@@ -237,8 +237,8 @@ namespace betteribttest
             // cr = new ChunkReader("Undertale\\data.win",false);
             cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             Disam dism = new Disam(cr);
-            dism.writeFile("frog");
-
+            // dism.writeFile("frog");
+            dism.writeFile("SCR_GAMESTART");
             //    cr.debugOn = false;
             // cr = new ChunkReader("testgame\\data.win");
             //  font_test();
@@ -257,7 +257,7 @@ namespace betteribttest
 
             GMK_Font fnt = cr.resFonts[1];
 
-                Bitmap bmp_chars = cr.filesImage[6].image; // don't know why or how the fonts know to look at this texture
+                Bitmap bmp_chars = cr.filesImage[fnt.bitmap.texture_id].image; // don't know why or how the fonts know to look at this texture
            // GMK_Font fnt = cr.resFonts[0];
             //Bitmap bmp_chars = cr.filesImage[0].image; // don't know why or how the fonts know to look at this texture
             Bitmap target = new Bitmap(320, 200);
@@ -265,8 +265,8 @@ namespace betteribttest
            
             int offset_x = 0;
             int offset_y = 0;
-            int texture_x = 518;
-            int texture_y = 5;
+            int texture_x = fnt.bitmap.x;
+            int texture_y = fnt.bitmap.y;
             System.Diagnostics.Debug.WriteLine(fnt);
             using (Graphics g = Graphics.FromImage(target))
             {

@@ -179,7 +179,7 @@ namespace betteribttest
             }
             return v;
         }
-        public string lookAtPoP(int topType, int secondType, int instance, short load_type,short var_ident)
+        public string lookAtPoP(int topType, int secondType, int instance, int load_type,int var_ident)
         {
             string sinstance;
             string ret = "Nothing";
@@ -255,9 +255,16 @@ namespace betteribttest
                                 int secondType = (int)((op >> 16) & 0xF);
                                 int instance = (short)(op & 0xFFFF);
                                 string sinstance = lookupInstance(instance);
-                                short object_var = r.ReadInt16(); // this COULD be 24 bits?
-                                short object_var_type = r.ReadInt16(); // I think this might only be 4 bits
-                                soperand = String.Format("{0} -> {1} ({2} [Type: {3,4:X}, Var: {4,4:X}])", typeLookup[topType], typeLookup[secondType], sinstance, object_var_type, object_var);
+                                int func = r.ReadInt32();
+
+                                int object_var =  (int)(func & 0x0FFFFFFF); // this COULD be 24 bits?
+                                int object_var_type = func >> 24 & 0xFF; // I think this might only be 4 bits
+                                string name = null;
+                             //   GMK_Data gkd = cr.OffsetDebugLookup(object_var);
+                             //   if (name == null && gkd != null) name = gkd.name + " off"; 
+                              //  if (name == null && object_var < cr.stringList.Count) name = cr.stringList[object_var].str;
+                                if (name == null) name = object_var.ToString();
+                                soperand = String.Format("{0} -> {1} ({2} [Type: {3,4:X}, Var: {4}])", typeLookup[topType], typeLookup[secondType], sinstance, object_var_type, name);
                                 scomment = lookAtPoP(topType, secondType, instance, object_var_type, object_var);
                             }
                             break;
@@ -302,7 +309,7 @@ namespace betteribttest
                                         int instance = (short)(op & 0xFFFF);
                                         string sinstance = lookupInstance(instance);
                                         short var_ident = r.ReadInt16();
-                                        short load_type = r.ReadInt16(); // this could be a byte humm
+                                        short load_type = r.ReadInt16(); // r.ReadInt16(); // this could be a byte humm
 
 
                                         scode += ".v";
@@ -337,7 +344,11 @@ namespace betteribttest
                                 // string return_type_string = typeLookup[return_type];
                                 int args = (ushort)(op & 0xFFFF);
                                 uint fuc = r.ReadUInt32();
-                                string fs = fuc < cr.codeList.Count ? cr.codeList[(int)fuc].name : fuc.ToString();
+                                GMK_Data gkd = cr.OffsetDebugLookup(fuc);
+                              //  string fs; funcIndex
+                             //   if (gkd != null) fs = gkd.ToString();
+                              //  else fs = fuc.ToString() + "[" + fuc.ToString("X4") + "]";
+                                string fs = fuc < cr.funcIndex.Count ? cr.funcIndex[(int)fuc].func_name : fuc.ToString(); 
                                 soperand = String.Format("{0}({1})", fs, args);
                             }
                             break;

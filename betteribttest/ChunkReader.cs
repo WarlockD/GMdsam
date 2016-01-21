@@ -11,8 +11,15 @@ using Microsoft.Deployment.Compression.Cab;
 
 namespace betteribttest
 {
-    public class GMK_Data
-    {
+    public class GMK_Data 
+    { //create comparer
+        public class GMK_DataComparer : IComparer<GMK_Data>
+        {
+            public int Compare(GMK_Data x, GMK_Data y)
+            {
+                return x.offset.CompareTo(y.offset);
+            }
+        }
         public readonly int index;
         public readonly int offset;
         public string name;
@@ -63,24 +70,64 @@ namespace betteribttest
             return base.ToString() + " String: " + escapedString;
         }
     }
+    class GMK_ScriptIndex : GMK_Data
+    {
+        public string script_name="";
+        public int script_index=-1;
+        public GMK_ScriptIndex(int index, int offset) : base(index, offset) { }
+        public override string ToString()
+        {
+            return "{ script_name = " + script_name + ", scrpit_index = " + script_index + " }" + base.ToString() ;
+        }
+    }
+    class GMK_FuncOffset : GMK_Data
+    {
+        public string func_name = "";
+        public int func_offset = -1;
+        public int another_offset = -1;
+        public GMK_FuncOffset(int index, int offset) : base(index, offset) { }
+        public override string ToString()
+        {
+            return "{ func_name = " + func_name + ", func_offset = " + func_offset + ", func_other = " + another_offset + " }" + base.ToString();
+        }
+    }
     class GMK_Object: GMK_Data
     { // HUMM We have 12 allarms!  EACH ALLARM IS A 1 DIMENIONAL ARRAY! WOO!
       //  public int[] header; // first 20 bytes, last byte seems to be a size
       //  public byte[] data;
-        public int[] data;
+        public int[] data; // header data is 19
+
+        // MMabye this is the order
         public int obj_id = 0; // instance varable
-        public bool isSolid = false;
-        public bool isVisiable = false;
-        public bool isPersistant = false;
+        public int sprite_index;
+        public bool Visible = false;
+        public bool Solid = false;
         public int depth = 0; // negitive numbers are close to the player
+        public bool isPersistant = false;
+        public int Parent = -1;
+        public int Mask = -1;
+        public int PhysicsObject = -1;
+        public int PhysicsObjectSensor = -1;
+        public int PhysicsObjectShape = -1;
+        public int PhysicsObjectDensity = -1;
+        // Pulled from the compile code, not sure if its needed
+        public int PhysicsObjectRestitution = -1;
+        public int PhysicsObjectGroup = -1;
+        public int PhysicsObjectLinearDamping = -1;
+        public int PhysicsObjectAngularDamping = -1;
+        public int PhysicsShapeVerticesCount = -1;
+        public int PhysicsObjectFriction = -1;
+        public int PhysicsObjectAwake = -1;
+        public int PhysicsObjectKinematic = -1;
+        //public List<int> PhysicsShapeVertices  // humm
+        // irght after this it does arlarms
         public int[] alarm_offsets = null; // hummmm!
-        public int obj_index = 0; // readonly, mabye its index?
 
         public List<GMK_Value> values = new List<GMK_Value>();
         public GMK_Object(int index, int offset) : base(index, offset) { }
         public override string ToString()
         {
-            return base.ToString() + " : " + String.Format("{{  obj_id : {0}, object_index: {1} }}", obj_id, obj_index);
+            return base.ToString() + " : " + String.Format("{{  obj_id : {0}, object_index: {1} }}", obj_id, Parent);
         }
 
     }
@@ -103,6 +150,24 @@ namespace betteribttest
         public int image_yscale;
 
         public GMK_Sprite(int index, int offset) : base(index, offset) { }
+    }
+    class GMK_SpritePosition : GMK_Data
+    {
+        public short x; // this is the size of the record
+        public short y;
+        public short width;
+        public short height;
+        public int some_data;
+        public short width0;
+        public short height0;
+        public short width1;
+        public short height1;
+        public short texture_id;
+        public GMK_SpritePosition(int index, int offset) : base(index, offset) { }
+        public override string ToString()
+        {
+            return String.Format("{{ x = {0}, y = {1}, width = {2}, height = {3}, texture_id = {4} }",x,y,width,height,texture_id) + base.ToString() ;
+        }
     }
     class GMK_BackgroundPos : GMK_Data
     {
@@ -148,12 +213,9 @@ namespace betteribttest
         public int font_size;
         public bool maybe_Bold; // I think these two are for bold and italix? not sure
         public bool maybe_Italii;
-        public short texture_number;// = r.ReadInt16();
-        public short meh;// = r.ReadInt16();
-        public short meh2;// = r.ReadInt16();
-        public short meh3;// = r.ReadInt16();
-        public  int ref_maybe;// = r.ReadInt32();
-        public List<int> header;
+        public GMK_SpritePosition bitmap;
+        public float scaleW;
+        public float scaleH;
         public void Add(GMK_FontGlyph g)
         {
             glyphs.Add(g);
@@ -162,7 +224,7 @@ namespace betteribttest
         public GMK_Font(int index, int offset) : base(index, offset) { }
         public override string ToString()
         {
-            return base.ToString() + " { font_size = " + font_size + ", texture_number = " + texture_number + ", meh = " + meh + " , meh2 = " + meh2 + ", meh 3 = " + meh3 + " , ref_maybe = " + ref_maybe + " } ";
+            return base.ToString() + " { font_size = " + font_size + " } ";
         }
         // System.Diagnostics.Debug.WriteLine(String.Format("'{0}': {1,-4}{2,-4}{3,-4}{4,-4}{5,-4}", c,cb, x1, y1, x2, y2));
     }
@@ -175,6 +237,7 @@ namespace betteribttest
         //  public Dictionary<string, List<GMKFile>> fileChunks = new Dictionary<string, List<GMKFile>>();
         //  public List<GMKFile> filesCode;
         //  public List<GMKFile> filesObj;
+        public SortedList<long, GMK_Data> offsetSet = new SortedList<long, GMK_Data>();
         public Dictionary<long, GMK_Data> offsetMap = new Dictionary<long, GMK_Data>();
         public Dictionary<string, GMK_Data> nameMap = new Dictionary<string, GMK_Data>();
         void AddData(GMK_Data d)
@@ -185,6 +248,41 @@ namespace betteribttest
             if (d.name != null) {
                 if (nameMap.ContainsKey(d.name)) WriteDebug(String.Format("Offset: 0x{0,-8:X8}  Name: {1} Exists", d.offset,d.name));
                 else nameMap[d.name] = d;
+            }
+            offsetSet.Add(d.offset, d);
+        }
+        void debugLocateOffsetInChunk(long offset)
+        {
+            foreach (var kv in chunks)
+            {
+                Chunk c = kv.Value;
+                if (c.name == "FORM") continue; // skip this one
+                if (offset > c.start && offset < c.end)
+                {
+                    WriteDebug("Offset: {0} is in Chunk {1}", offset, c.name);
+                    return;
+                }
+            }
+            WriteDebug("Offset: {0} not in chunk", offset);
+        }
+        void DebugFindBetweenOFfsets(long offset)
+        {
+            debugLocateOffsetInChunk(offset);
+            var e = offsetSet.GetEnumerator();
+            e.MoveNext();
+            GMK_Data last = e.Current.Value;
+            while(e.MoveNext())
+            {
+                if (last.offset == offset) { WriteDebug("FOUND: " + last.ToString()); return; }
+                if(offset > last.offset && offset < e.Current.Value.offset)
+                {
+                    WriteDebug("Not Found but between: {0,-8}" , offset);
+                    WriteDebug("this({0,-8}): {1}",last.offset, last.ToString());
+                    last = e.Current.Value;
+                    WriteDebug("that({0,-8}): {1}", last.offset, last.ToString());
+                    return;
+                }
+                last = e.Current.Value;
             }
         }
       
@@ -198,6 +296,8 @@ namespace betteribttest
         public List<GMK_Background> backgroundList = new List<GMK_Background>();
         public List<GMK_Sprite> spriteList = new List<GMK_Sprite>();
         public List<GMK_String> stringList = new List<GMK_String>();
+
+       
 
         static readonly int[] offset_debug_patern = new int[] { 0, -4, -8, 4, 8 };
 
@@ -226,11 +326,11 @@ namespace betteribttest
                     WriteDebug("obj_id DUP: " + o + " -> " + lookup);
                 }
                 else objMapId.Add(o.obj_id, o);
-            if (o.obj_index > -1) if (objMapIndex.TryGetValue(o.obj_index, out lookup))
+            if (o.Parent > -1) if (objMapIndex.TryGetValue(o.Parent, out lookup))
                 {
                     WriteDebug("obj_index DUP: " + o + " -> " + lookup);
                 }
-                else objMapIndex.Add(o.obj_index, o);
+                else objMapIndex.Add(o.Parent, o);
         }
 
         Stack<long> savedOffsets = new Stack<long>();
@@ -358,7 +458,7 @@ namespace betteribttest
         {
             PushOffset(from);
             byte[] bytes = r.ReadBytes((int)(to - from));
-            System.Diagnostics.Debug.Assert(to != r.BaseStream.Position);
+            System.Diagnostics.Debug.Assert(to == r.BaseStream.Position);
             PopOffset();
             return bytes;
         }
@@ -521,22 +621,24 @@ namespace betteribttest
                 GMK_Font fnt = new GMK_Font(i, offset);
                 r.BaseStream.Position = offset;
                 // int debug_offset = (int)(offset - chunkStart);
-
-
-               // string dbg_msg = checkForRefs(r.BaseStream.Position, chunkLimit);
-               // WriteDebug(dbg_msg);
-                
                 fnt.name = readVarString(r.ReadInt32());
                 fnt.description = readVarString(r.ReadInt32());
                 fnt.font_size = r.ReadInt32();
-                fnt.maybe_Italii = r.ReadInt32() == 1 ;
-                fnt.maybe_Bold = r.ReadInt32()== 1 ;
-                fnt.texture_number = r.ReadInt16();
-                fnt.meh = r.ReadInt16();
-                fnt.meh2 = r.ReadInt16();
-                fnt.meh3 = r.ReadInt16();
-                fnt.ref_maybe = r.ReadInt32();
-                fnt.header = readInts(2);
+                fnt.maybe_Bold = r.ReadInt32() == 1;
+                fnt.maybe_Italii = r.ReadInt32() == 1;
+                int data = r.ReadInt32();
+                int first_char = data & 0xFFFF;
+                int char_set = (data >> 16) & 0xFF;
+                int antiAlias = (data >> 24) & 0xFF;
+                int last = r.ReadInt32();
+                int humm = r.ReadInt32();
+                if (!spritePos.TryGetValue(humm, out fnt.bitmap)) throw new Exception( "Could not find bitmap");
+                // DebugFindBetweenOFfsets(humm); // this is in the tpag area of the stream
+               
+                 //   public GMK_SpritePosition bitmap;
+
+                fnt.scaleW = r.ReadSingle(); // scales?
+                fnt.scaleH = r.ReadSingle(); // scales?
                 int charCount = r.ReadInt32();
                 List<int> char_offsets = readInts(charCount);
                 for (int j = 0; j < charCount; j++)
@@ -553,10 +655,9 @@ namespace betteribttest
                     g.char_offset = r.ReadInt16();
                     fnt.Add(g);
                 }
+                // OHH check here?
                 res.Add(fnt);
                 AddData(fnt);
-                int a = fnt.ref_maybe & 0xFFFF;
-                int b = fnt.ref_maybe >> 16;
                     
             }
             resFonts = res;
@@ -652,12 +753,24 @@ namespace betteribttest
                 
                 List<int> head = readInts(19);
                 obj.data = head.ToArray();
-
-                obj.obj_id = head[0];
-                obj.isPersistant = head[1] != 0; // mabye 7, 7 is always negitive when this is 1?
-                obj.depth = head[5]; // fairly sure
-                obj.obj_index = head[6];
-                objectFlags(head[10]);
+             //   obj.obj_id = head[0]; // instance varable ooor sprite index? hummmmmm
+                obj.sprite_index = head[0];
+                System.Diagnostics.Debug.Assert(!(obj.sprite_index == 0 && obj.sprite_index == 1));
+                obj.Visible = head[2] != 0;
+                System.Diagnostics.Debug.Assert(!(head[2] == 0 &&  head[2] == 1));
+                obj.Solid =  head[3] != 0;
+                System.Diagnostics.Debug.Assert(!(head[3]== 0 && head[3] == 1));
+                obj.isPersistant = head[4] != 0;
+                obj.depth = head[5]; // negitive numbers are close to the player
+                obj.Parent = head[6];
+                
+                
+                obj.Mask = head[6];
+             //   obj.PhysicsObject = head[8];
+            //    obj.PhysicsObjectSensor = head[9];
+             //   obj.PhysicsObjectShape = head[10];
+             //   obj.PhysicsObjectDensity = head[11];
+       
                 
                 List<int> alarms = CollectEntries(obj_limit);
               ///  string debug_msg = checkForRefs(r.BaseStream.Position, obj_limit);
@@ -853,6 +966,112 @@ namespace betteribttest
 
             PopOffset();
         }
+        public List<GMK_ScriptIndex> scriptIndex = new List<GMK_ScriptIndex>();
+        public Dictionary<int, GMK_ScriptIndex> scriptMap = new Dictionary<int, GMK_ScriptIndex>();
+        void doSCPT(long chunkStart, long chunkLimit)
+        {
+            PushOffset(chunkStart);
+            List<int> offsets = CollectEntries(chunkLimit);
+            for (int i = 0; i < offsets.Count; i++)
+            {
+                int offset = offsets[i];
+                long next_offset = (i+1) < offsets.Count ? offsets[i+1] : chunkLimit;
+                long size = next_offset - offset;
+                
+                CheckAndSetOffset(offset);
+                GMK_ScriptIndex scpt = new GMK_ScriptIndex(i, offset );
+                System.Diagnostics.Debug.Assert(size == 8);
+
+                scpt.script_name = readVarString(r.ReadInt32());
+                scpt.script_index = r.ReadInt32();
+                AddData(scpt);
+                scriptIndex.Add(scpt);
+                scriptMap[scpt.index] = scpt;
+
+            }
+            PopOffset();
+        }
+        void doGEN8(long chunkStart, long chunkLimit)
+        {
+            PushOffset(chunkStart);
+            long size = chunkLimit - chunkStart;
+            List<int> test2 = readInts((int)(size / 4)); //  lots of weird data here, does this set up the vars?
+           // string test = readVarString(r.ReadInt32());
+            // special?
+
+
+            PopOffset();
+        }
+        public List<GMK_FuncOffset> funcIndex = new List<GMK_FuncOffset>();
+        public Dictionary<int, GMK_FuncOffset> funcMap = new Dictionary<int, GMK_FuncOffset>();
+        public Dictionary<int, GMK_FuncOffset> calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
+
+        void doFUNC(long chunkStart, long chunkLimit)
+        {
+             funcIndex = new List<GMK_FuncOffset>();
+            funcMap = new Dictionary<int, GMK_FuncOffset>();
+            calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
+            PushOffset(chunkStart);
+            long size = chunkLimit - chunkStart; // it should be divisiable by 12
+            int i = 0;
+            System.Diagnostics.Debug.Assert((size % 12) == 0);
+            while (r.BaseStream.Position < chunkLimit)
+            {
+                GMK_FuncOffset func = new GMK_FuncOffset(i++, (int)r.BaseStream.Position);
+                func.func_name = readVarString(r.ReadInt32());
+                func.func_offset = r.ReadInt32();
+                func.another_offset = r.ReadInt32(); // This offset is in the code section, so its linking direct to the code?
+                PushOffset(func.another_offset);
+                uint data = r.ReadUInt32();
+                uint data2 = r.ReadUInt32();
+                // Ok, so we are linking to the CALL of the fuction...  so what does this do ?
+                WriteDebug("Data: " + data.ToString("X8") + " More: " + data2.ToString("X8")); // func.ToString());
+                WriteDebug(func.ToString());
+                DebugFindBetweenOFfsets(func.another_offset);
+                PopOffset();
+                AddData(func);
+                funcIndex.Add(func);
+                // Ok, so the second data2 point goes to a calling function directy in the code section
+                // for all the tests I do, its ALWAY going to that calling section.  So I am assuming its the first
+                // time this functiin gets called
+                // I am fairly sure this is for debugging as the compiler probery doesn't know of the function's location till
+                // compile/parse time
+                // If this works, it would mean the disasembler, when it finds a call, look up the offseet, se if its in this thing
+                // then remember the offset in the function
+                funcMap[func.index] = func;
+            }
+            PopOffset();
+        }
+        public Dictionary<long, GMK_SpritePosition> spritePos = new Dictionary<long, GMK_SpritePosition>();
+
+        void doTPAG(long chunkStart, long chunkLimit)
+        {
+            PushOffset(chunkStart);
+            List<int> offsets = CollectEntries(chunkLimit);
+            for (int i = 0; i < offsets.Count; i++)
+            {
+                int offset = offsets[i];
+                long next_offset = (i + 1) < offsets.Count ? offsets[i + 1] : chunkLimit;
+                long size = next_offset - offset;
+                System.Diagnostics.Debug.Assert(size == 22);
+                CheckAndSetOffset(offset);
+                GMK_SpritePosition p = new GMK_SpritePosition(i,offset);
+
+                p.x = r.ReadInt16(); // this is the size of the record
+                p.y = r.ReadInt16();
+                p.width = r.ReadInt16();
+                p.height = r.ReadInt16();
+                p.some_data = r.ReadInt32();
+                p.width0 = r.ReadInt16();
+                p.height0 = r.ReadInt16();
+                p.width1 = r.ReadInt16();
+                p.height1 = r.ReadInt16();
+                p.texture_id= r.ReadInt16();
+                AddData(p);
+                spritePos[p.offset] = p;
+            }
+            PopOffset();
+        }
         class Chunk
         {
             public readonly long start;
@@ -881,22 +1100,33 @@ namespace betteribttest
                 doStrings(chunk.start, chunk.end);
             if (chunks.TryGetValue("TXTR", out chunk))
                 doTXRT(chunk.start, chunk.end); // doing objects right now
-
+            if (chunks.TryGetValue("TPAG", out chunk))
+                doTPAG(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("BGND", out chunk))
                 DoBackground(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("SPRT", out chunk))
                 DoSprite(chunk.start, chunk.end); // doing objects right now
+
+            this.debugOn = false;
             if (chunks.TryGetValue("OBJT", out chunk))
                 DoObject(chunk.start, chunk.end); // doing objects right now
-
+            this.debugOn = true;
 
             if (chunks.TryGetValue("ROOM", out chunk))
                 DoRoom(chunk.start, chunk.end); // doing objects right now
-
+           
             if (chunks.TryGetValue("FONT", out chunk))
                 DoFont(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("CODE", out chunk))
                 DoCode(chunk.start, chunk.end); // doing objects right now
+            if (chunks.TryGetValue("SCPT", out chunk))
+                doSCPT(chunk.start, chunk.end); // doing objects right now
+            if (chunks.TryGetValue("GEN8", out chunk))
+                doGEN8(chunk.start, chunk.end); // doing objects right now
+            if (chunks.TryGetValue("FUNC", out chunk))
+                doFUNC(chunk.start, chunk.end); // doing objects right now
+         
+            
 
             //    case "OBJT": DoObject(chuckStart, chunkLimit); break;
             //     case "TXTR": doTXRT(chuckStart, chunkLimit); break;
