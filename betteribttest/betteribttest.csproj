@@ -53,6 +53,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ChunkReader.cs" />
+    <Compile Include="ChunkStream.cs" />
     <Compile Include="Disam.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>

@@ -8,43 +8,72 @@ using System.Drawing;
 using System.IO.Compression;
 using Microsoft.Deployment.Compression;
 using Microsoft.Deployment.Compression.Cab;
+/*
+    Side note to the Disam potion.
+    To map variables and function names to the asembley REQUIRES some kind of emulation.  The dissassembler needs context to traslate
+    a var name to an string name.  So it requies what "self" object its referring too as well as whats on the stack 
+    This means we have to dissasemble the pop statment, and figure out the last few pop statements to get what instance, what self is, and then the var offset
+    THEN we can figure out the name of it
+    meh  I am going to work on sprites and rooms.  I got those almost done
 
+*/
 namespace betteribttest
 {
-    public class GMK_Data 
+    public class GMK_Data : IComparable<GMK_Data>, IEquatable<GMK_Data>
     { //create comparer
-        public class GMK_DataComparer : IComparer<GMK_Data>
-        {
-            public int Compare(GMK_Data x, GMK_Data y)
-            {
-                return x.offset.CompareTo(y.offset);
-            }
-        }
-        public readonly int index;
-        public readonly int offset;
-        public string name;
-        public GMK_Data(int index, int offset) { this.index = index;  this.offset = offset;this.name = null; }
+        public ChunkEntry FilePosition { get; private set; }
+        public string Name { get; set; }
+        public GMK_Data(ChunkEntry e) { FilePosition = e; Name = null; }
         public override string ToString()
         {
-            return name == null ? String.Format("{{ index: {0,-5} offset: {1,-8:X} }}",index,offset) : String.Format("{{ name: {0,-25}, index: {1,-5} offset: {2,-8:X} }}", name, index, offset);
+            return Name == null ? String.Format("{{ Type = GMK_Data, FilePosition: {0,-8:X} }}", FilePosition.Position) : String.Format("{{ Name = \"{1}\"  Type = GMK_Data, FilePosition: {0,-8:X} }}", FilePosition.Position, Name);
+        }
+        public int CompareTo(GMK_Data other)
+        {
+            return FilePosition.Position.CompareTo(other.FilePosition.Position);
+        }
+        public override int GetHashCode()
+        {
+            return FilePosition.GetHashCode();
+        }
+        public override bool Equals(object obj)
+        {
+            GMK_Data d = obj as GMK_Data;
+            if (d != null) return Equals(d);
+            return false;
+        }
+        public bool Equals(GMK_Data other)
+        {
+            return other.FilePosition == FilePosition;
+        }
+    }
+    public class GMK_Point
+    {
+        public short x;
+        public short y;
+        public GMK_Point(short x, short y) { this.x = x; this.y = y; }
+        public GMK_Point(BinaryReader r) { this.x = r.ReadInt16(); this.y = r.ReadInt16(); }
+        public override string ToString()
+        {
+            return "(" + x + "," + y + ")";
         }
     }
     public class GMK_Code : GMK_Data
     {
-        public byte[] code;
-        public GMK_Code(int index, int offset) : base(index, offset) { }
+        public byte[] code=null;
+        public GMK_Code(ChunkEntry e) : base(e) { }
     }
     class GMK_Value : GMK_Data
     {
         public int size;
         public byte[] data;
-        public GMK_Value(int index, int offset) : base(index, offset) { }
+        public GMK_Value(ChunkEntry e) : base(e) { }
     }
     class GMK_Image : GMK_Data
     {
-        public string filename {  get { return name; } set { name = value; } }
+        public string filename {  get { return Name; } set { Name = value; } }
         public Bitmap image;
-        public GMK_Image(int index, int offset) : base(index, offset) { }
+        public GMK_Image(ChunkEntry e) : base(e) { }
      
     }
     class GMK_String : GMK_Data
@@ -64,7 +93,7 @@ namespace betteribttest
                 }
             }
         }
-        public GMK_String(int index, int offset) : base(index, offset) { }
+        public GMK_String(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
             return base.ToString() + " String: " + escapedString;
@@ -74,7 +103,7 @@ namespace betteribttest
     {
         public string script_name="";
         public int script_index=-1;
-        public GMK_ScriptIndex(int index, int offset) : base(index, offset) { }
+        public GMK_ScriptIndex(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
             return "{ script_name = " + script_name + ", scrpit_index = " + script_index + " }" + base.ToString() ;
@@ -84,11 +113,22 @@ namespace betteribttest
     {
         public string func_name = "";
         public int func_offset = -1;
-        public int another_offset = -1;
-        public GMK_FuncOffset(int index, int offset) : base(index, offset) { }
+        public int code_offset = -1;
+        public GMK_FuncOffset(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
-            return "{ func_name = " + func_name + ", func_offset = " + func_offset + ", func_other = " + another_offset + " }" + base.ToString();
+            return "{ func_name = " + func_name + ", func_offset = " + func_offset + ", code_other = " + code_offset + " }" + base.ToString();
+        }
+    }
+    class GMK_Var : GMK_Data
+    {
+        public string var_name = "";
+        public int var_offset = -1;
+        public int code_offset = -1;
+        public GMK_Var(ChunkEntry e) : base(e) { }
+        public override string ToString()
+        {
+            return "{ func_name = " + var_name + ", func_offset = " + var_offset + ", code_other = " + code_offset + " }" + base.ToString();
         }
     }
     class GMK_Object: GMK_Data
@@ -124,7 +164,7 @@ namespace betteribttest
         public int[] alarm_offsets = null; // hummmm!
 
         public List<GMK_Value> values = new List<GMK_Value>();
-        public GMK_Object(int index, int offset) : base(index, offset) { }
+        public GMK_Object(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
             return base.ToString() + " : " + String.Format("{{  obj_id : {0}, object_index: {1} }}", obj_id, Parent);
@@ -149,7 +189,7 @@ namespace betteribttest
         public int image_xscale;
         public int image_yscale;
 
-        public GMK_Sprite(int index, int offset) : base(index, offset) { }
+        public GMK_Sprite(ChunkEntry e) : base(e) { }
     }
     class GMK_SpritePosition : GMK_Data
     {
@@ -157,39 +197,26 @@ namespace betteribttest
         public short y;
         public short width;
         public short height;
-        public int some_data;
+        public short renderX;
+        public short renderY;
         public short width0;
         public short height0;
         public short width1;
         public short height1;
         public short texture_id;
-        public GMK_SpritePosition(int index, int offset) : base(index, offset) { }
+        public GMK_SpritePosition(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
-            return String.Format("{{ x = {0}, y = {1}, width = {2}, height = {3}, texture_id = {4} }",x,y,width,height,texture_id) + base.ToString() ;
+            return String.Format("{{ x = {0}, y = {1}, width = {2}, height = {3}, texture_id = {4} }}",x,y,width,height,texture_id) + base.ToString() ;
         }
     }
-    class GMK_BackgroundPos : GMK_Data
-    {
-        public short texture_x; // pritty short these are offsets to the texture
-        public short texture_y;
-        public short texture_width;     // same about the width and height
-        public short texture_height;
-        // This might be more internal object stuff?
-        // offset x and y are usally zero and offset width and hight usally equal the texture width hieght
-        public short offset_x; // humm
-        public short offset_y; // don't know
-        public short offset_width; // humm
-        public short offset_height; // don't know
-        public GMK_BackgroundPos(int index, int offset) : base(index, offset) { }
-
-    }
+  
     class GMK_Background : GMK_Data
     {
         public int[] stuff; // 3 ints of stuff
         // after this there is an offset to this data
-        public GMK_BackgroundPos pos;
-        public GMK_Background(int index, int offset) : base(index, offset) { }
+        public GMK_SpritePosition pos;
+        public GMK_Background(ChunkEntry e) : base(e) { }
     }
     class GMK_FontGlyph : GMK_Data
     {
@@ -199,7 +226,7 @@ namespace betteribttest
         public short width;
         public short height;
         public short char_offset;
-        public GMK_FontGlyph(int index, int offset) : base(index, offset) { }
+        public GMK_FontGlyph(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
             return "{ char= '" + c + "' , x=" + x + ", y=" + y + ", widht=" + width + ", height=" + height+ ", char_offset=" + char_offset + "}";
@@ -221,7 +248,7 @@ namespace betteribttest
             glyphs.Add(g);
             map[g.c] = g;
         }
-        public GMK_Font(int index, int offset) : base(index, offset) { }
+        public GMK_Font(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
             return base.ToString() + " { font_size = " + font_size + " } ";
@@ -230,26 +257,38 @@ namespace betteribttest
     }
     class ChunkReader
     {
+        ChunkStream r = null;
+        public bool debugOn = true;
+        void WriteDebug(string line)
+        {
+            if (!debugOn) return;
+            if (line.Last() == '\n') System.Diagnostics.Debug.Write(line);
+            else System.Diagnostics.Debug.WriteLine(line);
+        }
+        void WriteDebug(string fmt, params object[] objs)
+        {
+            if (!debugOn) return;
+            string line = String.Format(fmt, objs);
+            if (line.Last() == '\n') System.Diagnostics.Debug.Write(line);
+            else System.Diagnostics.Debug.WriteLine(line);
+        }
 
-        BinaryReader r = null;
-        BinaryWriter w = null;
+
         Dictionary<string, byte[]> wholeChunks = new Dictionary<string, byte[]>();
         //  public Dictionary<string, List<GMKFile>> fileChunks = new Dictionary<string, List<GMKFile>>();
         //  public List<GMKFile> filesCode;
         //  public List<GMKFile> filesObj;
-        public SortedList<long, GMK_Data> offsetSet = new SortedList<long, GMK_Data>();
-        public Dictionary<long, GMK_Data> offsetMap = new Dictionary<long, GMK_Data>();
+        public SortedDictionary<int, GMK_Data> offsetMap = new SortedDictionary<int, GMK_Data>();
         public Dictionary<string, GMK_Data> nameMap = new Dictionary<string, GMK_Data>();
+
         void AddData(GMK_Data d)
         {
-            if (offsetMap.ContainsKey(d.offset))
-                WriteDebug(String.Format("Offset: 0x{0,-8:X8} Exists", d.offset));
-            else offsetMap[d.offset] = d;
-            if (d.name != null) {
-                if (nameMap.ContainsKey(d.name)) WriteDebug(String.Format("Offset: 0x{0,-8:X8}  Name: {1} Exists", d.offset,d.name));
-                else nameMap[d.name] = d;
+            if (offsetMap.ContainsKey(d.FilePosition.Position)) WriteDebug(String.Format("Offset: 0x{0,-8:X8} Exists", d.FilePosition.Position));
+            else offsetMap[d.FilePosition.Position] = d;
+            if (d.Name != null) {
+                if (nameMap.ContainsKey(d.Name)) WriteDebug(String.Format("Offset: 0x{0,-8:X8}  Name: {1} Exists", d.FilePosition.Position,d.Name));
+                else nameMap[d.Name] = d;
             }
-            offsetSet.Add(d.offset, d);
         }
         void debugLocateOffsetInChunk(long offset)
         {
@@ -265,24 +304,22 @@ namespace betteribttest
             }
             WriteDebug("Offset: {0} not in chunk", offset);
         }
-        void DebugFindBetweenOFfsets(long offset)
+        void DebugFindBetweenOFfsets(int offset)
         {
             debugLocateOffsetInChunk(offset);
-            var e = offsetSet.GetEnumerator();
+            var e = offsetMap.GetEnumerator();
             e.MoveNext();
-            GMK_Data last = e.Current.Value;
-            while(e.MoveNext())
+            var last = e.Current;
+            while (e.MoveNext())
             {
-                if (last.offset == offset) { WriteDebug("FOUND: " + last.ToString()); return; }
-                if(offset > last.offset && offset < e.Current.Value.offset)
+                if (offset > last.Key && offset < e.Current.Key)
                 {
-                    WriteDebug("Not Found but between: {0,-8}" , offset);
-                    WriteDebug("this({0,-8}): {1}",last.offset, last.ToString());
-                    last = e.Current.Value;
-                    WriteDebug("that({0,-8}): {1}", last.offset, last.ToString());
+                    WriteDebug("Not Found but between: {0,-8}", offset);
+                    WriteDebug("this({0,-8}): {1}", last.Value.FilePosition.Position, last.ToString());
+                    WriteDebug("that({0,-8}): {1}", e.Current.Value.FilePosition.Position, last.ToString());
                     return;
                 }
-                last = e.Current.Value;
+                last = e.Current;
             }
         }
       
@@ -297,25 +334,7 @@ namespace betteribttest
         public List<GMK_Sprite> spriteList = new List<GMK_Sprite>();
         public List<GMK_String> stringList = new List<GMK_String>();
 
-       
 
-        static readonly int[] offset_debug_patern = new int[] { 0, -4, -8, 4, 8 };
-
-        public GMK_Data OffsetDebugLookup(long offset)
-        {
-            GMK_Data d = null;
-            foreach (int i in offset_debug_patern)
-            {
-                long lookup = offset + i;
-                
-                if (offsetMap.TryGetValue(lookup,out d))
-                {
-                    if (i != 0) WriteDebug("Offset: 0x{0,-8:X8} off by {1} with {2}", offset, i, d.ToString());
-                    else return d;
-                }
-            }
-            return d;
-        }
         // sanity checks on objects
         void AddObject(GMK_Object o)
         {
@@ -342,40 +361,6 @@ namespace betteribttest
                 WriteDebug("CheckOffset: 0x{0,-8:X8} Exists", offset, offsetMap[(int)offset].GetType().Name);
             r.BaseStream.Position = offset;
         }
-        void PushOffset(long offset)
-        {
-            PushOffset();
-            CheckAndSetOffset(offset);
-        }
-
-        void PushOffset()
-        {
-            savedOffsets.Push(r.BaseStream.Position);
-        }
-        void PopOffset()
-        {
-            r.BaseStream.Position = savedOffsets.Pop();
-        }
-        void readPropertiy()
-        {
-            PushOffset();
-            int value = r.ReadInt32();
-            switch (value)
-            {
-                case 0:
-                    return;
-                case 1: // offset from something
-                    PushOffset(r.ReadInt32());
-                    readPropertiy();
-                    PopOffset();
-                    break;
-                case 10: // array? mabye?
-                    PushOffset();
-                    readPropertiy();
-                    PopOffset();
-                    break;
-            }
-        }
         /// <summary>
         /// Tests to see IF this is a ref.  not 100% sure but its 4 byte aligned and below the file size
         /// </summary>
@@ -390,81 +375,13 @@ namespace betteribttest
             if ((value % 4) == 0 && value < chumkLimit) return true;
             else return false;
         }
-        string debugint(byte[] value, bool lookup = true,int index=0)
-        {
-            int intdata = BitConverter.ToInt32(value, index);
-            short shortdata1 = BitConverter.ToInt16(value, index);
-            short shortdata2 = BitConverter.ToInt16(value, index +2);
-            string msg = String.Format("{0,12}[0x{0,-8:X8}]   {1,8}[0x{1,-4:X4}]   {2,5}[0x{2,-4:X4}]   ", intdata, shortdata1, shortdata2);
-            if (lookup && intdata !=0 && intdata < r.BaseStream.Length)
-            {
-                string stringref = readVarString(intdata);
-                if (stringref == null || stringref == "" || stringref.Length == 0 ||  stringref.Length > 40) // no string or WAY to long to be an ident
-                {
-                    msg += "\n";
-                    PushOffset(intdata);
-                    byte[] about4Ints = r.ReadBytes(16);
-                    for (int i = 0; i < 16; i+=4) msg += i.ToString() + "     " + debugint(about4Ints, false, i) + "\n";
-                    PopOffset();
-                    msg = msg.Substring(0, msg.Length - 1);
-                }
-                else
-                    msg += "String : " + EscapeString(stringref);
-            }
-
-            return msg;
-        }
-        void debugintOut(byte[] value,int index=0,bool lookup = true)
-        {
-            string msg = debugint(value, lookup, index);
-            WriteDebug(msg);
-        }
-        string debugInit(int value)
-        {
-            string msg;
-            if (value < 0x10000)
-            {
-                msg = String.Format("[{1,-4:X4}]:{0,-7} ", value, value & 0xFFFF);
-            }
-            else
-            {
-                int shortdata1 = (short)(value & 0xFFFF);
-                int shortdata2 = (short)(value >> 16);
-                msg = String.Format("[{0,-8:X8}]:{0,-12} ", value);
-                msg += String.Format("[{1,-4:X4}]:{0,-7} ", shortdata2, shortdata2 & 0xFFFF);
-                msg += String.Format("[{1,-4:X4}]:{0,-7} ", shortdata1, shortdata1 &0xFFFF);
-            }
-            return msg;
-        }
-        void debugInits(List<int> values,  bool tryFilter = true, bool lookup = false)
-        {
-            string msg = "";
-            for (int i = 0; i < values.Count; i++)
-            {
-                int value = values[i];
-                msg += String.Format("{0,-2} : ", i);
-                msg += debugInit(value);
-                msg += '\n';
-            }
-            WriteDebug(msg);
-        }
-
         string readFixedString(int len)
         {
             byte[] bytes = r.ReadBytes(len);
             return System.Text.Encoding.UTF8.GetString(bytes);
         }
-        byte[] readBlock(long from, long to)
-        {
-            PushOffset(from);
-            byte[] bytes = r.ReadBytes((int)(to - from));
-            System.Diagnostics.Debug.Assert(to == r.BaseStream.Position);
-            PopOffset();
-            return bytes;
-        }
-        string readVarString(long offset) {
-            // Humm, it looks like strings don't HAVE to bee int aligned.  Humm
-            //  if (!testIfRef(offset)) throw new Exception("offset not int alligned or out of bounds");
+
+        string readVarString(int offset) {
             if (offset < 9999) throw new Exception("offset is null");
             GMK_Data d;
             if (offsetMap.TryGetValue(offset, out d)){
@@ -473,155 +390,210 @@ namespace betteribttest
                 return s.str;
             }
             throw new Exception("STRING NOT FOUND");
-         //   return s;
+        }
 
-        }
-        string readVarString() // We shouldn't throw here
+        void DoCode(int chunkStart, int chunkLimit)
         {
-            throw new Exception("Error out for now");
-            List<byte> bytes = new List<byte>();
-            for(;;)
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach(ChunkEntry e in entries)
             {
-                if(r.BaseStream.Position >= r.BaseStream.Length) return null; // end of string before a 0
-                byte b = r.ReadByte();
-                if (b == 0) break;
-                bytes.Add(b);
-            }
-            if (bytes.Count == 0) return null; // null if we just read a 0
-            return System.Text.Encoding.UTF8.GetString(bytes.ToArray());
-        }
-        byte[] dumpBytes(int offset, int chunkSize)
-        {
-            PushOffset(offset);
-            byte[] data = r.ReadBytes(chunkSize);
-            PopOffset();
-            return data;
-        }
-        List<int> CollectEntries(long offset, long chunkLimit)
-        {
-            PushOffset(offset);
-            List<int> offsets = CollectEntries(chunkLimit);
-            PopOffset();
-            return offsets;
-        }
-        List<int> CollectEntries(long chunkLimit)
-        {
-            int j = 0;
-            List<int> entries = new List<int>();
-            int fileCount = r.ReadInt32();
-            for (int i = 0; i < fileCount; i++)
-            {
-                int offset = r.ReadInt32();
-                if (offset > 0 && (chunkLimit == 0 || offset < chunkLimit )) entries.Add(offset); // used to use chunkLimit here but some entries might not need
-            }
-            return entries;
-        }
-        void DoCode(long roomStart, long chunkLimit)
-        {
-            PushOffset(roomStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for (int i = 0; i < offsets.Count; i++)
-            {
-                int offset = offsets[i]; GMK_Code code = new GMK_Code(i, offset); 
-                r.BaseStream.Position = offset;
-                code.name = readVarString(r.ReadInt32());
-                int size = r.ReadInt32();
-                code.code = r.ReadBytes(size);
+                GMK_Code code = new GMK_Code(e);
+                code.Name = readVarString(r.ReadInt32());
+                int code_size = r.ReadInt32();
+                code.code = r.ReadBytes(code_size);
                 codeList.Add(code);
                 AddData(code);
             }
-            PopOffset();
         }
-        void DoBackground(long chunkStart,long chunkLimit)
+        void DoBackground(int chunkStart, int chunkLimit)
         {
-            PushOffset(chunkStart); 
-            // backgrounds are fixed entries?  like fonts I gather math SIZE = 0x14
-            // BMS script has the wrong data for this, they are 0x20 (32 bytes) big
-            List<int> offsets = CollectEntries(chunkLimit);
-
-            for(int i=0;i< offsets.Count;i++)
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit); ; // only 14 bytes?
+            foreach (ChunkEntry e in entries)
             {
-                int offset = offsets[i]; GMK_Background back = new GMK_Background(i,offset); 
-
-
-                r.BaseStream.Position = offset;
-                int next_offset = (i + 1) < offsets.Count ? offsets[i + 1] : (int)chunkLimit;
-                int size = next_offset - offset;
-                back.name = readVarString(r.ReadInt32());
-                back.stuff = readInts(3).ToArray();
-                int last = r.ReadInt32();
-                GMK_BackgroundPos back_pos = new GMK_BackgroundPos(0, last);
-                r.BaseStream.Position = last;
-                back_pos.texture_x = r.ReadInt16();
-                back_pos.texture_x = r.ReadInt16();
-                back_pos.texture_width = r.ReadInt16();
-                back_pos.texture_height = r.ReadInt16();
-                back_pos.offset_x = r.ReadInt16();
-                back_pos.offset_x = r.ReadInt16();
-                back_pos.offset_width = r.ReadInt16();
-                back_pos.offset_height = r.ReadInt16();
-                back.pos = back_pos;
+                GMK_Background back = new GMK_Background(e);
+                back.Name = readVarString(r.ReadInt32());
+                back.stuff = r.ReadInt32(3);
+                int sprite_pos = r.ReadInt32();
+                back.pos = spritePos[sprite_pos];
                 AddData(back);
                 backgroundList.Add(back);
             }
-            PopOffset();
         }
-        void DoRoom(long roomStart, long chunkLimit)
+        class RoomTest : GMK_Data
         {
-            /*
-            PushOffset(roomStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            int i = 0;
-            do
+            public class RoomBackground
             {
-                long startOffset = r.BaseStream.Position;
-                GMKFile f = new GMKFile();
-                f.index = i;
-                long offset = f.offset = offsets[i++];
-                long next_offset = i < offsets.Count ? offsets[i] : chunkLimit;
-                f.name = readVarString(r.ReadInt32());
-                f.name2 = readVarString(r.ReadInt32());
-                List<byte> data = new List<byte>();
-                while (r.BaseStream.Position < next_offset) data.Add((byte)r.ReadByte());
-                f.data = data.ToArray();
-                files.Add(f);
-            } while (i < offsets.Count);
-            PopOffset();
-            fileChunks.Add("ROOM", files);
-            */
-        }
-        List<int> readInts(int count)
-        {
-            List<int> values = new List<int>();
-            for (int i = 0; i < count; i++) values.Add(r.ReadInt32());
-            return values;
-        }
-        List<short> readShorts(int count)
-        {
-            List<short> values = new List<short>();
-            for (int i = 0; i < count; i += 2)
-            {
-                values.Add(r.ReadInt16());
-                values.Add(r.ReadInt16());
+                public int enabled;
+            //   public int visible;
+                public int foreground;
+                public int index;
+                public int x;
+                public int y;
+                public int tileX;
+                public int tileY;
+                public int[] more;
             }
-            return values;
+            public class RoomTiles
+            {
+                public int enabled;
+                //   public int visible;
+                public int foreground;
+                public int index;
+                public int x;
+                public int y;
+                public int tileX;
+                public int tileY;
+                public int[] more;
+            }
+            public class GameObjects // fixed size
+            {
+                public int x;
+                public int y;
+                public int index;
+                public int compiledIndex;
+                public float scaleX;
+                public float scaleY;
+                public float tint;
+                public int rotation;
+                public GameObjects(BinaryReader r) // 9 ints, 36 bytes
+                {
+                    int[] test = new int[9];
+                    for (int i = 0; i < 9; i++) test[0] = r.ReadInt32();
+                    x = r.ReadInt32();
+                    y = r.ReadInt32();
+                    index = r.ReadInt32();
+                    compiledIndex = r.ReadInt32();
+                    scaleX = r.ReadSingle();
+                    scaleY = r.ReadSingle();
+                    tint = r.ReadSingle();
+                    rotation = r.ReadInt32();
+                    int extra = r.ReadInt32();
+                }
+            }
+            public RoomTest(ChunkEntry e) : base(e) { }
+            public string caption;
+            public int width;
+            public int height;
+            public int speed;
+            public int persistent;
+            public int colour;
+            public int showColour;
+            public int compiledIndex;
+            public int flag0;
+            public bool enableViews {  get { return ((flag0) & 1) != 0; } }
+            public bool viewClearScreen { get { return ((flag0) & 2) != 0; } }
+            public bool clearDisplayBuffer { get { return ((flag0) & 4) != 0; } }
+            public int[] offsetsToData;  // So this is the bugger, these are offsets to data
+            // offsetsToData[0]
+            public int physicsWorldId;
+            public int physicsWorldTop;   // this was all from hacking the compiler so not sure how true it is
+            public int physicsWorldLeft;  // the values above I have tested with game maker and mostly true
+            public int physicsWorldRight;
+            public int physicsWorldBottom;
+            public int physicsWorldGravityX;
+            public int physicsWorldGravityY;
+            public int physicsWorldPixToMeters;
+            public List<RoomBackground> backgrounds = new List<RoomBackground>();
+            public List<RoomBackground> tiles = new List<RoomBackground>();
+            public List<GameObjects> objects = new List<GameObjects>();
+        }
+        void DoRoomBackground(RoomTest room, int chunkStart, int chunkLimit)
+        {
+            ChunkEntries entries = new ChunkEntries(r,  chunkStart,  chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+                RoomTest.RoomBackground back = new RoomTest.RoomBackground();
+                back.enabled = r.ReadInt32();
+                // back.visible = r.ReadInt32(); wrong version?
+                back.foreground = r.ReadInt32();
+                back.index = r.ReadInt32();
+                back.x = r.ReadInt32();
+                back.y = r.ReadInt32();
+                back.tileX = r.ReadInt32();
+                back.tileY = r.ReadInt32();
+                room.backgrounds.Add(back);
+                room.backgrounds.Add(back);
+            }
+        }
+        void DoRoomViews(RoomTest room, int chunkStart, int chunkLimit)
+        {
+            ChunkEntries entries = new ChunkEntries(r,chunkStart,chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+           
+            }
+        }
+        void DoRoomGameObjects(RoomTest room, int chunkStart, int chunkLimit)
+        {
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+                RoomTest.GameObjects obj = new RoomTest.GameObjects(r);
+                room.objects.Add(obj);
+            }
+        }
+        void DoRoomTiles(RoomTest room, int chunkStart, int chunkLimit)
+        {
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+              //  RoomTest.GameObjects obj = new RoomTest.GameObjects(r);
+              //  room.objects.Add(obj);
+            }
+        }
+        void DoRoom(int chunkStart, int chunkLimit)
+        {
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+                RoomTest room = new RoomTest(e);
+                room.Name = readVarString(r.ReadInt32());
+                room.caption = readVarString(r.ReadInt32());
+                room.width = r.ReadInt32();
+                room.height = r.ReadInt32();
+                room.speed = r.ReadInt32();
+                room.persistent = r.ReadInt32();
+                room.colour = r.ReadInt32();
+                room.showColour = r.ReadInt32();
+                room.compiledIndex = r.ReadInt32();
+                room.flag0 = r.ReadInt32();
+                room.offsetsToData = r.ReadInt32(4); // read 4 ints
+                room.physicsWorldId = r.ReadInt32();
+                room.physicsWorldTop = r.ReadInt32();  // this was all from hacking the compiler so not sure how true it is
+                room.physicsWorldLeft = r.ReadInt32();  // the values above I have tested with game maker and mostly true
+                room.physicsWorldRight = r.ReadInt32();
+                room.physicsWorldBottom = r.ReadInt32();
+                room.physicsWorldGravityX = r.ReadInt32(); // these three might be wrong
+                room.physicsWorldGravityY = r.ReadInt32();
+                room.physicsWorldPixToMeters = r.ReadInt32();
+                if(room.Name == "room_ruins1")
+                {
+                    WriteDebug("room_ruins1 debug");
+                }
+                // this should be the start of the room.offsetsToData[0] offsets according to tests
+                System.Diagnostics.Debug.Assert(room.offsetsToData[0] == r.BaseStream.Position);
+                DoRoomBackground(room, room.offsetsToData[0], chunkLimit); 
+                DoRoomViews(room, room.offsetsToData[1], chunkLimit);
+                DoRoomGameObjects(room, room.offsetsToData[2], chunkLimit);
+                DoRoomTiles(room, room.offsetsToData[3], chunkLimit);
+                
+
+            }
+            entries = null;
         }
      
+     
         public List<GMK_Font> resFonts;
-        void DoFont(long chunkStart, long chunkLimit)
+        void DoFont(int chunkStart, int chunkLimit)
         {
-            r.BaseStream.Position = chunkStart;
-            List<int> font_offs = new List<int>();
-            List<GMK_Font> res = new List<GMK_Font>();
-            int numOfFonts = r.ReadInt32();
-            font_offs = readInts(numOfFonts);
-            for (int i = 0; i < numOfFonts; i++)
+            resFonts = new List<GMK_Font>();
+            ChunkEntries.DebugOutput = true;
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
             {
-                int offset = font_offs[i]; 
-                GMK_Font fnt = new GMK_Font(i, offset);
-                r.BaseStream.Position = offset;
-                // int debug_offset = (int)(offset - chunkStart);
-                fnt.name = readVarString(r.ReadInt32());
+                GMK_Font fnt = new GMK_Font(e);
+
+                fnt.Name = readVarString(r.ReadInt32());
                 fnt.description = readVarString(r.ReadInt32());
                 fnt.font_size = r.ReadInt32();
                 fnt.maybe_Bold = r.ReadInt32() == 1;
@@ -639,14 +611,10 @@ namespace betteribttest
 
                 fnt.scaleW = r.ReadSingle(); // scales?
                 fnt.scaleH = r.ReadSingle(); // scales?
-                int charCount = r.ReadInt32();
-                List<int> char_offsets = readInts(charCount);
-                for (int j = 0; j < charCount; j++)
+                ChunkEntries charGlyphs = new ChunkEntries(r, chunkLimit);
+                foreach (ChunkEntry fe in charGlyphs)
                 {
-                    offset = char_offsets[j];
-                    int debug_fnt_offset = (int)(offset - chunkStart);
-                    r.BaseStream.Position = offset;
-                    GMK_FontGlyph g = new GMK_FontGlyph(j, offset);
+                    GMK_FontGlyph g = new GMK_FontGlyph(fe);
                     g.c = (char)r.ReadInt16();
                     g.x = r.ReadInt16();
                     g.y = r.ReadInt16();
@@ -656,208 +624,81 @@ namespace betteribttest
                     fnt.Add(g);
                 }
                 // OHH check here?
-                res.Add(fnt);
+                resFonts.Add(fnt);
                 AddData(fnt);
                     
             }
-            resFonts = res;
         }
-        public bool debugOn = true;
-        void WriteDebug(string line)
-        {
-            if (!debugOn) return;
-            if (line.Last() == '\n') System.Diagnostics.Debug.Write(line);
-            else System.Diagnostics.Debug.WriteLine(line);
-        }
-        void WriteDebug(string fmt,params object[] objs)
-        {
-            if (!debugOn) return;
-            string line = String.Format(fmt,  objs);
-            if(line.Last() == '\n') System.Diagnostics.Debug.Write(line);
-            else System.Diagnostics.Debug.WriteLine(line);
-        }
-        void objectFlags(int a)
-        {
-            int flag_type = a >> 24;
-            int operand = a & 0x00FFFFFF;
-            switch(flag_type)
-            {
-                case 0x3F: // its zero
-                    if (operand != 0) throw new Exception("Not Zero?");
-                    break;
-                case 0x3C:
-                case 0x3D:
-                    // alot of c in here
-                    if(operand != 0xCCCCCD)
-                        WriteDebug("Flag Decode({0,-2:X2}:{1,-2:X2}:{2,-2:X2})", flag_type, operand >> 16, operand & 0xFFFF);
-                    break;
-                default:
-                    throw new Exception("Unknown?");
-                    break;
-            }
-        }
-        string DebugRefLookup(int ident=0)
-        {
-            int value = r.ReadInt32();
-            if (value == 0) return "<NULL>\n"; // nothiing?
-            string msg = new string('-', ident);
-            switch(value)
-            {
-                case 1: // link, so we do a ref lookup?
-                    value = r.ReadInt32();
-                    msg += " [" + value.ToString("X8") + "] ";
-                    PushOffset(value);
-                    DebugRefLookup(ident+1);
-                    PopOffset();
-                break;
-                default:
-                    msg += debugInit(value) + "\n";
-                    break;
-            }
-            return msg;
-        }
-        string checkForRefs(long chunkStart, long chunkLimit)
-        {
-            System.Diagnostics.Debug.Assert((chunkStart % 4) == 0 && (chunkLimit % 4) == 0); // these are all int allinged right?
-            PushOffset(chunkStart);
-            long size = chunkLimit - chunkStart;
-            List<int> data = readInts((int)size);
-            string msg = "";
-            for(int i=0;i< data.Count; i++)
-            {
-                int value = data[i];
-                
-                if (value < 100) continue; // this should quickly get rid of the ones we don't think exist
-                GMK_Data d = OffsetDebugLookup(value);
-                if (d != null) msg += "FOUND(" + i + "): " + d.ToString() + "\n";
-            }
-            PopOffset();
-            if (string.IsNullOrWhiteSpace(msg)) return null; else return msg;
-        }
-        void DoObject(long chunkStart, long chunkLimit)
-        {
-            PushOffset(chunkStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for (int i = 0; i < offsets.Count; i++)
-            {
-                int obj_offset = offsets[i];
-                GMK_Object obj = new GMK_Object(i, obj_offset);
-                CheckAndSetOffset(obj_offset);
 
-                int obj_limit = (i + 1) < offsets.Count ? offsets[i + 1] : (int)chunkLimit;
-                int obj_size = obj_limit - obj_offset;
-                int str_offset = r.ReadInt32();
 
-                obj.name = readVarString(str_offset); // oo my god.
-               
-                
-                List<int> head = readInts(19);
+
+        void DoObject(int chunkStart, int chunkLimit)
+        {
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+                GMK_Object obj = new GMK_Object(e);
+
+                obj.Name = readVarString(r.ReadInt32()); // oo my god.
+
+
+                int[] head = r.ReadInt32(19);
                 obj.data = head.ToArray();
-             //   obj.obj_id = head[0]; // instance varable ooor sprite index? hummmmmm
+                //   obj.obj_id = head[0]; // instance varable ooor sprite index? hummmmmm
                 obj.sprite_index = head[0];
                 System.Diagnostics.Debug.Assert(!(obj.sprite_index == 0 && obj.sprite_index == 1));
                 obj.Visible = head[2] != 0;
-                System.Diagnostics.Debug.Assert(!(head[2] == 0 &&  head[2] == 1));
-                obj.Solid =  head[3] != 0;
-                System.Diagnostics.Debug.Assert(!(head[3]== 0 && head[3] == 1));
+                System.Diagnostics.Debug.Assert(!(head[2] == 0 && head[2] == 1));
+                obj.Solid = head[3] != 0;
+                System.Diagnostics.Debug.Assert(!(head[3] == 0 && head[3] == 1));
                 obj.isPersistant = head[4] != 0;
                 obj.depth = head[5]; // negitive numbers are close to the player
                 obj.Parent = head[6];
-                
-                
-                obj.Mask = head[6];
-             //   obj.PhysicsObject = head[8];
-            //    obj.PhysicsObjectSensor = head[9];
-             //   obj.PhysicsObjectShape = head[10];
-             //   obj.PhysicsObjectDensity = head[11];
-       
-                
-                List<int> alarms = CollectEntries(obj_limit);
-              ///  string debug_msg = checkForRefs(r.BaseStream.Position, obj_limit);
-              //  if (debug_msg != null)
-           //     {
-               //     WriteDebug("Object: " + obj.name + "--------------------------");
-               //     WriteDebug(debug_msg);
-                //    WriteDebug("------------------");
-              //  }
-             //   continue;
-                System.Diagnostics.Debug.Assert(alarms.Count == 12); // these are all int allinged right, no object more than 12?
-                for (int j=0;j<12;j++) // there are 12 refrences here.  I assume they go with the alarms?
-                {
-                    int offset = alarms[j];
-                    CheckAndSetOffset(offset);
-                    int next_offset = (j+1) < alarms.Count ? alarms[j+1] : (int)obj_limit;
-                    int size = next_offset - offset;
-                    System.Diagnostics.Debug.Assert((size % 4) ==0); // these are all int allinged right?
-                    if ((size / 4) > 1)
+
+                obj.Mask = head[6]; // Humm I am thinking objects are varable size
+                                    //   obj.PhysicsObject = head[8];
+                                    //    obj.PhysicsObjectSensor = head[9];
+                                    //   obj.PhysicsObjectShape = head[10];
+                                    //   obj.PhysicsObjectDensity = head[11];
+
+                using (ChunkEntries alarms = new ChunkEntries(r, chunkLimit, false))
+                { // Side note, mabey we link to parrent allarms?
+                    foreach (ChunkEntry alarm in alarms)
                     {
-                        List<int> stuff = readInts(size / 4);
-                        //string test = readVarString(stuff[12]);
-                        // anything over the chunklimit has a good chance of being a string
-                        for(int b=0;b<stuff.Count;b++)
-                        {
-                            if(stuff[b] >= chunkLimit)
-                            {
-                                 string stemp = readVarString(stuff[b]); // oo my god.
-                                if(stemp != null)
-                                {
-                               //     WriteDebug(obj.name + " String: " + stemp + " Pos : " + b + " index : " + j);
-                                }
-                            }
-                        }
-                        /*
-                        int value = r.ReadInt32();
-                        string msg = obj.name + "  Index: " + j + " Size: " + size + " Current offset: " + offset.ToString("X8");
-                        switch (value)
-                        {
-                            case 0: break; // nothing
-                            case 1: // refrence?
-                                {
-                                    offset = r.ReadInt32();
-                                    PushOffset(offset);
-                                    WriteDebug(msg + " Value: " + value + "\n" + DebugRefLookup());
-                                    PopOffset();
-                                    //  List<int> stuff = readInts(18);
-                                    //    debugInits(stuff);
-                                    //  byte[] d = r.ReadBytes(size - 4);
-                                    //   WriteDebug(msg + " Value: " + value);
-                                    //   debugintOut(d);
-
-                                }
-                                break;
-                            default:
-                                {
-                                    byte[] d = r.ReadBytes(size - 4);
-                                    WriteDebug(msg + " Value: " + value);
-                                    debugintOut(d);
-
-                                }
-                                break;
-                        }
-                        */
                     }
-                    
+
 
                 }
-                if(obj.name.IndexOf("obj_froggit")>-1)
+
+                if (obj.Name.IndexOf("obj_froggit") > -1)
                 {
-                    WriteDebug("We have FROG: " + obj.name);
+                    WriteDebug("We have FROG: " + obj.Name);
                 }
-              //  System.Diagnostics.Debug.Assert(obj.name != "obj_froggit");
+                //  System.Diagnostics.Debug.Assert(obj.name != "obj_froggit");
                 objList.Add(obj);
                 AddObject(obj);
             }
-            PopOffset();
         }
-      
       
         void doFORM()
         {
 
         }
-        void doTXRT(long chunkStart, long chunkLimit)
+        void doTXRT(int chunkStart, int chunkLimit)
         {
-            List<GMK_Image> res = new List<GMK_Image>();
+            // CHECK THIS, we have the textures.  I am sure the file size is in there somewhere
+
+            /*
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+                GMK_Image gi = new GMK_Image(e);
+                int dummy = r.ReadInt32(); // 1 means and ofset hummmmmmmm.  mabye to raw data?
+                int new_offset = r.ReadInt32();
+                // humm mabye there is more data here too
+
+            }
+                List<GMK_Image> res = new List<GMK_Image>();
             PushOffset(chunkStart);
             List<int> offsets = CollectEntries(chunkLimit);
             for(int i=0;i<offsets.Count;i++)
@@ -884,27 +725,24 @@ namespace betteribttest
               //  gi.image.Save(i.ToString() + "_test_.png");
             }
             filesImage = res;
+            */ 
         }
-        void DoSprite(long chunkStart,long chunkLimit)
+        void DoSprite(int chunkStart,int chunkLimit)
         {
-            PushOffset(chunkStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for (int i = 0; i < offsets.Count; i++)
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
             {
-                int offset = offsets[i++];
-                GMK_Sprite obj = new GMK_Sprite(i, offset);
-                CheckAndSetOffset(offset);
+                GMK_Sprite obj = new GMK_Sprite(e);
+                obj.Name = readVarString(r.ReadInt32());
 
-                long next_offset = i < offsets.Count ? offsets[i] : chunkLimit;
-                obj.name = readVarString(r.ReadInt32());
-                if (obj.name.IndexOf("frog") > -1)
+
+                if (obj.Name.IndexOf("frog") > -1)
                 {
-                    WriteDebug("We have FROG: " + obj.name);
+                    WriteDebug("We have FROG: " + obj.Name);
                 }
                 // objList.Add(obj);
                 AddData(obj);
             }
-            PopOffset();
             /*
             Spr_Sprite getSprSprite(string filename)
         {
@@ -948,153 +786,205 @@ namespace betteribttest
                     }
             }
         }
-        void doStrings(long chunkStart, long chunkLimit)
+        void doStrings(int chunkStart, int chunkLimit)
         {
-            PushOffset(chunkStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for (int i = 0; i < offsets.Count; i++)
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
             {
-                int offset = offsets[i];
-                GMK_String str = new GMK_String(i, offset+4); // We are storing the offset to the zro trminatd string
-                CheckAndSetOffset(offset);
-                int str_len = r.ReadInt32() + 1; //size
-                byte[] bstr = r.ReadBytes(str_len);
-                str.str = System.Text.Encoding.UTF8.GetString(bstr,0, (bstr.Last() == 0 ? (bstr.Length - 1)  : bstr.Length));
+                int string_size = r.ReadInt32() ; //size 
+                GMK_String str = new GMK_String(new ChunkEntry(e.Position + 4, e.Position + 4 + string_size, string_size)); // The strings are looked up by other functions by the offset
+                byte[] bstr = r.ReadBytes(string_size);
+                str.str = System.Text.Encoding.UTF8.GetString(bstr, 0, string_size);
                 stringList.Add(str);
                 AddData(str);
             }
-
-            PopOffset();
         }
         public List<GMK_ScriptIndex> scriptIndex = new List<GMK_ScriptIndex>();
         public Dictionary<int, GMK_ScriptIndex> scriptMap = new Dictionary<int, GMK_ScriptIndex>();
-        void doSCPT(long chunkStart, long chunkLimit)
+        void doSCPT(int chunkStart, int chunkLimit)
         {
-            PushOffset(chunkStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for (int i = 0; i < offsets.Count; i++)
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
             {
-                int offset = offsets[i];
-                long next_offset = (i+1) < offsets.Count ? offsets[i+1] : chunkLimit;
-                long size = next_offset - offset;
-                
-                CheckAndSetOffset(offset);
-                GMK_ScriptIndex scpt = new GMK_ScriptIndex(i, offset );
-                System.Diagnostics.Debug.Assert(size == 8);
-
+                GMK_ScriptIndex scpt = new GMK_ScriptIndex(e);
+                System.Diagnostics.Debug.Assert(e.ChunkSize == 8);
                 scpt.script_name = readVarString(r.ReadInt32());
                 scpt.script_index = r.ReadInt32();
                 AddData(scpt);
                 scriptIndex.Add(scpt);
-                scriptMap[scpt.index] = scpt;
-
             }
-            PopOffset();
+
         }
         void doGEN8(long chunkStart, long chunkLimit)
         {
-            PushOffset(chunkStart);
-            long size = chunkLimit - chunkStart;
-            List<int> test2 = readInts((int)(size / 4)); //  lots of weird data here, does this set up the vars?
+//
+      //      long size = chunkLimit - chunkStart;
+      //      List<int> test2 = readInts((int)(size / 4)); //  lots of weird data here, does this set up the vars?
            // string test = readVarString(r.ReadInt32());
             // special?
 
-
-            PopOffset();
-        }
-        public List<GMK_FuncOffset> funcIndex = new List<GMK_FuncOffset>();
-        public Dictionary<int, GMK_FuncOffset> funcMap = new Dictionary<int, GMK_FuncOffset>();
-        public Dictionary<int, GMK_FuncOffset> calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
-
-        void doFUNC(long chunkStart, long chunkLimit)
-        {
-             funcIndex = new List<GMK_FuncOffset>();
-            funcMap = new Dictionary<int, GMK_FuncOffset>();
-            calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
-            PushOffset(chunkStart);
-            long size = chunkLimit - chunkStart; // it should be divisiable by 12
-            int i = 0;
-            System.Diagnostics.Debug.Assert((size % 12) == 0);
-            while (r.BaseStream.Position < chunkLimit)
-            {
-                GMK_FuncOffset func = new GMK_FuncOffset(i++, (int)r.BaseStream.Position);
-                func.func_name = readVarString(r.ReadInt32());
-                func.func_offset = r.ReadInt32();
-                func.another_offset = r.ReadInt32(); // This offset is in the code section, so its linking direct to the code?
-                PushOffset(func.another_offset);
-                uint data = r.ReadUInt32();
-                uint data2 = r.ReadUInt32();
-                // Ok, so we are linking to the CALL of the fuction...  so what does this do ?
-                WriteDebug("Data: " + data.ToString("X8") + " More: " + data2.ToString("X8")); // func.ToString());
-                WriteDebug(func.ToString());
-                DebugFindBetweenOFfsets(func.another_offset);
-                PopOffset();
-                AddData(func);
-                funcIndex.Add(func);
-                // Ok, so the second data2 point goes to a calling function directy in the code section
-                // for all the tests I do, its ALWAY going to that calling section.  So I am assuming its the first
-                // time this functiin gets called
-                // I am fairly sure this is for debugging as the compiler probery doesn't know of the function's location till
-                // compile/parse time
-                // If this works, it would mean the disasembler, when it finds a call, look up the offseet, se if its in this thing
-                // then remember the offset in the function
-                funcMap[func.index] = func;
-            }
-            PopOffset();
         }
         public Dictionary<long, GMK_SpritePosition> spritePos = new Dictionary<long, GMK_SpritePosition>();
-
-        void doTPAG(long chunkStart, long chunkLimit)
+        void doTPAG(int chunkStart, int chunkLimit)
         {
-            PushOffset(chunkStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for (int i = 0; i < offsets.Count; i++)
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
             {
-                int offset = offsets[i];
-                long next_offset = (i + 1) < offsets.Count ? offsets[i + 1] : chunkLimit;
-                long size = next_offset - offset;
-                System.Diagnostics.Debug.Assert(size == 22);
-                CheckAndSetOffset(offset);
-                GMK_SpritePosition p = new GMK_SpritePosition(i,offset);
+                GMK_SpritePosition p = new GMK_SpritePosition(e);
+                System.Diagnostics.Debug.Assert(e.ChunkSize == 22);
 
                 p.x = r.ReadInt16(); // this is the size of the record
                 p.y = r.ReadInt16();
                 p.width = r.ReadInt16();
                 p.height = r.ReadInt16();
-                p.some_data = r.ReadInt32();
+                p.renderX = r.ReadInt16();
+                p.renderY = r.ReadInt16();
                 p.width0 = r.ReadInt16();
                 p.height0 = r.ReadInt16();
                 p.width1 = r.ReadInt16();
                 p.height1 = r.ReadInt16();
-                p.texture_id= r.ReadInt16();
+                p.texture_id = r.ReadInt16();
                 AddData(p);
-                spritePos[p.offset] = p;
+                spritePos[e.Position] = p;
             }
-            PopOffset();
+        }
+        public List<GMK_FuncOffset> funcIndex = new List<GMK_FuncOffset>();
+        public Dictionary<int, GMK_FuncOffset> funcMap = new Dictionary<int, GMK_FuncOffset>();
+        public Dictionary<int, GMK_FuncOffset> calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
+        public Dictionary<int, GMK_FuncOffset> othertoFunMap = new Dictionary<int, GMK_FuncOffset>();
+        public SortedDictionary<int, int> otherfuncounts = new SortedDictionary<int, int>();
+        void AddFUNCDebug(GMK_FuncOffset func)
+        {
+            // using this we can analize the offsets off this data. 
+            AddData(func);
+            funcIndex.Add(func);
+            funcMap[func.FilePosition.Position] = func;
+            r.PushSeek(func.code_offset);
+            uint data = r.ReadUInt32();
+            int data2 = r.ReadInt32();
+            calltoFunMap[data2] = func;
+            othertoFunMap[func.func_offset] = func;
+            if (otherfuncounts.ContainsKey(func.func_offset)) otherfuncounts[func.func_offset]++;
+            else otherfuncounts[func.func_offset] = 1;
+
+            r.PopPosition();
+        }
+        void doFUNC(int chunkStart, int chunkLimit)
+        {
+             funcIndex = new List<GMK_FuncOffset>();
+            funcMap = new Dictionary<int, GMK_FuncOffset>();
+            calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
+            r.PushSeek(chunkStart);
+            long size = chunkLimit - chunkStart; // it should be divisiable by 12
+            int i = 0;
+            System.Diagnostics.Debug.Assert((size % 12) == 0);
+            while (r.BaseStream.Position < chunkLimit)
+            {
+                GMK_FuncOffset func = new GMK_FuncOffset(new ChunkEntry(r.Position, r.Position + 12, 12)); 
+                func.func_name = readVarString(r.ReadInt32());
+                func.func_offset = r.ReadInt32();  // humm.  Mabye this is a type?
+                func.code_offset = r.ReadInt32(); // This offset is in the code section, so its linking direct to the code?
+                AddFUNCDebug(func);
+            }
+            foreach(var o in otherfuncounts)
+            {
+                WriteDebug("Type: {0}  Count: {1}", o.Key, o.Value);
+            }
+            r.PopPosition();
+        }
+        
+
+        public List<GMK_Var> variIndex = new List<GMK_Var>();
+        public Dictionary<int, GMK_Var> variMap = new Dictionary<int, GMK_Var>();
+        public Dictionary<int, GMK_Var> reftoVARI = new Dictionary<int, GMK_Var>();
+        public Dictionary<int, GMK_Var> otherToVARI = new Dictionary<int, GMK_Var>();
+        public SortedDictionary<int, int> otherVarCounts = new SortedDictionary<int, int>();
+        int debugPopStatmet(uint op)
+        {
+            int topType = (int)((op >> 20) & 0xF);
+            int secondType = (int)((op >> 16) & 0xF);
+            int instance = (short)(op & 0xFFFF);
+            string sinstance;
+            if (!Disam.instanceLookup.TryGetValue(instance, out sinstance)) sinstance = instance.ToString();
+            int func = r.ReadInt32();
+
+            int object_var = (int)(func & 0x0FFFFFFF); // this COULD be 24 bits?
+            int object_var_type = func >> 24 & 0xFF; // I think this might only be 4 bits
+            string name = null;
+            //   GMK_Data gkd = cr.OffsetDebugLookup(object_var);
+            //   if (name == null && gkd != null) name = gkd.name + " off"; 
+            //  if (name == null && object_var < cr.stringList.Count) name = cr.stringList[object_var].str;
+            if (name == null) name = object_var.ToString();
+            string soperand = String.Format("pop {0} -> {1} ({2} [Type: {3,4:X}, Var: {4}])", Disam.typeLookup[topType], Disam.typeLookup[secondType], sinstance, object_var_type, name);
+            WriteDebug(soperand);
+            return object_var;
+        }
+        void AddVARIDebug(GMK_Var func)
+        {
+            // using this we can analize the offsets off this data. 
+            r.PushSeek(func.code_offset);
+            AddData(func);
+            variIndex.Add(func);
+            variMap[func.var_offset] = func;
+           
+            uint data = r.ReadUInt32();
+            
+            int data2 = debugPopStatmet(data);
+            reftoVARI[data2] = func;
+            otherToVARI[func.var_offset] = func; 
+            if (otherVarCounts.ContainsKey(func.var_offset)) otherVarCounts[func.var_offset]++;
+            else otherVarCounts[func.var_offset] = 1;
+            
+            r.PopPosition();
+        }
+        // same structure as func mabye
+        void doVARI(int chunkStart, int chunkLimit)
+        {
+            r.PushSeek(chunkStart);
+            long size = chunkLimit - chunkStart; // it should be divisiable by 12
+            int i = 0;
+        //    List<int> test = readInts(24);
+            System.Diagnostics.Debug.Assert((size % 12) == 0);
+            while (r.BaseStream.Position < chunkLimit)
+            {
+                GMK_Var func = new GMK_Var(new ChunkEntry(r.Position, r.Position + 12, 12));
+                int str_offset = r.ReadInt32();
+                int var_offset = r.ReadInt32();
+                int code_offset = r.ReadInt32();
+
+                func.var_name = readVarString(str_offset);
+                func.var_offset = var_offset;
+                func.code_offset = code_offset; // This offset is in the code section, so its linking direct to the code?
+                WriteDebug(func.ToString());
+                AddVARIDebug(func);
+
+
+            }
+            r.PopPosition();
         }
         class Chunk
         {
-            public readonly long start;
-            public readonly long end;
-            public readonly long size;
+            public readonly int start;
+            public readonly int end;
+            public readonly int size;
             public readonly string name;
-            public Chunk(string name, long start, long size) { this.name = name; this.start = start; this.end = start + size; this.size = size; }
+            public Chunk(string name, int start, int size) { this.name = name; this.start = start; this.end = start + size; this.size = size; }
         }
         Dictionary<string, Chunk> chunks = new Dictionary<string, Chunk>();
 
         public void runChunkReader()
         {
             Chunk chunk = null;
-            long full_size = r.BaseStream.Length;
+            int full_size = r.Length;
             while (r.BaseStream.Position < full_size)
             {
                 string chunkName = readFixedString(4);
                 int chunkSize = r.ReadInt32();
-                long chuckStart = r.BaseStream.Position;
+                int chuckStart = r.Position;
                 chunk = new Chunk(chunkName, chuckStart, chunkSize);
                 chunks[chunkName] = chunk;
                 if (chunkName == "FORM") full_size = chunkSize; // special case for form
-                else r.BaseStream.Position = chuckStart + chunkSize; // make sure we are always starting at the next chunk               
+                else r.Position = chuckStart + chunkSize; // make sure we are always starting at the next chunk               
             } // we want to get strings out first so we can easily check if refrences equal them
             if (chunks.TryGetValue("STRG", out chunk))
                 doStrings(chunk.start, chunk.end);
@@ -1102,6 +992,7 @@ namespace betteribttest
                 doTXRT(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("TPAG", out chunk))
                 doTPAG(chunk.start, chunk.end); // doing objects right now
+                                                // These three need to be processed first ofr the others to work
             if (chunks.TryGetValue("BGND", out chunk))
                 DoBackground(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("SPRT", out chunk))
@@ -1110,11 +1001,12 @@ namespace betteribttest
             this.debugOn = false;
             if (chunks.TryGetValue("OBJT", out chunk))
                 DoObject(chunk.start, chunk.end); // doing objects right now
-            this.debugOn = true;
 
+            this.debugOn = true;
             if (chunks.TryGetValue("ROOM", out chunk))
                 DoRoom(chunk.start, chunk.end); // doing objects right now
-           
+            this.debugOn = false;
+
             if (chunks.TryGetValue("FONT", out chunk))
                 DoFont(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("CODE", out chunk))
@@ -1125,9 +1017,10 @@ namespace betteribttest
                 doGEN8(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("FUNC", out chunk))
                 doFUNC(chunk.start, chunk.end); // doing objects right now
-         
-            
+            if (chunks.TryGetValue("VARI", out chunk))
+                doVARI(chunk.start, chunk.end); // doing objects right now
 
+            this.debugOn = true;
             //    case "OBJT": DoObject(chuckStart, chunkLimit); break;
             //     case "TXTR": doTXRT(chuckStart, chunkLimit); break;
             //    case "FONT": DoFont(chuckStart, chunkLimit); break;
@@ -1151,7 +1044,7 @@ namespace betteribttest
                 filename = "data.win";
             } 
             s = System.IO.File.Open(filename, FileMode.Open, FileAccess.Read);
-            r = new BinaryReader(s);
+            r = new ChunkStream(s);
 
             runChunkReader();
         }

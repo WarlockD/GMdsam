@@ -80,23 +80,23 @@ namespace betteribttest
             bool found = false;
             foreach(GMK_Code c in cr.codeList)
             {
-                if(c.name.IndexOf(code_name) != -1)
+                if(c.Name.IndexOf(code_name) != -1)
                 {
                     found = true;
                     MemoryStream ms = new MemoryStream(c.code);
-                    processStream(ms);
-                    StreamWriter s = new StreamWriter(c.name + ".txt");
+                    processStream(ms,c.FilePosition.Position);
+                    StreamWriter s = new StreamWriter(c.Name + ".txt");
                     foreach (Opcode o in codes)
                     {
                         s.WriteLine(o.ToString());
                     }
                     s.Close();
-                    writeHTMLFile(c.name);
+                    writeHTMLFile(c.Name);
                 }
             }
             if(!found) throw new Exception(code_name + " not found");
         }
-        static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
+        public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
         {
             {  0 , "stack" },
             {  -1, "self" },
@@ -105,7 +105,7 @@ namespace betteribttest
             {  -4, "noone" },
             {  -5, "global" },
         };
-        static Dictionary<int, string> typeLookup = new Dictionary<int, string>()
+        public static Dictionary<int, string> typeLookup = new Dictionary<int, string>()
         {
             {  0x00, "double" },
             {  0x01, "float" },
@@ -152,13 +152,13 @@ namespace betteribttest
             {  0xda, "call" },
             {  0xff, "break" },
         };
-        string lookupInstance(int instance)
+        public string lookupInstance(int instance)
         {
             string ret;
             if (instanceLookup.TryGetValue(instance, out ret)) return ret;
             GMK_Object o;
             if (cr.objMapId.TryGetValue(instance, out o))
-                return o.name;
+                return o.Name;
             //   if (cr.objMapIndex.TryGetValue(instance, out o))
             //        return o.name;
             return instance > 10 ? String.Format("0x{0:X4}", instance) : String.Format("{0}", instance);
@@ -203,7 +203,7 @@ namespace betteribttest
             return ret;
             // zero seems to be an array assign
         }
-        public void processStream(Stream f)
+        public void processStream(Stream f,long codeOffset)
         {
             codes = new List<Opcode>();
             f.Position = 0;
@@ -343,13 +343,17 @@ namespace betteribttest
                                 //  byte return_type = (byte)((op >> 16) & 0xFF); // always i
                                 // string return_type_string = typeLookup[return_type];
                                 int args = (ushort)(op & 0xFFFF);
-                                uint fuc = r.ReadUInt32();
-                                GMK_Data gkd = cr.OffsetDebugLookup(fuc);
-                              //  string fs; funcIndex
-                             //   if (gkd != null) fs = gkd.ToString();
-                              //  else fs = fuc.ToString() + "[" + fuc.ToString("X4") + "]";
-                                string fs = fuc < cr.funcIndex.Count ? cr.funcIndex[(int)fuc].func_name : fuc.ToString(); 
-                                soperand = String.Format("{0}({1})", fs, args);
+                                int fuc = r.ReadInt32();
+                             //   GMK_Data gkd = cr.OffsetDebugLookup(fuc);
+                                //  string fs; funcIndex
+                                //   if (gkd != null) fs = gkd.ToString();
+                                //  else fs = fuc.ToString() + "[" + fuc.ToString("X4") + "]";
+                                // lets find the offset calltoFunMap
+                                GMK_FuncOffset o; 
+                                if (cr.othertoFunMap.TryGetValue(fuc, out o))
+                                    soperand = String.Format("{0}({1})", o.func_name, args);
+                                else
+                                    soperand = String.Format("{0}[{0,-5:X5}]({1})", fuc, args);
                             }
                             break;
                         case "break":

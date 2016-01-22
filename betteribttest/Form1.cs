@@ -18,42 +18,6 @@ namespace betteribttest
     {
         ChunkReader cr;
  
-
-        public void font_test()
-        {
-            List<int> data = new List<int>();
-            Bitmap bmp = null;
-            string stuff = "";
-            using (BinaryReader r = new BinaryReader(File.Open("Undertale\\FONT\\000009b1.dat", FileMode.Open)))
-            {
-                uint len = r.ReadUInt32(); // size?
-
-                for (int i = 0; i < 4; i++)
-                {
-                 //   stuff += String.Format("{0,10} {1,10}\n", r.ReadUInt16(), r.ReadUInt16());
-
-                }
-                while (r.BaseStream.Position != r.BaseStream.Length)
-                 
-                {
-                    uint op = r.ReadUInt32();
-                    if(op == 0 || op == 1)
-                    {
-                        ushort a = r.ReadUInt16();
-                        ushort b = r.ReadUInt16();
-                        uint c = r.ReadUInt32();
-                        uint d = r.ReadUInt32();
-
-                       stuff += String.Format("{0,2} {1,10} {2,10} {3,10} {4,10}\n", op,(char)a,b,c,d);
-
-                    }
-                    data.Add((int)op);
-                }
-            }
-        //    string s = PrintInts(data)+"\n";
-            System.Diagnostics.Debug.Write(stuff);
-
-        }
        
     
         class Spr_Sprite
@@ -237,7 +201,7 @@ namespace betteribttest
             // cr = new ChunkReader("Undertale\\data.win",false);
             cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             Disam dism = new Disam(cr);
-            // dism.writeFile("frog");
+            dism.writeFile("frog");
             dism.writeFile("SCR_GAMESTART");
             //    cr.debugOn = false;
             // cr = new ChunkReader("testgame\\data.win");
@@ -300,10 +264,10 @@ namespace betteribttest
             string font_dir = "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\fonts\\";
             string font_bmp_filename = "font_chars.png";
             this.image = target;
-            Stream s = File.Open(font_dir + fnt.name + ".fnt", FileMode.Create);
+            Stream s = File.Open(font_dir + fnt.Name + ".fnt", FileMode.Create);
             System.IO.TextWriter tw = new StreamWriter(s);
             bmp_chars.Save(font_dir + font_bmp_filename);
-            tw.Write("info face=\"" + fnt.name + "\"");
+            tw.Write("info face=\"" + fnt.Name + "\"");
             tw.Write(" size=" + fnt.font_size);
             tw.Write(" bold=" + "0");//  fnt.maybe_Bold ? "1": "0");
             tw.Write(" italic=" + "0");//  fnt.maybe_Bold ? "1": "0");
