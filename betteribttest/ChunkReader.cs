@@ -671,10 +671,6 @@ namespace betteribttest
 
                 }
 
-                if (obj.Name.IndexOf("obj_froggit") > -1)
-                {
-                    WriteDebug("We have FROG: " + obj.Name);
-                }
                 //  System.Diagnostics.Debug.Assert(obj.name != "obj_froggit");
                 objList.Add(obj);
                 AddObject(obj);

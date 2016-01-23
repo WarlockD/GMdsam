@@ -709,7 +709,7 @@ namespace betteribttest
                             op &= 0x00FFFFFF;
                             if ((op & 0x800000) != 0) op |= 0xFF000000;
                             info.value = new StackValue((int)op);
-                            soperand = String.Format("{0}", (int)op);
+                            soperand = String.Format("{0}", (int)op + (startOpPos/4)+1);
                             break;
                         case "popenv":
                             soperand = String.Format("{0} --> {1} ; (unknown, to pushenv?", (op >> 16) & 0xFF, (short)(op & 0xFFFF));
