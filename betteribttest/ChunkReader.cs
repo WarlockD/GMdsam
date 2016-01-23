@@ -78,6 +78,7 @@ namespace betteribttest
     }
     class GMK_String : GMK_Data
     {
+        public int index;
         public string str;
         public string escapedString
         {
@@ -587,7 +588,7 @@ namespace betteribttest
         void DoFont(int chunkStart, int chunkLimit)
         {
             resFonts = new List<GMK_Font>();
-            ChunkEntries.DebugOutput = true;
+            ChunkEntries.DebugOutput = false;
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
             foreach (ChunkEntry e in entries)
             {
@@ -795,6 +796,7 @@ namespace betteribttest
                 GMK_String str = new GMK_String(new ChunkEntry(e.Position + 4, e.Position + 4 + string_size, string_size)); // The strings are looked up by other functions by the offset
                 byte[] bstr = r.ReadBytes(string_size);
                 str.str = System.Text.Encoding.UTF8.GetString(bstr, 0, string_size);
+                str.index = stringList.Count;
                 stringList.Add(str);
                 AddData(str);
             }
@@ -869,7 +871,83 @@ namespace betteribttest
 
             r.PopPosition();
         }
-        void doFUNC(int chunkStart, int chunkLimit)
+        // Ok, this is stupid, but I get it
+        // All the vars and function names are on a link list from one to another that tie to the name
+        // to make this much easyer for the disassembler, we are going to change all these refrences
+        // to be string indexes to strlist.  To DO this however, requires us to read the entire code section
+        // as a bunch of ints, go though the etnire thing with the refrences, repeat then figure out the code section
+        // into seperate scripts blocks.  Meh
+        class CodeNameRefrence
+        {
+            public GMK_String name;
+            public int count;
+            public int start_ref;
+            public int[] offsets;
+        }
+       void refactorCode_FindAllRefs(SortedDictionary<int,CodeNameRefrence> refs, Chunk codeChunk, Chunk refChunk)
+        {
+            r.Position = refChunk.start;
+            int refCount = refChunk.size / 12;
+            // Each ref is 3 ints long, firt is name refrence, second is number of refs, and thrid is the chain
+            for (int i = 0; i < refCount; i++)
+            {
+                CodeNameRefrence nref = new CodeNameRefrence();
+                int name_ref = r.ReadInt32();
+                GMK_String str = offsetMap[name_ref] as GMK_String;
+                if (str == null) throw new Exception("We MUST have a string here or all is lost");
+                nref.name = str;
+                nref.count = r.ReadInt32();
+                nref.start_ref = r.ReadInt32() & 0x00FFFFFF;
+                nref.offsets = new int[nref.count];
+                r.PushSeek(nref.start_ref);
+                for (int j = 0; j < nref.count; j++)
+                {
+                    int first = r.ReadInt32(); // skip the first pop opcode
+                    int position = r.Position;
+                    int offset = r.ReadInt32() & 0x00FFFFFF;
+                    if (refs.ContainsKey(position)) throw new Exception("This ref was already in there?");
+                    else refs[position] = nref;
+                    nref.offsets[j] = offset;
+                    r.Position += (offset-8);
+                  //  r.BaseStream.Seek(looffsetcation - 8L, SeekOrigin.Current); // this is crazy, so its an offset to the NEXT entry?  Gezzz
+                }
+                r.PopPosition();
+            }
+        }
+        void refactorCode(Chunk codeChunk, Chunk funcChunk, Chunk varChunk) 
+        {
+            // first the easy bit, getting all of the code start
+            
+            // Functions first
+            int funcSize = funcChunk.size / 12;
+            SortedDictionary<int, CodeNameRefrence> refs = new SortedDictionary<int, CodeNameRefrence>();
+            refactorCode_FindAllRefs(refs, codeChunk,funcChunk);
+            refactorCode_FindAllRefs(refs, codeChunk,varChunk);
+
+            ChunkEntries entries = new ChunkEntries(r, codeChunk.start, codeChunk.end);
+            foreach (ChunkEntry e in entries)
+            {
+                GMK_Code code = new GMK_Code(e);
+                code.Name = readVarString(r.ReadInt32());
+                int code_size = r.ReadInt32();
+                int startPosition = r.Position;
+                code.code = r.ReadBytes(code_size);
+                for(int i=0; i< code_size;i+=4, startPosition+=4)
+                {
+                    CodeNameRefrence name_ref;
+                    if (refs.TryGetValue(startPosition, out name_ref))
+                    {
+                        code.code[i] = (byte)((name_ref.name.index) & 0xFF);
+                        code.code[i + 1] = (byte)((name_ref.name.index >> 8) & 0xFF);
+                        code.code[i + 2] = (byte)((name_ref.name.index >> 16) & 0xFF);
+                    }
+                }
+                codeList.Add(code);
+                AddData(code);
+            }
+        }
+
+    void doFUNC(int chunkStart, int chunkLimit)
         {
              funcIndex = new List<GMK_FuncOffset>();
             funcMap = new Dictionary<int, GMK_FuncOffset>();
@@ -1009,18 +1087,18 @@ namespace betteribttest
 
             if (chunks.TryGetValue("FONT", out chunk))
                 DoFont(chunk.start, chunk.end); // doing objects right now
-            if (chunks.TryGetValue("CODE", out chunk))
-                DoCode(chunk.start, chunk.end); // doing objects right now
+        
             if (chunks.TryGetValue("SCPT", out chunk))
                 doSCPT(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("GEN8", out chunk))
                 doGEN8(chunk.start, chunk.end); // doing objects right now
-            if (chunks.TryGetValue("FUNC", out chunk))
-                doFUNC(chunk.start, chunk.end); // doing objects right now
-            if (chunks.TryGetValue("VARI", out chunk))
-                doVARI(chunk.start, chunk.end); // doing objects right now
+        //  if (chunks.TryGetValue("FUNC", out chunk))
+        //      doFUNC(chunk.start, chunk.end); // doing objects right now
+        //   if (chunks.TryGetValue("VARI", out chunk))
+        //       doVARI(chunk.start, chunk.end); // doing objects right now
 
-            this.debugOn = true;
+            refactorCode(chunks["CODE"], chunks["FUNC"], chunks["VARI"]);
+           // this.debugOn = true;
             //    case "OBJT": DoObject(chuckStart, chunkLimit); break;
             //     case "TXTR": doTXRT(chuckStart, chunkLimit); break;
             //    case "FONT": DoFont(chuckStart, chunkLimit); break;

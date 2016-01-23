@@ -179,7 +179,7 @@ namespace betteribttest
             }
             return v;
         }
-        public string lookAtPoP(int topType, int secondType, int instance, int load_type,int var_ident)
+        public string lookAtPoP(int topType, int secondType, int instance, int load_type,string var_ident)
         {
             string sinstance;
             string ret = "Nothing";
@@ -203,6 +203,19 @@ namespace betteribttest
             return ret;
             // zero seems to be an array assign
         }
+        public string decodeCallName(int operand)
+        {
+            int string_ref = (int)(operand & 0x0FFFFFFF); // this COULD be 24 bits?
+            if (string_ref < cr.stringList.Count) return cr.stringList[string_ref].str;
+            else return "NOT FOUND: " + string_ref.ToString();
+        }
+        public string decodePushOrPop(int operand)
+        {
+            string name = decodeCallName(operand);
+            int load_type = ((operand >> 24) & 0xFF);
+            return "( LoadType: " + load_type.ToString("X2") + " Name: " + name + ")";
+        }
+      
         public void processStream(Stream f,long codeOffset)
         {
             codes = new List<Opcode>();
@@ -256,16 +269,9 @@ namespace betteribttest
                                 int instance = (short)(op & 0xFFFF);
                                 string sinstance = lookupInstance(instance);
                                 int func = r.ReadInt32();
-
-                                int object_var =  (int)(func & 0x0FFFFFFF); // this COULD be 24 bits?
                                 int object_var_type = func >> 24 & 0xFF; // I think this might only be 4 bits
-                                string name = null;
-                             //   GMK_Data gkd = cr.OffsetDebugLookup(object_var);
-                             //   if (name == null && gkd != null) name = gkd.name + " off"; 
-                              //  if (name == null && object_var < cr.stringList.Count) name = cr.stringList[object_var].str;
-                                if (name == null) name = object_var.ToString();
-                                soperand = String.Format("{0} -> {1} ({2} [Type: {3,4:X}, Var: {4}])", typeLookup[topType], typeLookup[secondType], sinstance, object_var_type, name);
-                                scomment = lookAtPoP(topType, secondType, instance, object_var_type, object_var);
+                                soperand = String.Format("{0} -> {1} ({2} {3}", typeLookup[topType], typeLookup[secondType], sinstance, decodePushOrPop(func));
+                                scomment = lookAtPoP(topType, secondType, instance, object_var_type, decodeCallName(func));
                             }
                             break;
                         case "push":
@@ -308,13 +314,11 @@ namespace betteribttest
                                     {
                                         int instance = (short)(op & 0xFFFF);
                                         string sinstance = lookupInstance(instance);
-                                        short var_ident = r.ReadInt16();
-                                        short load_type = r.ReadInt16(); // r.ReadInt16(); // this could be a byte humm
-
-
+                                        int func = r.ReadInt32();
+                                        int load_type = (func >> 24) & 0xFF;
                                         scode += ".v";
-                                        soperand = String.Format("{0} (load type: {1,4:X},ident: {2,4:X})", sinstance, load_type, var_ident);
-                                        if (load_type == 1) soperand += "; Type is an array";
+                                        soperand = String.Format("{0} {1}", sinstance, decodePushOrPop(func));
+                                        if (load_type == 0) scomment += "Type is an array";
 
                                     }
                                     break;
@@ -344,16 +348,8 @@ namespace betteribttest
                                 // string return_type_string = typeLookup[return_type];
                                 int args = (ushort)(op & 0xFFFF);
                                 int fuc = r.ReadInt32();
-                             //   GMK_Data gkd = cr.OffsetDebugLookup(fuc);
-                                //  string fs; funcIndex
-                                //   if (gkd != null) fs = gkd.ToString();
-                                //  else fs = fuc.ToString() + "[" + fuc.ToString("X4") + "]";
-                                // lets find the offset calltoFunMap
-                                GMK_FuncOffset o; 
-                                if (cr.othertoFunMap.TryGetValue(fuc, out o))
-                                    soperand = String.Format("{0}({1})", o.func_name, args);
-                                else
-                                    soperand = String.Format("{0}[{0,-5:X5}]({1})", fuc, args);
+                                string callName = decodeCallName(fuc);
+                                soperand = String.Format("{0}({1})", callName, args);
                             }
                             break;
                         case "break":

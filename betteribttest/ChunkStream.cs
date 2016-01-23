@@ -156,6 +156,9 @@ namespace betteribttest
     public class ChunkStream : BinaryReader
     {
         Stack<int> posStack = new Stack<int>();
+        // used on reading strings so we don't go creating a new one for thousands of things
+        Dictionary<int, string> stringCache = new Dictionary<int, string>(); 
+
         public byte[] ChunkData { get; private set; }
         public ChunkStream(Stream s) : base(s) { DebugPosition = false; ChunkData = null;  }
         public ChunkStream(Stream s, Encoding e) : base(s,e) { DebugPosition = false; ChunkData = null; }
@@ -185,6 +188,20 @@ namespace betteribttest
             byte[] data = ReadBytes((int)(chunkEnd - chunkStart));
             PopPosition();
             return new ChunkStream(data);
+        }
+        public uint[] ReadUInt32(int count, int position)
+        {
+            PushSeek(position);
+            uint[] ret = ReadUInt32(count);
+            PopPosition();
+            return ret;
+        }
+        public uint[] ReadUInt32(int count)
+        {
+            byte[] bytes = ReadBytes(count * sizeof(uint));
+            uint[] intArray = new uint[count];
+            Buffer.BlockCopy(bytes, 0, intArray, 0, intArray.Length * sizeof(uint));
+            return intArray;
         }
         public int[] ReadInt32(int count, int position)
         {
@@ -236,8 +253,12 @@ namespace betteribttest
             return CollectEntries(0, advance, true);
         }
         */
+       
         string ReadVString() // We shouldn't throw here
         {
+            string str;
+            int posStart = Position;
+            if (stringCache.TryGetValue(posStart, out str)) return str;
             List<byte> bytes = new List<byte>();
             for (;;)
             {
@@ -247,13 +268,17 @@ namespace betteribttest
                 bytes.Add(b);
             }
             if (bytes.Count == 0) return null; // null if we just read a 0
-            return System.Text.Encoding.UTF8.GetString(bytes.ToArray());
+            str = System.Text.Encoding.UTF8.GetString(bytes.ToArray());
+            stringCache[posStart] = str;
+            return str;
         }
         string ReadVString(int position)
         {
-            PushSeek(position);
-            string s = ReadVString();
-            PopPosition();
+            string s;
+            int posStart = Position; // we do it again here for speed
+            if (stringCache.TryGetValue(Position, out s)) return s;
+            s = ReadVString();
+            Position = posStart;
             return s;
         }
 

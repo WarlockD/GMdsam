@@ -220,7 +220,7 @@ namespace betteribttest
             // x= 2 y = 520 cr.resFonts[7]; fnt_curs  
 
             GMK_Font fnt = cr.resFonts[1];
-
+            return;
                 Bitmap bmp_chars = cr.filesImage[fnt.bitmap.texture_id].image; // don't know why or how the fonts know to look at this texture
            // GMK_Font fnt = cr.resFonts[0];
             //Bitmap bmp_chars = cr.filesImage[0].image; // don't know why or how the fonts know to look at this texture
