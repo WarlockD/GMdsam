@@ -954,7 +954,7 @@ namespace betteribttest
             calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
             r.PushSeek(chunkStart);
             long size = chunkLimit - chunkStart; // it should be divisiable by 12
-            int i = 0;
+
             System.Diagnostics.Debug.Assert((size % 12) == 0);
             while (r.BaseStream.Position < chunkLimit)
             {
@@ -1020,7 +1020,7 @@ namespace betteribttest
         {
             r.PushSeek(chunkStart);
             long size = chunkLimit - chunkStart; // it should be divisiable by 12
-            int i = 0;
+
         //    List<int> test = readInts(24);
             System.Diagnostics.Debug.Assert((size % 12) == 0);
             while (r.BaseStream.Position < chunkLimit)
@@ -1031,7 +1031,11 @@ namespace betteribttest
                 int code_offset = r.ReadInt32();
 
                 func.var_name = readVarString(str_offset);
-                func.var_offset = var_offset;
+                if (func.var_name.IndexOf("obj") != -1)
+                {
+                    throw new Exception("Check this");
+                }
+                    func.var_offset = var_offset;
                 func.code_offset = code_offset; // This offset is in the code section, so its linking direct to the code?
                 WriteDebug(func.ToString());
                 AddVARIDebug(func);
@@ -1092,21 +1096,9 @@ namespace betteribttest
                 doSCPT(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("GEN8", out chunk))
                 doGEN8(chunk.start, chunk.end); // doing objects right now
-        //  if (chunks.TryGetValue("FUNC", out chunk))
-        //      doFUNC(chunk.start, chunk.end); // doing objects right now
-        //   if (chunks.TryGetValue("VARI", out chunk))
-        //       doVARI(chunk.start, chunk.end); // doing objects right now
+
 
             refactorCode(chunks["CODE"], chunks["FUNC"], chunks["VARI"]);
-           // this.debugOn = true;
-            //    case "OBJT": DoObject(chuckStart, chunkLimit); break;
-            //     case "TXTR": doTXRT(chuckStart, chunkLimit); break;
-            //    case "FONT": DoFont(chuckStart, chunkLimit); break;
-            //    case "CODE": DoCode(chuckStart, chunkLimit); break;
-            //     case "ROOM": DoRoom(chuckStart, chunkLimit); break;
-            //    case "BGND": DoBackground(chuckStart, chunkLimit); break;
-            //     case "SPRT": DoSprite(chuckStart, chunkLimit); break;
-            //     case "STRG": doStrings(chuckStart, chunkLimit); break;
         }
 
         public ChunkReader(string filename, bool debugOn)
