@@ -30,7 +30,7 @@ namespace betteribttest
             return Position; // this is the easiest as all Position are all diffrent
         }
     }
-    public class ChunkEntries : IEnumerable<ChunkEntry>, IEnumerator<ChunkEntry>// list of offets that uses ChunkStream to move beetween
+    public class ChunkEntries : IEnumerable<ChunkEntry>//, IEnumerator<ChunkEntry>// list of offets that uses ChunkStream to move beetween
     {
         public static bool DebugOutput { get; set; }
         ChunkStream cs;
@@ -99,11 +99,9 @@ namespace betteribttest
                     entries.Add(new ChunkEntry(next_offset, chunkLimit, -1)); // then the end of the chunkLimit IS the last offset
                 }
             }
-
             this.entries = entries.ToArray();
-            cs.Position = entries[pos].Position; // move to the first offset
-            Current = default(ChunkEntry);
         }
+
         public ChunkEntries(ChunkStream cs, int chunkLimit, bool rangeChecking = true)
         {
             this.cs = cs;
@@ -118,41 +116,147 @@ namespace betteribttest
             this.pos = 0;
             this.chunkStart = chunkStart;
             this.chunkLimit = chunkLimit;
-            cs.Position = chunkStart;
+            cs.PushSeek(chunkStart);
             ReadEntries(rangeChecking);
+            cs.PopPosition();
         }
-        ~ChunkEntries() {  }
-        public void Dispose() { }
-        // Must implement GetEnumerator, which returns a new StreamReaderEnumerator.
-        public IEnumerator<ChunkEntry> GetEnumerator()
+        class ChunkEntriesEnumerator : IEnumerator<ChunkEntry>
         {
-            return this;
-        }
-
-        public bool MoveNext()
-        {
-            if(entries != null && pos < entries.Length)
+            int pos;
+            ChunkEntry[] entries;
+            ChunkStream cs;
+            ChunkEntry current;
+            public ChunkEntriesEnumerator(ChunkStream cs, ChunkEntry[] entries)
             {
-                if (DebugOutput) System.Diagnostics.Debug.WriteLine("Moving to {0} out of {1}", pos, entries.Length);
-                ChunkEntry e = entries[pos++];
-                Current = e;
-                cs.Position = e.Position;
-                return true;
+                this.cs = cs;
+                this.entries = entries;
+                this.pos = 0;
+                this.current = null;
+                cs.PushPosition();
             }
-            Current = default(ChunkEntry);
-            return false;
+            public ChunkEntry Current { get { return current; } }
+            object IEnumerator.Current { get { return current; } }
+            public void Dispose() { cs.PopPosition(); }
+            public bool MoveNext()
+            {
+                if (entries != null && pos < entries.Length)
+                {
+                   // if (DebugOutput) System.Diagnostics.Debug.WriteLine("Moving to {0} out of {1}", pos, entries.Length);
+                    ChunkEntry e = entries[pos++];
+                    current = e;
+                    cs.Position = e.Position;
+                    return true;
+                }
+                current = null;
+                return false;
+            }
+            public void Reset() { pos = 0; }
         }
-        public void Reset()
-        {
-            pos = 0;
-        }
-        // Humm, I wonder if I need to error check this or not since it IS invalid without MoveNext run first
-        public ChunkEntry Current { get; private set; }
-        // required interfaces
+        // Must implement GetEnumerator, which returns a new StreamReaderEnumerator.
+        public IEnumerator<ChunkEntry> GetEnumerator() { return new ChunkEntriesEnumerator(cs, entries);  }
         IEnumerator IEnumerable.GetEnumerator() { return (IEnumerator)this; }
-        object IEnumerator.Current { get { return Current; } }
     }
+    // http://stackoverflow.com/questions/31078598/c-sharp-create-a-filestream-with-an-offset
+    // This class saved me for a workaround for reading a bitmap out of an exisiting file
+    class ChunkStreamOffset : Stream
+    {
+        private readonly Stream instance;
+        private readonly long offset;
 
+        public static Stream Decorate(Stream instance)
+        {
+            if (instance == null) throw new ArgumentNullException("instance");
+
+            Stream decorator = new ChunkStreamOffset(instance);
+            return decorator;
+        }
+
+        private ChunkStreamOffset(Stream instance)
+        {
+            this.instance = instance;
+            this.offset = instance.Position;
+        }
+
+        #region override methods and properties pertaining to the file position/length to transform the file positon using the instance's offset
+
+        public override long Length
+        {
+            get { return instance.Length - offset; }
+        }
+
+        public override void SetLength(long value)
+        {
+            instance.SetLength(value + offset);
+        }
+
+        public override long Position
+        {
+            get { return instance.Position - this.offset; }
+            set { instance.Position = value + this.offset; }
+        }
+
+        public override bool CanRead
+        {
+            get
+            {
+                return instance.CanRead;
+            }
+        }
+
+        public override bool CanSeek
+        {
+            get
+            {
+                return instance.CanSeek;
+            }
+        }
+
+        public override bool CanWrite
+        {
+            get
+            {
+                return instance.CanWrite;
+            }
+        }
+
+        // etc.
+
+        #endregion
+
+        #region override all other methods and properties as simple pass-through calls to the decorated instance.
+
+        public override IAsyncResult BeginRead(byte[] array, int offset, int numBytes, AsyncCallback userCallback, object stateObject)
+        {
+            return instance.BeginRead(array, offset, numBytes, userCallback, stateObject);
+        }
+
+        public override IAsyncResult BeginWrite(byte[] array, int offset, int numBytes, AsyncCallback userCallback, object stateObject)
+        {
+            return instance.BeginWrite(array, offset, numBytes, userCallback, stateObject);
+        }
+
+        public override void Flush()
+        {
+            instance.Flush();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            // if (origin == SeekOrigin.Begin) offset += this.offset;
+            return instance.Seek(offset, origin);// - this.offset;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            return instance.Read(buffer, offset, count);
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            instance.Write(buffer, offset, count);
+        }
+        #endregion
+    }
     public class ChunkStream : BinaryReader
     {
         Stack<int> posStack = new Stack<int>();
@@ -167,6 +271,18 @@ namespace betteribttest
         public bool DebugPosition { get; set; }
         public int Position {  get { return (int)BaseStream.Position; } set { BaseStream.Position = value; } }
         public int Length { get { return (int)BaseStream.Length; } }
+
+        public Stream StreamFromPosition()
+        {
+            return ChunkStreamOffset.Decorate(BaseStream);
+        }
+        public Stream StreamFromPosition(int position)
+        {
+            PushSeek(position);
+            Stream s = ChunkStreamOffset.Decorate(BaseStream);
+            PopPosition();
+            return s;
+        }
         public void PushPosition()
         {
             BaseStream.Flush();

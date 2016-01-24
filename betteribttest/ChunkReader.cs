@@ -8,13 +8,15 @@ using System.Drawing;
 using System.IO.Compression;
 using Microsoft.Deployment.Compression;
 using Microsoft.Deployment.Compression.Cab;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 /*
-    Side note to the Disam potion.
-    To map variables and function names to the asembley REQUIRES some kind of emulation.  The dissassembler needs context to traslate
-    a var name to an string name.  So it requies what "self" object its referring too as well as whats on the stack 
-    This means we have to dissasemble the pop statment, and figure out the last few pop statements to get what instance, what self is, and then the var offset
-    THEN we can figure out the name of it
-    meh  I am going to work on sprites and rooms.  I got those almost done
+Side note to the Disam potion.
+To map variables and function names to the asembley REQUIRES some kind of emulation.  The dissassembler needs context to traslate
+a var name to an string name.  So it requies what "self" object its referring too as well as whats on the stack 
+This means we have to dissasemble the pop statment, and figure out the last few pop statements to get what instance, what self is, and then the var offset
+THEN we can figure out the name of it
+meh  I am going to work on sprites and rooms.  I got those almost done
 
 */
 namespace betteribttest
@@ -175,6 +177,13 @@ namespace betteribttest
     class GMK_Sprite : GMK_Data // mabye this is from object?
     {
         public GMK_Object obj;
+        public int width;
+        public int height;
+        public int widht0;
+        public int height0;
+        public GMK_SpritePosition[] frames;
+
+
         public int sprite_index;
         public int sprite_width;
         public int sprite_height;
@@ -189,7 +198,7 @@ namespace betteribttest
         public int image_speed;
         public int image_xscale;
         public int image_yscale;
-
+        public Bitmap mask;
         public GMK_Sprite(ChunkEntry e) : base(e) { }
     }
     class GMK_SpritePosition : GMK_Data
@@ -662,14 +671,12 @@ namespace betteribttest
                                     //   obj.PhysicsObjectShape = head[10];
                                     //   obj.PhysicsObjectDensity = head[11];
 
-                using (ChunkEntries alarms = new ChunkEntries(r, chunkLimit, false))
-                { // Side note, mabey we link to parrent allarms?
-                    foreach (ChunkEntry alarm in alarms)
-                    {
-                    }
-
-
+                foreach (ChunkEntry alarm in new ChunkEntries(r, chunkLimit, false))
+                {
                 }
+
+
+
 
                 //  System.Diagnostics.Debug.Assert(obj.name != "obj_froggit");
                 objList.Add(obj);
@@ -681,95 +688,126 @@ namespace betteribttest
         {
 
         }
+       
         void doTXRT(int chunkStart, int chunkLimit)
         {
             // CHECK THIS, we have the textures.  I am sure the file size is in there somewhere
 
-            /*
+            filesImage = new List<GMK_Image>();
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
             foreach (ChunkEntry e in entries)
             {
                 GMK_Image gi = new GMK_Image(e);
-                int dummy = r.ReadInt32(); // 1 means and ofset hummmmmmmm.  mabye to raw data?
+                int dummy = r.ReadInt32(); // Always 1?  Does this mean its in the file?
                 int new_offset = r.ReadInt32();
-                // humm mabye there is more data here too
-
-            }
-                List<GMK_Image> res = new List<GMK_Image>();
-            PushOffset(chunkStart);
-            List<int> offsets = CollectEntries(chunkLimit);
-            for(int i=0;i<offsets.Count;i++)
-            {
-                // so its a double offset list? humm
-                int offset = offsets[i];
-                r.BaseStream.Position = offset;
-                int dummy = r.ReadInt32(); // 1 means and ofset hummmmmmmm.  mabye to raw data?
-                int new_offset = r.ReadInt32();
-                offsets[i] = new_offset;
-            }
-            for (int i = 0; i < offsets.Count; i++)
-            {
-                int offset = offsets[i];
-                GMK_Image gi = new GMK_Image(i,offset);
-                r.BaseStream.Position = offset;
-                int next_offset = (i+1) < offsets.Count ? offsets[i+1] : (int)chunkLimit;
-                int size = next_offset - offset;
-                byte[] data = r.ReadBytes(size);
-                MemoryStream ms = new MemoryStream(data);
-                gi.image = new Bitmap(ms); // this works right?
-                res.Add(gi);
+                gi.image = new Bitmap(r.StreamFromPosition(new_offset));
                 AddData(gi);
-              //  gi.image.Save(i.ToString() + "_test_.png");
+                filesImage.Add(gi);
             }
-            filesImage = res;
-            */ 
+        }
+        Bitmap readBitmapfromTPNG(GMK_SpritePosition p)
+        {
+            return null;
+        }
+        void SaveSpritePng(string filename, GMK_SpritePosition p)
+        {
+            Bitmap texture = filesImage[p.texture_id].image;
+            Bitmap sprite = new Bitmap(p.width, p.height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            Graphics g = Graphics.FromImage(sprite);
+            Rectangle srcRect = new Rectangle(p.x, p.y, p.width, p.height);
+            g.DrawImage(texture, 0, 0, srcRect, GraphicsUnit.Pixel);
+            if (filename.IndexOf('.') == -1) filename += ".png";
+            sprite.Save(filename);
+        }
+        // We are doing this enough freaking times that a function helps with it
+        GMK_SpritePosition[] readFrames()
+        {
+            List<GMK_SpritePosition> frames = new List<GMK_SpritePosition>();
+            foreach (ChunkEntry frame_offset in new ChunkEntries(r, chunks["TPAG"].end, false)) // don't check range since these are all in TPAG
+            {
+                GMK_SpritePosition spos = spritePos[frame_offset.Position]; // it should be in here already
+                frames.Add(spos);
+            }
+            return frames.ToArray();
+        }
+        Bitmap readMask(int width, int height)
+        {
+            int stride = width * 1;// bpp;  // bits per row
+            stride += 16;            // round up to next 32-bit boundary
+            stride /= 16;            // DWORDs per row
+            stride *= 2;             // bytes per row
+            
+         //   int size_of_data = stride * height;
+         //   byte[] data = r.ReadBytes(size_of_data);
+          //  GCHandle pinnedArray = GCHandle.Alloc(data, GCHandleType.Pinned);
+          //  IntPtr pointer = pinnedArray.AddrOfPinnedObject();
+            
+          //  Bitmap mask = new Bitmap(width, height, stride, PixelFormat.Format1bppIndexed, pointer);
+          //  Marshal.FreeHGlobal(pointer);
+            Bitmap mask= new Bitmap(width, height, PixelFormat.Format1bppIndexed); 
+            BitmapData bdata = mask.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadWrite, PixelFormat.Format1bppIndexed) ;
+            for (int y = 0; y < height; y++)
+            {
+                int i = bdata.Stride * y;
+                int bytes_to_read = width / 8;
+                if ((width % 8) != 0) bytes_to_read++; // need another byte OHHH
+                byte[] data = r.ReadBytes(bytes_to_read);
+                // So we always read even bytes? we are 2 byte aligned?
+                
+                for (int x = 0; x < (width / 8); x++) Marshal.WriteByte(bdata.Scan0, i + x, data[x]);
+            }
+            /*
+            for (int y = 0; y < height; y++)
+            {
+                int i = bdata.Stride * y;
+                for (int x = 0; x < (width / 8); x++) Marshal.WriteByte(bdata.Scan0, i + x, r.ReadByte());
+            }
+            */
+            mask.UnlockBits(bdata);
+            return mask;
         }
         void DoSprite(int chunkStart,int chunkLimit)
         {
+            spriteList = new List<GMK_Sprite>();
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
             foreach (ChunkEntry e in entries)
             {
-                GMK_Sprite obj = new GMK_Sprite(e);
-                obj.Name = readVarString(r.ReadInt32());
+                GMK_Sprite spr = new GMK_Sprite(e); // so 19 bytes
+                spr.Name = readVarString(r.ReadInt32());
+                spr.width = r.ReadInt32();
+                spr.height = r.ReadInt32();
+                int flags = r.ReadInt32(); // not just one
+                spr.widht0 = r.ReadInt32() ; // size?
+                spr.height0 = r.ReadInt32() ; // size?
 
-
-                if (obj.Name.IndexOf("frog") > -1)
+                int another = r.ReadInt32();
+                int[] extra = r.ReadInt32(7);
+                spr.frames = readFrames();
+                int have_mask = r.ReadInt32();
+                if (have_mask != 0) {
+                    int mask_width = spr.width;
+                    int mask_height = spr.height;
+                    spr.mask = readMask(mask_width, mask_height);
+                } 
+                /*
+                if (spr.Name.IndexOf("frog") > -1) // frog  spr_froghead
                 {
-                    WriteDebug("We have FROG: " + obj.Name);
+                    bool oldDebug = this.debugOn;
+                    this.debugOn = true;
+                  
+                  
+                    WriteDebug("We have FROG: " + spr.Name);
+
+                    for (int i = 0; i < spr.frames.Length; i++) SaveSpritePng(spr.Name + "_" + i, spr.frames[i]);
+                    pr.mask.Save(spr.Name + "_mask.png");
+                    this.debugOn = oldDebug;
                 }
+                */
                 // objList.Add(obj);
-                AddData(obj);
+                AddData(spr);
+                spriteList.Add(spr);
             }
-            /*
-            Spr_Sprite getSprSprite(string filename)
-        {
-                Spr_Sprite spr = null;
-                using (BinaryReader r = new BinaryReader(File.Open(filename, FileMode.Open)))
-                {
-                    spr = new Spr_Sprite();
-                    spr.x = r.ReadUInt32(); // size?
-                    spr.y = r.ReadUInt32(); // size?
-                    spr.flags = r.ReadUInt32(); // size?
-                    spr.width = r.ReadUInt32() + 1; // size?
-                    spr.height = r.ReadUInt32() + 1; // size?
-                    List<uint> extra = new List<uint>();
-                    for (int i = 0; i < 12; i++) extra.Add(r.ReadUInt32());
-                    spr.extra = extra.ToArray(); //PixelFormat.Format1bppIndexed
-                    spr.mask = new Bitmap((int)spr.x, (int)spr.height, PixelFormat.Format1bppIndexed);
-                    BitmapData bdata = spr.mask.LockBits(new Rectangle(0, 0, spr.mask.Width, spr.mask.Height), ImageLockMode.ReadWrite, PixelFormat.Format1bppIndexed);
-                    for (int y = 0; y < spr.height; y++)
-                    {
-                        int i = bdata.Stride * y;
-                        for (int x = 0; x < ((int)spr.width / 8); x++) Marshal.WriteByte(bdata.Scan0, i + x, r.ReadByte());
-                    }
-                    spr.mask.UnlockBits(bdata);
-                }
-                image = spr.mask;
-                this.Update();
-                return spr;
-                //  SaveAllStrings();
-            }
-            */
+
         }
         string EscapeString(string s)
         {
@@ -846,27 +884,7 @@ namespace betteribttest
                 spritePos[e.Position] = p;
             }
         }
-        public List<GMK_FuncOffset> funcIndex = new List<GMK_FuncOffset>();
-        public Dictionary<int, GMK_FuncOffset> funcMap = new Dictionary<int, GMK_FuncOffset>();
-        public Dictionary<int, GMK_FuncOffset> calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
-        public Dictionary<int, GMK_FuncOffset> othertoFunMap = new Dictionary<int, GMK_FuncOffset>();
-        public SortedDictionary<int, int> otherfuncounts = new SortedDictionary<int, int>();
-        void AddFUNCDebug(GMK_FuncOffset func)
-        {
-            // using this we can analize the offsets off this data. 
-            AddData(func);
-            funcIndex.Add(func);
-            funcMap[func.FilePosition.Position] = func;
-            r.PushSeek(func.code_offset);
-            uint data = r.ReadUInt32();
-            int data2 = r.ReadInt32();
-            calltoFunMap[data2] = func;
-            othertoFunMap[func.func_offset] = func;
-            if (otherfuncounts.ContainsKey(func.func_offset)) otherfuncounts[func.func_offset]++;
-            else otherfuncounts[func.func_offset] = 1;
 
-            r.PopPosition();
-        }
         // Ok, this is stupid, but I get it
         // All the vars and function names are on a link list from one to another that tie to the name
         // to make this much easyer for the disassembler, we are going to change all these refrences
@@ -943,103 +961,7 @@ namespace betteribttest
             }
         }
 
-    void doFUNC(int chunkStart, int chunkLimit)
-        {
-             funcIndex = new List<GMK_FuncOffset>();
-            funcMap = new Dictionary<int, GMK_FuncOffset>();
-            calltoFunMap = new Dictionary<int, GMK_FuncOffset>();
-            r.PushSeek(chunkStart);
-            long size = chunkLimit - chunkStart; // it should be divisiable by 12
 
-            System.Diagnostics.Debug.Assert((size % 12) == 0);
-            while (r.BaseStream.Position < chunkLimit)
-            {
-                GMK_FuncOffset func = new GMK_FuncOffset(new ChunkEntry(r.Position, r.Position + 12, 12)); 
-                func.func_name = readVarString(r.ReadInt32());
-                func.func_offset = r.ReadInt32();  // humm.  Mabye this is a type?
-                func.code_offset = r.ReadInt32(); // This offset is in the code section, so its linking direct to the code?
-                AddFUNCDebug(func);
-            }
-            foreach(var o in otherfuncounts)
-            {
-                WriteDebug("Type: {0}  Count: {1}", o.Key, o.Value);
-            }
-            r.PopPosition();
-        }
-        
-
-        public List<GMK_Var> variIndex = new List<GMK_Var>();
-        public Dictionary<int, GMK_Var> variMap = new Dictionary<int, GMK_Var>();
-        public Dictionary<int, GMK_Var> reftoVARI = new Dictionary<int, GMK_Var>();
-        public Dictionary<int, GMK_Var> otherToVARI = new Dictionary<int, GMK_Var>();
-        public SortedDictionary<int, int> otherVarCounts = new SortedDictionary<int, int>();
-        int debugPopStatmet(uint op)
-        {
-            int topType = (int)((op >> 20) & 0xF);
-            int secondType = (int)((op >> 16) & 0xF);
-            int instance = (short)(op & 0xFFFF);
-            string sinstance;
-            if (!Disam.instanceLookup.TryGetValue(instance, out sinstance)) sinstance = instance.ToString();
-            int func = r.ReadInt32();
-
-            int object_var = (int)(func & 0x0FFFFFFF); // this COULD be 24 bits?
-            int object_var_type = func >> 24 & 0xFF; // I think this might only be 4 bits
-            string name = null;
-            //   GMK_Data gkd = cr.OffsetDebugLookup(object_var);
-            //   if (name == null && gkd != null) name = gkd.name + " off"; 
-            //  if (name == null && object_var < cr.stringList.Count) name = cr.stringList[object_var].str;
-            if (name == null) name = object_var.ToString();
-            string soperand = String.Format("pop {0} -> {1} ({2} [Type: {3,4:X}, Var: {4}])", Disam.typeLookup[topType], Disam.typeLookup[secondType], sinstance, object_var_type, name);
-            WriteDebug(soperand);
-            return object_var;
-        }
-        void AddVARIDebug(GMK_Var func)
-        {
-            // using this we can analize the offsets off this data. 
-            r.PushSeek(func.code_offset);
-            AddData(func);
-            variIndex.Add(func);
-            variMap[func.var_offset] = func;
-           
-            uint data = r.ReadUInt32();
-            
-            int data2 = debugPopStatmet(data);
-            reftoVARI[data2] = func;
-            otherToVARI[func.var_offset] = func; 
-            if (otherVarCounts.ContainsKey(func.var_offset)) otherVarCounts[func.var_offset]++;
-            else otherVarCounts[func.var_offset] = 1;
-            
-            r.PopPosition();
-        }
-        // same structure as func mabye
-        void doVARI(int chunkStart, int chunkLimit)
-        {
-            r.PushSeek(chunkStart);
-            long size = chunkLimit - chunkStart; // it should be divisiable by 12
-
-        //    List<int> test = readInts(24);
-            System.Diagnostics.Debug.Assert((size % 12) == 0);
-            while (r.BaseStream.Position < chunkLimit)
-            {
-                GMK_Var func = new GMK_Var(new ChunkEntry(r.Position, r.Position + 12, 12));
-                int str_offset = r.ReadInt32();
-                int var_offset = r.ReadInt32();
-                int code_offset = r.ReadInt32();
-
-                func.var_name = readVarString(str_offset);
-                if (func.var_name.IndexOf("obj") != -1)
-                {
-                    throw new Exception("Check this");
-                }
-                    func.var_offset = var_offset;
-                func.code_offset = code_offset; // This offset is in the code section, so its linking direct to the code?
-                WriteDebug(func.ToString());
-                AddVARIDebug(func);
-
-
-            }
-            r.PopPosition();
-        }
         class Chunk
         {
             public readonly int start;
