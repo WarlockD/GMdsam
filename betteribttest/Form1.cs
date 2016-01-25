@@ -194,31 +194,13 @@ namespace betteribttest
         public Form1()
         {
             InitializeComponent();
-
-            // getSprSprite("Undertale\\SPRT\\spr_heart");
-            // getSprSprite("testgame\\SPRT\\spr_snowdrake_head");
-            // FontDecodeing();
-            // cr = new ChunkReader("Undertale\\data.win",false);
             cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             Disam dism = new Disam(cr);
-            dism.writeFile("frog");
-            dism.writeFile("SCR_GAMESTART");
-            //    cr.debugOn = false;
-            // cr = new ChunkReader("testgame\\data.win");
-            //  font_test();
-            // displayImage("spr_snowdrake_head"); // spr_snowdrake_head spr_snowdrake_legs 
-            //  disam("gml_Object_obj_snowdrake_Step_0");
-
-            // getBGND();
-            // x= 2 y = 780 cr.resFonts[0]; windings
-            // x= 517 y = 5 cr.resFonts[1]; fnt_main
-            // x= 782 y = 2 cr.resFonts[2]; fnt_maintext
-            // x= 2 y = 910 cr.resFonts[3]; fnt_small
-            // x= 782 y = 134 cr.resFonts[4]; fnt_plain
-            // x= 2 y = 9 cr.resFonts[5]; fnt_plainbig  
-            // x= 2 y = 520 cr.resFonts[6]; fnt_dmg  
-            // x= 2 y = 520 cr.resFonts[7]; fnt_curs  
-
+         //   dism.DissasembleEveything();
+       //     dism.writeFile("frog");
+       //     dism.writeFile("SCR_GAMESTART");
+ 
+            cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
             GMK_Font fnt = cr.resFonts[1];
             return;
                 Bitmap bmp_chars = cr.filesImage[fnt.bitmap.texture_id].image; // don't know why or how the fonts know to look at this texture

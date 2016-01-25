@@ -10,6 +10,8 @@ using Microsoft.Deployment.Compression;
 using Microsoft.Deployment.Compression.Cab;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Xml;
+
 /*
 Side note to the Disam potion.
 To map variables and function names to the asembley REQUIRES some kind of emulation.  The dissassembler needs context to traslate
@@ -65,12 +67,6 @@ namespace betteribttest
         public byte[] code=null;
         public GMK_Code(ChunkEntry e) : base(e) { }
     }
-    class GMK_Value : GMK_Data
-    {
-        public int size;
-        public byte[] data;
-        public GMK_Value(ChunkEntry e) : base(e) { }
-    }
     class GMK_Image : GMK_Data
     {
         public string filename {  get { return Name; } set { Name = value; } }
@@ -123,17 +119,7 @@ namespace betteribttest
             return "{ func_name = " + func_name + ", func_offset = " + func_offset + ", code_other = " + code_offset + " }" + base.ToString();
         }
     }
-    class GMK_Var : GMK_Data
-    {
-        public string var_name = "";
-        public int var_offset = -1;
-        public int code_offset = -1;
-        public GMK_Var(ChunkEntry e) : base(e) { }
-        public override string ToString()
-        {
-            return "{ func_name = " + var_name + ", func_offset = " + var_offset + ", code_other = " + code_offset + " }" + base.ToString();
-        }
-    }
+
     class GMK_Object: GMK_Data
     { // HUMM We have 12 allarms!  EACH ALLARM IS A 1 DIMENIONAL ARRAY! WOO!
       //  public int[] header; // first 20 bytes, last byte seems to be a size
@@ -166,7 +152,6 @@ namespace betteribttest
         // irght after this it does arlarms
         public int[] alarm_offsets = null; // hummmm!
 
-        public List<GMK_Value> values = new List<GMK_Value>();
         public GMK_Object(ChunkEntry e) : base(e) { }
         public override string ToString()
         {
@@ -182,22 +167,6 @@ namespace betteribttest
         public int widht0;
         public int height0;
         public GMK_SpritePosition[] frames;
-
-
-        public int sprite_index;
-        public int sprite_width;
-        public int sprite_height;
-        public int sprite_xoffset;
-        public int sprite_yoffset;
-
-        public int iamge_alpha;
-        public int iamge_angle;
-        public int iamge_blend;
-        public int image_index;
-        public int image_number;
-        public int image_speed;
-        public int image_xscale;
-        public int image_yscale;
         public Bitmap mask;
         public GMK_Sprite(ChunkEntry e) : base(e) { }
     }
@@ -884,13 +853,58 @@ namespace betteribttest
                 spritePos[e.Position] = p;
             }
         }
+      
+        string MakePlistPoint(int x, int y)
+        {
+            return '{' + x + "," + y + '}';
+        }
+        public void SaveTexturePacker(string pngTexture,string packerFilename, int textureIndex)
+        {
+            List<GMK_SpritePosition> sprites = new List<GMK_SpritePosition>();
+            XmlWriterSettings settings = new XmlWriterSettings();
+            
 
+            settings.Indent = true;
+            Bitmap bmp = filesImage[textureIndex].image;
+            PListDict plist = new PListDict();
+            PListDict test = plist.AddDictonary("test");
+            PListDict meta = plist.AddDictonary("metadata");
+            PListDict frames = plist.AddDictonary("frames");
+            // bare minimum settings for cosco
+            meta["format"] = 0; // really simple format till I get some more data
+            meta["size"] = bmp.Size;
+            meta["textureFileName"] = pngTexture;
+            test["RectInside"] = new PointF(4.3f, 2.1f);
+            foreach (var sprite in spriteList.Where(s => s.frames != null))
+            {
+                GMK_SpritePosition p = sprite.frames[0];
+                if (p.texture_id != textureIndex) continue;
+                if(sprite.frames.Length == 1)
+                {
+                    Dictionary<string, object> spriteDict = new Dictionary<string, object>();
+                    spriteDict["x"] = p.x; 
+                    spriteDict["y"] = p.y;;
+                    spriteDict["width"] = p.width;
+                    spriteDict["height"] = p.height;
+                    spriteDict["offsetX"] =  p.renderX;
+                    spriteDict["offsetY"] =  p.renderY;
+                    spriteDict["originalWidth"] = p.width0;  //p.width0;
+                    spriteDict["originalHeight"] = p.height0; //p.height0;
+                    frames[sprite.Name] = spriteDict;
+                   // SaveSpritePng(sprite.Name,p);
+                }
+            }
+            plist.WritePlist(packerFilename);
+            bmp.Save(pngTexture);
+        }
         // Ok, this is stupid, but I get it
         // All the vars and function names are on a link list from one to another that tie to the name
         // to make this much easyer for the disassembler, we are going to change all these refrences
         // to be string indexes to strlist.  To DO this however, requires us to read the entire code section
         // as a bunch of ints, go though the etnire thing with the refrences, repeat then figure out the code section
         // into seperate scripts blocks.  Meh
+        // Also a side note is that object refrences as well as instance creation MUST fit in a 16bit value
+        // If thats the case are objects manged by an index or am I reading objects wrong?
         class CodeNameRefrence
         {
             public GMK_String name;

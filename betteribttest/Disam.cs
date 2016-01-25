@@ -89,7 +89,7 @@ namespace betteribttest
             {  (OpType)0x0a, "and" },
             {  (OpType)0x0b, "or" },
             { (OpType) 0x0c, "xor" },
-             { (OpType) 0x0d, "xnor" },
+             { (OpType) 0x0d, "com" },
             {  (OpType)0x0e, "not" },
             {  (OpType)0x0f, "sal" },
             {  (OpType)0x10, "sar" },
@@ -124,7 +124,7 @@ namespace betteribttest
             {  (OpType)0x0a, "&" },
             {  (OpType)0x0b, "|" },
             { (OpType) 0x0c, "^" },
-            { (OpType) 0x0d, "!^" },
+            { (OpType) 0x0d, "~" },
             {  (OpType)0x0e, "!" },
             {  (OpType)0x0f, "<<" },
             {  (OpType)0x10, ">>" },
@@ -325,6 +325,17 @@ namespace betteribttest
             wr.Close();
 
         }
+        public void DissasembleEveything()
+        {
+            foreach (GMK_Code c  in cr.codeList)
+            {
+                MemoryStream ms = new MemoryStream(c.code);
+                processStream(ms, c.FilePosition.Position);
+                StreamWriter s = new StreamWriter(c.Name + ".txt");
+                foreach (Opcode o in codes) s.WriteLine(o.ToString());
+                s.Close();
+            }
+        }
         public void writeFile(string code_name)
         {
             bool found = false;
@@ -332,15 +343,7 @@ namespace betteribttest
             {
                 if (c.Name.IndexOf(code_name) != -1)
                 {
-                    found = true;
-                    MemoryStream ms = new MemoryStream(c.code);
-                    processStream(ms, c.FilePosition.Position);
-                    StreamWriter s = new StreamWriter(c.Name + ".txt");
-                    foreach (Opcode o in codes)
-                    {
-                        s.WriteLine(o.ToString());
-                    }
-                    s.Close();
+                    
                     writeHTMLFile(c.Name);
                 }
             }
@@ -656,7 +659,22 @@ namespace betteribttest
                 {
                     int topType = (int)((op >> 16) & 0xF);
                     int secondType = (int)((op >> 20) & 0xF);
-                    if (scode == "conv") // going to try to get rid of extra pushes in the list
+                    if(scode == "com") // still not sure what this does
+                    {
+                        string mathop = opMathOperation[opcode];
+                        StackValue value = getValue(codes);
+                        if (value != null) // not sure about the stack here
+                        {
+                            soperand = String.Format("{0}({1})", mathop, value.valueToString());
+                            info.value = new StackValue(-5, soperand);
+                        }
+                        else
+                        {
+                            soperand = String.Format("Types: {0}, {1}", typeLookup[topType], typeLookup[secondType]);
+                            info.value = new StackValue(0, "Broken " + scode + " at " + startOpPos);
+                        }
+                    }
+                    else if (scode == "conv") // going to try to get rid of extra pushes in the list
                     {
                         Opcode last = codes.Last();
                         OpType last_opcode = (OpType)((byte)(last.op >> 24));
