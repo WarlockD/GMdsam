@@ -858,6 +858,39 @@ namespace betteribttest
         {
             return '{' + x + "," + y + '}';
         }
+        public void SaveNewTextureFormat(string path)
+        {
+            PListDict plist = new PListDict();
+            PListArray plist_textures = plist.AddArray("textures");
+            PListDict plist_sprites = plist.AddDictonary("sprites");
+            for (int i = 0; i < filesImage.Count; i++)
+            {
+                string filename =  "undertale_texture_" + i + ".png";
+                filesImage[i].image.Save(path + filename);
+                plist_textures.Add(filename);
+            }
+            foreach (var sprite in spriteList)
+            {
+                if (sprite.frames == null || sprite.frames.Length == 0) throw new Exception("This shouldn't happen");
+                PListArray frames = plist_sprites.AddArray(sprite.Name);
+                if (sprite.Name == "spr_doglick") for (int i = 0; i < sprite.frames.Length; i++) SaveSpritePng("spr_doglick_" + i + ".png", sprite.frames[i]);
+                foreach (var p in sprite.frames)
+                {
+
+                    PListDict frame = frames.AddDictonary();
+                    frame["x"] = p.x;
+                    frame["y"] = p.y; ;
+                    frame["width"] = p.width;
+                    frame["height"] = p.height;
+                    frame["offsetX"] = p.renderX;
+                    frame["offsetY"] = p.renderY;
+                    frame["originalWidth"] = p.width0;  //p.width0;
+                    frame["originalHeight"] = p.height0; //p.height0;
+                    frame["textureIndex"] = p.texture_id; //p.height0;
+                }
+            }
+            plist.WritePlist(path + "undertale_sprites.plist");
+        }
         public void SaveTexturePacker(string pngTexture,string packerFilename, int textureIndex)
         {
             List<GMK_SpritePosition> sprites = new List<GMK_SpritePosition>();
@@ -867,31 +900,30 @@ namespace betteribttest
             settings.Indent = true;
             Bitmap bmp = filesImage[textureIndex].image;
             PListDict plist = new PListDict();
-            PListDict test = plist.AddDictonary("test");
             PListDict meta = plist.AddDictonary("metadata");
             PListDict frames = plist.AddDictonary("frames");
+            PListDict newframes = plist.AddDictonary("newframes");
             // bare minimum settings for cosco
             meta["format"] = 0; // really simple format till I get some more data
             meta["size"] = bmp.Size;
             meta["textureFileName"] = pngTexture;
-            test["RectInside"] = new PointF(4.3f, 2.1f);
-            foreach (var sprite in spriteList.Where(s => s.frames != null))
+            foreach (var sprite in spriteList)
             {
-                GMK_SpritePosition p = sprite.frames[0];
-                if (p.texture_id != textureIndex) continue;
-                if(sprite.frames.Length == 1)
+                bool first = true;
+                PListArray frameArray = newframes.AddArray(sprite.Name);
+                foreach (var p in sprite.frames)
                 {
-                    Dictionary<string, object> spriteDict = new Dictionary<string, object>();
-                    spriteDict["x"] = p.x; 
-                    spriteDict["y"] = p.y;;
-                    spriteDict["width"] = p.width;
-                    spriteDict["height"] = p.height;
-                    spriteDict["offsetX"] =  p.renderX;
-                    spriteDict["offsetY"] =  p.renderY;
-                    spriteDict["originalWidth"] = p.width0;  //p.width0;
-                    spriteDict["originalHeight"] = p.height0; //p.height0;
-                    frames[sprite.Name] = spriteDict;
-                   // SaveSpritePng(sprite.Name,p);
+                    if (p.texture_id != textureIndex)  continue;
+                    PListDict frameDict = frameArray.AddDictonary();
+                    frameDict["x"] = p.x;
+                    frameDict["y"] = p.y; ;
+                    frameDict["width"] = p.width;
+                    frameDict["height"] = p.height;
+                    frameDict["offsetX"] = p.renderX;
+                    frameDict["offsetY"] = p.renderY;
+                    frameDict["originalWidth"] = p.width0;  //p.width0;
+                    frameDict["originalHeight"] = p.height0; //p.height0;
+                    if (first) { frames[sprite.Name] = frameDict; first = false; }
                 }
             }
             plist.WritePlist(packerFilename);

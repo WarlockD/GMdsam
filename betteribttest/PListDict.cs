@@ -72,19 +72,8 @@ namespace betteribttest
         static void WriteGenericArray<TValue>(XmlWriter w, IEnumerable<TValue> data)
         {
             w.WriteStartElement("array");
-            bool isValue = typeof(TValue) == typeof(string) || !typeof(TValue).IsByRef;
+            bool isValue = typeof(TValue) == typeof(string) || typeof(TValue).IsValueType;
             foreach (TValue value in data) if (isValue) WriteValue(w, value); else WriteObject(w, value);
-            w.WriteEndElement();
-        }
-        static void WriteArrayValue<T>(XmlWriter w, string type, IEnumerable<T> array) { // god I love generics
-            w.WriteStartElement("array");
-            foreach(T v in array) w.WriteElementString(type, v.ToString());
-            w.WriteEndElement();
-        }
-        static void WriteArrayValue<T>(XmlWriter w, string type, IEnumerable<T> array, Func<T,string> toString)
-        { // god I love generics
-            w.WriteStartElement("array");
-            foreach (T v in array) w.WriteElementString(type, toString(v));
             w.WriteEndElement();
         }
         // we only support a few types of enumerable objects in this order
@@ -117,7 +106,14 @@ namespace betteribttest
                         genric.Invoke(null, new object[] { w, obj });
                         return;
                     }
-                    else if (typeDef == typeof(IEnumerable<>)) // arrays
+                }
+            } // Ugh we HAVE to do two loops here
+            foreach (Type iType in obj.GetType().GetInterfaces())
+            {
+                if (iType.IsGenericType)
+                {
+                    Type typeDef = iType.GetGenericTypeDefinition();
+                    if (typeDef == typeof(IEnumerable<>)) // arrays
                     {
                         var method = typeof(PListUtility).GetMethod("WriteGenericArray", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
                         var genric = method.MakeGenericMethod(iType.GetGenericArguments());
@@ -125,7 +121,14 @@ namespace betteribttest
                         return;
                     }
                 }
-                else throw new Exception("Unknown generic type");
+            }
+            IEnumerable finalCheck = obj as IEnumerable;
+            if(obj != null) // last chance 
+            {
+                w.WriteStartElement("array");
+                foreach (object value in finalCheck) WriteObject(w, value);
+                w.WriteEndElement();
+                return;
             }
             FieldInfo[] fi = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
             PropertyInfo[] pi = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
