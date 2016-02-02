@@ -369,7 +369,20 @@ namespace betteribttest
             return CollectEntries(0, advance, true);
         }
         */
-       
+        public bool readIntBool()
+        {
+            int b = this.ReadInt32();
+            if (b != 1 && b != 0) throw new Exception("Expected bool to be 0 or 1");
+            return b != 0;
+        }
+        public string readStringFromOffset()
+        {
+            int offset = this.ReadInt32();
+            PushSeek(offset);
+            string s = ReadVString();
+            PopPosition();
+            return s;
+        }
         string ReadVString() // We shouldn't throw here
         {
             string str;

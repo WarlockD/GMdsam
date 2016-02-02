@@ -204,7 +204,7 @@ namespace betteribttest
             cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
             GMK_Font fnt = cr.resFonts[1];
             return;
-                Bitmap bmp_chars = cr.filesImage[fnt.bitmap.texture_id].image; // don't know why or how the fonts know to look at this texture
+                Bitmap bmp_chars = cr.filesImage[fnt.bitmap.textureId].image; // don't know why or how the fonts know to look at this texture
            // GMK_Font fnt = cr.resFonts[0];
             //Bitmap bmp_chars = cr.filesImage[0].image; // don't know why or how the fonts know to look at this texture
             Bitmap target = new Bitmap(320, 200);
@@ -212,8 +212,8 @@ namespace betteribttest
            
             int offset_x = 0;
             int offset_y = 0;
-            int texture_x = fnt.bitmap.x;
-            int texture_y = fnt.bitmap.y;
+            int texture_x = fnt.bitmap.rect.x;
+            int texture_y = fnt.bitmap.rect.y;
             System.Diagnostics.Debug.WriteLine(fnt);
             using (Graphics g = Graphics.FromImage(target))
             {

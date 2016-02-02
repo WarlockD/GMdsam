@@ -120,42 +120,65 @@ namespace betteribttest
         }
     }
 
+
     class GMK_Object: GMK_Data
     { // HUMM We have 12 allarms!  EACH ALLARM IS A 1 DIMENIONAL ARRAY! WOO!
       //  public int[] header; // first 20 bytes, last byte seems to be a size
       //  public byte[] data;
-        public int[] data; // header data is 19
-
-        // MMabye this is the order
-        public int obj_id = 0; // instance varable
-        public int sprite_index;
-        public bool Visible = false;
+        public int ObjectIndex = -1;
+        public int SpriteIndex = 0;
         public bool Solid = false;
-        public int depth = 0; // negitive numbers are close to the player
-        public bool isPersistant = false;
+        public bool Visible = false;
+        public int Depth = 10;
+        public bool Persistent = false;
         public int Parent = -1;
         public int Mask = -1;
-        public int PhysicsObject = -1;
-        public int PhysicsObjectSensor = -1;
+        public bool PhysicsObject = false;
+        public bool PhysicsObjectSensor = false;
         public int PhysicsObjectShape = -1;
-        public int PhysicsObjectDensity = -1;
-        // Pulled from the compile code, not sure if its needed
-        public int PhysicsObjectRestitution = -1;
+        public float PhysicsObjectDensity = 0.0f;
+        public float PhysicsObjectRestitution = 0.0f;
         public int PhysicsObjectGroup = -1;
-        public int PhysicsObjectLinearDamping = -1;
-        public int PhysicsObjectAngularDamping = -1;
-        public int PhysicsShapeVerticesCount = -1;
-        public int PhysicsObjectFriction = -1;
-        public int PhysicsObjectAwake = -1;
-        public int PhysicsObjectKinematic = -1;
-        //public List<int> PhysicsShapeVertices  // humm
-        // irght after this it does arlarms
+        public float PhysicsObjectLinearDamping = 0.0f;
+        public float PhysicsObjectAngularDamping = 0.0f;
+        public float PhysicsObjectFriction = 0.0f;
+        public bool PhysicsObjectAwake = false;
+        public bool PhysicsObjectKinematic = false;
+      //  public List<PointF> PhysicsShapeVertices = null;
+        public string ParentName = null;
+        public string SpriteName = null;
         public int[] alarm_offsets = null; // hummmm!
 
         public GMK_Object(ChunkEntry e) : base(e) { }
+        public GMK_Object(ChunkEntry e, ChunkStream r, int ObjectIndex) : base(e) {
+            this.ObjectIndex = ObjectIndex;
+            this.Name = r.readStringFromOffset();
+            this.SpriteIndex= r.ReadInt32();
+            this.Visible= r.readIntBool();
+            this.Solid= r.readIntBool();
+            this.Depth= r.ReadInt32();
+            this.Persistent= r.readIntBool();
+            this.Parent= r.ReadInt32();
+            this.Mask= r.ReadInt32();
+            this.PhysicsObject= r.readIntBool();
+            this.PhysicsObjectSensor= r.readIntBool();
+            this.PhysicsObjectShape= r.ReadInt32();
+            this.PhysicsObjectDensity= r.ReadSingle();
+            this.PhysicsObjectRestitution= r.ReadSingle();
+            this.PhysicsObjectGroup= r.ReadInt32();
+            this.PhysicsObjectLinearDamping= r.ReadSingle();
+            this.PhysicsObjectAngularDamping= r.ReadSingle();
+            this.PhysicsObjectFriction= r.ReadSingle();
+        //    this.PhysicsObjectAwake= r.readIntBool();  this came out as a single with undertale, version diffrences?
+     //       this.PhysicsObjectKinematic= r.readIntBool();
+
+           // PhysicsShapeVertices // X and Y singles
+            // events, not sure we will ever use this here
+
+        }
         public override string ToString()
         {
-            return base.ToString() + " : " + String.Format("{{  obj_id : {0}, object_index: {1} }}", obj_id, Parent);
+            return  String.Format("{{  Name: {0}, Parent: {1}, Sprite {2} }}", Name, ParentName, SpriteName );
         }
 
     }
@@ -172,21 +195,32 @@ namespace betteribttest
     }
     class GMK_SpritePosition : GMK_Data
     {
-        public short x; // this is the size of the record
-        public short y;
-        public short width;
-        public short height;
-        public short renderX;
-        public short renderY;
-        public short width0;
-        public short height0;
-        public short width1;
-        public short height1;
-        public short texture_id;
+        public Rectangle rect;
+        public Point offset;
+        public Size crop;
+        public Size original;
+        public short textureId;
         public GMK_SpritePosition(ChunkEntry e) : base(e) { }
+        public GMK_SpritePosition(ChunkEntry e,ChunkStream r) : base(e) {
+            rect = new Rectangle();
+            offset = new Point();
+            crop = new Size();
+            original = new Size();
+            rect.X = r.ReadInt16();
+            rect.Y = r.ReadInt16();
+            rect.Width = r.ReadInt16();
+            rect.Height = r.ReadInt16();
+            offset.X = r.ReadInt16();
+            offset.Y = r.ReadInt16();
+            crop.Width = r.ReadInt16();
+            crop.Height = r.ReadInt16();
+            original.Width = r.ReadInt16();
+            original.Height = r.ReadInt16();
+            textureId = r.ReadInt16();
+        }
         public override string ToString()
         {
-            return String.Format("{{ x = {0}, y = {1}, width = {2}, height = {3}, texture_id = {4} }}",x,y,width,height,texture_id) + base.ToString() ;
+            return String.Format("SpriteData:  Rect = {0}, TextureID = {1} ", rect, textureId);
         }
     }
   
@@ -314,22 +348,7 @@ namespace betteribttest
         public List<GMK_String> stringList = new List<GMK_String>();
 
 
-        // sanity checks on objects
-        void AddObject(GMK_Object o)
-        {
-            AddData(o); // remember addData is used on objects here
-            GMK_Object lookup;
-            if (o.obj_id > -1) if (objMapId.TryGetValue(o.obj_id, out lookup))
-                {
-                    WriteDebug("obj_id DUP: " + o + " -> " + lookup);
-                }
-                else objMapId.Add(o.obj_id, o);
-            if (o.Parent > -1) if (objMapIndex.TryGetValue(o.Parent, out lookup))
-                {
-                    WriteDebug("obj_index DUP: " + o + " -> " + lookup);
-                }
-                else objMapIndex.Add(o.Parent, o);
-        }
+     
 
         Stack<long> savedOffsets = new Stack<long>();
 
@@ -610,46 +629,43 @@ namespace betteribttest
         }
 
 
-
+        [StructLayout(LayoutKind.Explicit)]
+        struct FloatInt
+        {
+            [FieldOffset(0)]
+            public float f;
+            [FieldOffset(0)]
+            public int i;
+            public FloatInt(int i)
+            {
+                this.f = 0.0f;
+                this.i = i;
+            }
+        }
+        // sanity checks on objects
+        void AddObject(GMK_Object o)
+        {
+            AddData(o); // remember addData is used on objects here
+            objList.Add(o);
+            GMK_Object lookup;
+            if (o.Parent > -1) if (objMapIndex.TryGetValue(o.Parent, out lookup))
+                {
+                    WriteDebug("obj_index DUP: " + o + " -> " + lookup);
+                }
+                else objMapIndex.Add(o.Parent, o);
+        }
         void DoObject(int chunkStart, int chunkLimit)
         {
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            objList = new List<GMK_Object>();
             foreach (ChunkEntry e in entries)
             {
-                GMK_Object obj = new GMK_Object(e);
-
-                obj.Name = readVarString(r.ReadInt32()); // oo my god.
-
-
-                int[] head = r.ReadInt32(19);
-                obj.data = head.ToArray();
-                //   obj.obj_id = head[0]; // instance varable ooor sprite index? hummmmmm
-                obj.sprite_index = head[0];
-                System.Diagnostics.Debug.Assert(!(obj.sprite_index == 0 && obj.sprite_index == 1));
-                obj.Visible = head[2] != 0;
-                System.Diagnostics.Debug.Assert(!(head[2] == 0 && head[2] == 1));
-                obj.Solid = head[3] != 0;
-                System.Diagnostics.Debug.Assert(!(head[3] == 0 && head[3] == 1));
-                obj.isPersistant = head[4] != 0;
-                obj.depth = head[5]; // negitive numbers are close to the player
-                obj.Parent = head[6];
-
-                obj.Mask = head[6]; // Humm I am thinking objects are varable size
-                                    //   obj.PhysicsObject = head[8];
-                                    //    obj.PhysicsObjectSensor = head[9];
-                                    //   obj.PhysicsObjectShape = head[10];
-                                    //   obj.PhysicsObjectDensity = head[11];
-
-                foreach (ChunkEntry alarm in new ChunkEntries(r, chunkLimit, false))
-                {
-                }
-
-
-
-
-                //  System.Diagnostics.Debug.Assert(obj.name != "obj_froggit");
-                objList.Add(obj);
+                GMK_Object obj = new GMK_Object(e,r,objList.Count);
                 AddObject(obj);
+            }
+            foreach (GMK_Object o in objList) { // map the names
+                if (o.Parent != -100) o.ParentName = objList[o.Parent].Name;
+                if(o.SpriteIndex != -1) o.SpriteName = spriteList[o.SpriteIndex].Name;
             }
         }
       
@@ -680,11 +696,10 @@ namespace betteribttest
         }
         void SaveSpritePng(string filename, GMK_SpritePosition p)
         {
-            Bitmap texture = filesImage[p.texture_id].image;
-            Bitmap sprite = new Bitmap(p.width, p.height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            Bitmap texture = filesImage[p.textureId].image;
+            Bitmap sprite = new Bitmap(p.original.Width,p.original.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             Graphics g = Graphics.FromImage(sprite);
-            Rectangle srcRect = new Rectangle(p.x, p.y, p.width, p.height);
-            g.DrawImage(texture, 0, 0, srcRect, GraphicsUnit.Pixel);
+            g.DrawImage(texture, p.offset.X,p.offset.Y, p.rect, GraphicsUnit.Pixel);
             if (filename.IndexOf('.') == -1) filename += ".png";
             sprite.Save(filename);
         }
@@ -835,20 +850,7 @@ namespace betteribttest
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
             foreach (ChunkEntry e in entries)
             {
-                GMK_SpritePosition p = new GMK_SpritePosition(e);
-                System.Diagnostics.Debug.Assert(e.ChunkSize == 22);
-
-                p.x = r.ReadInt16(); // this is the size of the record
-                p.y = r.ReadInt16();
-                p.width = r.ReadInt16();
-                p.height = r.ReadInt16();
-                p.renderX = r.ReadInt16();
-                p.renderY = r.ReadInt16();
-                p.width0 = r.ReadInt16();
-                p.height0 = r.ReadInt16();
-                p.width1 = r.ReadInt16();
-                p.height1 = r.ReadInt16();
-                p.texture_id = r.ReadInt16();
+                GMK_SpritePosition p = new GMK_SpritePosition(e,r);
                 AddData(p);
                 spritePos[e.Position] = p;
             }
@@ -878,15 +880,17 @@ namespace betteribttest
                 {
 
                     PListDict frame = frames.AddDictonary();
-                    frame["x"] = p.x;
-                    frame["y"] = p.y; ;
-                    frame["width"] = p.width;
-                    frame["height"] = p.height;
-                    frame["offsetX"] = p.renderX;
-                    frame["offsetY"] = p.renderY;
-                    frame["originalWidth"] = p.width0;  //p.width0;
-                    frame["originalHeight"] = p.height0; //p.height0;
-                    frame["textureIndex"] = p.texture_id; //p.height0;
+                    frame["x"] = p.rect.X;
+                    frame["y"] = p.rect.Y;
+                    frame["width"] = p.rect.Width;
+                    frame["height"] = p.rect.Height;
+                    frame["offsetX"] = p.offset.X;
+                    frame["offsetY"] = p.offset.Y;
+                    frame["originalWidth"] = p.original.Width;  //p.width0;
+                    frame["originalHeight"] = p.original.Height; //p.height0;
+                    frame["cropWidth"] = p.crop.Width;  //p.width0;
+                    frame["cropHeight"] = p.crop.Height; //p.height0;
+                    frame["textureIndex"] = p.textureId; //p.height0;
                 }
             }
             plist.WritePlist(path + "undertale_sprites.plist");
@@ -896,7 +900,7 @@ namespace betteribttest
             List<GMK_SpritePosition> sprites = new List<GMK_SpritePosition>();
             XmlWriterSettings settings = new XmlWriterSettings();
             
-
+            /*
             settings.Indent = true;
             Bitmap bmp = filesImage[textureIndex].image;
             PListDict plist = new PListDict();
@@ -913,21 +917,26 @@ namespace betteribttest
                 PListArray frameArray = newframes.AddArray(sprite.Name);
                 foreach (var p in sprite.frames)
                 {
-                    if (p.texture_id != textureIndex)  continue;
+                    if (p.textureId != textureIndex)  continue;
                     PListDict frameDict = frameArray.AddDictonary();
-                    frameDict["x"] = p.x;
-                    frameDict["y"] = p.y; ;
-                    frameDict["width"] = p.width;
-                    frameDict["height"] = p.height;
-                    frameDict["offsetX"] = p.renderX;
-                    frameDict["offsetY"] = p.renderY;
-                    frameDict["originalWidth"] = p.width0;  //p.width0;
-                    frameDict["originalHeight"] = p.height0; //p.height0;
+                    PListDict frame = frames.AddDictonary();
+                    frame["x"] = p.rect.X;
+                    frame["y"] = p.rect.Y;
+                    frame["width"] = p.rect.Width;
+                    frame["height"] = p.rect.Height;
+                    frame["offsetX"] = p.offset.X;
+                    frame["offsetY"] = p.offset.Y;
+                    frame["originalWidth"] = p.original.Width;  //p.width0;
+                    frame["originalHeight"] = p.original.Height; //p.height0;
+                    frame["cropWidth"] = p.crop.Width;  //p.width0;
+                    frame["cropHeight"] = p.crop.Height; //p.height0;
+                    frame["textureIndex"] = p.textureId; //p.height0;
                     if (first) { frames[sprite.Name] = frameDict; first = false; }
                 }
             }
             plist.WritePlist(packerFilename);
             bmp.Save(pngTexture);
+            */
         }
         // Ok, this is stupid, but I get it
         // All the vars and function names are on a link list from one to another that tie to the name
