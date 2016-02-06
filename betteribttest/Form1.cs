@@ -193,14 +193,17 @@ namespace betteribttest
  
         public Form1()
         {
-            InitializeComponent();
-            cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
+            InitializeComponent(); 
+            cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
+           // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             Disam dism = new Disam(cr);
-         //   dism.DissasembleEveything();
-       //     dism.writeFile("frog");
-       //     dism.writeFile("SCR_GAMESTART");
- 
-        //    cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
+            //   dism.DissasembleEveything();
+            //     dism.writeFile("frog");
+           dism.TestStreamOutput("frog");
+            //  dism.TestStreamOutput("SCR_GAMESTART");
+            //  dism.writeFile("SCR_GAMESTART");
+
+            //    cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
             cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
             GMK_Font fnt = cr.resFonts[1];
             return;
@@ -212,8 +215,8 @@ namespace betteribttest
            
             int offset_x = 0;
             int offset_y = 0;
-            int texture_x = fnt.bitmap.rect.x;
-            int texture_y = fnt.bitmap.rect.y;
+            int texture_x = fnt.bitmap.rect.X;
+            int texture_y = fnt.bitmap.rect.Y;
             System.Diagnostics.Debug.WriteLine(fnt);
             using (Graphics g = Graphics.FromImage(target))
             {

@@ -375,6 +375,11 @@ namespace betteribttest
             if (b != 1 && b != 0) throw new Exception("Expected bool to be 0 or 1");
             return b != 0;
         }
+        public string readFixedString(int count)
+        {
+            byte[] bytes = ReadBytes(count);
+            return System.Text.Encoding.UTF8.GetString(bytes);
+        }
         public string readStringFromOffset()
         {
             int offset = this.ReadInt32();

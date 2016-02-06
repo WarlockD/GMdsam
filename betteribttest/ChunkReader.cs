@@ -64,7 +64,8 @@ namespace betteribttest
     }
     public class GMK_Code : GMK_Data
     {
-        public byte[] code=null;
+        public int startPosition;
+        public int size;
         public GMK_Code(ChunkEntry e) : base(e) { }
     }
     class GMK_Image : GMK_Data
@@ -398,7 +399,7 @@ namespace betteribttest
                 GMK_Code code = new GMK_Code(e);
                 code.Name = readVarString(r.ReadInt32());
                 int code_size = r.ReadInt32();
-                code.code = r.ReadBytes(code_size);
+             //   code.code = r.ReadBytes(code_size);
                 codeList.Add(code);
                 AddData(code);
             }
@@ -946,28 +947,81 @@ namespace betteribttest
         // into seperate scripts blocks.  Meh
         // Also a side note is that object refrences as well as instance creation MUST fit in a 16bit value
         // If thats the case are objects manged by an index or am I reading objects wrong?
-        class CodeNameRefrence
+        public class CodeNameRefrence
         {
             public GMK_String name;
             public int count;
             public int start_ref;
             public int[] offsets;
         }
-       void refactorCode_FindAllRefs(SortedDictionary<int,CodeNameRefrence> refs, Chunk codeChunk, Chunk refChunk)
+        void refactorCode_FindAllRefs_Old(SortedDictionary<int, CodeNameRefrence> refs, Chunk codeChunk, Chunk refChunk)
         {
             r.Position = refChunk.start;
             int refCount = refChunk.size / 12;
+
+         //   int refCount = r.ReadInt32(); // what is this first number? refrence count?
+         //   System.Diagnostics.Debug.WriteLine("Reading {0} refrences from {1}", refCount, refChunk.name);
+            //  System.Diagnostics.Debug.WriteLine("Reading {0} refrences from {1}", count, refChunk.name);
             // Each ref is 3 ints long, firt is name refrence, second is number of refs, and thrid is the chain
             for (int i = 0; i < refCount; i++)
             {
                 CodeNameRefrence nref = new CodeNameRefrence();
-                int name_ref = r.ReadInt32();
-                GMK_String str = offsetMap[name_ref] as GMK_String;
+                int[] record = r.ReadInt32(3); // still 3 ints
+                GMK_String str = offsetMap[record[0]] as GMK_String;
                 if (str == null) throw new Exception("We MUST have a string here or all is lost");
                 nref.name = str;
-                nref.count = r.ReadInt32();
-                nref.start_ref = r.ReadInt32() & 0x00FFFFFF;
+                nref.count = record[1];
+                nref.start_ref = record[2] & 0x00FFFFFF;
                 nref.offsets = new int[nref.count];
+
+                r.PushSeek(nref.start_ref);
+                for (int j = 0; j < nref.count; j++)
+                {
+                    int first = r.ReadInt32(); // skip the first pop opcode
+                    int position = r.Position;
+                    int offset = r.ReadInt32() & 0x00FFFFFF;
+                    if (refs.ContainsKey(position)) throw new Exception("This ref was already in there?");
+                    else refs[position] = nref;
+                    nref.offsets[j] = offset;
+                    r.Position += (offset - 8);
+                    //  r.BaseStream.Seek(looffsetcation - 8L, SeekOrigin.Current); // this is crazy, so its an offset to the NEXT entry?  Gezzz
+                }
+                r.PopPosition();
+            }
+        //    int[] record2 = r.ReadInt32(10); // still 3 ints
+
+
+        }
+        class RefactorWierdCount
+        {
+            public int[] data;
+            public string Name;
+            public string ArgumentAlways;
+            
+        }
+
+        void refactorCode_FindAllRefs(SortedDictionary<int,CodeNameRefrence> refs, Chunk codeChunk, Chunk refChunk)
+        {
+            r.Position = refChunk.start;
+           int totalSize = refChunk.size / 12;
+            int[] record = null;
+            int refCount = r.ReadInt32(); // what is this first number? refrence count?
+            List<CodeNameRefrence> debugrefs = new List<CodeNameRefrence>();
+            System.Diagnostics.Debug.WriteLine("Reading {0} refrences from {1}", refCount, refChunk.name);
+            //  System.Diagnostics.Debug.WriteLine("Reading {0} refrences from {1}", count, refChunk.name);
+            // Each ref is 3 ints long, firt is name refrence, second is number of refs, and thrid is the chain
+            for (int i = 0; i < refCount; i++)
+            {
+                CodeNameRefrence nref = new CodeNameRefrence();
+                debugrefs.Add(nref);
+                record = r.ReadInt32(3); // still 3 ints
+                GMK_String str = offsetMap[record[0]] as GMK_String;
+                if (str == null) throw new Exception("We MUST have a string here or all is lost");
+                nref.name = str;
+                nref.count = record[1];
+                nref.start_ref = record[2] & 0x00FFFFFF;
+                nref.offsets = new int[nref.count];
+               
                 r.PushSeek(nref.start_ref);
                 for (int j = 0; j < nref.count; j++)
                 {
@@ -982,38 +1036,117 @@ namespace betteribttest
                 }
                 r.PopPosition();
             }
+             
+            int wierd_count = r.ReadInt32();
+            List<RefactorWierdCount> wierdStuff = new List<RefactorWierdCount>();
+            for (int i = 0; i < wierd_count; i++)
+            {
+                RefactorWierdCount wierd = new RefactorWierdCount();
+                wierdStuff.Add(wierd);
+                wierd.data = r.ReadInt32(4); // humm 4 ints now?
+                GMK_String str = offsetMap[wierd.data[1]] as GMK_String;
+                wierd.Name = str.str;
+                str = offsetMap[wierd.data[3]] as GMK_String;
+                wierd.ArgumentAlways = str.str;
+                System.Diagnostics.Debug.Assert(wierd.data[0] == 1 && wierd.data[2] == 0);
+                // first and alst are bools?
+
+            }
         }
-        void refactorCode(Chunk codeChunk, Chunk funcChunk, Chunk varChunk) 
+        void refactorCode_FindAllRefsVar(SortedDictionary<int, CodeNameRefrence> refs, Chunk codeChunk, Chunk refChunk)
+        {
+            r.Position = refChunk.start;
+            int totalSize = refChunk.size / (5 * sizeof(int));
+            int[] record = null;
+            int nodeCount = r.ReadInt32(); // what is this first number? refrence count?  version mabye? humm
+            int next_count = r.ReadInt32();
+            int a_bool = r.ReadInt32();
+            List<CodeNameRefrence> debugrefs = new List<CodeNameRefrence>();
+      //      System.Diagnostics.Debug.WriteLine("Reading {0} refrences from {1}", refCount, refChunk.name);
+            //  System.Diagnostics.Debug.WriteLine("Reading {0} refrences from {1}", count, refChunk.name);
+            // Each ref is 3 ints long, firt is name refrence, second is number of refs, and thrid is the chain
+            for (int i = 0; i < totalSize; i++)
+            {
+                
+                // FUCK they changed it, its a string index now, its still 3 ints
+                record = r.ReadInt32(5);
+                GMK_String str = offsetMap[record[0]] as GMK_String;
+                int some_negivitve = record[1];
+                int unkonwno = record[2];
+                int ref_count = record[3];
+                int start_offset = record[4];
+                if (ref_count >0)
+                {
+                    CodeNameRefrence nref = new CodeNameRefrence();
+                    nref.name = str;
+                    nref.start_ref = start_offset;
+                    nref.count = ref_count;
+                    nref.offsets = new int[ref_count];
+                    r.PushSeek(start_offset);
+                 //   this.debugOn = true;
+                    for (int j=0;j< ref_count;j++)
+                    {
+                     //   debugLocateOffsetInChunk(start_offset);
+                        int first = r.ReadInt32(); // skip the first pop opcode
+                        int position = r.Position;
+                        int offset = r.ReadInt32() & 0x00FFFFFF;
+                        if (refs.ContainsKey(position)) throw new Exception("This ref was already in there?");
+                        else refs[position] = nref;
+                        nref.offsets[j] = offset;
+                        r.Position += (offset - 8);
+                    }
+                    r.PopPosition();
+                }
+               
+            }
+            // Start of the func chunk, so this is correct.   Meh
+
+        }
+        public SortedDictionary<int, CodeNameRefrence> codeRefs;
+        public Dictionary<string, GMK_Code> codeLookup;
+        void refactorCode(Chunk codeChunk, Chunk funcChunk, Chunk varChunk)
         {
             // first the easy bit, getting all of the code start
-            
+
             // Functions first
             int funcSize = funcChunk.size / 12;
-            SortedDictionary<int, CodeNameRefrence> refs = new SortedDictionary<int, CodeNameRefrence>();
-            refactorCode_FindAllRefs(refs, codeChunk,funcChunk);
-            refactorCode_FindAllRefs(refs, codeChunk,varChunk);
+            codeRefs = new SortedDictionary<int, CodeNameRefrence>();
+            //   refactorCode_FindAllRefs(codeRefs, codeChunk,funcChunk);
+            //    refactorCode_FindAllRefsVar(codeRefs, codeChunk,varChunk);
+
+            refactorCode_FindAllRefs_Old(codeRefs, codeChunk, funcChunk);
+            refactorCode_FindAllRefs_Old(codeRefs, codeChunk, varChunk);
+            // refactorCode_FindAllRefs_Old(refs, codeChunk, varChunk);
 
             ChunkEntries entries = new ChunkEntries(r, codeChunk.start, codeChunk.end);
+            codeLookup = new Dictionary<string, GMK_Code>();
             foreach (ChunkEntry e in entries)
             {
                 GMK_Code code = new GMK_Code(e);
                 code.Name = readVarString(r.ReadInt32());
-                int code_size = r.ReadInt32();
-                int startPosition = r.Position;
-                code.code = r.ReadBytes(code_size);
-                for(int i=0; i< code_size;i+=4, startPosition+=4)
-                {
-                    CodeNameRefrence name_ref;
-                    if (refs.TryGetValue(startPosition, out name_ref))
-                    {
-                        code.code[i] = (byte)((name_ref.name.index) & 0xFF);
-                        code.code[i + 1] = (byte)((name_ref.name.index >> 8) & 0xFF);
-                        code.code[i + 2] = (byte)((name_ref.name.index >> 16) & 0xFF);
-                    }
-                }
+                code.size = r.ReadInt32();
+                code.startPosition = r.Position;
                 codeList.Add(code);
                 AddData(code);
+                codeLookup[code.Name] = code;
+                
+                for (int i = 0; i < code.size; i += 4)
+                {
+                    CodeNameRefrence name_ref;
+                    if (codeRefs.TryGetValue(r.Position, out name_ref))
+                    {
+                        int startPos = r.Position;
+                        byte[] buffer = r.ReadBytes(4);
+                        buffer[0] = (byte)((name_ref.name.index) & 0xFF);
+                        buffer[1] = (byte)((name_ref.name.index >> 8) & 0xFF);
+                        buffer[2] = (byte)((name_ref.name.index >> 16) & 0xFF);
+                        r.Position = startPos;
+                        r.BaseStream.Write(buffer, 0, 4);
+                    }
+                    else r.Position += 4;
+                }
             }
+
         }
 
 
@@ -1073,7 +1206,10 @@ namespace betteribttest
 
             refactorCode(chunks["CODE"], chunks["FUNC"], chunks["VARI"]);
         }
-
+        byte[] file_data;
+        MemoryStream ms;
+        public ChunkStream getReturnStream() { return r; }
+        public byte[] getFileData() { return file_data; }
         public ChunkReader(string filename, bool debugOn)
         {
             // this.debugOn = debugOn;
@@ -1087,7 +1223,12 @@ namespace betteribttest
                 filename = "data.win";
             } 
             s = System.IO.File.Open(filename, FileMode.Open, FileAccess.Read);
-            r = new ChunkStream(s);
+            file_data = new byte[s.Length];
+            s.Read(file_data, 0, (int)s.Length);
+            s.Close();
+            s = null;
+             ms = new MemoryStream(file_data);
+            r = new ChunkStream(ms);
 
             runChunkReader();
         }

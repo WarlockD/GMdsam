@@ -12,6 +12,17 @@ namespace betteribttest
 {
     class Disam
     {
+        public static string EscapeString(string s)
+        {
+            using (var writer = new StringWriter())
+            {
+                using (var provider = System.CodeDom.Compiler.CodeDomProvider.CreateProvider("CSharp"))
+                {
+                    provider.GenerateCodeFromExpression(new System.CodeDom.CodePrimitiveExpression(s), writer, null);
+                    return writer.ToString();
+                }
+            }
+        }
         ChunkReader cr;
         public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
         {
@@ -35,10 +46,10 @@ namespace betteribttest
             Int,
             Long,
             Bool,
-            Variable,
+            Var,
             String,
             Instance,
-            Error = 15, // This is usally short anyway
+            Short = 15, // This is usally short anyway
             refrenceInt = 0xFF00, // Used when we are a refrence that refers to a string
             refrenceString,// Used when we are a refrence that refers to a string
             NoType
@@ -126,6 +137,7 @@ namespace betteribttest
             { (OpType) 0x0c, "^" },
             { (OpType) 0x0d, "~" },
             {  (OpType)0x0e, "!" },
+
             {  (OpType)0x0f, "<<" },
             {  (OpType)0x10, ">>" },
             { (OpType) 0x11, "<" },
@@ -134,6 +146,15 @@ namespace betteribttest
             {  (OpType)0x14, "!=" },
             {  (OpType)0x15, ">=" },
             {  (OpType)0x16, ">" },
+        };
+        static Dictionary<OpType, OpType> invertOpType = new Dictionary<OpType, OpType>()
+        {
+            { OpType.Slt, OpType.Sge },
+            { OpType.Sge, OpType.Slt },
+            { OpType.Sle, OpType.Sgt },
+            { OpType.Sgt, OpType.Sle },
+            { OpType.Sne, OpType.Seq },
+            { OpType.Seq, OpType.Sne },
         };
         class StackValue // habit, I like unions, sue me
         {
@@ -161,7 +182,7 @@ namespace betteribttest
                 noValue = true;
                 svalue = var_name;
                 lvalue = instance;
-                type = GM_Type.Variable;
+                type = GM_Type.Var;
             }
             public StackValue(string v) { type = GM_Type.String; svalue = v; }
             public StackValue(double v) { type = GM_Type.Double; dvalue = v; }
@@ -183,13 +204,13 @@ namespace betteribttest
                     value.noValue = true;
                     return value;
                 }
-                if (this.type == GM_Type.Int || this.type == GM_Type.Long || this.type == GM_Type.Error)
+                if (this.type == GM_Type.Int || this.type == GM_Type.Long || this.type == GM_Type.Short)
                 {
                     if (to == GM_Type.Double || to == GM_Type.Float)
                         value.dvalue = (double)this.lvalue;
                     else if (to == GM_Type.String)
                         value.svalue = this.lvalue.ToString();
-                    else if (to == GM_Type.Variable)
+                    else if (to == GM_Type.Var)
                     {
                         value.svalue = this.lvalue.ToString();
                         value.lvalue = -10; // we don't know the instance?  Fucntion call?
@@ -199,11 +220,11 @@ namespace betteribttest
                 }
                 else if (this.type == GM_Type.Float || this.type == GM_Type.Double)
                 {
-                    if (to == GM_Type.Int || to == GM_Type.Long || to == GM_Type.Error)
+                    if (to == GM_Type.Int || to == GM_Type.Long || to == GM_Type.Short)
                         value.lvalue = (long)this.dvalue;
                     else if (to == GM_Type.String)
                         value.svalue = this.dvalue.ToString();
-                    else if (to == GM_Type.Variable)
+                    else if (to == GM_Type.Var)
                     {
                         value.svalue = this.dvalue.ToString();
                         value.lvalue = (long)this.dvalue;
@@ -213,11 +234,11 @@ namespace betteribttest
                 }
                 else if (this.type == GM_Type.String)
                 {
-                    if (to == GM_Type.Int || to == GM_Type.Long || to == GM_Type.Error)
+                    if (to == GM_Type.Int || to == GM_Type.Long || to == GM_Type.Short)
                         value.lvalue = int.Parse(this.svalue);
                     else if (to == GM_Type.Double || to == GM_Type.Float)
                         value.dvalue = double.Parse(this.svalue);
-                    else if (to == GM_Type.Variable)
+                    else if (to == GM_Type.Var)
                     {
                         value.svalue = this.svalue;
                         value.lvalue = this.lvalue;
@@ -243,7 +264,7 @@ namespace betteribttest
                 {
                     case GM_Type.Int:
                     case GM_Type.Long:
-                    case GM_Type.Error:
+                    case GM_Type.Short:
                         return lvalue.ToString();
                     case GM_Type.Float:
                     case GM_Type.Double:
@@ -329,12 +350,32 @@ namespace betteribttest
         {
             foreach (GMK_Code c  in cr.codeList)
             {
-                MemoryStream ms = new MemoryStream(c.code);
-                processStream(ms, c.FilePosition.Position);
-                StreamWriter s = new StreamWriter(c.Name + ".txt");
-                foreach (Opcode o in codes) s.WriteLine(o.ToString());
-                s.Close();
+              //  MemoryStream ms = new MemoryStream(c.code);
+             //   processStream(ms, c.FilePosition.Position);
+             //   StreamWriter s = new StreamWriter(c.Name + ".txt");
+             //   foreach (Opcode o in codes) s.WriteLine(o.ToString());
+             //   s.Close();
             }
+        }
+        public string TestStreamOutput(string code_name)
+        {
+            foreach (GMK_Code c in cr.codeList)
+            {
+                if (c.Name.IndexOf(code_name) != -1)
+                {
+                    ChunkStream ms = cr.getReturnStream();
+                    var lines = processStream2(ms, c.startPosition,c.size);
+
+                    StreamWriter s = new StreamWriter(c.Name + "_new.txt");
+                    foreach (var line in lines)
+                    {
+                        string text = line.DecompileLine();
+                        if (!string.IsNullOrEmpty(text)) s.WriteLine(text);
+                    }
+                    s.Close();
+                }
+            }
+            return null;
         }
         public void writeFile(string code_name)
         {
@@ -381,27 +422,182 @@ namespace betteribttest
             }
             return v;
         }
-        class OpcodeDecode
+        class AST
         {
-            public uint op;
-            public OpcodeDecode(uint op) { this.op = op; }
+            public GM_Type Type { get; private set; }
+            public AST( GM_Type type) {  this.Type = type; }
         }
-        class Opcode_Push : OpcodeDecode
+        class Variable : AST
         {
-            public int instance;
-            public int operand;
-            public int load_type;
-            public GM_Type push_type;
-
-            public Opcode_Push(uint op, int operand) : base(op)
+            double dvalue;
+            long ivalue;
+            string svalue;
+            public Variable Dup()
             {
-                this.operand = operand & 0x00FFFFFF;
-                this.load_type = operand >> 24;
-                this.instance = (int)(op & 0xFFFF);
-                this.push_type = (GM_Type)((op >> 16) & 0xFF);
+                return (Variable)this.MemberwiseClone();
+            }
+            public string Value { get; private set; }
+            public double DValue { get { return dvalue; } }
+            public double IValue { get { return ivalue; } }
+            public Variable(int value) : base(GM_Type.Int) { ivalue = value; Value = value.ToString(); }
+            public Variable(long value) : base(GM_Type.Long) { ivalue = value; Value = value.ToString(); }
+            public Variable(ushort value) : base(GM_Type.Short) { ivalue = value; Value = value.ToString(); }
+            public Variable(float value) : base(GM_Type.Float) { dvalue = value; Value = value.ToString(); }
+            public Variable(double value) : base(GM_Type.Double) { dvalue = value; Value = value.ToString(); }
+            public Variable(bool value) : base(GM_Type.Bool) { ivalue = value ? 1:0; Value = value.ToString(); }
+            public Variable(string value) : base(GM_Type.String) { Value = svalue = value;  }
+            public Variable(string value,GM_Type type) : base(type) { Value = svalue = value; }
+            public Variable(int value, string instance) : base(GM_Type.Instance) {
+                ivalue = value;
+                Value = instance;
+            }
+            public override string ToString()
+            {
+                if (this.Type == GM_Type.String)
+                    return EscapeString(Value);
+                else
+                    return Value;
             }
         }
+        class Conv : AST
+        {
+            public AST next;
+            public Conv(AST ast, GM_Type type) : base(type) { this.next = ast; }
 
+ 
+            public override string ToString()
+            {
+                Variable isVar = next as Variable;
+                if (this.Type == next.Type) return next.ToString();
+
+                switch (this.Type)
+                {
+                    case GM_Type.Int:
+                        switch (next.Type)
+                        {
+                            case GM_Type.Double:
+                            case GM_Type.Float:
+                            case GM_Type.String:
+                                return "(Int)(" + next.ToString() + ")";
+                            default:
+                                return next.ToString();
+                        }
+                    case GM_Type.Long:
+                        switch (next.Type)
+                        {
+                            case GM_Type.Double:
+                            case GM_Type.Float:
+                            case GM_Type.String:
+                                return "(Long)(" + next.ToString() + ")";
+                            default:
+                                return next.ToString();
+                        }
+                    case GM_Type.Short:
+                        switch (next.Type)
+                        {
+                            case GM_Type.Double:
+                            case GM_Type.Float:
+                            case GM_Type.String:
+                                return "(Short)(" + next.ToString() + ")";
+                            default:
+                                return next.ToString();
+                        }
+                    case GM_Type.Float:
+                        switch (next.Type)
+                        {
+                            case GM_Type.Int:
+                            case GM_Type.Long:
+                            case GM_Type.Short:
+                            case GM_Type.String:
+                                return "(Float)(" + next.ToString() + ")";
+                            default:
+                                return next.ToString();
+                        }
+                    case GM_Type.Double:
+                        switch (next.Type)
+                        {
+                            case GM_Type.Int:
+                            case GM_Type.Long:
+                            case GM_Type.Short:
+                            case GM_Type.String:
+                                return "(Double)(" + next.ToString() + ")";
+                            default:
+                                return next.ToString();
+                        }
+                    case GM_Type.String: // might have an issue with a double string conversion but should be fine
+                        if (isVar != null && isVar.Type == GM_Type.Instance)
+                            return "(String)(" + EscapeString(next.ToString()) + ")";
+                        else
+                            return "(String)(" + EscapeString(next.ToString()) + ")";
+                    case GM_Type.Var:
+                        if (isVar != null && next.Type == GM_Type.String) return isVar.ToString(); // might be a normal string
+                        else return next.ToString(); // dosn't matter
+                    case GM_Type.Instance:
+                        if (isVar != null && next.Type == GM_Type.Short || next.Type == GM_Type.Int)
+                        {
+                            // we have to look up the int type here, need to have a static list somewhere or throw?
+                            string instance;
+                            if (instanceLookup.TryGetValue((int)isVar.IValue, out instance)) return instance;
+                        }
+                        return "(Instance)(" + isVar.ToString() + ")";
+                    default:
+                        return next.ToString();
+                }
+            }
+        }
+        class MathOp : AST
+        {
+            public AST Left { get; private set; }
+            public AST Right { get; private set; }
+
+            public OpType Op { get; private set; }
+
+            public MathOp(AST left, OpType op, AST right) : base(GM_Type.NoType) { this.Left = left; this.Op = op; this.Right = right; }
+            public override string ToString()
+            {
+                string sop;
+                if(opMathOperation.TryGetValue(Op,out sop))
+                {
+                    return Left.ToString() + " " + sop + " " + Right.ToString();
+                }
+                throw new ArgumentException("Cannot find math operation");
+            }
+        }
+        class Assign : AST
+        {
+            public string Variable { get; private set; }
+            public AST Value { get; private set; }
+            public Assign(string variable, GM_Type type,  AST value) : base(type) { this.Variable = variable; this.Value = value; }
+            public override string ToString()
+            {
+                return Variable + " = " + Value.ToString();
+            }
+        }
+        class Call : AST
+        {
+            public string FunctionName { get; private set; }
+            public int ArgumentCount { get; private set; }
+            public AST[] Arguments { get; private set; }
+            public Call(string functionname, params AST[] args) : base(GM_Type.Int)
+            {
+                this.FunctionName = functionname;
+                ArgumentCount = args.Length;
+                Arguments = args;
+            }
+
+            public override string ToString()
+            {
+                string ret = FunctionName + "(";
+                if (ArgumentCount > 0)
+                {
+                    for (int i = 0; i < ArgumentCount - 1; i++)
+                        ret += Arguments[i].ToString() + ",";
+                    ret += Arguments.Last();
+                }
+                ret += ")";
+                return ret;
+            }
+        }
 
         StackValue getValue(List<Opcode> opcodes, int pos, bool remove)
         {
@@ -433,6 +629,14 @@ namespace betteribttest
         {
             return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index, value.valueToString());
         }
+        string FormatAssign(string sinstance, string var_name, int index, AST value)
+        {
+            return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index, value.ToString());
+        }
+        string FormatAssign(string sinstance, string var_name, AST index, AST value)
+        {
+            return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index.ToString(), value.ToString());
+        }
         string FormatAssign(string sinstance, string var_name, int index, string value)
         {
             return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index, value);
@@ -449,96 +653,17 @@ namespace betteribttest
         {
             return String.Format("{0}.{1} = {2}", sinstance, var_name, value);
         }
-        string ProcessAssign(string var_name, int load_type, GM_Type convertFrom, GM_Type convertTo, int instance, List<Opcode> opcodes)
-        {
-            Queue<StackValue> valueStack = new Queue<StackValue>(); // its a queue as we have to reverse the order
-            // Lets do the simplest conversion first  int -> ref ( integer being assigned to a value of an object aka global.bob = 4;
-            string sinstance = lookupInstance(instance);
-            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self") && convertFrom != GM_Type.Variable && convertTo == GM_Type.Variable)
-            {
-                StackValue value = getValue(opcodes);
-                if (value == null) return null;
-                return FormatAssign(sinstance, var_name, value);
-            }
-            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self") && convertFrom == GM_Type.Variable && convertTo == GM_Type.Variable) // usally a function return, assigning to an object
-            {
-                Opcode lastOp = opcodes.Last();
-                if (lastOp.opcode_text == "call") // last was a call
-                {
-                    opcodes.RemoveAt(opcodes.Count - 1);
-                    return FormatAssign(sinstance, var_name, lastOp.operand_text);
-                } else
-                {
-                    StackValue value = getValue(opcodes);
-                    if (value == null) return null;
-                    return FormatAssign(sinstance, var_name, value);
-                }
-            }
-            // load_type 0 is an array and instance is on the stack
-            if (load_type == 0 && (sinstance == "stack"))
-            {
-                List<StackValue> values = getValues(opcodes, 3);
-                if (values == null) return null;
-                // remember, values is reversed
-                string sindex = values[0].valueToString();
-                sinstance = lookupInstance(values[1].intValue);
-                StackValue value = values[2];
-                return FormatAssign(sinstance, var_name, sindex, value);
-            }
-            return null;
-            // zero seems to be an array assign
-        }
-        string ProcessVariable(string var_name, int load_type, int instance, Opcode opcode, List<Opcode> opcodes)
-        {
-            string sinstance = lookupInstance(instance);
-            string ret = null;
-            if (load_type == 0xA0) // simple varable, usally an int 
-            {
-                if (sinstance == "stack")
-                {
-                    StackValue value = getValue(opcodes);
-                    if (value == null) return null;
-                    if (value.hasValue)
-                        sinstance = lookupInstance(value.intValue);
-                    else
-                        sinstance = value.valueToString();
-                    sinstance = lookupInstance(value.intValue);
-                    ret = sinstance + "." + var_name;
-                } else
-                {
-                    ret = sinstance + "." + var_name;
-                    StackValue value = new StackValue(instance, ret);
-                    opcode.value = value;
-                }
-            }
-            if (load_type == 0 && sinstance == "stack") // instance is on the stack and its an array
-            {
-                List<StackValue> values = getValues(opcodes, 2);
-                if (values == null) return null; // can't read the stack for some reason
-                string sindex = values[0].valueToString();
-                if (values[1].hasValue)
-                    sinstance = lookupInstance(values[1].intValue);
-                else
-                    sinstance = values[1].valueToString();
-
-                ret = sinstance + "." + var_name + "[" + sindex + "]";
-                opcode.value = new StackValue(instance, ret);
-            }
-            if (load_type == 0x80) // not sure what this is
-            {
-                ret = sinstance + "." + var_name + " (Load: 0x80)";
-                opcode.value = new StackValue(instance, ret);
-            }
-
-            if (ret == null)
-                throw new NotImplementedException("Push.V convert not implmented");
-            return ret;
-        }
+     
+        // This is an offset
         public string decodeCallName(int operand)
         {
             int string_ref = (int)(operand & 0x0FFFFFFF); // this COULD be 24 bits?
-            if (string_ref < cr.stringList.Count) return cr.stringList[string_ref].str;
-            else return "NOT FOUND: " + string_ref.ToString();
+
+            if (string_ref < cr.stringList.Count)
+            {
+                return cr.stringList[string_ref].str;
+            }
+            else throw new Exception("Function not found!"); // return "NOT FOUND: " + string_ref.ToString();
         }
         public string decodePushOrPop(int operand)
         {
@@ -566,299 +691,317 @@ namespace betteribttest
 
 
         }
-
-
-        public void processStream2(Stream f, long codeOffset)
-        {
-            f.Position = 0;
-            BinaryReader r = new BinaryReader(f);
-            codes = new List<Opcode>();
-            Stack<Opcode> exprs = new Stack<Opcode>(); // used to caculate stuff
-            int len = (int)f.Length / 4;
-            long startPos = f.Position;
-
-            while (f.Position != f.Length)
+        void ProcessVarPush(Stack<AST> tree, uint op, int operand) {
+            int instance = (short)(op & 0xFFFF);
+            string sinstance = lookupInstance(instance);
+            int load_type = (operand >> 24) & 0xFF;
+            string var_name = decodeCallName(operand & 0x00FFFFFF);
+            if (load_type == 0xA0) // simple varable, usally an int 
             {
-                Opcode info = new Opcode();
-                long pc = info.pc = (f.Position / 4);
-                uint op = info.op = r.ReadUInt32();
-                OpType code = (OpType)((byte)(op >> 24));
-                if (!opDecode.TryGetValue(code, out info.opcode_text))
+                if (sinstance == "stack" )
                 {
-                    info.opcode_text = String.Format("E{0:X2}", (byte)code);
-                    codes.Add(info);
-                    continue; //skip it
+                    AST value = tree.Pop();
+                    Variable valueVar = value as Variable;
+                    if (valueVar != null)
+                        sinstance = lookupInstance((int)valueVar.IValue);
+                    else
+                        sinstance = value.ToString();
+                    tree.Push(new Variable(sinstance + "." + var_name, GM_Type.Var));
+                    return;
+                } else if(sinstance == "self")
+                {
+                 //   AST value = tree.Pop();
+                    tree.Push(new Variable(sinstance + "." + var_name, GM_Type.Var));
+                    return;
                 }
-                if ((byte)code <= 0x16)
+            }
+            if (load_type == 0 && sinstance == "stack") // instance is on the stack and its an array
+            {
+                AST index = tree.Pop();
+                AST value = tree.Pop();
+                Variable valueVar = value as Variable;
+                if (valueVar != null)
+                    sinstance = lookupInstance((int)valueVar.IValue);
+                else
+                    sinstance = value.ToString();
+                tree.Push(new Variable(sinstance + "." + var_name + "[" + index.ToString() + "]", GM_Type.Var));
+                return;
+            }
+            if (load_type == 0x80) // not sure what this is
+            {
+                // ret = sinstance + "." + var_name + " (Load: 0x80)";
+                //  opcode.value = new StackValue(instance, ret);
+            }
+            throw new NotImplementedException("Push.V convert not implmented"); // we are going to handle it all, no exceptions this time around
+        }
+        string ProcessAssignPush(Stack<AST> tree, uint op,  int operand)
+        {
+            GM_Type convertFrom = (GM_Type)(int)((op >> 20) & 0xF);
+            GM_Type convertTo = (GM_Type)(int)((op >> 16) & 0xF);
+            int iinstance = (short)(op & 0xFFFF);
+            string sinstance = lookupInstance(iinstance);
+            int load_type = operand >> 24 & 0xFF; // I think this might only be 4 bits
+            string var_name = decodeCallName(operand & 0x00FFFFFF);
+
+            //Queue<StackValue> valueStack = new Queue<StackValue>(); // its a queue as we have to reverse the order
+            // Lets do the simplest conversion first  int -> ref ( integer being assigned to a value of an object aka global.bob = 4;
+            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self") && convertFrom != GM_Type.Var && convertTo == GM_Type.Var)
+            {
+                AST value = tree.Pop();
+                return FormatAssign(sinstance, var_name, value.ToString());
+            }
+            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self") && convertFrom == GM_Type.Var && convertTo == GM_Type.Var) // usally a function return, assigning to an object
+            {
+                AST value = tree.Pop();
+                return FormatAssign(sinstance, var_name, value.ToString());
+            }
+            // load_type 0 is an array and instance is on the stack
+            if (load_type == 0 && (sinstance == "stack"))
+            {
+                AST index = tree.Pop();
+                AST instance = tree.Pop();
+                AST value = tree.Pop();
+                if (int.TryParse(instance.ToString(), out iinstance))
                 {
-                    string operation = opMathOperation[code];
-                    int topType = (int)((op >> 16) & 0xF);
-                    int secondType = (int)((op >> 20) & 0xF);
-                    List<StackValue> values = getValues(codes, 2);
-                    if (values == null) throw new Exception("Stack missmatch");
-                    info.opcode_text = String.Format("{0} {1} {2}", values[0].valueToString(), operation, values[1].valueToString());
-                    info.value = new StackValue(-6, info.opcode_text);
-                } else switch (code)
+                    sinstance = lookupInstance(iinstance);
+                }
+                else sinstance = instance.ToString();
+                return FormatAssign(sinstance, var_name, index, value);
+            }
+            return null;
+            // zero seems to be an array assign
+        }
+        void ProcessMathOp(Stack<AST> tree, uint op)
+        {
+            OpType code = (OpType)((byte)(op >> 24));
+            GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
+            GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
+            AST right = tree.Pop();
+            AST left = tree.Pop();
+            tree.Push(new MathOp(left, code, right));
+        }
+        void ProcessCall(Stack<AST> tree, uint op, int operand)
+        {
+            //  byte return_type = (byte)((op >> 16) & 0xFF); // always i
+            // string return_type_string = typeLookup[return_type];
+            int arg_count = (ushort)(op & 0xFFFF);
+            string func_name = decodeCallName(operand);
+
+            List<AST> args = new List<AST>();
+            for (int i = 0; i < arg_count; i++) args.Add(tree.Pop());
+            tree.Push(new Call(func_name, args.ToArray()));
+        }
+        public bool invertBranchLogic = true;
+        string ProcessBranch(Stack<AST> tree, string gotoLabel, bool testIfTrue)
+        {
+            string s = "if ";
+            AST value = tree.Pop();
+            MathOp mathOp = value as MathOp;
+            if (mathOp == null)
+            {
+                if (testIfTrue) s += value.ToString();
+                else s += "!" + value.ToString();
+            }
+            else
+            {
+                if (invertBranchLogic && !testIfTrue)
+                {
+                    OpType inverted;
+                    if (invertOpType.TryGetValue(mathOp.Op, out inverted))
                     {
-                        case OpType.Pop:
-                            {
-                                int topType = (int)((op >> 20) & 0xF);
-                                int secondType = (int)((op >> 16) & 0xF);
-                                int instance = (short)(op & 0xFFFF);
-                                string sinstance = lookupInstance(instance);
-                                int func = r.ReadInt32();
-                                int object_var_type = func >> 24 & 0xFF; // I think this might only be 4 bits
-                                string varname = decodeCallName(func);
-                                info.opcode_text = ProcessAssign(varname, object_var_type, (GM_Type)topType, (GM_Type)secondType, instance, codes);
-                                if (info.opcode_text == null) throw new Exception("Fix me");
-                                info.value = null; // we are a setter, not a value
-                            }
-                            break;
-                        case OpType.Dup:
-                        case OpType.Ret:
-                        case OpType.Exit:
-                        case OpType.Popz:
-
-                            info.opcode_text = String.Format("{0}", typeLookup[(int)((op >> 16) & 0xFF)]);
-                            break;
-                        case OpType.B:
-                        case OpType.Bt:
-                        case OpType.Bf:
-                        case OpType.Pushenv:
-                        case OpType.Popenv:
-                        case OpType.Call:
-                        case OpType.Break:
-                        default:
-                            throw new NotImplementedException("Ugh");
+                        mathOp = new MathOp(mathOp.Left, inverted, mathOp.Right);
+                        testIfTrue = true;
                     }
-
+                }
+                if (testIfTrue)
+                    s += mathOp.ToString();
+                else
+                    s += "!(" + mathOp.ToString() + ")";
+            }
+            s += "then goto " + gotoLabel;
+            return s;
+        }
+        class CodeLine
+        {
+            public string Text=null;
+            public string Label = null;
+            public uint op = 0;
+            public int operand = 0;
+            public int pc = 0;
+            public long startPc = 0;
+            public long endPC = 0;
+   
+            public string DecompileLine()
+            {
+                if (this.Text == null && this.Label == null) return null;
+                string s = String.Format("{0,-10} {1}", this.Label == null ? "" : this.Label+":", this.Text == null ? "" : this.Text);
+                return s;
+            }
+            public override string ToString()
+            {
+                return Label != null ? Label + " : " + Text : Text;
             }
         }
-        public void processStream(Stream f,long codeOffset)
+        static int getBranchOffset(uint op)
         {
-            f.Position = 0;
-            BinaryReader r = new BinaryReader(f);
-            int len = (int)f.Length / 4;
-            codes = new List<Opcode>(len);
-            string scode;
-            string soperand;
-            string scomment;
-            long startPos = f.Position;
-            while (f.Position != f.Length)
+            op &= 0x00FFFFFF;
+            if ((op & 0x800000) != 0) op |= 0xFF000000;
+            return (int)op;
+        }
+        List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size)
+        {
+            r.PushSeek((int)codeOffset);
+            int limit = (int)(codeOffset + code_size);
+            Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
+            List<CodeLine> lines = new List<CodeLine>();
+            Dictionary<int, string> gotos = new Dictionary<int, string>();
+            int len = (int)r.Length / 4;
+            int startPos = r.Position;
+            string codeLine = null;
+            int pc = 0;
+            int last_pc = 0;
+            int start_pc = pc;
+            Func<uint, string> checkLabel = (value) =>
+              {
+                  value &= 0x00FFFFFF;
+                  if ((value & 0x800000) != 0) value |= 0xFF000000;
+                  int offset = pc + (int)value;
+                  string label;
+                  if (gotos.TryGetValue(offset, out label)) return label;
+                  return gotos[offset] = ("Label_" + gotos.Count);
+              };
+            uint op = 0;
+            //     int shit_header = r.ReadInt32();
+            while (r.Position != limit)
             {
-                Opcode info = new Opcode();
-                long startOpPos = f.Position;
-                uint op  = r.ReadUInt32();
-                OpType opcode = (OpType)((byte)(op >> 24));
-                soperand = "";
-                scomment = "";
-                // scode = opDecode[opcode];
-                if (!opDecode.TryGetValue(opcode, out scode)) scode = String.Format("E{0:X2}", (byte)opcode);
-               
-               else  if ((byte)opcode <= 0x16)
+                CodeLine line = new CodeLine();
+                last_pc = pc;
+                line.pc = pc = (r.Position - codeOffset) / 4;
+                line.op = op = r.ReadUInt32();
+                OpType code = (OpType)((byte)(op >> 24));
+                switch (code)
                 {
-                    int topType = (int)((op >> 16) & 0xF);
-                    int secondType = (int)((op >> 20) & 0xF);
-                    if(scode == "com") // still not sure what this does
-                    {
-                        string mathop = opMathOperation[opcode];
-                        StackValue value = getValue(codes);
-                        if (value != null) // not sure about the stack here
-                        {
-                            soperand = String.Format("{0}({1})", mathop, value.valueToString());
-                            info.value = new StackValue(-5, soperand);
-                        }
-                        else
-                        {
-                            soperand = String.Format("Types: {0}, {1}", typeLookup[topType], typeLookup[secondType]);
-                            info.value = new StackValue(0, "Broken " + scode + " at " + startOpPos);
-                        }
-                    }
-                    else if (scode == "conv") // going to try to get rid of extra pushes in the list
-                    {
-                        Opcode last = codes.Last();
-                        OpType last_opcode = (OpType)((byte)(last.op >> 24));
-                        if (last.value != null)
-                        {
-                            // ignore this, convert the push
-                            last.value = last.value.convert((GM_Type)topType, (GM_Type)secondType);
-                            continue;
-                        }
-                        else throw new Exception("Bad stack?");
-                    }
-                    else
-                    {
-                        string mathop = opMathOperation[opcode];
-                        List<StackValue> values = getValues(codes, 2);
-                        if(values != null) // not sure about the stack here
-                        {
-                            soperand = String.Format("{0} {1} {2}", values[0].valueToString(), mathop, values[1].valueToString());
-                            info.value = new StackValue(-5, soperand);
-                        } else
-                        {
-                            soperand = String.Format("Types: {0}, {1}", typeLookup[topType] , typeLookup[secondType]);
-                            info.value = new StackValue(0,"Broken " + scode + " at " + startOpPos);
-                        }
-                        
-                        //   Opcode left = codes[codes.Count - 2];
-                        //   Opcode right = codes[codes.Count - 2];
-                        //  soperand = String.Format("{0} {1} {2}", typeLookup[topType], mathop, typeLookup[secondType]);
+                    case OpType.Pushenv:
 
-                    }
-                        
-                }
-                else switch (scode)
-                    {
-                        case "dup": // we just copy the last opcode on the stack, prey this dosn't fuck up
-                            {
-                                Opcode last = codes.Last();
-                                info.value = last.value.convert(last.value.Type, (GM_Type)(int)((op >> 16) & 0xFF));
-                            }
-                            break;
-                        case "ret":
-                        case "exit":
-                        case "popz":
-                            soperand = String.Format("{0}", typeLookup[(int)((op >> 16) & 0xFF)]);
-                            break;
-                        case "b":
-                        case "bt":
-                        case "bf":
-                        case "pushenv":
-                            op &= 0x00FFFFFF;
-                            if ((op & 0x800000) != 0) op |= 0xFF000000;
-                            info.value = new StackValue((int)op);
-                            soperand = String.Format("{0}", (int)op + (startOpPos/4)+1);
-                            break;
-                        case "popenv":
-                            soperand = String.Format("{0} --> {1} ; (unknown, to pushenv?", (op >> 16) & 0xFF, (short)(op & 0xFFFF));
-                            break;
-                        case "pop":
-                            {
-                                int topType = (int)((op >> 20) & 0xF);
-                                int secondType = (int)((op >> 16) & 0xF);
-                                int instance = (short)(op & 0xFFFF);
-                                string sinstance = lookupInstance(instance);
-                                int func = r.ReadInt32();
-                                int object_var_type = func >> 24 & 0xFF; // I think this might only be 4 bits
-                                string varname = decodeCallName(func);
-                                soperand = ProcessAssign(varname, object_var_type, (GM_Type)topType, (GM_Type)secondType, instance, codes);
-                                if (soperand != null) scode = "assign";
-                                else soperand = String.Format("{0} -> {1} ({2} {3}", typeLookup[topType], typeLookup[secondType], lookupInstance(instance), decodePushOrPop(func));       
-                            }
-                            break;
-                        case "push":
+                    case OpType.Popenv:
+
+                    case OpType.Mul:
+                    case OpType.Div:
+                    case OpType.Rem:
+                    case OpType.Mod:
+                    case OpType.Add:
+                    case OpType.Sub:
+                    case OpType.Or:
+                    case OpType.And:
+                    case OpType.Xor:
+                    case OpType.Not:
+                    case OpType.Sal:
+                    case OpType.Slt:
+                    case OpType.Sle:
+                    case OpType.Seq:
+                    case OpType.Sge:
+                    case OpType.Sgt:
+                        ProcessMathOp(tree, op);
+                        break;
+                    case OpType.Bf: // branch if false
+                        codeLine = ProcessBranch(tree, checkLabel(op), false);
+                        break;
+                    case OpType.Bt: // branch if false
+                        codeLine = ProcessBranch(tree, checkLabel(op), true);
+                        break;
+                    case OpType.B: // branch if false
+                        codeLine = "goto " + checkLabel(op);
+                        break;
+                    case OpType.Conv:
+                        {
+                            GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
+                            GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
+                            tree.Push(new Conv(tree.Pop(), tooType));
+                        }
+                        break;
+                    case OpType.Push: // most common.  Used for all math operations
+                        {
                             byte t = (byte)(op >> 16);
-                            // string ts = typeLookup[t];
-
                             switch (t)
                             {
-                                case 0x0:
-                                    {
-                                        double operand = r.ReadDouble();
-                                        scode += ".d";
-                                        info.value = new StackValue(operand);
-                                        soperand = String.Format("{0}", operand);
-                                    }
-                                    break;
-                                case 0x1:
-                                    {
-                                        float operand = r.ReadSingle();
-                                        scode += ".f";
-                                        info.value = new StackValue(operand);
-                                        soperand = String.Format("{0}", operand);
-                                    }
-                                    break;
-                                case 0x2:
+                                case 0x0: tree.Push(new Variable(r.ReadDouble())); break;
+                                case 0x1: tree.Push(new Variable(r.ReadSingle())); break;
+                                case 0x2: tree.Push(new Variable(line.operand = r.ReadInt32())); break;
+                                case 0x3: tree.Push(new Variable(r.ReadInt64())); break;
+                                case 0x5: ProcessVarPush(tree, op, line.operand = r.ReadInt32()); break;
+                                case 0x6:
                                     {
                                         int operand = r.ReadInt32();
-                                        scode += ".i";
-                                        info.value = new StackValue(operand);
-                                        soperand = String.Format("{0}", operand);
+                                        line.operand = operand;
+                                        string value = cr.stringList[(int)operand].str;
+                                        tree.Push(new Variable(value));
                                     }
                                     break;
-                                case 0x3:
-                                    {
-                                        long operand = r.ReadInt64();
-                                        scode += ".l";
-                                        info.value = new StackValue(operand);
-                                        soperand = String.Format("{0}", operand);
-                                    }
-                                    break;
-                                case 0x5: // need to function this
-                                    {
-                                        int instance = (short)(op & 0xFFFF);
-                                        string sinstance = lookupInstance(instance);
-                                        int func = r.ReadInt32();
-                                        int load_type = (func >> 24) & 0xFF;
-                                        string varname = decodeCallName(func);
-                                        scode += ".v";
-                                        soperand = ProcessVariable(varname, load_type, instance, info, codes);   
-                                        info.operand = func;
-                                    }
-                                    break;
-                                case 0x6: // string hum
-                                    {
-                                        int operand = r.ReadInt32();
-                                        scode += ".s";
-                                        info.value = new StackValue(cr.stringList[(int)operand].escapedString);
-                                        info.soperand = cr.stringList[(int)operand].escapedString;
-                                        soperand = String.Format("{0}", info.soperand);
-                                    }
-                                    break;
-                                case 0xF:
-                                    {
-                                        short operand = (short)(op & 0xFFFF);
-                                        scode += ".e";
-                                        info.value = new StackValue(operand);
-                                        soperand = String.Format("{0}", operand);
-                                    }
-                                    break;
+                                case 0xF: tree.Push(new Variable((short)(op & 0xFFFF))); break;
                                 default:
                                     throw new Exception("Bad type");
                             }
-                            break;
-                        case "call":
-                            {
-                                //  byte return_type = (byte)((op >> 16) & 0xFF); // always i
-                                // string return_type_string = typeLookup[return_type];
-                                int args = (ushort)(op & 0xFFFF);
-                                int fuc = r.ReadInt32();
-                                soperand = decodeCallName(fuc);
-                                List<StackValue> values = getValues(codes, args);
-                                if (values == null) soperand += "(? " + args + ")";
-                                else // now the magic happens
-                                {
-                                    soperand += "(";
-                                    for (int i=0;i<args;i++)
-                                    {
-                                        soperand += values[i].valueToString();
-                                        if (i != (args - 1)) soperand += ",";
-                                    }
-                                    soperand += ")";
-                                }
-                                info.value = new StackValue(-10, soperand);
+                        }
+                        break;
+                    case OpType.Pop:
+                        codeLine = ProcessAssignPush(tree, op, line.operand = r.ReadInt32());
+                        break;
+                    case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
+                        {
+                            codeLine = tree.Pop().ToString();
+                        }
+                        break;
+                    case OpType.Dup:
+                        {
+                            Variable v = tree.First() as Variable;
+                            if (v == null) throw new ArgumentException("Dup didn't work, meh");
+                            tree.Push(v.Dup());
+                        }
+                        break;
+                    case OpType.Break:
+                        {
+                            int brkint = (ushort)(op & 0xFFFF); // to break on
+                            int alwayszero = r.ReadInt32();
+                            int str_ref = r.ReadInt32(); // this is a goto ugh christ I have to download the entire file
+                            int index_maybe = r.ReadInt32();
+                            List<CodeLine> brkLines = processStream2(r, str_ref, index_maybe);
+                            //  string s = decodeCallName(str_ref);
 
-                            }
-                            break;
-                        case "break":
-                            {
-                                int brkint = (ushort)(op & 0xFFFF);
-                                soperand = String.Format("{0}", brkint);
-                            }
-                            break;
+                            int value_maybe = r.ReadInt32();
 
-                    }
-                info.pc = (startOpPos - startPos)/4;
-                info.op = op;
-                info.opcode_text = scode;
-                info.operand_text = soperand;
-                info.comment_text = scomment;
-                this.codes.Add(info);
+                            // int offset = r.ReadInt32();
+                            codeLine = String.Format("break {0}", brkint);
+                        }
+                        break;
+                    case OpType.Call:
+                        ProcessCall(tree, op, line.operand = r.ReadInt32());
+                        break;
+                    case (OpType)0:
+                        System.Diagnostics.Debug.WriteLine("Zero at {0} value {1} valuehex {1:X}", r.Position, op, op);
+                        break;
+                    default:
+                        System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.Position, op, op);
+                        break;
+                        //   throw new NotImplementedException("Opcode not implmented");
+                }
+                if (codeLine != null)
+                {
+                    int endPos = last_pc == start_pc ? start_pc : last_pc - 1;
+                    line.startPc = pc;
+                    line.endPC = endPos;
+                    line.Text = codeLine;
+                    codeLine = null;
+                    start_pc = pc;
+                }
+                lines.Add(line);
             }
-            r = null;
-            f.Close();
-            f = null;
-          //  System.Diagnostics.Debug.Write(line);
+            r.PopPosition();
+            foreach (CodeLine line in lines)
+            {
+                string label;
+                if (gotos.TryGetValue(line.pc, out label)) line.Label = label;
+            }
+            return lines;
         }
     }
 }
