@@ -179,16 +179,20 @@ namespace betteribttest
         {
             int Offset { get; }
         }
-        public class Opcode : IEquatable<OpType>, IEquatable<Opcode>,  IComparer<Opcode>
+        public class Opcode : IEquatable<OpType>
         {
             public int Compare(Opcode a, Opcode b)
             {
                 return a.Pc.CompareTo(b.Pc);
             }
-            public OpType Op { get; private set; }
+            public OpType Op { get;  set; }
             public uint Raw { get; private set; }
             public int Pc { get; private set; }
             public int Size { get; protected set; }
+            public int Offset { get; set; } 
+            // making this public saves so many issues
+            // and putting it in Opcode? golden
+            public int Address {  get { return Pc + Offset; } set { Offset = value - Pc; } }
             public Opcode(uint raw, int pc)
             {
                 this.Op = (OpType)((raw >> 24) & 0xFF);
@@ -197,19 +201,24 @@ namespace betteribttest
                 this.Size = 1;
             }
             public bool isBranch { get { return Op == OpType.B || Op == OpType.Bf || Op == OpType.Bt; } }
+            public bool isConditional {  get { return Op == OpType.Slt || Op == OpType.Sle || Op == OpType.Seq || Op == OpType.Sne || Op == OpType.Sge || Op == OpType.Sgt; } }
+
             public bool Equals(Opcode other) { return other.Raw == Raw; }
             public bool Equals(OpType other) { return other == Op; }
-            public override int GetHashCode() { return (int)Raw; }
-            public override bool Equals(object other)
-            {
-                if (object.ReferenceEquals(this, other)) return true;
-                Opcode code = other as Opcode;
-                return code != null ? Equals(code) : false;
-            }
+           // public override int GetHashCode() { return (int)Raw; }
+          
             public virtual string Operand { get { return null; } } // none
             public virtual string OpText { get { return opDecode[Op]; } }
+            public override string ToString()
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.AppendFormat("{0,-6}: {1} ", Pc,OpText);
+                if (Operand != null) sb.Append(Operand);
+                return sb.ToString();
+                
+            }
         }
-        public class OffsetOpcode : Opcode, OffsetOpcodeInterface
+        public class OffsetOpcode : Opcode
         {
             public static uint MakeBranchRawOpcode(OpType op, int offset)
             {
@@ -217,29 +226,26 @@ namespace betteribttest
                 raw |= (uint)(offset & 0x00FFFFFF);
                 return raw;
             }
-            public int Offset { get; private set; }
+            
             public OffsetOpcode(uint raw, int pc) : base(raw, pc)
             {
                 uint offset = raw & 0x00FFFFFF;
                 if ((offset & 0x00100000) != 0) offset |= 0xFF000000; // make it negitive
-                Offset = (int)raw;
+                Offset = (int)offset;
             }
             public OffsetOpcode(uint raw, int offset, int pc) : base(raw, pc) { Offset = offset; } // use this if the offset dosn't match the opcode
             public OffsetOpcode(OpType op, int offset, int pc) : base(MakeBranchRawOpcode(op, offset), pc) { Offset = offset; } // use this if you need to make an opcode
-            public override string Operand { get { return Offset.ToString("X"); } }
+            public override string Operand { get { return Address.ToString(); } }
         }
-        public class PopOpcode : Opcode, OffsetOpcodeInterface, TypeOpcodeInterface
+        public class PopOpcode : Opcode,  TypeOpcodeInterface
         {
-            public GM_Type FirstType { get; private set; }
-            public GM_Type SecondType { get; private set; }
-            public int Offset { get; private set; }
-            public int Instance { get; private set; }
+            public GM_Type FirstType { get { return (GM_Type)(int)((Raw >> 16) & 0xF); } }
+            public GM_Type SecondType { get { return (GM_Type)(int)((Raw >> 20) & 0xF); } }
+            public int Instance { get { return (short)(Raw & 0xFFFF); } }
             public PopOpcode(uint raw, BinaryReader r, int pc) : base(raw, pc)
             {
-                FirstType = (GM_Type)(int)((raw >> 16) & 0xF);
-                SecondType = (GM_Type)(int)((raw >> 20) & 0xF);
                 Offset = r.ReadInt32();
-                Instance = (int)(raw & 0xFFFF);
+                Size += 1;
             }
             public override string Operand
             {
@@ -251,23 +257,20 @@ namespace betteribttest
         }
         public class TypeOpcode : Opcode, TypeOpcodeInterface
         {
-            public GM_Type FirstType { get; private set; }
-            public GM_Type SecondType { get; private set; }
+            public GM_Type FirstType { get { return (GM_Type)(int)((Raw >> 16) & 0xF); } }
+            public GM_Type SecondType { get { return (GM_Type)(int)((Raw >> 20) & 0xF); } }
             public TypeOpcode(uint raw, int pc) : base(raw, pc)
             {
-                FirstType = (GM_Type)(int)((raw >> 16) & 0xF);
-                SecondType = (GM_Type)(int)((raw >> 20) & 0xF);
             }
             public override string Operand { get { return String.Format("( {0} -> {1} )", gmTypeLookup[FirstType], gmTypeLookup[SecondType]); } }
         }
         public class CallOpcode : Opcode, OffsetOpcodeInterface
         {
-            public int Offset { get; private set; }
-            public int ArgumentCount { get; private set; }
+            public int ArgumentCount { get { return (short)(Raw & 0xFFFF); } }
             public CallOpcode(uint raw, BinaryReader r, int pc) : base(raw, pc)
             {
                 Offset = r.ReadInt32();
-                ArgumentCount = (short)(raw & 0xFFFF); // arg coun
+                Size += 1;
             }
             public override string Operand { get { return String.Format("{0}({1})", Offset, ArgumentCount); } }
         }
@@ -285,6 +288,7 @@ namespace betteribttest
             public GM_Type OperandType { get; private set; }
             public double OperandValueDouble { get { return operand.dvalue; } }
             public double OperandValue { get { return operand.lvalue; } }
+            public int Instance {  get { return (short)(Raw & 0xFFFF); } }
             public PushOpcode(uint raw, BinaryReader r, int pc) : base(raw, pc)
             {
                 operand = new OperandValueUnion();
@@ -304,7 +308,7 @@ namespace betteribttest
                 }
                 long endPosition = r.BaseStream.Position;
                 Size += (int)((endPosition - startPos) / 4);
-                System.Diagnostics.Debug.Assert(((endPosition - startPos) / 4) != 0);
+                System.Diagnostics.Debug.Assert(((endPosition - startPos) % 4) == 0);
             }
             public override string OpText
             {
@@ -385,7 +389,7 @@ namespace betteribttest
                 case OpType.Call:
                     return new CallOpcode(raw, r, pc);
                 default:
-                    System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.BaseStream.Position, op.opcode, op.opcode);
+                 //   System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.BaseStream.Position, op.opcode, op.opcode);
                     throw new Exception("Bad opcode"); // We fix this now no more ignoreing this
             }
         }
@@ -398,9 +402,11 @@ namespace betteribttest
             while (r.Position < limit)
             {
                 Opcode o = ReadOpcode();
-                pc += o.Size;
                 codes.Add(pc,o);
+                pc += o.Size;
             }
+            // We might have a branch that goes to the end of this, so just throwing in Exit just  in case
+            codes.Add(pc, new Opcode(unchecked((uint)((byte)OpType.Exit << 24)), pc));
             return codes;
         }
 

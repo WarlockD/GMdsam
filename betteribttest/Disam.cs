@@ -15,10 +15,12 @@ using System.Runtime.InteropServices;
 namespace betteribttest
 {
     using Opcode = GM_Disam.Opcode;
+    using OffsetOpcode = GM_Disam.OffsetOpcode;
     class Disam
     {
-        Opcode o;
         ChunkReader cr;
+        SortedList<int, GM_Disam.Opcode> codes;
+        SortedList<int, OffsetOpcode> inlineBranches;
         public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
         {
             {  0 , "stack" },
@@ -34,8 +36,8 @@ namespace betteribttest
             if (Disam.instanceLookup.TryGetValue(instance, out ret)) return ret;
             else return String.Format("Instance({0})", instance);
         }
-      
-       
+
+
         static Dictionary<OpType, string> opMathOperation = new Dictionary<OpType, string>()  {
             {  (OpType)0x03, "conv" },
             {  (OpType)0x04, "*" },
@@ -73,7 +75,7 @@ namespace betteribttest
         {
             this.cr = cr;
         }
-     
+
         public string TestStreamOutput(string code_name)
         {
             foreach (GMK_Code c in cr.codeList)
@@ -110,7 +112,7 @@ namespace betteribttest
             if (!found) throw new Exception(code_name + " not found");
         }
 
-      
+
 
 
 
@@ -146,7 +148,7 @@ namespace betteribttest
             }
             public override string ToString()
             {
-                    return Value;
+                return Value;
             }
         }
         class Conv : AST
@@ -320,11 +322,12 @@ namespace betteribttest
 
         // The new Fangled method
 
-        void ProcessVarPush(Stack<AST> tree, uint op, int operand) {
-            int instance = (short)(op & 0xFFFF);
+        void ProcessVarPush(Stack<AST> tree, GM_Disam.PushOpcode op) {
+            int instance = op.Instance;
             string sinstance = lookupInstance(instance);
-            int load_type = (operand >> 24) & 0xFF;
-            string var_name = decodeCallName(operand & 0x00FFFFFF);
+            int operandValue = (int)op.OperandValue;
+            int load_type = (operandValue >> 24) & 0xFF;
+            string var_name = decodeCallName(operandValue & 0x00FFFFFF);
             if (load_type == 0xA0) // simple varable, usally an int 
             {
                 if (sinstance == "stack")
@@ -371,23 +374,18 @@ namespace betteribttest
             }
             throw new NotImplementedException("Push.V convert not implmented"); // we are going to handle it all, no exceptions this time around
         }
-        string ProcessAssignPush(Stack<AST> tree, uint op, int operand)
+        string ProcessAssignPop(Stack<AST> tree, GM_Disam.PopOpcode code)
         {
-            GM_Type convertFrom = (GM_Type)(int)((op >> 20) & 0xF);
-            GM_Type convertTo = (GM_Type)(int)((op >> 16) & 0xF);
-            int iinstance = (short)(op & 0xFFFF);
+            GM_Type convertFrom = code.FirstType;
+            GM_Type convertTo = code.SecondType;
+            int iinstance = code.Instance;
             string sinstance = lookupInstance(iinstance);
-            int load_type = operand >> 24 & 0xFF; // I think this might only be 4 bits
-            string var_name = decodeCallName(operand & 0x00FFFFFF);
+            int load_type = code.Offset >> 24 & 0xFF; // I think this might only be 4 bits
+            string var_name = decodeCallName(code.Offset & 0x00FFFFFF);
 
             //Queue<StackValue> valueStack = new Queue<StackValue>(); // its a queue as we have to reverse the order
             // Lets do the simplest conversion first  int -> ref ( integer being assigned to a value of an object aka global.bob = 4;
-            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self") && convertFrom != GM_Type.Var && convertTo == GM_Type.Var)
-            {
-                AST value = tree.Pop();
-                return FormatAssign(sinstance, var_name, value.ToString());
-            }
-            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self") && convertFrom == GM_Type.Var && convertTo == GM_Type.Var) // usally a function return, assigning to an object
+            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self")) // usally a function return, assigning to an object
             {
                 AST value = tree.Pop();
                 return FormatAssign(sinstance, var_name, value.ToString());
@@ -405,6 +403,7 @@ namespace betteribttest
                 else sinstance = instance.ToString();
                 return FormatAssign(sinstance, var_name, index, value);
             }
+            throw new Exception(" ALL BUGS MUST BE FIXED, GOD DEMANDS IT!");//
             return null;
             // zero seems to be an array assign
         }
@@ -443,12 +442,12 @@ namespace betteribttest
 
 
         };
-        void ProcessCall(Stack<AST> tree, uint op, int operand)
+        void ProcessCall(Stack<AST> tree, GM_Disam.CallOpcode op)
         {
             //  byte return_type = (byte)((op >> 16) & 0xFF); // always i
             // string return_type_string = typeLookup[return_type];
-            int arg_count = (ushort)(op & 0xFFFF);
-            string func_name = decodeCallName(operand);
+            int arg_count = op.ArgumentCount;
+            string func_name = decodeCallName(op.Offset);
 
             AST[] args = new AST[arg_count];
             for (int i = 0; i < arg_count; i++) args[i] = tree.Pop();
@@ -517,112 +516,8 @@ namespace betteribttest
             if (gotos.TryGetValue(pc, out label)) return label;
             return gotos[pc] = ("Label_" + gotos.Count);
         }
-        int CorrectBranchOffset(int offset, int pc, ChunkStream r)
-        {
-            /*
 
-            r.PushPosition();
-            r.Position += offset * 4 - 4;
-            GM_Disam.Opcode opcode = new GM_Disam.Opcode(r, -1);
-            if (opcode.Kind == OpType.Push && opcode.opernadType == GM_Type.Short && opcode.OperandValue == 0)
-            {
-                OpCode checkBranch = new OpCode(r, -1);
-                if (checkBranch.Kind == OpType.Bf)
-                {
-                    markedCode.Add(offset + pc);
-                    markedCode.Add(offset + pc + 1); // mark to ignore
 
-                    // we have a hit return this offset to correct the jump
-                    offset = checkBranch.Offset;
-                }
-            }
-            r.PopPosition();
-            */
-            return offset + pc;
-        }
-
-        int CorrectBranchOffset(SortedDictionary<int, Opcode> codes, int pc)
-        {
-            /*
-            Its so bad I am using MULTI LINE COMMENTS ARRRRG
-            Ok, so this must be a case of LVVM, but it looks like the compiler optimizes out bf
-            That is to say it will throw something on the stack, and use bf OR it wil jump to the bf with push.e0 on it so it
-            dosn't have to put in another B.  Makes sence but annoying to work with
-            We have to test to see if this is a coded B ( Push.E 0; BF label } = ( B label ) and ANY link that goes to this has to be
-            fixed.  meh
-
-            
-            // hacking till I ileterate over ALL the reverses ARG
-
-            OpCode opcode = codes[pc]; // THIS must exist, so we must fix all the codes in here.
-            if (opcode.Kind == OpType.Push && opcode.opernadType == GM_Type.Short && opcode.OperandValue == 0)
-            {
-
-                OpCode checkBranch = codes[pc + 1];
-                if (checkBranch.Kind == OpType.Bf)
-                {
-                    codes.Remove(pc);
-                    codes.Remove(pc + 1);
-                    OpCode branchBefore = codes[pc - 1]; // this jumps over these two staments
-                    int newpc = checkBranch.Offset;
-                    foreach(var p in codes)
-                    {
-                        OpCode o = p.Value;
-                        if (o.Kind == OpType.B && (o.Offset) == (pc + 1)) // oh god, I figured out whats happening
-                        {
-                            branchBefore.ChangeOffset(newpc);
-                            branchBefore.SoftChangKind(OpType.Bf);
-                        } else if
-                    }
-                    pc = newpc;   
-                }
-            }
-            return pc;
-              */
-            return pc;
-        }
-
-        string DoBranch(SortedDictionary<int, Opcode> codes, Stack<AST> stack, OpType op, int pc, int offset)
-        {
-            string codeLine = null;
-            var last = codes.Last();
-            if (offset < last.Key) offset = CorrectBranchOffset(codes, offset);
-            switch (op)
-            {
-                case OpType.Bf:
-                    codeLine = ProcessBranch(stack, GetLabel(offset), false);
-                    break;
-                case OpType.Bt:
-                    codeLine = ProcessBranch(stack, GetLabel(offset), true);
-                    break;
-                case OpType.B:
-                    codeLine = "goto " + GetLabel(offset);
-                    break;
-                default:
-                    throw new Exception("Can't be called here");
-            }
-            return codeLine;
-        }
-        string DoBranch(Stack<AST> stack, OpType op, int pc, int offset)
-        {
-            string codeLine = null;
-            offset = CorrectBranchOffset(offset, pc);
-            switch (op)
-            {
-                case OpType.Bf:
-                    codeLine = ProcessBranch(stack, GetLabel(offset), false);
-                    break;
-                case OpType.Bt:
-                    codeLine = ProcessBranch(stack, GetLabel(offset), true);
-                    break;
-                case OpType.B:
-                    codeLine = "goto " + GetLabel(offset);
-                    break;
-                default:
-                    throw new Exception("Can't be called here");
-            }
-            return codeLine;
-        }
         void InsertLabels(List<CodeLine> lines, int pc)
         {
             CodeLine line;
@@ -637,11 +532,11 @@ namespace betteribttest
                     continue;
                 }
                 line = lines.Single(o => o.startPc == label.Key);
-                if(line == null) throw new Exception("No more fucking around, fix this");
+                if (line == null) throw new Exception("No more fucking around, fix this");
                 line.Label = label.Value;
                 continue;
 
-              
+
 
             }
 
@@ -658,65 +553,269 @@ namespace betteribttest
             if (branch != null && branch.Op == op) return true;
             return false;
         }
-        bool PushOpcodeTest(Opcode o,  GM_Type t, int value)
+        bool PushOpcodeTest(Opcode o, GM_Type t, int value)
         {
             GM_Disam.PushOpcode push = o as GM_Disam.PushOpcode;
             if (push != null && push.OperandType == t && push.OperandValue == value) return true;
             return false;
         }
-        SortedList<int, GM_Disam.Opcode> PeepholeFix(SortedList<int, GM_Disam.Opcode> codes)
+        void ReplaceBranchAddress(int from, int too)
         {
-            // need to change this to a bunch of delgates, but right now lets find one patern match
-            int found_branch = -1;
-            for (int i = 0; i < codes.Count; i++)
+            foreach (var toFix in codes.Where(o => o.Value.isBranch && o.Value.Address == from))
             {
-                if (OffsetOpcodeTest(codes[i], OpType.B, 2) && PushOpcodeTest(codes[i + 1], GM_Type.Short, 0) && OffsetOpcodeTest(codes[i + 3], OpType.Bf))
+                OffsetOpcode b = toFix.Value as OffsetOpcode;
+                System.Diagnostics.Debug.Write("\t B Correct: " + b.ToString());
+                System.Diagnostics.Debug.Write(" TO ");
+                b.Address = too;
+                System.Diagnostics.Debug.WriteLine(b.ToString());
+            }
+        }
+        void ReplaceBranchAddress(int from, int too, OpType fromType, OpType toType)
+        {
+            foreach (var toFix in codes.Where(o => o.Value.Op == fromType && o.Value.Address == from))
+            {
+                OffsetOpcode b = toFix.Value as OffsetOpcode;
+                System.Diagnostics.Debug.Write("\t B Correct: " + b.ToString());
+                System.Diagnostics.Debug.Write(" TO ");
+                b.Address = too;
+                b.Op = toType;
+                System.Diagnostics.Debug.WriteLine(b.ToString());
+            }
+        }
+
+        List<Opcode> MatchPatern(bool remove, params Func<Opcode, bool>[] funcs)
+        {
+            var list = codes.Values;
+            int pos = 0;
+            while (pos < list.Count)
+            {
+                int match = 0;
+                while (match < funcs.Length)
                 {
-                    found_branch = i; // ITS A MATCH
+                    if (funcs[match](list[pos + match])) match++;
+                    else break;
+                }
+                if (match == funcs.Length)
+                {
+                    List<Opcode> ops = new List<Opcode>();
+                    for (int i = 0; i < match; i++) ops.Add(list[pos + i]);
+                    if (remove) foreach (Opcode o in ops) codes.Remove(o.Pc); // have to do this as the list numbers become flaky
+                    return ops;
+                }
+                pos++;
+            }
+            return null;
+        }
+
+        // FIX THIS.  I think I will have to just start doing branch following and detection and to detect this kind of junk
+        void PeepholeFix()
+        {
+            inlineBranches = new SortedList<int, Opcode>();
+            // need to change this to a bunch of delgates, but right now lets find one patern match
+            var list = codes.Values;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var match = MatchPatern(true, o => o.Op == OpType.B && o.Offset == 2, o => PushOpcodeTest(o, GM_Type.Short, 0), o => o.Op == OpType.Bf);
+
+                if (match != null)
+                {
+                    // Ok, lets start this ride.  Since the first instruction is a B and it jumps over to BF, something is on the stack that we need to compare BF with
+
+
+                    // lets start this ball rolling, first lets find any and all branches to the three code we have here
+                    // First, a jump to B 2 means its really a BF <somehwere> so both of these instructons are equilvelent
+                    var indirectBF = MatchPatern(false, o => o.isBranch && (o.Address == match[0].Address || o.Address == match[2].Address));
+                    // Since this poitns to a push.E 0, and the next instruction is a BF so it will ALWAYS jump, change the offset of this to 3
+                    var indirectB = MatchPatern(false, o => o.isBranch && o.Address == match[1].Address);
+                    // Change that B to BF but not yet
+                    Opcode inlineBranch = new OffsetOpcode(match[2].Op, match[2].Offset, match[0].Pc);
+                    codes.Add(inlineBranch.Pc, inlineBranch); // put it back cause we need it for the previous conditional!
+                    // This saves some code.  Its either watch it on the branch decompile stage for inline opcodes
+                    // OR modify the existing opcodes to fix this issue
+                    inlineBranches.Add(match[0].Pc, inlineBranch); // make it inline as well for any targets
+                    inlineBranches.Add(match[2].Pc, inlineBranch); // make it inline as well for any targets
+
+                    // Second, we need to find, and there SHOULD be one out there, of some branch that points to the Push.E 0
+                    System.Diagnostics.Debug.WriteLineIf(indirectB == null, "No B match for the scond bit?  What is the compiler thinking?");
+                    if (indirectB != null) foreach (Opcode o in indirectB) o.Address = match[2].Address; // we don't care about the target branch type
+
                 }
             }
-            return codes;
         }
+        Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
+        Stack<AST> enviroment = new Stack<AST>();
+        CodeLine processOpcode(Opcode code, int pc, ref int start_pc, ref int last_pc)
+        {
+            last_pc = pc;
+            pc = code.Pc;
+            string codeLine = null;
+            if (start_pc == -1) start_pc = pc;
+            CodeLine line = new CodeLine();
+            line.code = code;
+            line.pc = pc;
+            line.startPc = -1;
+            switch (code.Op)
+            {
+                // A hack for push enviroment right here.
+                // It SEEMS that push enviroment is set up so we can call a function that is in an instance
+                // aka self.myobject.instance_destroy()
+                // Sence we know the start and the end of the call, lets see if we can simplfiy this with 
+                // recording the start of a push env and back.
+                // This might not work well with recursive returns or calls though
+                case OpType.Pushenv:
+                    enviroment.Push(tree.Pop());
+                    // codeLine = "Push Enviroment " + tree.Pop().ToString() + "goto on error " + checkLabel(op);
+                    break;
+
+                case OpType.Exit:
+                    codeLine = "Exit";
+                    System.Diagnostics.Debug.Assert(tree.Count == 0);
+                    break;
+                case OpType.Neg: // not really xNOR but not sure WHAT it is, one op?
+                    {
+                        AST value = tree.Pop();
+                        tree.Push(new Variable("-(" + value.ToString() + ")", GM_Type.Var));
+                    }
+                    break;
+                case OpType.Mul:
+                case OpType.Div:
+                case OpType.Rem:
+                case OpType.Mod:
+                case OpType.Add:
+                case OpType.Sub:
+                case OpType.Or:
+                case OpType.And:
+                case OpType.Xor:
+                case OpType.Not:
+                case OpType.Sal:
+                case OpType.Slt:
+                case OpType.Sle:
+                case OpType.Seq:
+                case OpType.Sge:
+                case OpType.Sgt:
+                case OpType.Sne:
+
+                    ProcessMathOp(tree, code.Raw);
+                    break;
+
+                case OpType.Conv:
+                    {
+                        //   GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
+                        //   GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
+                        tree.Push(new Conv(tree.Pop(), (code as GM_Disam.TypeOpcode).SecondType));
+                    }
+                    break;
+                case OpType.Push: // most common.  Used for all math operations
+                    {
+                        GM_Disam.PushOpcode popcode = code as GM_Disam.PushOpcode;
+                        switch (popcode.OperandType)
+                        {
+                            case GM_Type.Double: tree.Push(new Variable(popcode.OperandValueDouble)); break;
+                            case GM_Type.Float: tree.Push(new Variable((float)popcode.OperandValueDouble)); break;
+                            case GM_Type.Long: tree.Push(new Variable((long)popcode.OperandValue)); break;
+                            case GM_Type.Int: tree.Push(new Variable((int)popcode.OperandValue)); break;
+                            case GM_Type.Var: ProcessVarPush(tree, popcode); break;
+                            case GM_Type.String:
+                                {
+                                    string value = cr.stringList[(int)popcode.OperandValue].str;
+                                    tree.Push(new Variable(value));
+                                }
+                                break;
+                            case GM_Type.Short: tree.Push(new Variable((short)popcode.OperandValue)); break;
+                            default:
+                                throw new Exception("Bad type");
+                        }
+                    }
+                    break;
+                case OpType.Pop:
+                    codeLine = ProcessAssignPop(tree, code as GM_Disam.PopOpcode);
+                    break;
+                case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
+                    {
+                        codeLine = tree.Pop().ToString();
+                    }
+                    break;
+                case OpType.Dup:
+                    {
+                        tree.Push(tree.First()); // will this work?
+                                                 //   Variable v = tree.First() as Variable;
+                                                 //   tree.First()
+                                                 //   if (v == null) throw new ArgumentException("Dup didn't work, meh");
+                                                 //  tree.Push(v.Dup());
+                    }
+                    break;
+                case OpType.Break:
+                    {
+                        codeLine = String.Format("break {0}", code.Raw & 0xFFFF); // have yet to run into this
+                    }
+                    break;
+                case OpType.Call:
+                    ProcessCall(tree, code as GM_Disam.CallOpcode);
+                    break;
+                default:
+                    //      System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.Position, op, op);
+                    throw new NotImplementedException("Opcode not implmented"); // NO MORE FUCKING AROUND HERE
+            }
+            //  int startPosition = r.Position;
+            if (codeLine != null)
+            {
+                line.startPc = start_pc;
+                start_pc = -1;
+                line.endPC = pc;
+                line.Text = codeLine;
+                codeLine = null;
+            }
+            return line;
+        }
+        void DoBranch(Stack<AST> stack, List<CodeLine> lines, OffsetOpcode op)
+        {
+            string codeLine = null;
+            var last = codes.Last();
+            int offset = op.Offset;
+
+            switch (op.Op)
+            {
+                case OpType.Bf:
+                    codeLine = ProcessBranch(stack, GetLabel(offset), false);
+                    break;
+                case OpType.Bt:
+                    codeLine = ProcessBranch(stack, GetLabel(offset), true);
+                    break;
+                case OpType.B:
+                    codeLine = "goto " + GetLabel(offset);
+                    break;
+                default:
+                    throw new Exception("Can't be called here");
+            }
+            OffsetOpcode vop; // if we have an inline branch, we got to call it here
+            if (inlineBranches.TryGetValue(op.Address, out vop) {
+
+            }
+        }
+
         List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size)
         {
             GM_Disam disam = new GM_Disam(r);
-            SortedList<int, Opcode> codes = disam.ReadOpCode(codeOffset, code_size);
+            this.codes = disam.ReadOpCode(codeOffset, code_size);
+            PeepholeFix();
             gotos = new Dictionary<int, string>();
-            markedCode = new HashSet<int>();
             int limit = (int)(codeOffset + code_size);
+            tree = new Stack<AST>(); // used to caculate stuff
+            enviroment = new Stack<AST>();
 
-            Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
-            Stack<AST> enviroment = new Stack<AST>();
             List<CodeLine> lines = new List<CodeLine>();
             string codeLine = null;
             int pc = 0, start_pc = -1, last_pc = 0;
             int end_pc = codes.Last().Key;
-            for(int it=0;it< end_pc;it++) {
+            for (int it = 0; it < end_pc; it++) {
                 if (!codes.ContainsKey(it)) continue;
-                GM_Disam.Opcode code = codes[it];
-                last_pc = pc;
-                
-                pc = code.Pc;
-                if (start_pc == -1) start_pc = pc;
-                CodeLine line = new CodeLine();
-                line.code = code;
-                line.pc = pc;
-                line.startPc = -1;
-                lines.Add(line);
-
-                if (markedCode.Contains(pc))
-                    continue; // ignore this code, its already processed
-                switch (code.Kind)
+                Opcode code = codes[it];
+                switch (code.Op)
                 {
-                    // A hack for push enviroment right here.
-                    // It SEEMS that push enviroment is set up so we can call a function that is in an instance
-                    // aka self.myobject.instance_destroy()
-                    // Sence we know the start and the end of the call, lets see if we can simplfiy this with 
-                    // recording the start of a push env and back.
-                    // This might not work well with recursive returns or calls though
-                    case OpType.Pushenv:
-                        enviroment.Push(tree.Pop());
-                        // codeLine = "Push Enviroment " + tree.Pop().ToString() + "goto on error " + checkLabel(op);
+                    case OpType.Bf: // branch if false
+                    case OpType.Bt: // branch if true
+                    case OpType.B:
+                        codeLine = DoBranch(tree, code as OffsetOpcode);
                         break;
                     case OpType.Popenv:
                         {
@@ -733,305 +832,11 @@ namespace betteribttest
                         }
                         //    codeLine = "Pop Enviroment from " + checkLabelEnv((short)(op & 0xFFFF));
                         break;
-                    case OpType.Exit:
-                        codeLine = "Exit";
-                        System.Diagnostics.Debug.Assert(tree.Count == 0);
-                        break;
-                    case OpType.Neg: // not really xNOR but not sure WHAT it is, one op?
-                        {
-                            AST value = tree.Pop();
-                            tree.Push(new Variable("-(" + value.ToString() + ")", GM_Type.Var));
-                        }
-                        break;
-                    case OpType.Mul:
-                    case OpType.Div:
-                    case OpType.Rem:
-                    case OpType.Mod:
-                    case OpType.Add:
-                    case OpType.Sub:
-                    case OpType.Or:
-                    case OpType.And:
-                    case OpType.Xor:
-                    case OpType.Not:
-                    case OpType.Sal:
-                    case OpType.Slt:
-                    case OpType.Sle:
-                    case OpType.Seq:
-                    case OpType.Sge:
-                    case OpType.Sgt:
-                    case OpType.Sne:
-
-                        ProcessMathOp(tree, code.Op);
-                        break;
-                    case OpType.Bf: // branch if false
-                    case OpType.Bt: // branch if true
-                    case OpType.B:
-                        codeLine = DoBranch(codes, tree, code.Kind, pc, code.Offset);
-                        break;
-                    case OpType.Conv:
-                        {
-                            //   GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
-                            //   GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
-                            tree.Push(new Conv(tree.Pop(), code.SecondType));
-                        }
-                        break;
-                    case OpType.Push: // most common.  Used for all math operations
-                        {
-                            byte t = (byte)(code.Op >> 16); // for now
-                            switch (t)
-                            {
-                                case 0x0: tree.Push(new Variable(code.OperandDouble)); break;
-                                case 0x1: tree.Push(new Variable(code.OperandFloat)); break;
-                                case 0x2: tree.Push(new Variable(code.OperandValue)); break;
-                                case 0x3: tree.Push(new Variable(code.OperandLong)); break;
-                                case 0x5: ProcessVarPush(tree, code.Op, code.OperandValue); break;
-                                case 0x6:
-                                    {
-                                        string value = cr.stringList[code.OperandValue].str;
-                                        tree.Push(new Variable(value));
-                                    }
-                                    break;
-                                case 0xF: tree.Push(new Variable((short)(code.OperandValue))); break;
-                                default:
-                                    throw new Exception("Bad type");
-                            }
-                        }
-                        break;
-                    case OpType.Pop:
-                        codeLine = ProcessAssignPush(tree, code.Op, code.Offset);
-                        break;
-                    case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
-                        {
-                            codeLine = tree.Pop().ToString();
-                        }
-                        break;
-                    case OpType.Dup:
-                        {
-                            tree.Push(tree.First()); // will this work?
-                                                     //   Variable v = tree.First() as Variable;
-                                                     //   tree.First()
-                                                     //   if (v == null) throw new ArgumentException("Dup didn't work, meh");
-                                                     //  tree.Push(v.Dup());
-                        }
-                        break;
-                    case OpType.Break:
-                        {
-                            codeLine = String.Format("break {0}", code.Op & 0xFFFF); // have yet to run into this
-                        }
-                        break;
-                    case OpType.Call:
-                        ProcessCall(tree, code.Op, code.Offset);
-                        break;
-                    default:
-                        //      System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.Position, op, op);
-                        break;
-                        //   throw new NotImplementedException("Opcode not implmented");
-                }
-                //  int startPosition = r.Position;
-                if (codeLine != null)
-                {
-                    line.startPc = start_pc;
-                    start_pc = -1;
-                    line.endPC = pc;
-                    line.Text = codeLine;
-                    codeLine = null;
                 }
             }
-            InsertLabels(lines,pc);
-            return lines;
+            InsertLabels(lines, pc);
+
+            return null;// lines;
         }
-/*
-        List<CodeLine> processStream2_old(ChunkStream r, int codeOffset, int code_size) {
-            gotos = new Dictionary<int, string>();
-            markedCode = new HashSet<int>();
-            int limit = (int)(codeOffset + code_size);
-            SortedDictionary<int, OpCode> codes = OpCode.SimpleDisam(r, codeOffset, limit);
-            r.PushSeek((int)codeOffset);
-           
-            Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
-            Stack<AST> enviroment = new Stack<AST>();
-            List<CodeLine> lines = new List<CodeLine>();
-            
-            SortedDictionary<int, CodeLine> pclookup = new SortedDictionary<int, CodeLine>();
-            int len = (int)r.Length / 4;
-            string codeLine = null;
-            int pc = 0;
-            int last_pc = 0;
-            int start_pc = pc;
-            uint op = 0;
-            // some reason I just can't get r.Position to sync up right with the start of pc
-            // 
-            //     int shit_header = r.ReadInt32();
-            while (r.Position != limit)
-            {
-                int startPosition = r.Position;
-                CodeLine line = new CodeLine();
-                line.startPc = -1;
-                last_pc = pc;
-                line.pc = pc = (startPosition - codeOffset) / 4;
-                pclookup[pc] = line;
-                lines.Add(line);
-
-               
-                System.Diagnostics.Debug.Assert(((startPosition - codeOffset) % 4) == 0); // are we aligned?
-                line.op = op = r.ReadUInt32();
-                OpType code = (OpType)((byte)(op >> 24));
-                line.opType = code;
-                if (markedCode.Contains(pc))
-                    continue; // ignore this code, its already processed
-                switch (code)
-                {
-                    // A hack for push enviroment right here.
-                    // It SEEMS that push enviroment is set up so we can call a function that is in an instance
-                    // aka self.myobject.instance_destroy()
-                    // Sence we know the start and the end of the call, lets see if we can simplfiy this with 
-                    // recording the start of a push env and back.
-                    // This might not work well with recursive returns or calls though
-                    case OpType.Pushenv:
-                        enviroment.Push(tree.Pop());
-                       // codeLine = "Push Enviroment " + tree.Pop().ToString() + "goto on error " + checkLabel(op);
-                        break;
-                    case OpType.Popenv:
-                        {
-                            AST env = enviroment.Pop();
-                            // we need to find the last statment
-                            foreach(CodeLine l in lines.Reverse<CodeLine>())
-                            {
-                                if(l.Text != null)
-                                {
-                                    l.Text = env.ToString() + "." + l.Text;
-                                    break;
-                                }
-                            }
-                        }
-                    //    codeLine = "Pop Enviroment from " + checkLabelEnv((short)(op & 0xFFFF));
-                        break;
-                    case OpType.Exit:
-                        codeLine = "Exit";
-                        System.Diagnostics.Debug.Assert(tree.Count == 0);
-                        break;
-                    case OpType.Neg: // not really xNOR but not sure WHAT it is, one op?
-                        {
-                            GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
-                            GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
-                            AST value = tree.Pop();
-                            tree.Push(new Variable("-(" + value.ToString() + ")", GM_Type.Var));
-                        }
-                        break;
-                    case OpType.Mul:
-                    case OpType.Div:
-                    case OpType.Rem:
-                    case OpType.Mod:
-                    case OpType.Add:
-                    case OpType.Sub:
-                    case OpType.Or:
-                    case OpType.And:
-                    case OpType.Xor:
-                    case OpType.Not:
-                    case OpType.Sal:
-                    case OpType.Slt:
-                    case OpType.Sle:
-                    case OpType.Seq:
-                    case OpType.Sge:
-                    case OpType.Sgt:
-                    case OpType.Sne:
-                        
-                        ProcessMathOp(tree, op);
-                        break;
-                    case OpType.Bf: // branch if false
-                    case OpType.Bt: // branch if true
-                    case OpType.B:
-                        codeLine = DoBranch(tree, code, pc, getBranchOffset(op), r);
-                        break;
-                    case OpType.Conv:
-                        {
-                            GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
-                            GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
-                            tree.Push(new Conv(tree.Pop(), tooType));
-                        }
-                        break;
-                    case OpType.Push: // most common.  Used for all math operations
-                        {
-                            byte t = (byte)(op >> 16);
-                            switch (t)
-                            {
-                                case 0x0: tree.Push(new Variable(r.ReadDouble())); break;
-                                case 0x1: tree.Push(new Variable(r.ReadSingle())); break;
-                                case 0x2: tree.Push(new Variable(line.operand = r.ReadInt32())); break;
-                                case 0x3: tree.Push(new Variable(r.ReadInt64())); break;
-                                case 0x5: ProcessVarPush(tree, op, line.operand = r.ReadInt32()); break;
-                                case 0x6:
-                                    {
-                                        int operand = r.ReadInt32();
-                                        line.operand = operand;
-                                        string value = cr.stringList[(int)operand].str;
-                                        tree.Push(new Variable(value));
-                                    }
-                                    break;
-                                case 0xF: tree.Push(new Variable((short)(op & 0xFFFF))); break;
-                                default:
-                                    throw new Exception("Bad type");
-                            }
-                        }
-                        break;
-                    case OpType.Pop:
-                        codeLine = ProcessAssignPush(tree, op, line.operand = r.ReadInt32());
-                        break;
-                    case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
-                        {
-                            codeLine = tree.Pop().ToString();
-                        }
-                        break;
-                    case OpType.Dup:
-                        {
-                            tree.Push(tree.First()); // will this work?
-                         //   Variable v = tree.First() as Variable;
-                         //   tree.First()
-                         //   if (v == null) throw new ArgumentException("Dup didn't work, meh");
-                          //  tree.Push(v.Dup());
-                        }
-                        break;
-                    case OpType.Break:
-                        {
-                            int brkint = (ushort)(op & 0xFFFF); // to break on
-                            int alwayszero = r.ReadInt32();
-                            int str_ref = r.ReadInt32(); // this is a goto ugh christ I have to download the entire file
-                            int index_maybe = r.ReadInt32();
-                            List<CodeLine> brkLines = processStream2(r, str_ref, index_maybe);
-                            //  string s = decodeCallName(str_ref);
-
-                            int value_maybe = r.ReadInt32();
-
-                            // int offset = r.ReadInt32();
-                            codeLine = String.Format("break {0}", brkint);
-                        }
-                        break;
-                    case OpType.Call:
-                        ProcessCall(tree, op, line.operand = r.ReadInt32());
-                        break;
-                    case (OpType)0:
-                        System.Diagnostics.Debug.WriteLine("Zero at {0} value {1} valuehex {1:X}", r.Position, op, op);
-                        break;
-                    default:
-                        System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.Position, op, op);
-                        break;
-                        //   throw new NotImplementedException("Opcode not implmented");
-                }
-              //  int startPosition = r.Position;
-                if (codeLine != null)
-                {
-                    line.startPc = start_pc;
-                    start_pc = (r.Position - codeOffset) / 4;
-                    line.endPC = pc;
-                    line.Text = codeLine;
-                    codeLine = null;
-                }
-                
-            }
-            r.PopPosition();
-         
-            return lines;
-        }
-        */
     }
 }
