@@ -257,6 +257,85 @@ namespace betteribttest
         }
         #endregion
     }
+    /// <summary>
+    /// This class takes a stream and limits it at a starting offset from the Beging and optionaly, and ending Length
+    /// From the users standpoint, this stream works just like a normal stream. This will throw an IO error if you go outside
+    /// of the limits of the stream
+    /// </summary>
+    public class OffsetStream : Stream
+    {
+        public class OffsetStreamLimitException : ArgumentException
+        {
+            public OffsetStreamLimitException() : base("Cannot go outside the limits of an OffsetStream") { }
+        }
+        Stream BaseStream;
+        long _length;
+        long _start;
+        public OffsetStream(Stream s, long start, long length)
+        {
+            BaseStream = s;
+            _start = start;
+            _length = length;
+            BaseStream.Position = start;
+        }
+        public OffsetStream(Stream s, long start) : this(s, start, s.Length) { }
+        public override bool CanRead  { get  { return BaseStream.CanRead; } }
+        public override bool CanSeek { get { return BaseStream.CanSeek; } }
+        public override bool CanWrite { get { return BaseStream.CanWrite; } }
+        public override long Length { get { return _length; } }
+        public override long Position
+        {
+            get
+            {
+                return BaseStream.Position - _start;
+            }
+
+            set
+            {
+                long newPos = value + _start;
+                if (newPos < 0 || newPos > _length) throw new OffsetStreamLimitException();
+                BaseStream.Position = newPos;
+            }
+        }
+
+        public override void Flush() { BaseStream.Flush();  }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            long limit = Position + count;
+            if(limit > _length) throw new OffsetStreamLimitException();
+            return BaseStream.Read(buffer, offset, count);
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            long newPos = 0; 
+            switch (origin)
+            {
+                case SeekOrigin.Begin:
+                    newPos =  offset + _start;
+                    break;       
+                case SeekOrigin.End:
+                    newPos = offset + _start + _length;
+                    break;
+                case SeekOrigin.Current:
+                    newPos = Position + offset;
+                    break;
+            }
+            if (newPos < 0 || newPos > _length) throw new OffsetStreamLimitException();
+            BaseStream.Seek(newPos, SeekOrigin.Begin);
+            return newPos;
+        }
+
+        public override void SetLength(long value) { throw new NotImplementedException(); }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            long limit = Position + count;
+            if (limit > _length) throw new OffsetStreamLimitException();
+            BaseStream.Write(buffer, offset, count);
+        }
+    }
+  
     public class ChunkStream : BinaryReader
     {
         Stack<int> posStack = new Stack<int>();

@@ -195,11 +195,14 @@ namespace betteribttest
         {
             InitializeComponent(); 
             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
-           // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
+          //  cr.DumpAllObjects("objects.txt");
+            // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             Disam dism = new Disam(cr);
             //   dism.DissasembleEveything();
             //     dism.writeFile("frog");
-           dism.TestStreamOutput("frog");
+          //dism.TestStreamOutput("frog");
+          //  dism.TestStreamOutput("gasterblaster");
+            dism.TestStreamOutput("gasterblaster_Draw");
             //  dism.TestStreamOutput("SCR_GAMESTART");
             //  dism.writeFile("SCR_GAMESTART");
 

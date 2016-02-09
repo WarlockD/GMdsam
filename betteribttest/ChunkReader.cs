@@ -120,7 +120,22 @@ namespace betteribttest
             return "{ func_name = " + func_name + ", func_offset = " + func_offset + ", code_other = " + code_offset + " }" + base.ToString();
         }
     }
-
+    class GMK_Audio : GMK_Data
+    {
+        public int audioType;
+        public string extension;
+        public string filename;
+        public int effects;
+        public float volume;
+        public float pan;
+        public int other;
+        public int maybe_offset;
+        public GMK_Audio(ChunkEntry e) : base(e) { }
+        public override string ToString()
+        {
+            return "{ Audio Data }";
+        }
+    }
 
     class GMK_Object: GMK_Data
     { // HUMM We have 12 allarms!  EACH ALLARM IS A 1 DIMENIONAL ARRAY! WOO!
@@ -151,6 +166,7 @@ namespace betteribttest
         public int[] alarm_offsets = null; // hummmm!
 
         public GMK_Object(ChunkEntry e) : base(e) { }
+        
         public GMK_Object(ChunkEntry e, ChunkStream r, int ObjectIndex) : base(e) {
             this.ObjectIndex = ObjectIndex;
             this.Name = r.readStringFromOffset();
@@ -162,6 +178,7 @@ namespace betteribttest
             this.Parent= r.ReadInt32();
             this.Mask= r.ReadInt32();
             this.PhysicsObject= r.readIntBool();
+         
             this.PhysicsObjectSensor= r.readIntBool();
             this.PhysicsObjectShape= r.ReadInt32();
             this.PhysicsObjectDensity= r.ReadSingle();
@@ -170,22 +187,29 @@ namespace betteribttest
             this.PhysicsObjectLinearDamping= r.ReadSingle();
             this.PhysicsObjectAngularDamping= r.ReadSingle();
             this.PhysicsObjectFriction= r.ReadSingle();
-        //    this.PhysicsObjectAwake= r.readIntBool();  this came out as a single with undertale, version diffrences?
-     //       this.PhysicsObjectKinematic= r.readIntBool();
 
-           // PhysicsShapeVertices // X and Y singles
+
+            //    this.PhysicsObjectAwake= r.readIntBool();  this came out as a single with undertale, version diffrences?
+            //       this.PhysicsObjectKinematic= r.readIntBool();
+
+            // PhysicsShapeVertices // X and Y singles
             // events, not sure we will ever use this here
-
+         //   System.Diagnostics.Debug.Assert(this.PhysicsObject == true);
         }
         public override string ToString()
         {
-            return  String.Format("{{  Name: {0}, Parent: {1}, Sprite {2} }}", Name, ParentName, SpriteName );
+            StringBuilder sb = new StringBuilder();
+            sb.Append("Name = ");
+            sb.AppendFormat("Name = {0,-30}", this.Name);
+            if(this.ParentName != null) sb.AppendFormat("  Parrent = {0,-30}", this.ParentName);
+            if (this.SpriteName != null) sb.AppendFormat("  Sprite = {0,-30}", this.SpriteName);
+            return sb.ToString();
         }
 
     }
+ 
     class GMK_Sprite : GMK_Data // mabye this is from object?
     {
-        public GMK_Object obj;
         public int width;
         public int height;
         public int widht0;
@@ -349,7 +373,12 @@ namespace betteribttest
         public List<GMK_String> stringList = new List<GMK_String>();
 
 
-     
+        public void DumpAllObjects(string filename)
+        {
+            StreamWriter sw = new StreamWriter(filename);
+            foreach (var o in objList) sw.WriteLine(o.ToString());
+            sw.Close();
+        }
 
         Stack<long> savedOffsets = new Stack<long>();
 
@@ -856,8 +885,30 @@ namespace betteribttest
                 spritePos[e.Position] = p;
             }
         }
-      
-        string MakePlistPoint(int x, int y)
+        public List<GMK_Audio> audioList;
+        void doAudio(int chunkStart, int chunkLimit)
+        {
+            audioList = new List<GMK_Audio>();
+            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
+            foreach (ChunkEntry e in entries)
+            {
+                GMK_Audio audio = new GMK_Audio(e);
+                audio.Name = r.readStringFromOffset();
+                audio.audioType = r.ReadInt32();
+                audio.extension = r.readStringFromOffset();
+                audio.filename = r.readStringFromOffset();
+                audio.effects = r.ReadInt32();
+                audio.volume = r.ReadSingle();
+                audio.pan = r.ReadSingle();
+                audio.other = r.ReadInt32();
+                audio.maybe_offset = r.ReadInt32();
+             
+                AddData(audio);
+                audioList.Add(audio);
+            }
+
+        }
+            string MakePlistPoint(int x, int y)
         {
             return '{' + x + "," + y + '}';
         }
@@ -1185,6 +1236,9 @@ namespace betteribttest
                 DoBackground(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("SPRT", out chunk))
                 DoSprite(chunk.start, chunk.end); // doing objects right now
+            if (chunks.TryGetValue("SOND", out chunk))
+                doAudio(chunk.start, chunk.end); // doing objects right now
+            
 
             this.debugOn = false;
             if (chunks.TryGetValue("OBJT", out chunk))
