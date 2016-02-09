@@ -403,6 +403,19 @@ namespace betteribttest
                 else sinstance = instance.ToString();
                 return FormatAssign(sinstance, var_name, index, value);
             }
+            if (load_type == 0x80) // not sure what this is
+            {
+                if (sinstance == "stack")
+                {
+                    AST ainstance = tree.Pop();
+                    AST value = tree.Pop(); // Mabye.... mabye this is only one value, instance in a var?
+                    sinstance = ainstance.ToString();
+                    return FormatAssign(sinstance, var_name, value.ToString());
+
+                }
+                // ret = sinstance + "." + var_name + " (Load: 0x80)";
+                //  opcode.value = new StackValue(instance, ret);
+            }
             throw new Exception(" ALL BUGS MUST BE FIXED, GOD DEMANDS IT!");//
             return null;
             // zero seems to be an array assign
@@ -531,7 +544,7 @@ namespace betteribttest
                     lines.Add(line);
                     continue;
                 }
-                line = lines.Single(o => o.startPc == label.Key);
+                line = lines.Single(o => o.pc == label.Key);
                 if (line == null) throw new Exception("No more fucking around, fix this");
                 line.Label = label.Value;
                 continue;
@@ -610,34 +623,45 @@ namespace betteribttest
         // FIX THIS.  I think I will have to just start doing branch following and detection and to detect this kind of junk
         void PeepholeFix()
         {
-            inlineBranches = new SortedList<int, Opcode>();
+            inlineBranches = new SortedList<int, OffsetOpcode>();
             // need to change this to a bunch of delgates, but right now lets find one patern match
             var list = codes.Values;
             for (int i = 0; i < list.Count; i++)
             {
-                var match = MatchPatern(true, o => o.Op == OpType.B && o.Offset == 2, o => PushOpcodeTest(o, GM_Type.Short, 0), o => o.Op == OpType.Bf);
+                var match = MatchPatern(false, o => o.Op == OpType.B && o.Offset == 2, o => PushOpcodeTest(o, GM_Type.Short, 0), o => o.Op == OpType.Bf);
 
                 if (match != null)
                 {
                     // Ok, lets start this ride.  Since the first instruction is a B and it jumps over to BF, something is on the stack that we need to compare BF with
-
+                    OffsetOpcode inlineBranch = new OffsetOpcode(match[2].Op, match[2].Offset, match[0].Pc);
+                    int final_destnation = match[2].Address;
+                    match[0].Op = OpType.Bf;
+                    match[0].Address = final_destnation; // fix the jump
+                    match[1].Op = OpType.BadOp;
+                    match[2].Op = OpType.BadOp;
 
                     // lets start this ball rolling, first lets find any and all branches to the three code we have here
                     // First, a jump to B 2 means its really a BF <somehwere> so both of these instructons are equilvelent
-                    var indirectBF = MatchPatern(false, o => o.isBranch && (o.Address == match[0].Address || o.Address == match[2].Address));
-                    // Since this poitns to a push.E 0, and the next instruction is a BF so it will ALWAYS jump, change the offset of this to 3
-                    var indirectB = MatchPatern(false, o => o.isBranch && o.Address == match[1].Address);
+
+                    var indirectB = MatchPatern(false, o => o.isBranch && o.Address == match[1].Pc);
+                    if (indirectB != null) foreach (Opcode o in indirectB) o.Address = final_destnation; // we don't care about the target branch type
+
+                    // order matters since we could have braches at the top that might go here
+                    var indirectBF = MatchPatern(false, o => o.isBranch && (o.Address == match[0].Pc || o.Address == match[2].Pc));
+                    System.Diagnostics.Debug.Assert(indirectBF == null); // There is NO reason why this shouldn't be nul.  No reason to branch to these two address
+                                                                         // Since this poitns to a push.E 0, and the next instruction is a BF so it will ALWAYS jump, change the offset of this to 3
+
                     // Change that B to BF but not yet
-                    Opcode inlineBranch = new OffsetOpcode(match[2].Op, match[2].Offset, match[0].Pc);
-                    codes.Add(inlineBranch.Pc, inlineBranch); // put it back cause we need it for the previous conditional!
+                    //  codes.Add(inlineBranch.Pc, inlineBranch); // put it back cause we need it for the previous conditional!
+                  
                     // This saves some code.  Its either watch it on the branch decompile stage for inline opcodes
                     // OR modify the existing opcodes to fix this issue
-                    inlineBranches.Add(match[0].Pc, inlineBranch); // make it inline as well for any targets
-                    inlineBranches.Add(match[2].Pc, inlineBranch); // make it inline as well for any targets
+              //      inlineBranches.Add(match[0].Pc, inlineBranch); // make it inline as well for any targets
+             //       inlineBranches.Add(match[2].Pc, inlineBranch); // make it inline as well for any targets
 
                     // Second, we need to find, and there SHOULD be one out there, of some branch that points to the Push.E 0
                     System.Diagnostics.Debug.WriteLineIf(indirectB == null, "No B match for the scond bit?  What is the compiler thinking?");
-                    if (indirectB != null) foreach (Opcode o in indirectB) o.Address = match[2].Address; // we don't care about the target branch type
+                    
 
                 }
             }
@@ -649,13 +673,15 @@ namespace betteribttest
             last_pc = pc;
             pc = code.Pc;
             string codeLine = null;
-            if (start_pc == -1) start_pc = pc;
+            if (code.Op != OpType.BadOp && start_pc == -1) start_pc = pc;
             CodeLine line = new CodeLine();
             line.code = code;
             line.pc = pc;
             line.startPc = -1;
             switch (code.Op)
             {
+                case OpType.BadOp:
+                    break;
                 // A hack for push enviroment right here.
                 // It SEEMS that push enviroment is set up so we can call a function that is in an instance
                 // aka self.myobject.instance_destroy()
@@ -767,30 +793,44 @@ namespace betteribttest
             }
             return line;
         }
-        void DoBranch(Stack<AST> stack, List<CodeLine> lines, OffsetOpcode op)
+
+        void DoBranch(Stack<AST> stack, List<CodeLine> lines, OffsetOpcode code, int pc, ref int start_pc, ref int last_pc)
         {
             string codeLine = null;
             var last = codes.Last();
-            int offset = op.Offset;
+            CodeLine line = new CodeLine();
+            line.code = code;
+            line.pc = pc;
+            line.startPc = start_pc;
+            line.endPC = pc;
+            line.Text = codeLine;
+            lines.Add(line);
 
-            switch (op.Op)
+            start_pc = -1;
+            switch (code.Op)
             {
                 case OpType.Bf:
-                    codeLine = ProcessBranch(stack, GetLabel(offset), false);
+                    line.Text  = ProcessBranch(stack, GetLabel(code.Address), false);
                     break;
                 case OpType.Bt:
-                    codeLine = ProcessBranch(stack, GetLabel(offset), true);
+                    line.Text = ProcessBranch(stack, GetLabel(code.Address), true);
                     break;
                 case OpType.B:
-                    codeLine = "goto " + GetLabel(offset);
+                    line.Text = "goto " + GetLabel(code.Address);
                     break;
                 default:
                     throw new Exception("Can't be called here");
             }
             OffsetOpcode vop; // if we have an inline branch, we got to call it here
-            if (inlineBranches.TryGetValue(op.Address, out vop) {
-
+            if (inlineBranches.TryGetValue(code.Address, out vop) ){
+                // love recursion
+                int fake_start_pc = 0, fake_end_pc = 0; // dosn't matter as -1 pc means its virtual
+                DoBranch(stack, lines, vop, -1, ref fake_start_pc, ref fake_end_pc);
             }
+        }
+        void PurgeExtraLines(List<CodeLine> lines)
+        {
+
         }
 
         List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size)
@@ -804,18 +844,18 @@ namespace betteribttest
             enviroment = new Stack<AST>();
 
             List<CodeLine> lines = new List<CodeLine>();
-            string codeLine = null;
-            int pc = 0, start_pc = -1, last_pc = 0;
+            int start_pc = -1, last_pc = 0;
             int end_pc = codes.Last().Key;
-            for (int it = 0; it < end_pc; it++) {
-                if (!codes.ContainsKey(it)) continue;
-                Opcode code = codes[it];
+            for (int pc = 0; pc < end_pc; pc++) {
+                if (!codes.ContainsKey(pc)) continue;
+                Opcode code = codes[pc];
                 switch (code.Op)
                 {
+                    
                     case OpType.Bf: // branch if false
                     case OpType.Bt: // branch if true
                     case OpType.B:
-                        codeLine = DoBranch(tree, code as OffsetOpcode);
+                         DoBranch(tree, lines, code as OffsetOpcode, pc, ref start_pc, ref last_pc);
                         break;
                     case OpType.Popenv:
                         {
@@ -832,11 +872,14 @@ namespace betteribttest
                         }
                         //    codeLine = "Pop Enviroment from " + checkLabelEnv((short)(op & 0xFFFF));
                         break;
+                    default:
+                        lines.Add(processOpcode(code, pc, ref start_pc, ref last_pc));
+                        continue;
                 }
             }
-            InsertLabels(lines, pc);
+            InsertLabels(lines, end_pc);
 
-            return null;// lines;
+            return lines;
         }
     }
 }

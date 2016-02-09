@@ -201,8 +201,8 @@ namespace betteribttest
             //   dism.DissasembleEveything();
             //     dism.writeFile("frog");
           //dism.TestStreamOutput("frog");
-          //  dism.TestStreamOutput("gasterblaster");
-            dism.TestStreamOutput("gasterblaster_Draw");
+           dism.TestStreamOutput("gasterblaster");
+          //  dism.TestStreamOutput("gasterblaster_Draw");
             //  dism.TestStreamOutput("SCR_GAMESTART");
             //  dism.writeFile("SCR_GAMESTART");
 
