@@ -200,12 +200,16 @@ namespace betteribttest
             Disam dism = new Disam(cr);
             //   dism.DissasembleEveything();
             //     dism.writeFile("frog");
-          //dism.TestStreamOutput("frog");
-           dism.TestStreamOutput("gasterblaster");
-          //  dism.TestStreamOutput("gasterblaster_Draw");
-            //  dism.TestStreamOutput("SCR_GAMESTART");
-            //  dism.writeFile("SCR_GAMESTART");
+            //dism.TestStreamOutput("frog");
+            // dism.TestStreamOutput("gasterblaster");
+            //    dism.TestStreamOutput("obj_shaker_Alarm");
+            //   dism.TestStreamOutput("gasterblaster_Draw");
+            //  dism.TestStreamOutput("sansbullet");
+            //  dism.TestStreamOutput("TEXT");
 
+            //  dism.TestStreamOutput("SCR_GAMESTART");
+          //  dism.TestStreamOutput("toriel");
+            dism.TestStreamOutput("obj_dialoguer");
             //    cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
             cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
             GMK_Font fnt = cr.resFonts[1];

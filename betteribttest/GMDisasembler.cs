@@ -385,6 +385,7 @@ namespace betteribttest
                     return new PopOpcode(raw, r, pc);
                 case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
                 case OpType.Break:
+                case OpType.Exit:
                     return new Opcode(raw, pc);
                 case OpType.Call:
                     return new CallOpcode(raw, r, pc);

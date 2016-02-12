@@ -140,8 +140,12 @@ namespace betteribttest
             public Variable(float value) : base(GM_Type.Float) { dvalue = value; Value = value.ToString(); }
             public Variable(double value) : base(GM_Type.Double) { dvalue = value; Value = value.ToString(); }
             public Variable(bool value) : base(GM_Type.Bool) { ivalue = value ? 1 : 0; Value = value.ToString(); }
-            public Variable(string value) : base(GM_Type.String) { Value = svalue = value; }
-            public Variable(string value, GM_Type type) : base(type) { Value = svalue = value; }
+            public Variable(string value) : base(GM_Type.String) {
+                Value = svalue = GM_Disam.EscapeString(value);
+            }
+            public Variable(string value, GM_Type type) : base(type) {
+                Value = svalue = GM_Type.String == type ? Value = svalue = GM_Disam.EscapeString(value) :value;
+            }
             public Variable(int value, string instance) : base(GM_Type.Instance) {
                 ivalue = value;
                 Value = instance;
@@ -291,17 +295,17 @@ namespace betteribttest
             }
         }
 
-        string FormatAssign(string sinstance, string var_name, int index, AST value)
+        string FormatAssign( string var_name, int index, AST value)
         {
-            return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index, value.ToString());
+            return String.Format("{0}[{1}] = {2}",  var_name, index, value.ToString());
         }
-        string FormatAssign(string sinstance, string var_name, AST index, AST value)
+        string FormatAssign( string var_name, AST index, AST value)
         {
-            return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index.ToString(), value.ToString());
+            return String.Format("{0}[{1}] = {2}",  var_name, index.ToString(), value.ToString());
         }
-        string FormatAssign(string sinstance, string var_name, int index, string value)
+        string FormatAssign( string var_name, int index, string value)
         {
-            return String.Format("{0}.{1}[{2}] = {3}", sinstance, var_name, index, value);
+            return String.Format("{0}[{1}] = {2}",  var_name, index, value);
         }
         string FormatAssign(string sinstance, string var_name, string value)
         {
@@ -321,104 +325,58 @@ namespace betteribttest
         }
 
         // The new Fangled method
-
+  
+            
+        string GetInstance(Stack<AST> tree, int instance)
+        {
+            string sinstance = null;
+            while (instance == 0) // in the stack
+            {
+                AST new_instance = tree.Pop();
+                if (int.TryParse(new_instance.ToString(), out instance)) continue;
+                return new_instance.ToString();
+            }
+            if (instance < 0) sinstance = lookupInstance(instance);
+            else sinstance = cr.objList[instance].Name;
+            return sinstance;
+        }
+        string  GetInstance(Stack<AST> tree, string instance)
+        {
+            int instance_test;
+            if (int.TryParse(instance, out instance_test)) return GetInstance(tree, instance_test);
+            return null;
+        }
         void ProcessVarPush(Stack<AST> tree, GM_Disam.PushOpcode op) {
             int instance = op.Instance;
-            string sinstance = lookupInstance(instance);
             int operandValue = (int)op.OperandValue;
             int load_type = (operandValue >> 24) & 0xFF;
             string var_name = decodeCallName(operandValue & 0x00FFFFFF);
-            if (load_type == 0xA0) // simple varable, usally an int 
-            {
-                if (sinstance == "stack")
-                {
-                    AST value = tree.Pop();
-                    Variable valueVar = value as Variable;
-                    if (valueVar != null)
-                        sinstance = lookupInstance((int)valueVar.IValue);
-                    else
-                        sinstance = value.ToString();
-                    tree.Push(new Variable(sinstance + "." + var_name, GM_Type.Var));
-                    return;
-                } else //if(sinstance == "self" || sinstance == "global")
-                {
-                    //   AST value = tree.Pop();
-                    tree.Push(new Variable(sinstance + "." + var_name, GM_Type.Var));
-                    return;
-                }
-            }
-            if (load_type == 0 && sinstance == "stack") // instance is on the stack and its an array
-            {
-                AST index = tree.Pop();
-                AST value = tree.Pop();
-                Variable valueVar = value as Variable;
-                if (valueVar != null)
-                    sinstance = lookupInstance((int)valueVar.IValue);
-                else
-                    sinstance = value.ToString();
-                tree.Push(new Variable(sinstance + "." + var_name + "[" + index.ToString() + "]", GM_Type.Var));
-                return;
-            }
-            if (load_type == 0x80) // not sure what this is
-            {
-                if (sinstance == "stack")
-                {
-                    AST ainstance = tree.Pop();
-                    //   AST value = tree.Pop(); // Mabye.... mabye this is only one value, instance in a var?
-                    sinstance = ainstance.ToString();
-                    tree.Push(new Variable(sinstance + "." + var_name, GM_Type.Var));
-                    return;
-                }
-                // ret = sinstance + "." + var_name + " (Load: 0x80)";
-                //  opcode.value = new StackValue(instance, ret);
-            }
-            throw new NotImplementedException("Push.V convert not implmented"); // we are going to handle it all, no exceptions this time around
+
+            AST index = load_type == 0 ? tree.Pop() : null;
+            var_name = GetInstance(tree, instance) + "." + var_name;
+            if (index == null)
+                tree.Push(new Variable(var_name, GM_Type.Var));
+            else
+                tree.Push(new Variable(var_name + "[" + index.ToString() + "]", GM_Type.Var));
+
+            return;
+           // throw new NotImplementedException("Push.V convert not implmented"); // we are going to handle it all, no exceptions this time around
         }
         string ProcessAssignPop(Stack<AST> tree, GM_Disam.PopOpcode code)
         {
             GM_Type convertFrom = code.FirstType;
             GM_Type convertTo = code.SecondType;
             int iinstance = code.Instance;
-            string sinstance = lookupInstance(iinstance);
             int load_type = code.Offset >> 24 & 0xFF; // I think this might only be 4 bits
             string var_name = decodeCallName(code.Offset & 0x00FFFFFF);
 
-            //Queue<StackValue> valueStack = new Queue<StackValue>(); // its a queue as we have to reverse the order
-            // Lets do the simplest conversion first  int -> ref ( integer being assigned to a value of an object aka global.bob = 4;
-            if (load_type == 0xA0 && (sinstance == "global" || sinstance == "self")) // usally a function return, assigning to an object
-            {
-                AST value = tree.Pop();
-                return FormatAssign(sinstance, var_name, value.ToString());
-            }
-            // load_type 0 is an array and instance is on the stack
-            if (load_type == 0 && (sinstance == "stack"))
-            {
-                AST index = tree.Pop();
-                AST instance = tree.Pop();
-                AST value = tree.Pop();
-                if (int.TryParse(instance.ToString(), out iinstance))
-                {
-                    sinstance = lookupInstance(iinstance);
-                }
-                else sinstance = instance.ToString();
-                return FormatAssign(sinstance, var_name, index, value);
-            }
-            if (load_type == 0x80) // not sure what this is
-            {
-                if (sinstance == "stack")
-                {
-                    AST ainstance = tree.Pop();
-                    AST value = tree.Pop(); // Mabye.... mabye this is only one value, instance in a var?
-                    sinstance = ainstance.ToString();
-                    return FormatAssign(sinstance, var_name, value.ToString());
-
-                }
-                // ret = sinstance + "." + var_name + " (Load: 0x80)";
-                //  opcode.value = new StackValue(instance, ret);
-            }
-            throw new Exception(" ALL BUGS MUST BE FIXED, GOD DEMANDS IT!");//
-            return null;
-            // zero seems to be an array assign
+            AST index = load_type == 0 ? tree.Pop() : null;
+            var_name = GetInstance(tree, iinstance) + "." + var_name;
+            AST value = tree.Pop();
+            if(index == null)
+                return var_name + " = " + value.ToString();
+            else
+                return var_name + "[" + index.ToString() + "] = " + value.ToString();
         }
         void ProcessMathOp(Stack<AST> tree, uint op)
         {
@@ -442,6 +400,16 @@ namespace betteribttest
                     }
                 }
             },
+            { "instance_exists",
+                delegate (Disam disam, AST[] args) {
+                 int objIndex;
+                if(int.TryParse(args[0].ToString(), out objIndex)) // if its a numerical instance, find the object name
+                {
+                    var obj = disam.cr.objList[objIndex];
+                    args[args.Length - 1] = new Variable(obj.Name);
+                    }
+                }
+            },
             { "snd_play",
                 delegate (Disam disam, AST[] args) {
                  int sndIndex;
@@ -450,6 +418,17 @@ namespace betteribttest
                     var obj = disam.cr.audioList[sndIndex];
                     args[args.Length - 1] = new Variable(obj.Name);
                     }
+                }
+            },
+            { "script_execute",
+                delegate (Disam disam, AST[] args) {
+                    int scrpt_index;
+                     if(int.TryParse(args[0].ToString(), out scrpt_index)) // if its a numerical instance, find the object name
+                      {
+                        var obj = disam.cr.scriptIndex[scrpt_index];
+                           args[args.Length - 1] = new Variable(obj.Name);
+                    }
+                 
                 }
             },
 
@@ -626,12 +605,14 @@ namespace betteribttest
             inlineBranches = new SortedList<int, OffsetOpcode>();
             // need to change this to a bunch of delgates, but right now lets find one patern match
             var list = codes.Values;
+            int fix_count = 0;
             for (int i = 0; i < list.Count; i++)
             {
                 var match = MatchPatern(false, o => o.Op == OpType.B && o.Offset == 2, o => PushOpcodeTest(o, GM_Type.Short, 0), o => o.Op == OpType.Bf);
 
                 if (match != null)
                 {
+                    fix_count++;
                     // Ok, lets start this ride.  Since the first instruction is a B and it jumps over to BF, something is on the stack that we need to compare BF with
                     OffsetOpcode inlineBranch = new OffsetOpcode(match[2].Op, match[2].Offset, match[0].Pc);
                     int final_destnation = match[2].Address;
@@ -650,14 +631,15 @@ namespace betteribttest
                     var indirectBF = MatchPatern(false, o => o.isBranch && (o.Address == match[0].Pc || o.Address == match[2].Pc));
                     System.Diagnostics.Debug.Assert(indirectBF == null); // There is NO reason why this shouldn't be nul.  No reason to branch to these two address
                                                                          // Since this poitns to a push.E 0, and the next instruction is a BF so it will ALWAYS jump, change the offset of this to 3
-
+                    if (indirectB != null) foreach (Opcode o in indirectB) { o.Address = final_destnation; o.Op = OpType.B; }
+                    // we don't care about the target branch type
                     // Change that B to BF but not yet
-                    //  codes.Add(inlineBranch.Pc, inlineBranch); // put it back cause we need it for the previous conditional!
-                  
+                     //  codes.Add(inlineBranch.Pc, inlineBranch); // put it back cause we need it for the previous conditional!
+
                     // This saves some code.  Its either watch it on the branch decompile stage for inline opcodes
                     // OR modify the existing opcodes to fix this issue
-              //      inlineBranches.Add(match[0].Pc, inlineBranch); // make it inline as well for any targets
-             //       inlineBranches.Add(match[2].Pc, inlineBranch); // make it inline as well for any targets
+                    //      inlineBranches.Add(match[0].Pc, inlineBranch); // make it inline as well for any targets
+                    //       inlineBranches.Add(match[2].Pc, inlineBranch); // make it inline as well for any targets
 
                     // Second, we need to find, and there SHOULD be one out there, of some branch that points to the Push.E 0
                     System.Diagnostics.Debug.WriteLineIf(indirectB == null, "No B match for the scond bit?  What is the compiler thinking?");
@@ -665,6 +647,7 @@ namespace betteribttest
 
                 }
             }
+            System.Diagnostics.Debug.WriteLineIf(fix_count > 0, "Amount of peephole fixes: " + fix_count);
         }
         Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
         Stack<AST> enviroment = new Stack<AST>();
@@ -690,9 +673,16 @@ namespace betteribttest
                 // This might not work well with recursive returns or calls though
                 case OpType.Pushenv:
                     enviroment.Push(tree.Pop());
+                    codeLine = "Pushing Enviroment : " + GetInstance(tree, enviroment.Peek().ToString());
                     // codeLine = "Push Enviroment " + tree.Pop().ToString() + "goto on error " + checkLabel(op);
                     break;
-
+                case OpType.Popenv:
+                    {
+                        AST env = enviroment.Pop();
+                        string instance = GetInstance(tree, env.ToString());
+                        codeLine = "Poping  Envorment :  " + instance;
+                    }
+                        break;
                 case OpType.Exit:
                     codeLine = "Exit";
                     System.Diagnostics.Debug.Assert(tree.Count == 0);
@@ -763,7 +753,20 @@ namespace betteribttest
                     break;
                 case OpType.Dup:
                     {
-                        tree.Push(tree.First()); // will this work?
+                        short extra = (short)(code.Raw & 0xFFFF); // humm extra data? OR COPY THE TOP TWO ON THE STACK MABE
+                        if (extra > 0)
+                        {
+                            AST top = tree.ElementAt(0);
+                            AST second = tree.ElementAt(1);
+                            tree.Push(second);
+                            tree.Push(top);
+                        } else tree.Push(tree.Peek());
+                        System.Diagnostics.Debug.Assert(extra == 0 || extra == 1);
+
+                      
+ 
+
+                    //    tree.Push(tree.First()); // will this work?
                                                  //   Variable v = tree.First() as Variable;
                                                  //   tree.First()
                                                  //   if (v == null) throw new ArgumentException("Dup didn't work, meh");
@@ -849,6 +852,7 @@ namespace betteribttest
             for (int pc = 0; pc < end_pc; pc++) {
                 if (!codes.ContainsKey(pc)) continue;
                 Opcode code = codes[pc];
+                System.Diagnostics.Debug.Assert(pc != 1951);
                 switch (code.Op)
                 {
                     
@@ -857,21 +861,7 @@ namespace betteribttest
                     case OpType.B:
                          DoBranch(tree, lines, code as OffsetOpcode, pc, ref start_pc, ref last_pc);
                         break;
-                    case OpType.Popenv:
-                        {
-                            AST env = enviroment.Pop();
-                            // we need to find the last statment
-                            foreach (CodeLine l in lines.Reverse<CodeLine>())
-                            {
-                                if (l.Text != null)
-                                {
-                                    l.Text = env.ToString() + "." + l.Text;
-                                    break;
-                                }
-                            }
-                        }
-                        //    codeLine = "Pop Enviroment from " + checkLabelEnv((short)(op & 0xFFFF));
-                        break;
+        
                     default:
                         lines.Add(processOpcode(code, pc, ref start_pc, ref last_pc));
                         continue;

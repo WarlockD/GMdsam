@@ -38,9 +38,10 @@ namespace betteribttest
         int chunkStart;
 
         ChunkEntry[] entries;
-        int pos;
+
         public int Count { get { return entries == null ? 0 : entries.Length; } }
         public ChunkEntry this[int i] { get { return entries[i]; } }
+        public int Length {  get { return entries.Length; } }
         void ReadEntries(bool rangeChecking)
         {
             int entriesCount = cs.ReadInt32();
@@ -105,7 +106,6 @@ namespace betteribttest
         public ChunkEntries(ChunkStream cs, int chunkLimit, bool rangeChecking = true)
         {
             this.cs = cs;
-            this.pos = 0;
             this.chunkStart = cs.Position;
             this.chunkLimit = chunkLimit;
             ReadEntries(rangeChecking);
@@ -113,7 +113,6 @@ namespace betteribttest
         public ChunkEntries(ChunkStream cs,int chunkStart,int chunkLimit,bool rangeChecking=true)
         {
             this.cs = cs;
-            this.pos = 0;
             this.chunkStart = chunkStart;
             this.chunkLimit = chunkLimit;
             cs.PushSeek(chunkStart);

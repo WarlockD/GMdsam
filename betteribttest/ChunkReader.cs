@@ -11,7 +11,7 @@ using Microsoft.Deployment.Compression.Cab;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Xml;
-
+using System.Diagnostics;
 /*
 Side note to the Disam potion.
 To map variables and function names to the asembley REQUIRES some kind of emulation.  The dissassembler needs context to traslate
@@ -130,7 +130,17 @@ namespace betteribttest
         public float pan;
         public int other;
         public int maybe_offset;
+        public byte[] data = null; // sound data, if it exits
         public GMK_Audio(ChunkEntry e) : base(e) { }
+        public void SaveAudio(string path= null)
+        {
+            if (data == null) return;
+            if (path == null) path = filename;
+            else path = Path.Combine(path, filename);
+            FileStream sr = new FileStream(path, FileMode.Create, FileAccess.Write);
+            sr.Write(data, 0, data.Length);
+            sr.Close();
+        }
         public override string ToString()
         {
             return "{ Audio Data }";
@@ -295,6 +305,15 @@ namespace betteribttest
     }
     class ChunkReader
     {
+        class Chunk
+        {
+            public readonly int start;
+            public readonly int end;
+            public readonly int size;
+            public readonly string name;
+            public Chunk(string name, int start, int size) { this.name = name; this.start = start; this.end = start + size; this.size = size; }
+        }
+        Dictionary<string, Chunk> chunks = new Dictionary<string, Chunk>();
         ChunkStream r = null;
         public bool debugOn = true;
         void WriteDebug(string line)
@@ -886,8 +905,16 @@ namespace betteribttest
             }
         }
         public List<GMK_Audio> audioList;
+        class RawAudiodata
+        {
+            public int size;
+            public int index;
+        }
         void doAudio(int chunkStart, int chunkLimit)
         {
+            Chunk rawData = chunks["AUDO"]; // raw data
+            ChunkEntries rawDataEntries = new ChunkEntries(r, rawData.start, rawData.end);
+
             audioList = new List<GMK_Audio>();
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
             foreach (ChunkEntry e in entries)
@@ -895,6 +922,11 @@ namespace betteribttest
                 GMK_Audio audio = new GMK_Audio(e);
                 audio.Name = r.readStringFromOffset();
                 audio.audioType = r.ReadInt32();
+                // Ok, 101 seems to be wave files in the win files eveything else is mabye exxternal?
+                // 100 is mp3 ogg?
+                // found no other types in there.  
+               // Debug.Assert(audio.audioType == 101 || audio.audioType == 100);
+              
                 audio.extension = r.readStringFromOffset();
                 audio.filename = r.readStringFromOffset();
                 audio.effects = r.ReadInt32();
@@ -902,7 +934,17 @@ namespace betteribttest
                 audio.pan = r.ReadSingle();
                 audio.other = r.ReadInt32();
                 audio.maybe_offset = r.ReadInt32();
-             
+                // Debug.WriteLineIf(audio.audioType == 101, "Audio file : " + audio.filename + " index? " + audio.maybe_offset); // I suspect this is in the audo list
+                //Debug.WriteLineIf(audio.audioType == 100, "Audio file : " + audio.filename + " index? " + audio.maybe_offset); // not sure what the offset is for here?
+                if (audio.audioType == 101)
+                {
+                    var offset = rawDataEntries[audio.maybe_offset];
+                    r.PushSeek(offset.Position);
+                    int size = r.ReadInt32();
+                    audio.data = r.ReadBytes(size);
+                    r.PopPosition();
+                }
+                audio.SaveAudio();
                 AddData(audio);
                 audioList.Add(audio);
             }
@@ -1201,15 +1243,7 @@ namespace betteribttest
         }
 
 
-        class Chunk
-        {
-            public readonly int start;
-            public readonly int end;
-            public readonly int size;
-            public readonly string name;
-            public Chunk(string name, int start, int size) { this.name = name; this.start = start; this.end = start + size; this.size = size; }
-        }
-        Dictionary<string, Chunk> chunks = new Dictionary<string, Chunk>();
+    
 
         public void runChunkReader()
         {
@@ -1236,6 +1270,7 @@ namespace betteribttest
                 DoBackground(chunk.start, chunk.end); // doing objects right now
             if (chunks.TryGetValue("SPRT", out chunk))
                 DoSprite(chunk.start, chunk.end); // doing objects right now
+
             if (chunks.TryGetValue("SOND", out chunk))
                 doAudio(chunk.start, chunk.end); // doing objects right now
             
