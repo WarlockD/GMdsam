@@ -198,6 +198,7 @@ namespace betteribttest
           //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             Disam dism = new Disam(cr);
+     //       cr.DumpAllStrings("STRINGS.TXT");
             //   dism.DissasembleEveything();
             //     dism.writeFile("frog");
             //dism.TestStreamOutput("frog");
@@ -205,11 +206,11 @@ namespace betteribttest
             //    dism.TestStreamOutput("obj_shaker_Alarm");
             //   dism.TestStreamOutput("gasterblaster_Draw");
             //  dism.TestStreamOutput("sansbullet");
-            //  dism.TestStreamOutput("TEXT");
+             dism.TestStreamOutput("obj_face");
 
             //  dism.TestStreamOutput("SCR_GAMESTART");
-          //  dism.TestStreamOutput("toriel");
-            dism.TestStreamOutput("obj_dialoguer");
+       //     dism.TestStreamOutput("scr_facechoice");
+         //   dism.TestStreamOutput("obj_dialoguer");
             //    cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
             cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
             GMK_Font fnt = cr.resFonts[1];

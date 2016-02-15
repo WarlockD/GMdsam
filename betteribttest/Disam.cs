@@ -7,6 +7,7 @@ using System.IO;
 using System.Web.UI;
 using System.Web;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 /*
     So why SortedList?  When using the peekhole optimiazer (or deoptimizer?) We will need to get the next instruction 
     rather than the next pc, while OTHEr parts of the decompiler needs the next pc
@@ -388,6 +389,16 @@ namespace betteribttest
             tree.Push(new MathOp(left, code, right));
         }
         delegate void FixFunctionDel(Disam disam, AST[] args);
+        delegate void FixVariable(Disam disam, AST toAssign, ref AST value);
+        static Dictionary<string, FixVariable> fix_variable = new Dictionary<string, FixVariable>()
+        {
+            {
+                "sprite_index",
+                delegate(Disam disam, AST toAssign, ref AST value)
+                {
+                }
+            }
+        };
         static Dictionary<string, FixFunctionDel> fix_function = new Dictionary<string, FixFunctionDel>()
         {
             { "instance_create",
@@ -406,7 +417,7 @@ namespace betteribttest
                 if(int.TryParse(args[0].ToString(), out objIndex)) // if its a numerical instance, find the object name
                 {
                     var obj = disam.cr.objList[objIndex];
-                    args[args.Length - 1] = new Variable(obj.Name);
+                    args[0] = new Variable(obj.Name);
                     }
                 }
             },
@@ -416,7 +427,7 @@ namespace betteribttest
                 if(int.TryParse(args[0].ToString(), out sndIndex)) // if its a numerical instance, find the object name
                 {
                     var obj = disam.cr.audioList[sndIndex];
-                    args[args.Length - 1] = new Variable(obj.Name);
+                    args[0] = new Variable("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
                     }
                 }
             },
@@ -426,7 +437,7 @@ namespace betteribttest
                      if(int.TryParse(args[0].ToString(), out scrpt_index)) // if its a numerical instance, find the object name
                       {
                         var obj = disam.cr.scriptIndex[scrpt_index];
-                           args[args.Length - 1] = new Variable(obj.Name);
+                           args[0] = new Variable(obj.script_name);
                     }
                  
                 }
@@ -512,26 +523,46 @@ namespace betteribttest
 
         void InsertLabels(List<CodeLine> lines, int pc)
         {
-            CodeLine line;
-            foreach (var label in gotos)
+            // CodeLine line;
+            string label;
+            foreach (var line in lines)
             {
-                if (label.Key >= pc) // this is the end of the file
+                if (gotos.TryGetValue(line.pc, out label))
                 {
-                    line = new CodeLine();
-                    line.pc = label.Key;
-                    line.Label = label.Value;
-                    lines.Add(line);
-                    continue;
+                    if (line.Label != null) throw new Exception("Label '" + line.Label + "' already assigned for pc = " + line.pc);
+                    line.Label = label;
+                    gotos.Remove(line.pc);
                 }
-                line = lines.Single(o => o.pc == label.Key);
-                if (line == null) throw new Exception("No more fucking around, fix this");
-                line.Label = label.Value;
-                continue;
-
-
-
             }
 
+            if(gotos.Count>0)
+            {
+                // catch if a label goes beond the PC end
+                var line = lines.Last();
+                var gos = gotos.Where(o => line.pc>o.Key );
+                if(gos == null)
+                {
+                    foreach(var g in gos)
+                    {
+                        CodeLine n = new CodeLine();
+                        n.Label = g.Value;
+                        n.Text = null;
+                        n.pc = g.Key;
+                        n.startPc = g.Key;
+                        n.endPC = g.Key;
+                        lines.Add(n);
+                        gotos.Remove(g.Key);
+                    }
+                  
+                }
+                foreach (var g in gotos)
+                {
+                    CodeLine n = new CodeLine();
+                    n.pc = g.Key;
+                    n.Text = " Label '" + g.Value + "' not used";
+                    lines.Insert(0, n);
+                }
+            }
         }
         bool OffsetOpcodeTest(Opcode o, OpType op, int offset)
         {
@@ -627,11 +658,15 @@ namespace betteribttest
                     var indirectB = MatchPatern(false, o => o.isBranch && o.Address == match[1].Pc);
                     if (indirectB != null) foreach (Opcode o in indirectB) o.Address = final_destnation; // we don't care about the target branch type
 
+                    // Ran into this on gml_Object_obj_dialogurer_Step  a push was done for a conditional, then a B
+                 //   var stackIssue = MatchPatern(false, o => o.isConditional, o => o.Op == OpType.B && o.Pc == final_destnation); // This should be changed to BF humm
+               //     if (stackIssue != null) foreach (Opcode o in indirectB) o.Op = OpType.Bf; // we don't care about the target branch type
+
                     // order matters since we could have braches at the top that might go here
                     var indirectBF = MatchPatern(false, o => o.isBranch && (o.Address == match[0].Pc || o.Address == match[2].Pc));
                     System.Diagnostics.Debug.Assert(indirectBF == null); // There is NO reason why this shouldn't be nul.  No reason to branch to these two address
                                                                          // Since this poitns to a push.E 0, and the next instruction is a BF so it will ALWAYS jump, change the offset of this to 3
-                    if (indirectB != null) foreach (Opcode o in indirectB) { o.Address = final_destnation; o.Op = OpType.B; }
+                    if (indirectB != null) foreach (Opcode o in indirectB) { o.Address = final_destnation; }//  o.Op = OpType.B; }
                     // we don't care about the target branch type
                     // Change that B to BF but not yet
                      //  codes.Add(inlineBranch.Pc, inlineBranch); // put it back cause we need it for the previous conditional!
@@ -647,7 +682,15 @@ namespace betteribttest
 
                 }
             }
-            System.Diagnostics.Debug.WriteLineIf(fix_count > 0, "Amount of peephole fixes: " + fix_count);
+            for (int i = 0; i < list.Count; i++)
+            {
+                var match = MatchPatern(false, o => o.isConditional, o => o.Op == OpType.B);
+                if(match != null)
+                {
+                  //  Debug.WriteLine("Meh " + i);
+                }
+            }
+                System.Diagnostics.Debug.WriteLineIf(fix_count > 0, "Amount of peephole fixes: " + fix_count);
         }
         Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
         Stack<AST> enviroment = new Stack<AST>();
@@ -687,7 +730,15 @@ namespace betteribttest
                     codeLine = "Exit";
                     System.Diagnostics.Debug.Assert(tree.Count == 0);
                     break;
-                case OpType.Neg: // not really xNOR but not sure WHAT it is, one op?
+                case OpType.Not: 
+                    // This op is CLEARLY an op.  It was hard verified after I saw a return call from a function, a conv from a var to a bool
+                    // and THIS statment doing a bool to a double
+                    {
+                        AST value = tree.Pop();
+                        tree.Push(new Variable("!(" + value.ToString() + ")", GM_Type.Var));
+                    }
+                    break;
+                case OpType.Neg: // sure this is a negitive
                     {
                         AST value = tree.Pop();
                         tree.Push(new Variable("-(" + value.ToString() + ")", GM_Type.Var));
@@ -702,7 +753,6 @@ namespace betteribttest
                 case OpType.Or:
                 case OpType.And:
                 case OpType.Xor:
-                case OpType.Not:
                 case OpType.Sal:
                 case OpType.Slt:
                 case OpType.Sle:
@@ -819,6 +869,7 @@ namespace betteribttest
                     line.Text = ProcessBranch(stack, GetLabel(code.Address), true);
                     break;
                 case OpType.B:
+                    Debug.Assert(stack.Count == 0);
                     line.Text = "goto " + GetLabel(code.Address);
                     break;
                 default:

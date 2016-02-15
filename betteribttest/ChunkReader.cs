@@ -954,6 +954,7 @@ namespace betteribttest
         {
             return '{' + x + "," + y + '}';
         }
+    
         public void SaveNewTextureFormat(string path)
         {
             PListDict plist = new PListDict();
@@ -1320,6 +1321,12 @@ namespace betteribttest
             r = new ChunkStream(ms);
 
             runChunkReader();
+        }
+        public void DumpAllStrings(string filename)
+        {
+            StreamWriter sw = new StreamWriter(new FileStream(filename, FileMode.Create), Encoding.ASCII);
+            for (int i = 0; i < stringList.Count; i++) sw.WriteLine("{0,-5} : {1}", i, stringList[i].escapedString);
+            sw.Close();
         }
     }
 }
