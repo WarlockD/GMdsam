@@ -17,8 +17,10 @@ namespace betteribttest
 {
     using Opcode = GM_Disam.Opcode;
     using OffsetOpcode = GM_Disam.OffsetOpcode;
+    using System.Text.RegularExpressions;
     class Disam
     {
+        string scriptName;
         ChunkReader cr;
         SortedList<int, GM_Disam.Opcode> codes;
         SortedList<int, OffsetOpcode> inlineBranches;
@@ -71,7 +73,84 @@ namespace betteribttest
             { OpType.Sne, OpType.Seq },
             { OpType.Seq, OpType.Sne },
         };
+        // side not, AGAIN, if I wanted to spend the time, I could make an array for each object/script
+        // and determan what the types are of all the variables and then act find the object names that way
+        // hoewever this will take weeks and its just a few I need to look at
 
+        static Regex RealConstantRegex = new Regex(@"real\((\d+)\)");
+        static Dictionary<string, FixVariableDel> fix_variable = new Dictionary<string, FixVariableDel>()
+        {
+            {"self.sprite_index", delegate(Disam disam, AST toAssign, ref AST value) {
+                    if(value.CanEval)
+                    {
+                        var obj = disam.cr.spriteList[value.Eval()];
+                        value = Variable.CreatePsudoVariable(obj.Name);
+                    }
+                    
+                    // sometimes we use the function "real" with a constant inside so lets find it
+            }
+            // This is a special case.  In all the obj_face files, there is an array of u where
+            // all the face sprite names are kept, we detect if we are IN that and then change the
+            // constants to numerical values
+            },{ "self.u", delegate(Disam disam, AST toAssign, ref AST value) {
+                if(disam.scriptName.ToLower().IndexOf("obj_face")!=-1)
+                {
+                     if(value.CanEval)
+                    {
+                        var obj = disam.cr.spriteList[value.Eval()];
+                        value = Variable.CreatePsudoVariable(obj.Name);
+                    }
+                }
+                }
+            }
+        };
+ 
+        static Dictionary<string, FixFunctionDel> fix_function = new Dictionary<string, FixFunctionDel>()
+        {
+            { "instance_create",
+                delegate (Disam disam, AST[] args) {
+                    AST last = args.Last();
+                if(last.CanEval) // if its a numerical instance, find the object name
+                {
+                    var obj = disam.cr.objList[last.Eval()];
+                    args[args.Length - 1] = Variable.CreatePsudoVariable(obj.Name);
+                    }
+                }
+            },
+            { "instance_exists",
+                delegate (Disam disam, AST[] args) {
+                      if(args[0].CanEval) // if its a numerical instance, find the object name
+                {
+                    var obj = disam.cr.objList[args[0].Eval()];
+                    args[0] = Variable.CreatePsudoVariable(obj.Name);
+                    }
+                }
+            },
+            { "snd_play",
+                delegate (Disam disam, AST[] args) {
+                          if(args[0].CanEval) // if its a numerical instance, find the object name
+                {
+                    var obj = disam.cr.audioList[args[0].Eval()];
+                    args[0] = Variable.CreatePsudoVariable("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
+                    }
+                }
+            },
+            { "script_execute",
+                delegate (Disam disam, AST[] args) {
+                     if(args[0].CanEval) // if its a numerical instance, find the object name
+                      {
+                        var obj = disam.cr.scriptIndex[args[0].Eval()];
+                        string script_name = obj.script_name;
+                        args[0] = Variable.CreatePsudoVariable(script_name);
+                        FixFunctionDel script_execute_del;
+                        if(script_execute_fix.TryGetValue(script_name,out script_execute_del)) script_execute_del(disam,args);
+                    }
+
+                }
+            },
+
+
+        };
         public Disam(ChunkReader cr)
         {
             this.cr = cr;
@@ -79,14 +158,15 @@ namespace betteribttest
 
         public string TestStreamOutput(string code_name)
         {
+            code_name = code_name.ToLower();
             foreach (GMK_Code c in cr.codeList)
             {
-                if (c.Name.IndexOf(code_name) != -1)
+                if (c.Name.ToLower().IndexOf(code_name) != -1)
                 {
                     System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
                     //System.Diagnostics.Debug.Assert("gml_Object_obj_finalfroggit_Alarm_6" != c.Name);
                     ChunkStream ms = cr.getReturnStream();
-                    var lines = processStream2(ms, c.startPosition, c.size);
+                    var lines = processStream2(ms, c.startPosition, c.size,c.Name);
 
                     StreamWriter s = new StreamWriter(c.Name + ".txt");
                     foreach (var line in lines)
@@ -122,46 +202,79 @@ namespace betteribttest
         {
             public GM_Type Type { get; private set; }
             public AST(GM_Type type) { this.Type = type; }
+
+            // Attemted to get an int for either an instance, or for a something else
+            public virtual bool CanEval { get { return false; } }
+            public virtual int Eval() { return 0; }
         }
         class Variable : AST
         {
             double dvalue;
             long ivalue;
             string svalue;
+            bool isInt;
             public Variable Dup()
             {
                 return (Variable)this.MemberwiseClone();
             }
+            public static Variable CreateString(string str)
+            {
+                return new Variable(str, GM_Type.String);
+            }
+            public static Variable CreatePsudoVariable(string str)
+            {
+                return new Variable(str, GM_Type.Var);
+            }
             public string Value { get; private set; }
             public double DValue { get { return dvalue; } }
             public double IValue { get { return ivalue; } }
-            public Variable(int value) : base(GM_Type.Int) { ivalue = value; Value = value.ToString(); }
-            public Variable(long value) : base(GM_Type.Long) { ivalue = value; Value = value.ToString(); }
-            public Variable(ushort value) : base(GM_Type.Short) { ivalue = value; Value = value.ToString(); }
-            public Variable(float value) : base(GM_Type.Float) { dvalue = value; Value = value.ToString(); }
-            public Variable(double value) : base(GM_Type.Double) { dvalue = value; Value = value.ToString(); }
-            public Variable(bool value) : base(GM_Type.Bool) { ivalue = value ? 1 : 0; Value = value.ToString(); }
-            public Variable(string value) : base(GM_Type.String) {
-                Value = svalue = GM_Disam.EscapeString(value);
-            }
+            public Variable(int value) : base(GM_Type.Int) { ivalue = value; Value = value.ToString(); isInt = true; }
+            public Variable(long value) : base(GM_Type.Long) { ivalue = value; Value = value.ToString(); isInt = true; }
+            public Variable(ushort value) : base(GM_Type.Short) { ivalue = value; Value = value.ToString(); isInt = true; }
+            public Variable(float value) : base(GM_Type.Float) { dvalue = value; Value = value.ToString(); isInt = false; }
+            public Variable(double value) : base(GM_Type.Double) { dvalue = value; Value = value.ToString(); isInt = false; }
+            public Variable(bool value) : base(GM_Type.Bool) { ivalue = value ? 1 : 0; Value = value.ToString(); isInt = false; }
             public Variable(string value, GM_Type type) : base(type) {
                 Value = svalue = GM_Type.String == type ? Value = svalue = GM_Disam.EscapeString(value) :value;
+                isInt = long.TryParse(value, out ivalue);
             }
             public Variable(int value, string instance) : base(GM_Type.Instance) {
                 ivalue = value;
                 Value = instance;
+                isInt = true;
             }
+            public override bool CanEval
+            {
+                get
+                {
+                    return isInt;
+                }
+            }
+            public override int Eval() { return (int)ivalue; }
+          
             public override string ToString()
             {
+
                 return Value;
             }
         }
         class Conv : AST
         {
             public AST next;
-            public Conv(AST ast, GM_Type type) : base(type) { this.next = ast; }
-
-
+            GM_Type from;
+            GM_Type to;
+            public Conv(AST ast, GM_Type from, GM_Type to) : base(to) { this.from = from;  this.to = to; this.next = ast; }
+            public override bool CanEval
+            {
+                get
+                {
+                    return next.CanEval;
+                }
+            }
+            public override int Eval()
+            {
+                return next.Eval();
+            }
             public override string ToString()
             {
                 Variable isVar = next as Variable;
@@ -272,6 +385,18 @@ namespace betteribttest
         }
         class Call : AST
         {
+            AST constant;
+            public override bool CanEval
+            {
+                get
+                {
+                    return constant == null ? false : constant.CanEval;
+                }
+            }
+            public override int Eval()
+            {
+                return constant.Eval();
+            }
             public string FunctionName { get; private set; }
             public int ArgumentCount { get; private set; }
             public AST[] Arguments { get; private set; }
@@ -280,6 +405,9 @@ namespace betteribttest
                 this.FunctionName = functionname;
                 ArgumentCount = args.Length;
                 Arguments = args;
+                // special case for a constant going though a real function
+                if (functionname == "real" && args.Length == 1 && args[0].CanEval) constant = args[0];
+                // some sepcial cases for evaling
             }
 
             public override string ToString()
@@ -331,11 +459,12 @@ namespace betteribttest
         string GetInstance(Stack<AST> tree, int instance)
         {
             string sinstance = null;
-            while (instance == 0) // in the stack
+            if (instance == 0) // in the stack
             {
                 AST new_instance = tree.Pop();
-                if (int.TryParse(new_instance.ToString(), out instance)) continue;
-                return new_instance.ToString();
+                if (!new_instance.CanEval) throw new Exception("Cannot eval this stack value");
+                instance = new_instance.Eval();
+                if (instance == 0) throw new Exception("Reading a stack, of the instance?");
             }
             if (instance < 0) sinstance = lookupInstance(instance);
             else sinstance = cr.objList[instance].Name;
@@ -355,12 +484,12 @@ namespace betteribttest
 
             AST index = load_type == 0 ? tree.Pop() : null;
             var_name = GetInstance(tree, instance) + "." + var_name;
+            AST value = null;
             if (index == null)
-                tree.Push(new Variable(var_name, GM_Type.Var));
+                value=Variable.CreatePsudoVariable(var_name);
             else
-                tree.Push(new Variable(var_name + "[" + index.ToString() + "]", GM_Type.Var));
-
-            return;
+                value = Variable.CreatePsudoVariable(var_name + "[" + index.ToString() + "]");
+            tree.Push(value);
            // throw new NotImplementedException("Push.V convert not implmented"); // we are going to handle it all, no exceptions this time around
         }
         string ProcessAssignPop(Stack<AST> tree, GM_Disam.PopOpcode code)
@@ -374,10 +503,16 @@ namespace betteribttest
             AST index = load_type == 0 ? tree.Pop() : null;
             var_name = GetInstance(tree, iinstance) + "." + var_name;
             AST value = tree.Pop();
-            if(index == null)
-                return var_name + " = " + value.ToString();
+            FixVariable(this, var_name,ref value);
+    
+            //AST assign = null;
+            string assignString;
+            if (index == null)
+                assignString =var_name + " = " + value.ToString();
             else
-                return var_name + "[" + index.ToString() + "] = " + value.ToString();
+                assignString =var_name + "[" + index.ToString() + "] = " + value.ToString();
+
+            return assignString;
         }
         void ProcessMathOp(Stack<AST> tree, uint op)
         {
@@ -386,65 +521,33 @@ namespace betteribttest
             GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
             AST right = tree.Pop();
             AST left = tree.Pop();
+            FixVariable(this, left.ToString(), ref right);
             tree.Push(new MathOp(left, code, right));
         }
         delegate void FixFunctionDel(Disam disam, AST[] args);
-        delegate void FixVariable(Disam disam, AST toAssign, ref AST value);
-        static Dictionary<string, FixVariable> fix_variable = new Dictionary<string, FixVariable>()
+        delegate void FixVariableDel(Disam disam, AST toAssign, ref AST value);
+        static void FixVariable(Disam disam, string var_name, ref AST value)
         {
-            {
-                "sprite_index",
-                delegate(Disam disam, AST toAssign, ref AST value)
-                {
-                }
-            }
-        };
-        static Dictionary<string, FixFunctionDel> fix_function = new Dictionary<string, FixFunctionDel>()
+            FixVariableDel fixVar;
+            if (fix_variable.TryGetValue(var_name, out fixVar)) fixVar(disam, null, ref value);
+        }
+        // takes the stuff from fix execute and repairs the names of the arguments
+        static Dictionary<string, FixFunctionDel> script_execute_fix = new Dictionary<string, FixFunctionDel>()
         {
-            { "instance_create",
-                delegate (Disam disam, AST[] args) {
-                 int objIndex;
-                if(int.TryParse(args.Last().ToString(), out objIndex)) // if its a numerical instance, find the object name
-                {
-                    var obj = disam.cr.objList[objIndex];
-                    args[args.Length - 1] = new Variable(obj.Name);
+            { "SCR_TEXTSETUP",
+              delegate (Disam disam, AST[] args) {
+                    if(args[1].CanEval) args[0] = Variable.CreatePsudoVariable(disam.cr.resFonts[args[1].Eval()].Name);  // font index  
+                    if(args[3].CanEval) args[2] =  Variable.CreatePsudoVariable(String.Format("Color(0x{0:X8})", args[3].Eval()));  // color, just easyer to read
+                    if(args[8].CanEval)  // sound
+                    {
+                       var obj = disam.cr.audioList[args[8].Eval()];
+                        args[8] =  Variable.CreatePsudoVariable("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
                     }
-                }
-            },
-            { "instance_exists",
-                delegate (Disam disam, AST[] args) {
-                 int objIndex;
-                if(int.TryParse(args[0].ToString(), out objIndex)) // if its a numerical instance, find the object name
-                {
-                    var obj = disam.cr.objList[objIndex];
-                    args[0] = new Variable(obj.Name);
-                    }
-                }
-            },
-            { "snd_play",
-                delegate (Disam disam, AST[] args) {
-                 int sndIndex;
-                if(int.TryParse(args[0].ToString(), out sndIndex)) // if its a numerical instance, find the object name
-                {
-                    var obj = disam.cr.audioList[sndIndex];
-                    args[0] = new Variable("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
-                    }
-                }
-            },
-            { "script_execute",
-                delegate (Disam disam, AST[] args) {
-                    int scrpt_index;
-                     if(int.TryParse(args[0].ToString(), out scrpt_index)) // if its a numerical instance, find the object name
-                      {
-                        var obj = disam.cr.scriptIndex[scrpt_index];
-                           args[0] = new Variable(obj.script_name);
-                    }
-                 
-                }
+              }
             },
 
-
         };
+    
         void ProcessCall(Stack<AST> tree, GM_Disam.CallOpcode op)
         {
             //  byte return_type = (byte)((op >> 16) & 0xFF); // always i
@@ -534,15 +637,13 @@ namespace betteribttest
                     gotos.Remove(line.pc);
                 }
             }
-
-            if(gotos.Count>0)
+            if (gotos.Count > 0)
             {
-                // catch if a label goes beond the PC end
+                List<int> keys = new List<int>();
                 var line = lines.Last();
-                var gos = gotos.Where(o => line.pc>o.Key );
-                if(gos == null)
+                foreach (var g in gotos)
                 {
-                    foreach(var g in gos)
+                    if (g.Key > line.pc)
                     {
                         CodeLine n = new CodeLine();
                         n.Label = g.Value;
@@ -551,18 +652,20 @@ namespace betteribttest
                         n.startPc = g.Key;
                         n.endPC = g.Key;
                         lines.Add(n);
-                        gotos.Remove(g.Key);
+                        keys.Add(g.Key);
+
                     }
-                  
                 }
-                foreach (var g in gotos)
-                {
-                    CodeLine n = new CodeLine();
-                    n.pc = g.Key;
-                    n.Text = " Label '" + g.Value + "' not used";
-                    lines.Insert(0, n);
-                }
+                foreach (var k in keys) gotos.Remove(k);
             }
+            foreach (var g in gotos)
+            {
+                CodeLine n = new CodeLine();
+                n.pc = g.Key;
+                n.Text = " Label '" + g.Value + "' not used";
+                lines.Insert(0, n);
+            }
+           
         }
         bool OffsetOpcodeTest(Opcode o, OpType op, int offset)
         {
@@ -744,6 +847,12 @@ namespace betteribttest
                         tree.Push(new Variable("-(" + value.ToString() + ")", GM_Type.Var));
                     }
                     break;
+                case OpType.Ret:
+                    {
+                        AST value = tree.Pop();
+                        codeLine = "return " + value.ToString();
+                    }
+                    break;
                 case OpType.Mul:
                 case OpType.Div:
                 case OpType.Rem:
@@ -766,9 +875,9 @@ namespace betteribttest
 
                 case OpType.Conv:
                     {
-                        //   GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
-                        //   GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
-                        tree.Push(new Conv(tree.Pop(), (code as GM_Disam.TypeOpcode).SecondType));
+                         GM_Type fromType = (GM_Type)(int)((code.Raw >> 16) & 0xF);
+                         GM_Type tooType = (GM_Type)(int)((code.Raw >> 20) & 0xF);
+                        tree.Push(new Conv(tree.Pop(), fromType, tooType));  
                     }
                     break;
                 case OpType.Push: // most common.  Used for all math operations
@@ -784,13 +893,14 @@ namespace betteribttest
                             case GM_Type.String:
                                 {
                                     string value = cr.stringList[(int)popcode.OperandValue].str;
-                                    tree.Push(new Variable(value));
+                                    tree.Push(Variable.CreateString(value));
                                 }
                                 break;
                             case GM_Type.Short: tree.Push(new Variable((short)popcode.OperandValue)); break;
                             default:
                                 throw new Exception("Bad type");
                         }
+                        
                     }
                     break;
                 case OpType.Pop:
@@ -812,15 +922,15 @@ namespace betteribttest
                             tree.Push(top);
                         } else tree.Push(tree.Peek());
                         System.Diagnostics.Debug.Assert(extra == 0 || extra == 1);
+                        System.Diagnostics.Debug.Assert(extra == 0);
 
-                      
- 
 
-                    //    tree.Push(tree.First()); // will this work?
-                                                 //   Variable v = tree.First() as Variable;
-                                                 //   tree.First()
-                                                 //   if (v == null) throw new ArgumentException("Dup didn't work, meh");
-                                                 //  tree.Push(v.Dup());
+
+                        //    tree.Push(tree.First()); // will this work?
+                        //   Variable v = tree.First() as Variable;
+                        //   tree.First()
+                        //   if (v == null) throw new ArgumentException("Dup didn't work, meh");
+                        //  tree.Push(v.Dup());
                     }
                     break;
                 case OpType.Break:
@@ -886,11 +996,156 @@ namespace betteribttest
         {
 
         }
-
-        List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size)
+        // We find if statments that are single statments and try to consoidate them int a single one
+        //  Since we have eveything flattened, photoshop term look it up, we have to use regedit to fix
+        // the strings and gotos
+        // because of my shit coading and the lack of proper AST processing, we can do this, so ERASE THIS
+        // if we ever do proper AST trees
+        // can probery make this a class
+        // Sigh.  I was SOOOOO CLOSE to scraping the CodeLine object and making proper Statment and AST
+        // tree objects.  But this works.  Its either that or properly ASTing labels.  Sigh.
+        static Dictionary<string, string> invertIfString = new Dictionary<string, string>()
         {
+            {"==","!=" },
+              {"!=","==" },
+            {">=","<" },
+            {"<=",">" },
+            {">","<=" },
+            {"<",">=" },
+            { "!", "" }
+        };
+        void FixSimpleEnviroment(List<CodeLine> lines)
+        {
+            Regex findPushEnv = new Regex(@"Pushing\s+Enviroment\s*:\s*(\w+)", RegexOptions.Compiled);
+            Regex findPopEnv = new Regex(@"Poping\s+Envorment\s*:\s*(\w+)", RegexOptions.Compiled);
+            Regex findInstanceDestroy = new Regex(@"(instance_destroy\(\))", RegexOptions.Compiled);
+            int index = 0;
+            int start = 0;
+            Func<Regex, string> FindMatch = (Regex r) =>
+            {
+                for (int i = index ; i < lines.Count; i++)
+                {
+                    if (lines[i].Text == null) continue;
+                    Match m = r.Match(lines[i].Text);
+                    if (m.Success) {
+                        index = i;
+                        return m.Groups[1].Value;
+                    }
+                }
+                return null;
+            };
+            while(index < lines.Count)
+            {
+                string env = FindMatch(findPushEnv);
+                if (env == null) break;
+                start = index;
+                string destroy = FindMatch(findInstanceDestroy);
+                if (destroy == null) continue;
+                string endenv = FindMatch(findPopEnv);
+                Debug.Assert(env == endenv);
+                destroy = env + "." + destroy;
+                for (int j = start+1; j <= index; j++)
+                {
+                    CodeLine c = lines[j];
+                    c.Text = null;
+                    c.Label = null;
+                }
+                lines[start].Text = destroy;
+            }
+
+
+        }
+        void SimplifyIFStatements(List<CodeLine> lines)
+        {
+            Regex findLabelRegex = new Regex("Label_\\d+", RegexOptions.Compiled);
+            Regex findConditionalStatment = new Regex(@"(?<=if).*?(?=then)", RegexOptions.Compiled);
+            Regex replaceLabel = new Regex("goto\\s*Label_\\d+", RegexOptions.Compiled);
+            Regex InvertLogic = new Regex(@"==|!=|>=|<=|>|<|!", RegexOptions.Compiled);
+            int index = 0;
+            string fixed_if = "";
+            string currentLabel = "";
+            CodeLine current = null;
+            CodeLine statment = null;
+            int start = 0;
+            Func<string, string> ProcessIfStatment = (string func) =>
+            {
+                Match conditional = findConditionalStatment.Match(func);
+                return InvertLogic.Replace(conditional.Value, m => invertIfString[m.Value]);
+            };
+            Func<CodeLine> FindNextStatment = () =>
+            {
+                for (int i = index + 1; index < lines.Count; i++)
+                {
+                    CodeLine c = lines[i];
+                    if (c.Text != null && c.Label == null)
+                    {
+                        if (c.Text.IndexOf("if") == 0)
+                        { // if we have another if statment going to the same label right AFTER this one, then lets combine them
+                            if (c.Text.IndexOf(currentLabel) != -1)
+                            {
+                                fixed_if += " && " + ProcessIfStatment(c.Text);
+                                continue;
+                            }
+                            return null;
+                        }
+                        index = i;
+                        return c;
+                    }
+                }
+                return null;
+            };
+            Func<CodeLine> CheckIfNextisLabel = () =>
+            {
+                for (int i = index + 1; index < lines.Count; i++)
+                {
+                    CodeLine c = lines[i];
+                    if (c.Text == null && c.Label == null) continue;
+                    if (c.Text != null) return null;
+                    index = i;
+                    return c;
+                }
+                return null;
+            };
+            int conditional_max_length = 0;
+            for (index = 0; index < lines.Count; index++)
+            {
+                current = lines[index];
+                if (current.Text == null || current.Text.IndexOf("if") != 0) continue; // find the if statement
+                start = index;
+                fixed_if = ProcessIfStatment(current.Text);
+                currentLabel = findLabelRegex.Match(current.Text).Value;
+                statment = FindNextStatment();
+                if (statment == null) continue;
+                CodeLine label = CheckIfNextisLabel();
+                if (label == null || label.Label != currentLabel) continue;
+                // WE FOUND A MATCH LETS FIX THE FUCKER
+                if (fixed_if.Length > conditional_max_length) conditional_max_length = fixed_if.Length;
+                fixed_if = "if " + fixed_if + " then " + statment.Text;
+                for (int j = start; j <= index; j++)
+                {
+                    CodeLine c = lines[j];
+                    c.Text = null;
+                    c.Label = null;
+                }
+
+                current.Text = fixed_if;
+            }
+            string newFormat = "{0,-" + (conditional_max_length + 3) + "} {1}";
+            for (index = 0; index < lines.Count; index++)
+            {
+                current = lines[index];
+                if (current.Text == null || current.Text.IndexOf("if") != 0 || current.Text.IndexOf("goto") != -1) continue; // find one of the modified statments
+                int thenIndex = current.Text.IndexOf("then");
+                string firstpart = current.Text.Substring(0, thenIndex).Trim();
+                string secondpart = current.Text.Substring(thenIndex).Trim();
+                current.Text = String.Format(newFormat, firstpart, secondpart);
+            }
+        }
+        List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size,string scriptName)
+        {
+            this.scriptName = scriptName;
             GM_Disam disam = new GM_Disam(r);
-            this.codes = disam.ReadOpCode(codeOffset, code_size);
+            this.codes = disam.ReadOpCode(codeOffset, code_size, scriptName);
             PeepholeFix();
             gotos = new Dictionary<int, string>();
             int limit = (int)(codeOffset + code_size);
@@ -903,7 +1158,7 @@ namespace betteribttest
             for (int pc = 0; pc < end_pc; pc++) {
                 if (!codes.ContainsKey(pc)) continue;
                 Opcode code = codes[pc];
-                System.Diagnostics.Debug.Assert(pc != 1951);
+                //System.Diagnostics.Debug.Assert(pc != 1951);
                 switch (code.Op)
                 {
                     
@@ -919,7 +1174,8 @@ namespace betteribttest
                 }
             }
             InsertLabels(lines, end_pc);
-
+            FixSimpleEnviroment(lines);
+            SimplifyIFStatements(lines);
             return lines;
         }
     }

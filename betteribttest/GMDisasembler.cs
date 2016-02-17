@@ -94,6 +94,7 @@ namespace betteribttest
     }
     class GM_Disam
     {
+        string scriptName;
         static Dictionary<OpType, string> opDecode = new Dictionary<OpType, string>()  {
             {  (OpType)0x03, "conv" },
             {  (OpType)0x04, "mul" },
@@ -386,6 +387,7 @@ namespace betteribttest
                 case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
                 case OpType.Break:
                 case OpType.Exit:
+                case OpType.Ret:
                     return new Opcode(raw, pc);
                 case OpType.Call:
                     return new CallOpcode(raw, r, pc);
@@ -394,8 +396,9 @@ namespace betteribttest
                     throw new Exception("Bad opcode"); // We fix this now no more ignoreing this
             }
         }
-        public SortedList<int,GM_Disam.Opcode> ReadOpCode(int start, int length)
+        public SortedList<int,GM_Disam.Opcode> ReadOpCode(int start, int length, string scriptName)
         {
+            this.scriptName = scriptName;
             SortedList<int, Opcode> codes = new SortedList<int, Opcode>(length * 2); // should be safe
             pc = 0;
             r.Position = start;

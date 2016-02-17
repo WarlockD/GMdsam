@@ -1069,11 +1069,12 @@ namespace betteribttest
                 nref.offsets = new int[nref.count];
 
                 r.PushSeek(nref.start_ref);
+                int offset = 0;
                 for (int j = 0; j < nref.count; j++)
                 {
                     int first = r.ReadInt32(); // skip the first pop opcode
                     int position = r.Position;
-                    int offset = r.ReadInt32() & 0x00FFFFFF;
+                    offset = r.ReadInt32() & 0x00FFFFFF;
                     if (refs.ContainsKey(position)) throw new Exception("This ref was already in there?");
                     else refs[position] = nref;
                     nref.offsets[j] = offset;
@@ -1231,6 +1232,8 @@ namespace betteribttest
                     {
                         int startPos = r.Position;
                         byte[] buffer = r.ReadBytes(4);
+                        ushort debug0 = BitConverter.ToUInt16(buffer, 0);
+                        ushort debug1 = BitConverter.ToUInt16(buffer, 2);
                         buffer[0] = (byte)((name_ref.name.index) & 0xFF);
                         buffer[1] = (byte)((name_ref.name.index >> 8) & 0xFF);
                         buffer[2] = (byte)((name_ref.name.index >> 16) & 0xFF);
