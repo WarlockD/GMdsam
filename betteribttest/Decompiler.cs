@@ -18,7 +18,9 @@ namespace betteribttest
     using Opcode = GM_Disam.Opcode;
     using OffsetOpcode = GM_Disam.OffsetOpcode;
     using System.Text.RegularExpressions;
-    class Disam
+    using System.Collections;
+
+    class Decompiler
     {
         string scriptName;
         ChunkReader cr;
@@ -36,43 +38,13 @@ namespace betteribttest
         static string lookupInstance(int instance)
         {
             string ret;
-            if (Disam.instanceLookup.TryGetValue(instance, out ret)) return ret;
+            if (Decompiler.instanceLookup.TryGetValue(instance, out ret)) return ret;
             else return String.Format("Instance({0})", instance);
         }
 
 
-        static Dictionary<OpType, string> opMathOperation = new Dictionary<OpType, string>()  {
-            {  (OpType)0x03, "conv" },
-            {  (OpType)0x04, "*" },
-            {  (OpType)0x05, "/" },
-            { (OpType) 0x06, "rem" },
-            {  (OpType)0x07, "%" },
-            {  (OpType)0x08, "+" },
-            {  (OpType)0x09, "-" },
-            {  (OpType)0x0a, "&" },
-            {  (OpType)0x0b, "|" },
-            { (OpType) 0x0c, "^" },
-            { (OpType) 0x0d, "~" },
-            {  (OpType)0x0e, "!" },
-
-            {  (OpType)0x0f, "<<" },
-            {  (OpType)0x10, ">>" },
-            { (OpType) 0x11, "<" },
-            { (OpType) 0x12, "<=" },
-            { (OpType) 0x13, "==" },
-            {  (OpType)0x14, "!=" },
-            {  (OpType)0x15, ">=" },
-            {  (OpType)0x16, ">" },
-        };
-        static Dictionary<OpType, OpType> invertOpType = new Dictionary<OpType, OpType>()
-        {
-            { OpType.Slt, OpType.Sge },
-            { OpType.Sge, OpType.Slt },
-            { OpType.Sle, OpType.Sgt },
-            { OpType.Sgt, OpType.Sle },
-            { OpType.Sne, OpType.Seq },
-            { OpType.Seq, OpType.Sne },
-        };
+        
+      
         // side not, AGAIN, if I wanted to spend the time, I could make an array for each object/script
         // and determan what the types are of all the variables and then act find the object names that way
         // hoewever this will take weeks and its just a few I need to look at
@@ -80,11 +52,13 @@ namespace betteribttest
         static Regex RealConstantRegex = new Regex(@"real\((\d+)\)");
         static Dictionary<string, FixVariableDel> fix_variable = new Dictionary<string, FixVariableDel>()
         {
-            {"self.sprite_index", delegate(Disam disam, AST toAssign, ref AST value) {
-                    if(value.CanEval)
+            {"self.sprite_index", delegate(Decompiler disam, AST toAssign, ref AST value) {
+                Constant constant = value.EvalInt();
+                    if(constant != null)
                     {
-                        var obj = disam.cr.spriteList[value.Eval()];
-                        value = Variable.CreatePsudoVariable(obj.Name);
+                    int i = (int)constant.IValue;
+                        var obj = disam.cr.spriteList[i];
+                        value =   new Constant(obj.Name);
                     }
                     
                     // sometimes we use the function "real" with a constant inside so lets find it
@@ -92,93 +66,75 @@ namespace betteribttest
             // This is a special case.  In all the obj_face files, there is an array of u where
             // all the face sprite names are kept, we detect if we are IN that and then change the
             // constants to numerical values
-            },{ "self.u", delegate(Disam disam, AST toAssign, ref AST value) {
+            },{ "self.u", delegate(Decompiler disam, AST toAssign, ref AST value) {
                 if(disam.scriptName.ToLower().IndexOf("obj_face")!=-1)
                 {
-                     if(value.CanEval)
+                    Constant constant = value.EvalInt();
+                    if(constant != null)
                     {
-                        var obj = disam.cr.spriteList[value.Eval()];
-                        value = Variable.CreatePsudoVariable(obj.Name);
+                        int i = (int)constant.IValue;
+                         var obj = disam.cr.spriteList[i];
+                        value =   new Constant(obj.Name);
                     }
                 }
-                }
+            }
             }
         };
  
         static Dictionary<string, FixFunctionDel> fix_function = new Dictionary<string, FixFunctionDel>()
         {
             { "instance_create",
-                delegate (Disam disam, AST[] args) {
-                    AST last = args.Last();
-                if(last.CanEval) // if its a numerical instance, find the object name
-                {
-                    var obj = disam.cr.objList[last.Eval()];
-                    args[args.Length - 1] = Variable.CreatePsudoVariable(obj.Name);
+                delegate (Decompiler disam, AST[] args) {
+                     Constant constant = args.Last().EvalInt();
+                    if(constant != null)
+                    {
+                        int i = (int)constant.IValue;
+                        var obj = disam.cr.objList[i];
+                        args[args.Length - 1] = new Constant(obj.Name);
+                        }
                     }
-                }
             },
             { "instance_exists",
-                delegate (Disam disam, AST[] args) {
-                      if(args[0].CanEval) // if its a numerical instance, find the object name
-                {
-                    var obj = disam.cr.objList[args[0].Eval()];
-                    args[0] = Variable.CreatePsudoVariable(obj.Name);
+                delegate (Decompiler disam, AST[] args) {
+                      Constant constant = args[0].EvalInt();
+                    if(constant != null)
+                    {
+                        int i = (int)constant.IValue;
+                        var obj = disam.cr.objList[i];
+                        args[0] = new Constant(obj.Name);
                     }
                 }
             },
             { "snd_play",
-                delegate (Disam disam, AST[] args) {
-                          if(args[0].CanEval) // if its a numerical instance, find the object name
-                {
-                    var obj = disam.cr.audioList[args[0].Eval()];
-                    args[0] = Variable.CreatePsudoVariable("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
+                delegate (Decompiler disam, AST[] args) {
+                     Constant constant = args[0].EvalInt();
+                    if(constant != null)
+                    {
+                        int i = (int)constant.IValue;
+                        var obj = disam.cr.audioList[i];
+                        args[0] = new Constant("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
                     }
                 }
             },
             { "script_execute",
-                delegate (Disam disam, AST[] args) {
-                     if(args[0].CanEval) // if its a numerical instance, find the object name
-                      {
-                        var obj = disam.cr.scriptIndex[args[0].Eval()];
-                        string script_name = obj.script_name;
-                        args[0] = Variable.CreatePsudoVariable(script_name);
+                delegate (Decompiler disam, AST[] args) {
+                      Constant constant = args[0].EvalInt();
+                    if(constant != null)
+                    {
+                        int i = (int)constant.IValue;
+                        var scr = disam.cr.scriptIndex[i];
+                        args[0] = new Constant(scr.script_name);
                         FixFunctionDel script_execute_del;
-                        if(script_execute_fix.TryGetValue(script_name,out script_execute_del)) script_execute_del(disam,args);
+                        if(script_execute_fix.TryGetValue(scr.script_name,out script_execute_del)) script_execute_del(disam,args);
                     }
-
                 }
-            },
-
-
+            }
         };
-        public Disam(ChunkReader cr)
+        public Decompiler(ChunkReader cr)
         {
             this.cr = cr;
         }
-
-        public string TestStreamOutput(string code_name)
-        {
-            code_name = code_name.ToLower();
-            foreach (GMK_Code c in cr.codeList)
-            {
-                if (c.Name.ToLower().IndexOf(code_name) != -1)
-                {
-                    System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
-                    //System.Diagnostics.Debug.Assert("gml_Object_obj_finalfroggit_Alarm_6" != c.Name);
-                    ChunkStream ms = cr.getReturnStream();
-                    var lines = processStream2(ms, c.startPosition, c.size,c.Name);
-
-                    StreamWriter s = new StreamWriter(c.Name + ".txt");
-                    foreach (var line in lines)
-                    {
-                        string text = line.DecompileLine();
-                        if (!string.IsNullOrEmpty(text)) s.WriteLine(text);
-                    }
-                    s.Close();
-                }
-            }
-            return null;
-        }
+    
         public void writeFile(string code_name)
         {
             bool found = false;
@@ -198,248 +154,6 @@ namespace betteribttest
 
 
 
-        class AST
-        {
-            public GM_Type Type { get; private set; }
-            public AST(GM_Type type) { this.Type = type; }
-
-            // Attemted to get an int for either an instance, or for a something else
-            public virtual bool CanEval { get { return false; } }
-            public virtual int Eval() { return 0; }
-        }
-        class Variable : AST
-        {
-            double dvalue;
-            long ivalue;
-            string svalue;
-            bool isInt;
-            public Variable Dup()
-            {
-                return (Variable)this.MemberwiseClone();
-            }
-            public static Variable CreateString(string str)
-            {
-                return new Variable(str, GM_Type.String);
-            }
-            public static Variable CreatePsudoVariable(string str)
-            {
-                return new Variable(str, GM_Type.Var);
-            }
-            public string Value { get; private set; }
-            public double DValue { get { return dvalue; } }
-            public double IValue { get { return ivalue; } }
-            public Variable(int value) : base(GM_Type.Int) { ivalue = value; Value = value.ToString(); isInt = true; }
-            public Variable(long value) : base(GM_Type.Long) { ivalue = value; Value = value.ToString(); isInt = true; }
-            public Variable(ushort value) : base(GM_Type.Short) { ivalue = value; Value = value.ToString(); isInt = true; }
-            public Variable(float value) : base(GM_Type.Float) { dvalue = value; Value = value.ToString(); isInt = false; }
-            public Variable(double value) : base(GM_Type.Double) { dvalue = value; Value = value.ToString(); isInt = false; }
-            public Variable(bool value) : base(GM_Type.Bool) { ivalue = value ? 1 : 0; Value = value.ToString(); isInt = false; }
-            public Variable(string value, GM_Type type) : base(type) {
-                Value = svalue = GM_Type.String == type ? Value = svalue = GM_Disam.EscapeString(value) :value;
-                isInt = long.TryParse(value, out ivalue);
-            }
-            public Variable(int value, string instance) : base(GM_Type.Instance) {
-                ivalue = value;
-                Value = instance;
-                isInt = true;
-            }
-            public override bool CanEval
-            {
-                get
-                {
-                    return isInt;
-                }
-            }
-            public override int Eval() { return (int)ivalue; }
-          
-            public override string ToString()
-            {
-
-                return Value;
-            }
-        }
-        class Conv : AST
-        {
-            public AST next;
-            GM_Type from;
-            GM_Type to;
-            public Conv(AST ast, GM_Type from, GM_Type to) : base(to) { this.from = from;  this.to = to; this.next = ast; }
-            public override bool CanEval
-            {
-                get
-                {
-                    return next.CanEval;
-                }
-            }
-            public override int Eval()
-            {
-                return next.Eval();
-            }
-            public override string ToString()
-            {
-                Variable isVar = next as Variable;
-                if (this.Type == next.Type) return next.ToString();
-
-                switch (this.Type)
-                {
-                    case GM_Type.Int:
-                        switch (next.Type)
-                        {
-                            case GM_Type.Double:
-                            case GM_Type.Float:
-                            case GM_Type.String:
-                                return "(Int)(" + next.ToString() + ")";
-                            default:
-                                return next.ToString();
-                        }
-                    case GM_Type.Long:
-                        switch (next.Type)
-                        {
-                            case GM_Type.Double:
-                            case GM_Type.Float:
-                            case GM_Type.String:
-                                return "(Long)(" + next.ToString() + ")";
-                            default:
-                                return next.ToString();
-                        }
-                    case GM_Type.Short:
-                        switch (next.Type)
-                        {
-                            case GM_Type.Double:
-                            case GM_Type.Float:
-                            case GM_Type.String:
-                                return "(Short)(" + next.ToString() + ")";
-                            default:
-                                return next.ToString();
-                        }
-                    case GM_Type.Float:
-                        switch (next.Type)
-                        {
-                            case GM_Type.Int:
-                            case GM_Type.Long:
-                            case GM_Type.Short:
-                            case GM_Type.String:
-                                return "(Float)(" + next.ToString() + ")";
-                            default:
-                                return next.ToString();
-                        }
-                    case GM_Type.Double:
-                        switch (next.Type)
-                        {
-                            case GM_Type.Int:
-                            case GM_Type.Long:
-                            case GM_Type.Short:
-                            case GM_Type.String:
-                                return "(Double)(" + next.ToString() + ")";
-                            default:
-                                return next.ToString();
-                        }
-                    case GM_Type.String: // might have an issue with a double string conversion but should be fine
-                        if (isVar != null && isVar.Type == GM_Type.Instance)
-                            return "(String)(" + next.ToString() + ")";
-                        else
-                            return "(String)(" + next.ToString() + ")";
-                    case GM_Type.Var:
-                        if (isVar != null && next.Type == GM_Type.String) return isVar.ToString(); // might be a normal string
-                        else return next.ToString(); // dosn't matter
-                    case GM_Type.Instance:
-                        if (isVar != null && next.Type == GM_Type.Short || next.Type == GM_Type.Int)
-                        {
-                            // we have to look up the int type here, need to have a static list somewhere or throw?
-                            string instance;
-                            if (instanceLookup.TryGetValue((int)isVar.IValue, out instance)) return instance;
-                        }
-                        return "(Instance)(" + isVar.ToString() + ")";
-                    default:
-                        return next.ToString();
-                }
-            }
-        }
-        class MathOp : AST
-        {
-            public AST Left { get; private set; }
-            public AST Right { get; private set; }
-
-            public OpType Op { get; private set; }
-
-            public MathOp(AST left, OpType op, AST right) : base(GM_Type.NoType) { this.Left = left; this.Op = op; this.Right = right; }
-            public override string ToString()
-            {
-                string sop;
-                if (opMathOperation.TryGetValue(Op, out sop))
-                {
-                    return "(" + Left.ToString() + " " + sop + " " + Right.ToString() + ")";
-                }
-                throw new ArgumentException("Cannot find math operation");
-            }
-        }
-        class Assign : AST
-        {
-            public string Variable { get; private set; }
-            public AST Value { get; private set; }
-            public Assign(string variable, GM_Type type, AST value) : base(type) { this.Variable = variable; this.Value = value; }
-            public override string ToString()
-            {
-                return Variable + " = " + Value.ToString();
-            }
-        }
-        class Call : AST
-        {
-            AST constant;
-            public override bool CanEval
-            {
-                get
-                {
-                    return constant == null ? false : constant.CanEval;
-                }
-            }
-            public override int Eval()
-            {
-                return constant.Eval();
-            }
-            public string FunctionName { get; private set; }
-            public int ArgumentCount { get; private set; }
-            public AST[] Arguments { get; private set; }
-            public Call(string functionname, params AST[] args) : base(GM_Type.Int)
-            {
-                this.FunctionName = functionname;
-                ArgumentCount = args.Length;
-                Arguments = args;
-                // special case for a constant going though a real function
-                if (functionname == "real" && args.Length == 1 && args[0].CanEval) constant = args[0];
-                // some sepcial cases for evaling
-            }
-
-            public override string ToString()
-            {
-                string ret = FunctionName + "(";
-                if (ArgumentCount > 0)
-                {
-                    for (int i = 0; i < ArgumentCount - 1; i++)
-                        ret += Arguments[i].ToString() + ",";
-                    ret += Arguments.Last();
-                }
-                ret += ")";
-                return ret;
-            }
-        }
-
-        string FormatAssign( string var_name, int index, AST value)
-        {
-            return String.Format("{0}[{1}] = {2}",  var_name, index, value.ToString());
-        }
-        string FormatAssign( string var_name, AST index, AST value)
-        {
-            return String.Format("{0}[{1}] = {2}",  var_name, index.ToString(), value.ToString());
-        }
-        string FormatAssign( string var_name, int index, string value)
-        {
-            return String.Format("{0}[{1}] = {2}",  var_name, index, value);
-        }
-        string FormatAssign(string sinstance, string var_name, string value)
-        {
-            return String.Format("{0}.{1} = {2}", sinstance, var_name, value);
-        }
 
         // This is an offset
         public string decodeCallName(int operand)
@@ -462,8 +176,9 @@ namespace betteribttest
             if (instance == 0) // in the stack
             {
                 AST new_instance = tree.Pop();
-                if (!new_instance.CanEval) throw new Exception("Cannot eval this stack value");
-                instance = new_instance.Eval();
+                Constant c = new_instance.EvalInt();
+                if (c==null) throw new Exception("Cannot eval this stack value");
+                instance = (int)c.IValue;
                 if (instance == 0) throw new Exception("Reading a stack, of the instance?");
             }
             if (instance < 0) sinstance = lookupInstance(instance);
@@ -483,40 +198,38 @@ namespace betteribttest
             string var_name = decodeCallName(operandValue & 0x00FFFFFF);
 
             AST index = load_type == 0 ? tree.Pop() : null;
-            var_name = GetInstance(tree, instance) + "." + var_name;
+            string instance_name = GetInstance(tree, instance); 
             AST value = null;
             if (index == null)
-                value=Variable.CreatePsudoVariable(var_name);
-            else
-                value = Variable.CreatePsudoVariable(var_name + "[" + index.ToString() + "]");
+                value= new ObjectVariable(instance_name, var_name);
+            else 
+                value = new ArrayAccess(instance_name, var_name, index);
             tree.Push(value);
            // throw new NotImplementedException("Push.V convert not implmented"); // we are going to handle it all, no exceptions this time around
         }
-        string ProcessAssignPop(Stack<AST> tree, GM_Disam.PopOpcode code)
+        Assign ProcessAssignPop(Stack<AST> tree, GM_Disam.PopOpcode code)
         {
             GM_Type convertFrom = code.FirstType;
             GM_Type convertTo = code.SecondType;
-            int iinstance = code.Instance;
+            int instance = code.Instance;
             int load_type = code.Offset >> 24 & 0xFF; // I think this might only be 4 bits
             string var_name = decodeCallName(code.Offset & 0x00FFFFFF);
 
             AST index = load_type == 0 ? tree.Pop() : null;
-            var_name = GetInstance(tree, iinstance) + "." + var_name;
+            string instance_name = GetInstance(tree, instance);
             AST value = tree.Pop();
             FixVariable(this, var_name,ref value);
-    
-            //AST assign = null;
-            string assignString;
+            Assign assign = null;
             if (index == null)
-                assignString =var_name + " = " + value.ToString();
-            else
-                assignString =var_name + "[" + index.ToString() + "] = " + value.ToString();
-
-            return assignString;
+                if (index == null)
+                    value = new Assign(new ObjectVariable(instance_name, var_name), value);
+                else
+                    value = new Assign(new ArrayAccess(instance_name, var_name, index), value);
+            return assign;
         }
         void ProcessMathOp(Stack<AST> tree, uint op)
         {
-            OpType code = (OpType)((byte)(op >> 24));
+            GMCode code = (GMCode)((byte)(op >> 24));
             GM_Type fromType = (GM_Type)(int)((op >> 16) & 0xF);
             GM_Type tooType = (GM_Type)(int)((op >> 20) & 0xF);
             AST right = tree.Pop();
@@ -524,9 +237,9 @@ namespace betteribttest
             FixVariable(this, left.ToString(), ref right);
             tree.Push(new MathOp(left, code, right));
         }
-        delegate void FixFunctionDel(Disam disam, AST[] args);
-        delegate void FixVariableDel(Disam disam, AST toAssign, ref AST value);
-        static void FixVariable(Disam disam, string var_name, ref AST value)
+        delegate void FixFunctionDel(Decompiler disam, AST[] args);
+        delegate void FixVariableDel(Decompiler disam, AST toAssign, ref AST value);
+        static void FixVariable(Decompiler disam, string var_name, ref AST value)
         {
             FixVariableDel fixVar;
             if (fix_variable.TryGetValue(var_name, out fixVar)) fixVar(disam, null, ref value);
@@ -535,13 +248,14 @@ namespace betteribttest
         static Dictionary<string, FixFunctionDel> script_execute_fix = new Dictionary<string, FixFunctionDel>()
         {
             { "SCR_TEXTSETUP",
-              delegate (Disam disam, AST[] args) {
-                    if(args[1].CanEval) args[0] = Variable.CreatePsudoVariable(disam.cr.resFonts[args[1].Eval()].Name);  // font index  
-                    if(args[3].CanEval) args[2] =  Variable.CreatePsudoVariable(String.Format("Color(0x{0:X8})", args[3].Eval()));  // color, just easyer to read
-                    if(args[8].CanEval)  // sound
+              delegate (Decompiler disam, AST[] args) {
+                  int i;
+                    if(args[1].CanEval(out i)) args[0] =  new Constant(disam.cr.resFonts[i].Name);   // font index  
+                    if(args[3].CanEval(out i)) args[2] =  new Constant(String.Format("Color(0x{0:X8})",i));  // color, just easyer to read
+                    if(args[8].CanEval(out i))  // sound
                     {
-                       var obj = disam.cr.audioList[args[8].Eval()];
-                        args[8] =  Variable.CreatePsudoVariable("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
+                       var obj = disam.cr.audioList[i];
+                        args[8] =  new Constant("{ Name = " + obj.Name + " , filename = " + obj.filename + "}");
                     }
               }
             },
@@ -563,78 +277,66 @@ namespace betteribttest
 
             tree.Push(new Call(func_name, args.ToArray()));
         }
-        public bool invertBranchLogic = true;
-        string ProcessBranch(Stack<AST> tree, string gotoLabel, bool testIfTrue)
+        AST ProcessBranch(Stack<AST> tree, AST target, bool testIfTrue)
         {
-            string s = "if ";
             AST value = tree.Pop();
             MathOp mathOp = value as MathOp;
-            if (mathOp == null)
-            {
-                if (testIfTrue) s += value.ToString();
-                else s += "!" + value.ToString();
-            }
-            else
-            {
-                if (invertBranchLogic && !testIfTrue)
-                {
-                    OpType inverted;
-                    if (invertOpType.TryGetValue(mathOp.Op, out inverted))
-                    {
-                        mathOp = new MathOp(mathOp.Left, inverted, mathOp.Right);
-                        testIfTrue = true;
-                    }
-                }
-                if (testIfTrue)
-                    s += mathOp.ToString();
-                else
-                    s += "!(" + mathOp.ToString() + ")";
-            }
-            s += " then goto " + gotoLabel;
-            return s;
+            Conditional ifStatment = new Conditional(value, target);
+            return testIfTrue ? ifStatment : ifStatment.Invert(false);
         }
         class CodeLine
         {
-            public string Text = null;
-            public string Label = null;
+            AST _ast = null;
+            ASTLabel _label = null;
             public GM_Disam.Opcode code;
             public int pc = 0;
-            public long startPc = 0;
-            public long endPC = 0;
-
+            public int startPc = 0;
+            public int endPC = 0;
+            public ASTLabel label { get; set; }
+            public AST ast
+            {
+                get { return _ast; }
+                set
+                {
+                    _ast = value;
+                }
+            }
             public string DecompileLine()
             {
-                if (this.Text == null && this.Label == null) return null;
-                string s = String.Format("{0,-10} {1}", this.Label == null ? "" : this.Label + ":", this.Text == null ? "" : this.Text);
-                return s;
+                if (ast == null) return null;
+                else return ASTLabel.FormatWithLabel(ast);
             }
             public override string ToString()
             {
                 string s = DecompileLine();
-                return s == null ? "Nothing" : s;
+                return s == null ? String.Format("{0,-5} : No AST", pc) : String.Format("{0,-5} : {1}", startPc,s);
             }
         }
-        Dictionary<int, string> gotos = new Dictionary<int, string>();
+        Dictionary<int, ASTLabel> gotos = new Dictionary<int, ASTLabel>();
         HashSet<int> markedCode = new HashSet<int>();
-        string GetLabel(int pc)
+        ASTLabel GetLabel(int pc)
         {
-            string label;
+            ASTLabel label;
             if (gotos.TryGetValue(pc, out label)) return label;
-            return gotos[pc] = ("Label_" + gotos.Count);
+            return gotos[pc] = new ASTLabel(gotos.Count,pc);     
         }
 
 
         void InsertLabels(List<CodeLine> lines, int pc)
         {
             // CodeLine line;
-            string label;
+            ASTLabel label;
             foreach (var line in lines)
             {
-                if (gotos.TryGetValue(line.pc, out label))
+                if (gotos.TryGetValue((int)line.startPc, out label))
                 {
-                    if (line.Label != null) throw new Exception("Label '" + line.Label + "' already assigned for pc = " + line.pc);
-                    line.Label = label;
-                    gotos.Remove(line.pc);
+                    if (line.ast == null) throw new Exception("Missing Statment");
+                    
+                      //  Label test = line.ast as Label;
+                      //  if(test != null) throw new Exception("Label '" + test + "' already assigned for pc = " + line.pc);
+                    
+                    line.label = label;
+                    gotos.Remove(line.startPc);
                 }
             }
             if (gotos.Count > 0)
@@ -646,8 +348,8 @@ namespace betteribttest
                     if (g.Key > line.pc)
                     {
                         CodeLine n = new CodeLine();
-                        n.Label = g.Value;
-                        n.Text = null;
+                        n.ast = new LabelStart(g.Value, null);
+                        n.label = g.Value;
                         n.pc = g.Key;
                         n.startPc = g.Key;
                         n.endPC = g.Key;
@@ -662,18 +364,18 @@ namespace betteribttest
             {
                 CodeLine n = new CodeLine();
                 n.pc = g.Key;
-                n.Text = " Label '" + g.Value + "' not used";
+                n.ast = new LabelStart(g.Value, new Constant("Label target not found or used but in some branch"));
                 lines.Insert(0, n);
             }
            
         }
-        bool OffsetOpcodeTest(Opcode o, OpType op, int offset)
+        bool OffsetOpcodeTest(Opcode o, GMCode op, int offset)
         {
             GM_Disam.OffsetOpcode branch = o as GM_Disam.OffsetOpcode;
             if (branch != null && branch.Op == op && branch.Offset == offset) return true;
             return false;
         }
-        bool OffsetOpcodeTest(Opcode o, OpType op)
+        bool OffsetOpcodeTest(Opcode o, GMCode op)
         {
             GM_Disam.OffsetOpcode branch = o as GM_Disam.OffsetOpcode;
             if (branch != null && branch.Op == op) return true;
@@ -696,7 +398,7 @@ namespace betteribttest
                 System.Diagnostics.Debug.WriteLine(b.ToString());
             }
         }
-        void ReplaceBranchAddress(int from, int too, OpType fromType, OpType toType)
+        void ReplaceBranchAddress(int from, int too, GMCode fromType, GMCode toType)
         {
             foreach (var toFix in codes.Where(o => o.Value.Op == fromType && o.Value.Address == from))
             {
@@ -742,7 +444,7 @@ namespace betteribttest
             int fix_count = 0;
             for (int i = 0; i < list.Count; i++)
             {
-                var match = MatchPatern(false, o => o.Op == OpType.B && o.Offset == 2, o => PushOpcodeTest(o, GM_Type.Short, 0), o => o.Op == OpType.Bf);
+                var match = MatchPatern(false, o => o.Op == GMCode.B && o.Offset == 2, o => PushOpcodeTest(o, GM_Type.Short, 0), o => o.Op == GMCode.Bf);
 
                 if (match != null)
                 {
@@ -750,10 +452,10 @@ namespace betteribttest
                     // Ok, lets start this ride.  Since the first instruction is a B and it jumps over to BF, something is on the stack that we need to compare BF with
                     OffsetOpcode inlineBranch = new OffsetOpcode(match[2].Op, match[2].Offset, match[0].Pc);
                     int final_destnation = match[2].Address;
-                    match[0].Op = OpType.Bf;
+                    match[0].Op = GMCode.Bf;
                     match[0].Address = final_destnation; // fix the jump
-                    match[1].Op = OpType.BadOp;
-                    match[2].Op = OpType.BadOp;
+                    match[1].Op = GMCode.BadOp;
+                    match[2].Op = GMCode.BadOp;
 
                     // lets start this ball rolling, first lets find any and all branches to the three code we have here
                     // First, a jump to B 2 means its really a BF <somehwere> so both of these instructons are equilvelent
@@ -787,7 +489,7 @@ namespace betteribttest
             }
             for (int i = 0; i < list.Count; i++)
             {
-                var match = MatchPatern(false, o => o.isConditional, o => o.Op == OpType.B);
+                var match = MatchPatern(false, o => o.isConditional, o => o.Op == GMCode.B);
                 if(match != null)
                 {
                   //  Debug.WriteLine("Meh " + i);
@@ -795,21 +497,27 @@ namespace betteribttest
             }
                 System.Diagnostics.Debug.WriteLineIf(fix_count > 0, "Amount of peephole fixes: " + fix_count);
         }
-        Stack<AST> tree = new Stack<AST>(); // used to caculate stuff
-        Stack<AST> enviroment = new Stack<AST>();
+        Stack<AST> tree;// = new Stack<AST>(); // used to caculate stuff
+        class EnvState
+        {
+            public string env;
+            public int stackSize;
+            public EnvState(string env, int stack) { this.env = env;  stackSize = stack; }
+        }
+        Stack<EnvState> enviroment;// = new Stack<AST>();
+        Regex WordTest = new Regex(@"[A-Za-z0-9]+", RegexOptions.Compiled);
         CodeLine processOpcode(Opcode code, int pc, ref int start_pc, ref int last_pc)
         {
             last_pc = pc;
             pc = code.Pc;
-            string codeLine = null;
-            if (code.Op != OpType.BadOp && start_pc == -1) start_pc = pc;
+            if (code.Op != GMCode.BadOp && start_pc == -1) start_pc = pc;
             CodeLine line = new CodeLine();
             line.code = code;
             line.pc = pc;
             line.startPc = -1;
             switch (code.Op)
             {
-                case OpType.BadOp:
+                case GMCode.BadOp:
                     break;
                 // A hack for push enviroment right here.
                 // It SEEMS that push enviroment is set up so we can call a function that is in an instance
@@ -817,101 +525,99 @@ namespace betteribttest
                 // Sence we know the start and the end of the call, lets see if we can simplfiy this with 
                 // recording the start of a push env and back.
                 // This might not work well with recursive returns or calls though
-                case OpType.Pushenv:
-                    enviroment.Push(tree.Pop());
-                    codeLine = "Pushing Enviroment : " + GetInstance(tree, enviroment.Peek().ToString());
+                case GMCode.Pushenv:
+                    {
+                        AST env = tree.Pop();
+                        string instance = GetInstance(tree, env.ToString());
+                        enviroment.Push(new EnvState(instance, tree.Count));
+                    }
+                    
+                  //  codeLine = "Pushing Enviroment : " + GetInstance(tree, enviroment.Peek().ToString());
                     // codeLine = "Push Enviroment " + tree.Pop().ToString() + "goto on error " + checkLabel(op);
                     break;
-                case OpType.Popenv:
+                case GMCode.Popenv:
                     {
-                        AST env = enviroment.Pop();
-                        string instance = GetInstance(tree, env.ToString());
-                        codeLine = "Poping  Envorment :  " + instance;
+                        var env = enviroment.Pop();
+                        Statements statments = new Statements();
+                        while (tree.Count != env.stackSize) statments.Add(tree.Pop());
+                        line.ast = new Enviroment(env.env, statments);
                     }
                         break;
-                case OpType.Exit:
-                    codeLine = "Exit";
+                case GMCode.Exit:
+                    line.ast = new Constant("Exit");
                     System.Diagnostics.Debug.Assert(tree.Count == 0);
                     break;
-                case OpType.Not: 
-                    // This op is CLEARLY an op.  It was hard verified after I saw a return call from a function, a conv from a var to a bool
-                    // and THIS statment doing a bool to a double
+                case GMCode.Neg: // sure this is a negitive
+                case GMCode.Not:
+                // This op is CLEARLY a a not.  It was hard verified after I saw a return call from a function, a conv from a var to a bool
+                // and THIS statment doing a bool to a double
+                case GMCode.Ret:
                     {
                         AST value = tree.Pop();
-                        tree.Push(new Variable("!(" + value.ToString() + ")", GM_Type.Var));
+                        tree.Push(new UntaryOp(code.Op, tree.Pop()));   
                     }
                     break;
-                case OpType.Neg: // sure this is a negitive
-                    {
-                        AST value = tree.Pop();
-                        tree.Push(new Variable("-(" + value.ToString() + ")", GM_Type.Var));
-                    }
-                    break;
-                case OpType.Ret:
-                    {
-                        AST value = tree.Pop();
-                        codeLine = "return " + value.ToString();
-                    }
-                    break;
-                case OpType.Mul:
-                case OpType.Div:
-                case OpType.Rem:
-                case OpType.Mod:
-                case OpType.Add:
-                case OpType.Sub:
-                case OpType.Or:
-                case OpType.And:
-                case OpType.Xor:
-                case OpType.Sal:
-                case OpType.Slt:
-                case OpType.Sle:
-                case OpType.Seq:
-                case OpType.Sge:
-                case OpType.Sgt:
-                case OpType.Sne:
+                case GMCode.Mul:
+                case GMCode.Div:
+                case GMCode.Rem:
+                case GMCode.Mod:
+                case GMCode.Add:
+                case GMCode.Sub:
+                case GMCode.Or:
+                case GMCode.And:
+                case GMCode.Xor:
+                case GMCode.Sal:
+                case GMCode.Slt:
+                case GMCode.Sle:
+                case GMCode.Seq:
+                case GMCode.Sge:
+                case GMCode.Sgt:
+                case GMCode.Sne:
 
                     ProcessMathOp(tree, code.Raw);
                     break;
 
-                case OpType.Conv:
+                case GMCode.Conv:
                     {
                          GM_Type fromType = (GM_Type)(int)((code.Raw >> 16) & 0xF);
                          GM_Type tooType = (GM_Type)(int)((code.Raw >> 20) & 0xF);
                         tree.Push(new Conv(tree.Pop(), fromType, tooType));  
                     }
                     break;
-                case OpType.Push: // most common.  Used for all math operations
+                case GMCode.Push: // most common.  Used for all math operations
                     {
                         GM_Disam.PushOpcode popcode = code as GM_Disam.PushOpcode;
                         switch (popcode.OperandType)
                         {
-                            case GM_Type.Double: tree.Push(new Variable(popcode.OperandValueDouble)); break;
-                            case GM_Type.Float: tree.Push(new Variable((float)popcode.OperandValueDouble)); break;
-                            case GM_Type.Long: tree.Push(new Variable((long)popcode.OperandValue)); break;
-                            case GM_Type.Int: tree.Push(new Variable((int)popcode.OperandValue)); break;
+                            case GM_Type.Double: tree.Push(new Constant(popcode.OperandValueDouble)); break;
+                            case GM_Type.Float: tree.Push(new Constant((float)popcode.OperandValueDouble)); break;
+                            case GM_Type.Long: tree.Push(new Constant((long)popcode.OperandValue)); break;
+                            case GM_Type.Int: tree.Push(new Constant((int)popcode.OperandValue)); break;
                             case GM_Type.Var: ProcessVarPush(tree, popcode); break;
                             case GM_Type.String:
                                 {
                                     string value = cr.stringList[(int)popcode.OperandValue].str;
-                                    tree.Push(Variable.CreateString(value));
+                                    Match m = WordTest.Match(value); // if its a simple word, we don't need to escape it, still might make it easyer to read howerver
+                                    if (m.Value == value) tree.Push(new Constant(value));
+                                    else tree.Push(new Constant(GM_Disam.EscapeString(value)));
                                 }
                                 break;
-                            case GM_Type.Short: tree.Push(new Variable((short)popcode.OperandValue)); break;
+                            case GM_Type.Short: tree.Push(new Constant((short)popcode.OperandValue)); break;
                             default:
                                 throw new Exception("Bad type");
                         }
                         
                     }
                     break;
-                case OpType.Pop:
-                    codeLine = ProcessAssignPop(tree, code as GM_Disam.PopOpcode);
+                case GMCode.Pop:
+                    line.ast = ProcessAssignPop(tree, code as GM_Disam.PopOpcode);
                     break;
-                case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
+                case GMCode.Popz: // usally on void funtion returns, so just pop the stack and print it
                     {
-                        codeLine = tree.Pop().ToString();
+                        line.ast = tree.Pop();
                     }
                     break;
-                case OpType.Dup:
+                case GMCode.Dup:
                     {
                         short extra = (short)(code.Raw & 0xFFFF); // humm extra data? OR COPY THE TOP TWO ON THE STACK MABE
                         if (extra > 0)
@@ -933,12 +639,12 @@ namespace betteribttest
                         //  tree.Push(v.Dup());
                     }
                     break;
-                case OpType.Break:
+                case GMCode.Break:
                     {
-                        codeLine = String.Format("break {0}", code.Raw & 0xFFFF); // have yet to run into this
+                        line.ast = new Constant(String.Format("break {0}", code.Raw & 0xFFFF)); // have yet to run into this
                     }
                     break;
-                case OpType.Call:
+                case GMCode.Call:
                     ProcessCall(tree, code as GM_Disam.CallOpcode);
                     break;
                 default:
@@ -946,52 +652,43 @@ namespace betteribttest
                     throw new NotImplementedException("Opcode not implmented"); // NO MORE FUCKING AROUND HERE
             }
             //  int startPosition = r.Position;
-            if (codeLine != null)
+            if (line.ast != null)
             {
                 line.startPc = start_pc;
                 start_pc = -1;
                 line.endPC = pc;
-                line.Text = codeLine;
-                codeLine = null;
             }
             return line;
         }
 
         void DoBranch(Stack<AST> stack, List<CodeLine> lines, OffsetOpcode code, int pc, ref int start_pc, ref int last_pc)
         {
-            string codeLine = null;
             var last = codes.Last();
             CodeLine line = new CodeLine();
+            if (start_pc == -1) start_pc = pc;
             line.code = code;
             line.pc = pc;
             line.startPc = start_pc;
             line.endPC = pc;
-            line.Text = codeLine;
             lines.Add(line);
-
             start_pc = -1;
             switch (code.Op)
             {
-                case OpType.Bf:
-                    line.Text  = ProcessBranch(stack, GetLabel(code.Address), false);
+                case GMCode.Bf:
+                    line.ast  = ProcessBranch(stack, GetLabel(code.Address), false);
                     break;
-                case OpType.Bt:
-                    line.Text = ProcessBranch(stack, GetLabel(code.Address), true);
+                case GMCode.Bt:
+                    line.ast = ProcessBranch(stack, GetLabel(code.Address), true);
                     break;
-                case OpType.B:
+                case GMCode.B:
                     Debug.Assert(stack.Count == 0);
-                    line.Text = "goto " + GetLabel(code.Address);
+                    line.ast = new GotoLabel(GetLabel(code.Address));
                     break;
                 default:
                     throw new Exception("Can't be called here");
             }
-            OffsetOpcode vop; // if we have an inline branch, we got to call it here
-            if (inlineBranches.TryGetValue(code.Address, out vop) ){
-                // love recursion
-                int fake_start_pc = 0, fake_end_pc = 0; // dosn't matter as -1 pc means its virtual
-                DoBranch(stack, lines, vop, -1, ref fake_start_pc, ref fake_end_pc);
-            }
         }
+#if false
         void PurgeExtraLines(List<CodeLine> lines)
         {
 
@@ -1055,6 +752,7 @@ namespace betteribttest
 
 
         }
+
         void SimplifyIFStatements(List<CodeLine> lines)
         {
             Regex findLabelRegex = new Regex("Label_\\d+", RegexOptions.Compiled);
@@ -1141,30 +839,93 @@ namespace betteribttest
                 current.Text = String.Format(newFormat, firstpart, secondpart);
             }
         }
-        List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size,string scriptName)
+#endif
+        void ClearEmptyLines(List<CodeLine> lines)
         {
+         
+        }
+        T DetectNextStatment<T>(List<CodeLine> lines,int index) where T: AST
+        {
+            for(int i=index+1;i<lines.Count;i++)
+            {
+                while (lines[i].ast == null) continue;
+                T ret = lines[i].ast as T;
+                if (ret != null) return ret;
+            }
+            return null;
+        }
+        void SimplifyIFStatements(List<CodeLine> lines)
+        {
+            for (int index = 0; index < lines.Count; index++)
+            {
+                CodeLine first = lines[index];
+                Conditional testIf = first.ast as Conditional;
+                if (testIf == null) continue;
+                CodeLine next = lines[index + 1];
+                Conditional testSecond = next.ast as Conditional;
+                if (testSecond != null && (testIf.ifTrue as ASTLabel).Equals(first.label)) {
+                    testIf = new Conditional(new MathOp(testIf.Condition, GMCode.And, testSecond.Condition), testSecond.ifTrue);
+                    ++index;
+                    next = lines[index + 1];
+                }
+                CodeLine labelCheck = lines[index+2];
+                if (labelCheck.label == first.label)
+                {
+                    
+                    index += 2;
+                   
+                    testIf = new Conditional(testIf.Condition, next.ast);
+                    testIf = testIf.Invert(false);
+                    next.ast = null;
+                    labelCheck.label = null;
+                } else continue;
+                first.ast = new Statements(testIf);
+            }
+        }
+        void restart(ChunkStream r, int codeOffset, int code_size, string scriptName)
+        {
+            tree = new Stack<AST>(); // used to caculate stuff
+            enviroment = new Stack<EnvState>();
+            gotos = new Dictionary<int, ASTLabel>();
             this.scriptName = scriptName;
             GM_Disam disam = new GM_Disam(r);
             this.codes = disam.ReadOpCode(codeOffset, code_size, scriptName);
-            PeepholeFix();
-            gotos = new Dictionary<int, string>();
-            int limit = (int)(codeOffset + code_size);
-            tree = new Stack<AST>(); // used to caculate stuff
-            enviroment = new Stack<AST>();
+            // find all the labels first
+            foreach (var o in codes)
+            {
+                if (o.Value.Op == GMCode.B || o.Value.Op == GMCode.Bt || o.Value.Op == GMCode.Bf)
+                {
+                    int offset = GM_Disam.getBranchOffset(o.Value.Raw);
+                    ASTLabel label = new ASTLabel(o.Key + offset, o.Key);
+                    gotos.Add(o.Key, label);
+                }
+            }
+        }
+        void RemoveAllConv()
+        {
+            // We don't need them like, at all for this process.  Might as well just remove them
 
+        }
+        List<CodeLine> processStream2(ChunkStream r, int codeOffset, int code_size,string scriptName)
+        {
+            restart(r, codeOffset, code_size, scriptName);
+            //  PeepholeFix(); // skip this, lets try something diffrent
+            // FIRST lets find all the labels
             List<CodeLine> lines = new List<CodeLine>();
+            int limit = (int)(codeOffset + code_size);
             int start_pc = -1, last_pc = 0;
             int end_pc = codes.Last().Key;
             for (int pc = 0; pc < end_pc; pc++) {
                 if (!codes.ContainsKey(pc)) continue;
                 Opcode code = codes[pc];
-                //System.Diagnostics.Debug.Assert(pc != 1951);
+                // Ok we are going to do this a bit diffrently, we are going to find a valid statment FIRST, then resolve it
+                // so lets see if we can decode 
                 switch (code.Op)
                 {
                     
-                    case OpType.Bf: // branch if false
-                    case OpType.Bt: // branch if true
-                    case OpType.B:
+                    case GMCode.Bf: // branch if false
+                    case GMCode.Bt: // branch if true
+                    case GMCode.B:
                          DoBranch(tree, lines, code as OffsetOpcode, pc, ref start_pc, ref last_pc);
                         break;
         
@@ -1174,8 +935,9 @@ namespace betteribttest
                 }
             }
             InsertLabels(lines, end_pc);
-            FixSimpleEnviroment(lines);
-            SimplifyIFStatements(lines);
+            lines.RemoveAll(line => line.ast == null);
+        //    SimplifyIFStatements(lines);
+
             return lines;
         }
     }

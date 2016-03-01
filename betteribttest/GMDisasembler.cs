@@ -43,7 +43,7 @@ namespace betteribttest
 
     }
 
-    enum GM_Type : byte
+    public enum GM_Type : byte
     {
         Double = 0,
         Float,
@@ -56,7 +56,7 @@ namespace betteribttest
         Short = 15, // This is usally short anyway
         NoType
     }
-    enum OpType : byte
+    public enum GMCode : byte
     {
         BadOp = 0x00, // used for as a noop, mainly for branches hard jump location is after this
         Conv = 0x03,
@@ -92,48 +92,314 @@ namespace betteribttest
         Call = 0xda,
         Break = 0xff
     }
+    class DismLabel
+    {
+        public string Name;
+        public List<int> CalledFrom;
+        public int Target;
+        public DismLabel(string name, int target, int pc)
+        {
+            Name = name;
+            CalledFrom = new List<int>(); CalledFrom.Add(pc);
+            Target = target;
+        }
+    }
+    public static class GMCodeUtil
+    {
+        public static int getBranchOffset(uint op)
+        {
+            if ((op & 0x800000)!=0) op |= 0xFF000000; else op &= 0x00FFFFFF;
+            return (int)(op);
+        }
+        public readonly static Dictionary<GMCode, int> opMathOperationCount = new Dictionary<GMCode, int>()  {
+            {  (GMCode)0x04,2},
+            {  (GMCode)0x05, 2},
+            { (GMCode) 0x06, 2},
+            {  (GMCode)0x07, 2 },
+            {  (GMCode)0x08, 2},
+            {  (GMCode)0x09, 2 },
+            {  (GMCode)0x0a, 2 },
+            {  (GMCode)0x0b, 2 },
+            { (GMCode) 0x0c, 2 },
+            { (GMCode) 0x0d,1},
+            {  (GMCode)0x0e, 1 },
+
+            {  (GMCode)0x0f, 2},
+            {  (GMCode)0x10, 2 },
+            { (GMCode) 0x11, 2},
+            { (GMCode) 0x12, 2 },
+            { (GMCode) 0x13, 2},
+            {  (GMCode)0x14, 2},
+            {  (GMCode)0x15, 2},
+            {  (GMCode)0x16, 2 },
+        };
+        public static int getOpTreeCount(this GMCode t)
+        {
+            int count;
+            if (opMathOperationCount.TryGetValue(t, out count)) return count;
+            return 0;
+        }
+        public static string getOpTreeString(this GMCode t)
+        {
+            string  ret;
+            if (opMathOperation.TryGetValue(t, out ret)) return ret;
+            return null;
+        }
+        public static GMCode getInvertedOp(this GMCode t)
+        {
+            switch(t)
+            {
+                case GMCode.Sne: return GMCode.Seq;
+                case GMCode.Seq: return GMCode.Sne;
+                case GMCode.Sgt: return GMCode.Sle;
+                case GMCode.Sge: return GMCode.Slt;
+                case GMCode.Slt: return GMCode.Sge;
+                case GMCode.Sle: return GMCode.Sgt;
+                default:
+                    return GMCode.BadOp;
+            }
+        }
+        public readonly static Dictionary<GMCode, string> opMathOperation = new Dictionary<GMCode, string>()  {
+            {  (GMCode)0x03, "conv" },
+            {  (GMCode)0x04, "*" },
+            {  (GMCode)0x05, "/" },
+            { (GMCode) 0x06, "rem" },
+            {  (GMCode)0x07, "%" },
+            {  (GMCode)0x08, "+" },
+            {  (GMCode)0x09, "-" },
+            {  (GMCode)0x0a, "&" },
+            {  (GMCode)0x0b, "|" },
+            { (GMCode) 0x0c, "^" },
+            { (GMCode) 0x0d, "~" },
+            {  (GMCode)0x0e, "!" },
+
+            {  (GMCode)0x0f, "<<" },
+            {  (GMCode)0x10, ">>" },
+            { (GMCode) 0x11, "<" },
+            { (GMCode) 0x12, "<=" },
+            { (GMCode) 0x13, "==" },
+            {  (GMCode)0x14, "!=" },
+            {  (GMCode)0x15, ">=" },
+            {  (GMCode)0x16, ">" },
+        };
+        public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
+        {
+            {  0 , "stack" },
+            {  -1, "self" },
+            {  -2, "other" },
+            {  -3, "all" },
+            {  -4, "noone" },
+            {  -5, "global" },
+        };
+        public static string lookupInstance(short instance)
+        {
+            string ret;
+            if (instanceLookup.TryGetValue(instance, out ret)) return ret;
+            else return String.Format("%{0}%", instance);
+        }
+        public static string lookupInstanceFromRawOpcode(uint opcode)
+        {
+            return lookupInstance((short)(opcode & 0xFFFF));
+        }
+        public static bool IsArrayPushPop(uint opcode)
+        {
+            return (opcode & 0x8000000) == 0;
+        }
+        public static string EscapeString(string s)
+        {
+            using (var writer = new StringWriter())
+            {
+                using (var provider = System.CodeDom.Compiler.CodeDomProvider.CreateProvider("CSharp"))
+                {
+                    provider.GenerateCodeFromExpression(new System.CodeDom.CodePrimitiveExpression(s), writer, null);
+                    return writer.ToString();
+                }
+            }
+        }
+        public static GMCode getFromRaw(uint raw)
+        {
+            return (GMCode)((raw >> 24) & 0xFF);
+        }
+        public static string GetName(this GMCode code)
+        {
+            return code.ToString().ToLowerInvariant().TrimStart('_').Replace('_', '.');
+        }
+        public static int GetSize(this GM_Type t)
+        {
+            switch (t)
+            {
+                case GM_Type.Double:
+                case GM_Type.Long:
+                    return 2;
+                case GM_Type.Short:
+                    return 0;
+                default:
+                    return 1;
+            }
+        }
+        public static int OpCodeSize(uint raw)
+        {
+            switch ((GMCode)(raw>>24))
+            {
+                case GMCode.Pop:
+                case GMCode.Call:
+                    return 2;
+                case GMCode.Push:
+                    return((GM_Type)((raw >> 16) & 0xF)).GetSize() + 1;
+                default:
+                    return 1;
+            }
+        }
+        public static string TypeToStringPostfix(int type) { return TypeToStringPostfix((GM_Type)(type & 15)); }
+        public static string TypeToStringPostfix(this GM_Type t)
+        {
+            switch (t)
+            {
+                case GM_Type.Double: return ".d";
+                case GM_Type.Float: return ".f";
+                case GM_Type.Int: return ".i";
+                case GM_Type.Long: return ".l";
+                case GM_Type.Bool: return ".b";
+                case GM_Type.Var: return ".v";
+                case GM_Type.String: return ".s";
+                case GM_Type.Short: return ".e";
+            }
+            throw new Exception("Not sure how we got here");
+        }
+        public static bool IsConditionalControlFlow(this GMCode code)
+        {
+            return code == GMCode.Bt || code == GMCode.Bf;
+        }
+        public static bool IsUnconditionalControlFlow(this GMCode code)
+        {
+            return code == GMCode.B;
+        }
+        public static bool IsConditional(this GMCode code)
+        {
+            return code == GMCode.Bt || code == GMCode.Bf|| code == GMCode.B;
+        }
+        public static bool IsConditionalStatment(this GMCode code)
+        {
+            switch(code)
+            {
+                case GMCode.Seq:
+                case GMCode.Sne:
+                case GMCode.Sge:
+                case GMCode.Sle:
+                case GMCode.Sgt:
+                case GMCode.Slt:
+                    return true;
+                default:
+                    return false;
+
+            }
+        }
+    }
+    class GMVariable
+    {
+        public string Name;
+        public GM_Type Type;
+        public int Instance;
+    }
+    class ByteCode
+    {
+
+        public DismLabel Label = null;
+        public uint Raw = 0;
+        public GMCode Code = GMCode.BadOp;
+        public int Pc = 0;
+        public int Size = 0;
+        public object Operand = null;
+        public int? PopCount = null;
+        public int PushCount = 0;
+        public ByteCode Next = null;
+        public string Name { get { return "IL_" + this.Pc.ToString("4"); } }
+        public bool IsVariableDefinition
+        {
+            get
+            {
+                return (this.Code == GMCode.Pop);
+            }
+        }
+        //  public StackSlot[] StackBefore;     // Unique per bytecode; not shared
+        //  public VariableSlot[] VariablesBefore; // Unique per bytecode; not shared
+        //  public List<ILVariable> StoreTo;         // Store result of instruction to those AST variables
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append(this.Name);
+            sb.Append(':');
+            if (Label == null)
+                sb.Append('*');
+            else
+                sb.Append(' ');
+            sb.Append(this.Code.GetName());
+            sb.Append(this.Code.GetName());
+
+            if (this.Operand != null)
+            {
+                sb.Append(' ');
+                // if (this.Operand.GetType().IsValueType) sb.Append(Operand.ToString());
+                //   else if(Operand is DismLabel) sb.Append((Operand as ))
+                if (Operand is string) sb.Append(GM_Disam.EscapeString(Operand.ToString()));
+                else sb.Append(Operand.ToString());
+            }
+            return sb.ToString();
+        }
+    }
     class GM_Disam
     {
-        string scriptName;
-        static Dictionary<OpType, string> opDecode = new Dictionary<OpType, string>()  {
-            {  (OpType)0x03, "conv" },
-            {  (OpType)0x04, "mul" },
-            {  (OpType)0x05, "div" },
-            { (OpType) 0x06, "rem" },
-            {  (OpType)0x07, "mod" },
-            {  (OpType)0x08, "add" },
-            {  (OpType)0x09, "sub" },
-            {  (OpType)0x0a, "and" },
-            {  (OpType)0x0b, "or" },
-            { (OpType) 0x0c, "xor" },
-             { (OpType) 0x0d, "neg" },
-            {  (OpType)0x0e, "not" },
-            {  (OpType)0x0f, "sal" },
-            {  (OpType)0x10, "sar" },
-            { (OpType) 0x11, "slt" },
-            { (OpType) 0x12, "sle" },
-            { (OpType) 0x13, "seq" },
-            {  (OpType)0x14, "sne" },
-            {  (OpType)0x15, "sge" },
-            {  (OpType)0x16, "sgt" },
-            {  (OpType)0x41, "pop" }, // multi place
-            {  (OpType)0x82, "dup" },
-            {  (OpType)0x9d, "ret" },
-            {  (OpType)0x9e, "exit" },
-            {  (OpType)0x9f, "popz" },
-            {  (OpType)0xb7, "b" },
-            {  (OpType)0xb8, "bt" },
-            {  (OpType)0xb9, "bf" },
-            {  (OpType)0xbb, "pushenv" },
-            {  (OpType)0xbc, "popenv" },
-            {  (OpType)0xc0, "push" },
-            {  (OpType)0xda, "call" },
-            {  (OpType)0xff, "break" },
-        };
-        static int getBranchOffset(uint op)
+        public SortedDictionary<int, DismLabel> Labels = new SortedDictionary<int, DismLabel>();
+        DismLabel getNewLabel(string name, int target, int pc)
         {
-            op &= 0x00FFFFFF;
-            if ((op & 0x800000) != 0) op |= 0xFF000000;
+            DismLabel l;
+            if (!Labels.TryGetValue(target, out l))
+            {
+                l = new DismLabel("Label_" + Labels.Count, target, pc);
+                Labels.Add(target, l);
+            }
+            else l.CalledFrom.Add(pc);
+            return l;
+        }
+        string scriptName;
+        static Dictionary<GMCode, string> opDecode = new Dictionary<GMCode, string>()  {
+            {  (GMCode)0x03, "conv" },
+            {  (GMCode)0x04, "mul" },
+            {  (GMCode)0x05, "div" },
+            { (GMCode) 0x06, "rem" },
+            {  (GMCode)0x07, "mod" },
+            {  (GMCode)0x08, "add" },
+            {  (GMCode)0x09, "sub" },
+            {  (GMCode)0x0a, "and" },
+            {  (GMCode)0x0b, "or" },
+            { (GMCode) 0x0c, "xor" },
+             { (GMCode) 0x0d, "neg" },
+            {  (GMCode)0x0e, "not" },
+            {  (GMCode)0x0f, "sal" },
+            {  (GMCode)0x10, "sar" },
+            { (GMCode) 0x11, "slt" },
+            { (GMCode) 0x12, "sle" },
+            { (GMCode) 0x13, "seq" },
+            {  (GMCode)0x14, "sne" },
+            {  (GMCode)0x15, "sge" },
+            {  (GMCode)0x16, "sgt" },
+            {  (GMCode)0x41, "pop" }, // multi place
+            {  (GMCode)0x82, "dup" },
+            {  (GMCode)0x9d, "ret" },
+            {  (GMCode)0x9e, "exit" },
+            {  (GMCode)0x9f, "popz" },
+            {  (GMCode)0xb7, "b" },
+            {  (GMCode)0xb8, "bt" },
+            {  (GMCode)0xb9, "bf" },
+            {  (GMCode)0xbb, "pushenv" },
+            {  (GMCode)0xbc, "popenv" },
+            {  (GMCode)0xc0, "push" },
+            {  (GMCode)0xda, "call" },
+            {  (GMCode)0xff, "break" },
+        };
+        public static int getBranchOffset(uint op)
+        {
+            if (((op<<8) & 0x80000000) != 0) op |= 0xFF000000;
             return (int)(op);
         }
         public static string EscapeString(string s)
@@ -180,13 +446,13 @@ namespace betteribttest
         {
             int Offset { get; }
         }
-        public class Opcode : IEquatable<OpType>
+        public class Opcode : IEquatable<GMCode>
         {
             public int Compare(Opcode a, Opcode b)
             {
                 return a.Pc.CompareTo(b.Pc);
             }
-            public OpType Op { get;  set; }
+            public GMCode Op { get;  set; }
             public uint Raw { get; private set; }
             public int Pc { get; private set; }
             public int Size { get; protected set; }
@@ -196,16 +462,16 @@ namespace betteribttest
             public int Address {  get { return Pc + Offset; } set { Offset = value - Pc; } }
             public Opcode(uint raw, int pc)
             {
-                this.Op = (OpType)((raw >> 24) & 0xFF);
+                this.Op = (GMCode)((raw >> 24) & 0xFF);
                 this.Raw = raw;
                 this.Pc = pc;
                 this.Size = 1;
             }
-            public bool isBranch { get { return Op == OpType.B || Op == OpType.Bf || Op == OpType.Bt; } }
-            public bool isConditional {  get { return Op == OpType.Slt || Op == OpType.Sle || Op == OpType.Seq || Op == OpType.Sne || Op == OpType.Sge || Op == OpType.Sgt; } }
+            public bool isBranch { get { return Op == GMCode.B || Op == GMCode.Bf || Op == GMCode.Bt; } }
+            public bool isConditional {  get { return Op == GMCode.Slt || Op == GMCode.Sle || Op == GMCode.Seq || Op == GMCode.Sne || Op == GMCode.Sge || Op == GMCode.Sgt; } }
 
             public bool Equals(Opcode other) { return other.Raw == Raw; }
-            public bool Equals(OpType other) { return other == Op; }
+            public bool Equals(GMCode other) { return other == Op; }
            // public override int GetHashCode() { return (int)Raw; }
           
             public virtual string Operand { get { return null; } } // none
@@ -221,7 +487,7 @@ namespace betteribttest
         }
         public class OffsetOpcode : Opcode
         {
-            public static uint MakeBranchRawOpcode(OpType op, int offset)
+            public static uint MakeBranchRawOpcode(GMCode op, int offset)
             {
                 uint raw = (uint)((byte)op << 24);
                 raw |= (uint)(offset & 0x00FFFFFF);
@@ -235,7 +501,7 @@ namespace betteribttest
                 Offset = (int)offset;
             }
             public OffsetOpcode(uint raw, int offset, int pc) : base(raw, pc) { Offset = offset; } // use this if the offset dosn't match the opcode
-            public OffsetOpcode(OpType op, int offset, int pc) : base(MakeBranchRawOpcode(op, offset), pc) { Offset = offset; } // use this if you need to make an opcode
+            public OffsetOpcode(GMCode op, int offset, int pc) : base(MakeBranchRawOpcode(op, offset), pc) { Offset = offset; } // use this if you need to make an opcode
             public override string Operand { get { return Address.ToString(); } }
         }
         public class PopOpcode : Opcode,  TypeOpcodeInterface
@@ -349,47 +615,47 @@ namespace betteribttest
         Opcode ReadOpcode()
         {
             uint raw = r.ReadUInt32();
-            OpType opType = (OpType)((byte)(raw >> 24));
+            GMCode opType = (GMCode)((byte)(raw >> 24));
             switch (opType)
             {
-                case OpType.Dup:
-                case OpType.Mul:
-                case OpType.Div:
-                case OpType.Rem:
-                case OpType.Mod:
-                case OpType.Add:
-                case OpType.Sub:
-                case OpType.Or:
-                case OpType.And:
-                case OpType.Xor:
-                case OpType.Not:
-                case OpType.Sal:
-                case OpType.Slt:
-                case OpType.Sle:
-                case OpType.Seq:
-                case OpType.Sge:
-                case OpType.Sgt:
-                case OpType.Sne:
-                case OpType.Neg:
-                case OpType.Conv:
+                case GMCode.Dup:
+                case GMCode.Mul:
+                case GMCode.Div:
+                case GMCode.Rem:
+                case GMCode.Mod:
+                case GMCode.Add:
+                case GMCode.Sub:
+                case GMCode.Or:
+                case GMCode.And:
+                case GMCode.Xor:
+                case GMCode.Not:
+                case GMCode.Sal:
+                case GMCode.Slt:
+                case GMCode.Sle:
+                case GMCode.Seq:
+                case GMCode.Sge:
+                case GMCode.Sgt:
+                case GMCode.Sne:
+                case GMCode.Neg:
+                case GMCode.Conv:
                     return new TypeOpcode(raw, pc);
-                case OpType.Popenv:
-                case OpType.Pushenv:
+                case GMCode.Popenv:
+                case GMCode.Pushenv:
                     return new OffsetOpcode(raw, (short)(raw & 0xFFFF), pc);
-                case OpType.Bf:
-                case OpType.Bt:
-                case OpType.B:
+                case GMCode.Bf:
+                case GMCode.Bt:
+                case GMCode.B:
                     return new OffsetOpcode(raw, pc);
-                case OpType.Push:
+                case GMCode.Push:
                     return new PushOpcode(raw, r, pc);
-                case OpType.Pop:
+                case GMCode.Pop:
                     return new PopOpcode(raw, r, pc);
-                case OpType.Popz: // usally on void funtion returns, so just pop the stack and print it
-                case OpType.Break:
-                case OpType.Exit:
-                case OpType.Ret:
+                case GMCode.Popz: // usally on void funtion returns, so just pop the stack and print it
+                case GMCode.Break:
+                case GMCode.Exit:
+                case GMCode.Ret:
                     return new Opcode(raw, pc);
-                case OpType.Call:
+                case GMCode.Call:
                     return new CallOpcode(raw, r, pc);
                 default:
                  //   System.Diagnostics.Debug.WriteLine("Not implmented at {0} value {1} valuehex {1:X}", r.BaseStream.Position, op.opcode, op.opcode);
@@ -398,6 +664,8 @@ namespace betteribttest
         }
         public SortedList<int,GM_Disam.Opcode> ReadOpCode(int start, int length, string scriptName)
         {
+            // test
+            OffsetStream s = new OffsetStream(r.BaseStream, start, length);
             this.scriptName = scriptName;
             SortedList<int, Opcode> codes = new SortedList<int, Opcode>(length * 2); // should be safe
             pc = 0;
@@ -410,7 +678,7 @@ namespace betteribttest
                 pc += o.Size;
             }
             // We might have a branch that goes to the end of this, so just throwing in Exit just  in case
-            codes.Add(pc, new Opcode(unchecked((uint)((byte)OpType.Exit << 24)), pc));
+            codes.Add(pc, new Opcode(unchecked((uint)((byte)GMCode.Exit << 24)), pc));
             return codes;
         }
 

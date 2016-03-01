@@ -870,6 +870,35 @@ namespace betteribttest
         }
         public List<GMK_ScriptIndex> scriptIndex = new List<GMK_ScriptIndex>();
         public Dictionary<int, GMK_ScriptIndex> scriptMap = new Dictionary<int, GMK_ScriptIndex>();
+        public struct CodeData
+        {
+            public string ScriptName;
+            public BinaryReader stream;
+        }
+        public IEnumerable<CodeData> GetCodeStreams()
+        {
+            foreach (GMK_Code c in codeList)
+            {
+                System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
+                //System.Diagnostics.Debug.Assert("gml_Object_obj_finalfroggit_Alarm_6" != c.Name);
+                ChunkStream ms = getReturnStream();
+                yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
+            }
+        }
+        public IEnumerable<CodeData> GetCodeStreams(string code_name)
+        {
+            code_name = code_name.ToLower();
+            foreach (GMK_Code c in codeList)
+            {
+                if (c.Name.ToLower().IndexOf(code_name) != -1)
+                {
+                    System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
+                    //System.Diagnostics.Debug.Assert("gml_Object_obj_finalfroggit_Alarm_6" != c.Name);
+                    ChunkStream ms = getReturnStream();
+                    yield return new CodeData() { ScriptName= c.Name, stream= new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
+                }
+            }
+        }
         void doSCPT(int chunkStart, int chunkLimit)
         {
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
@@ -944,7 +973,7 @@ namespace betteribttest
                     audio.data = r.ReadBytes(size);
                     r.PopPosition();
                 }
-                audio.SaveAudio();
+           //     audio.SaveAudio();
                 AddData(audio);
                 audioList.Add(audio);
             }
@@ -963,14 +992,13 @@ namespace betteribttest
             for (int i = 0; i < filesImage.Count; i++)
             {
                 string filename =  "undertale_texture_" + i + ".png";
-                filesImage[i].image.Save(path + filename);
+              //  filesImage[i].image.Save(path + filename);
                 plist_textures.Add(filename);
             }
             foreach (var sprite in spriteList)
             {
                 if (sprite.frames == null || sprite.frames.Length == 0) throw new Exception("This shouldn't happen");
                 PListArray frames = plist_sprites.AddArray(sprite.Name);
-                if (sprite.Name == "spr_doglick") for (int i = 0; i < sprite.frames.Length; i++) SaveSpritePng("spr_doglick_" + i + ".png", sprite.frames[i]);
                 foreach (var p in sprite.frames)
                 {
 
@@ -988,7 +1016,7 @@ namespace betteribttest
                     frame["textureIndex"] = p.textureId; //p.height0;
                 }
             }
-            plist.WritePlist(path + "undertale_sprites.plist");
+           // plist.WritePlist(path + "undertale_sprites.plist");
         }
         public void SaveTexturePacker(string pngTexture,string packerFilename, int textureIndex)
         {

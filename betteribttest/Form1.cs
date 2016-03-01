@@ -109,10 +109,6 @@ namespace betteribttest
                 int width = 20;// data[0];
                 int height = data[1];
                 bmp = new Bitmap(width, height, PixelFormat.Format1bppIndexed);
-                //  Graphics g = Graphics.FromImage(bmp);
-                //   g.Clear(Color.Black);
-                //   g.Dispose();
-                //  g = null;
                 BitmapData bdata = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format1bppIndexed);
                 for(int y=0;y < height;y++)
                 {
@@ -120,24 +116,6 @@ namespace betteribttest
                     for (int x = 0; x < (width/8 ) ; x++) Marshal.WriteByte(bdata.Scan0, i+x, r.ReadByte());
                 }
                 bmp.UnlockBits(bdata);
-                /*
-                for (int y = 0; y < height; y++)
-                {
-                    for(int x = 0; x< width;x+=8)
-                    {
-                        int b = r.ReadByte();
-                        int index = y * bdata.Stride + (x * 4);
-                        Marshal.WriteByte(bdata.Scan0, index, p);
-                        /* for(int i=0;i<8;i++)
-                         {
-                             Color c = ((i << i) & 0x80) != 0 ? Color.White : Color.Black;
-                             dbg += ((i << i) & 0x80) != 0 ? "X" : " ";
-                             bmp.SetPixel(x+i, y, c);
-                         }
-                         
-                    }
-                }
-        */
                 bmp.UnlockBits(bdata);
 
             }
@@ -185,14 +163,33 @@ namespace betteribttest
             
             return data;
         }
- 
+
         public Form1()
         {
-            InitializeComponent(); 
+            InitializeComponent();
             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
-          //  cr.DumpAllObjects("objects.txt");
+            //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-            Disam dism = new Disam(cr);
+            Decompiler dism = new Decompiler(cr);
+            DecompilerNew newDecompiler = new DecompilerNew();
+            List<string> stringList = cr.stringList.Select(x => x.str).ToList();
+            // we assume all the patches were done to calls and pushes
+            // string filename_to_test = "obj_face_alphys_Step";
+          //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
+           // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
+            string filename_to_test = "gml_Object_obj_emptyborder_s"; // slighty harder now
+          //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3";
+            foreach (var files in cr.GetCodeStreams(filename_to_test))
+            {
+                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList);
+            }
+
+            
+            foreach (var files in cr.GetCodeStreams())
+            {
+                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList);
+            }
+            return;
             //       cr.DumpAllStrings("STRINGS.TXT");
             //   dism.DissasembleEveything();
             //     dism.writeFile("frog");
@@ -202,100 +199,12 @@ namespace betteribttest
             //   dism.TestStreamOutput("gasterblaster_Draw");
             //  dism.TestStreamOutput("sansbullet");
             //    dism.TestStreamOutput("SCR_BORDERSETUP");
-            dism.TestStreamOutput("obj_face");
+            //    dism.TestStreamOutput("obj_face_alphys_Step");
             //  dism.TestStreamOutput("SCR_GAMESTART");
             //     dism.TestStreamOutput("scr_facechoice");
             //   dism.TestStreamOutput("obj_dialoguer");
             //    cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
-            cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
-            GMK_Font fnt = cr.resFonts[1];
-            return;
-                Bitmap bmp_chars = cr.filesImage[fnt.bitmap.textureId].image; // don't know why or how the fonts know to look at this texture
-           // GMK_Font fnt = cr.resFonts[0];
-            //Bitmap bmp_chars = cr.filesImage[0].image; // don't know why or how the fonts know to look at this texture
-            Bitmap target = new Bitmap(320, 200);
-            string message = "TesIj $\nHaul ,$";
-           
-            int offset_x = 0;
-            int offset_y = 0;
-            int texture_x = fnt.bitmap.rect.X;
-            int texture_y = fnt.bitmap.rect.Y;
-            System.Diagnostics.Debug.WriteLine(fnt);
-            using (Graphics g = Graphics.FromImage(target))
-            {
-                g.Clear(Color.Black);
-                for (int i = 0; i < 6; i++)
-                {
-                    g.DrawLine(Pens.Aqua, 0, i * fnt.font_size + 10, 9, i * fnt.font_size + 10);
-                }
-                foreach (char c in message)
-                {
-                    if (c == '\n')
-                    {
-                        offset_x = 0;
-                        offset_y += fnt.font_size;
-                    }
-                    else
-                    {
-                        GMK_FontGlyph gly = fnt.map[c];
-
-                        Rectangle src = new Rectangle(gly.x + texture_x, gly.y + texture_y, gly.width, gly.height);
-                        System.Diagnostics.Debug.WriteLine(gly + " : " + src);
-                        g.DrawImage(bmp_chars, offset_x + 10, offset_y + 10, src, GraphicsUnit.Pixel);
-                        offset_x += gly.char_offset;
-                    }
-
-                }
-
-            }
-
-
-            string font_dir = "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\fonts\\";
-            string font_bmp_filename = "font_chars.png";
-            this.image = target;
-            Stream s = File.Open(font_dir + fnt.Name + ".fnt", FileMode.Create);
-            System.IO.TextWriter tw = new StreamWriter(s);
-            bmp_chars.Save(font_dir + font_bmp_filename);
-            tw.Write("info face=\"" + fnt.Name + "\"");
-            tw.Write(" size=" + fnt.font_size);
-            tw.Write(" bold=" + "0");//  fnt.maybe_Bold ? "1": "0");
-            tw.Write(" italic=" + "0");//  fnt.maybe_Bold ? "1": "0");
-            tw.Write(" charset=\"\"");
-            tw.Write(" unicode=0");
-            tw.Write(" stretchH=100");
-            tw.Write(" smooth=1"); 
-            tw.Write(" aa=0");
-            tw.Write(" padding=0,0,0,0"); // might be wrong
-            tw.Write(" spacing=1,1"); // might be wrong
-            tw.Write(" outline=0"); // might be wrong
-            tw.WriteLine();
-            tw.Write("common lineHeight=" + fnt.font_size);
-            tw.Write(" base=" + (fnt.font_size-2)); // humm unsure on base
-            tw.Write(" scaleW=1024 scaleH=1024");
-            tw.Write(" pages=1 packed=0"); // alphaChnl=1 redChnl=0 greenChnl=0 blueChnl=0 hummmmm
-            tw.WriteLine();
-            tw.Write("page id=0 file=\"" + font_bmp_filename+"\"");
-            tw.WriteLine();
-            tw.Write("chars count=" + fnt.glyphs.Count());
-            tw.WriteLine();
-            foreach(var g in fnt.glyphs)
-            {
-                int x = g.x + texture_x;
-                int y = g.y + texture_y;
-                string line = String.Format("char id={0,-5} x={1,-5} y={2,-5} width={3,-5} height={4,-5} xoffset=0    yoffset=0    xadvance={5,-5} xpage=0     chnl=15", (ushort)g.c, x, y, g.width, g.height, g.char_offset);
-                tw.WriteLine(line);
-            }
-
-            tw.Close();
-            tw = null;
-            // getSprSprite("Undertale\\SPRT\\spr_heart");
-            //getSprSprite("Undertale\\SPRT\\spr_snowdrake_head");
-            //itsAllInts("Undertale\\SPRT\\spr_fallleaf");
-            // disam("Undertale\\CODE\\gml_Script_SCR_TEXT");
-            //disam("Undertale\\CODE\\gml_Script_attention_hackerz_no_2");
-            System.Diagnostics.Debug.Write("Woot");
-
-
+            //   cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
         }
 
         private void Form1_Paint(object sender, PaintEventArgs e)

@@ -292,7 +292,7 @@ namespace betteribttest
             set
             {
                 long newPos = value + _start;
-                if (newPos < 0 || newPos > _length) throw new OffsetStreamLimitException();
+                if (newPos < 0 || newPos > (_length+ _start)) throw new OffsetStreamLimitException();
                 BaseStream.Position = newPos;
             }
         }
@@ -301,7 +301,7 @@ namespace betteribttest
         public override int Read(byte[] buffer, int offset, int count)
         {
             long limit = Position + count;
-            if(limit > _length) throw new OffsetStreamLimitException();
+            if(limit > (_length+ _start)) throw new OffsetStreamLimitException();
             return BaseStream.Read(buffer, offset, count);
         }
 
