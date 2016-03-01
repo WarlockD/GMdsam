@@ -6,570 +6,466 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Collections;
+using System.IO;
 
 namespace betteribttest
 {
-    using Opcode = GM_Disam.Opcode;
-    using OffsetOpcode = GM_Disam.OffsetOpcode;
-    interface Visitor
+    public abstract class CodeInfo
     {
-        void visit(Constant node);
-        void visit(MathOp node);
-        void visit(ASTLabel node);
-        void visit(LabelStart node);
-        void visit(UntaryOp node);
-        void visit(ObjectVariable node);
-        void visit(ArrayAccess node);
-        void visit(Statements node);
-        void visit(Call node);
-        void visit(Conditional node);
-        void visit(Enviroment node);
-
-        void visit(Conv node);
-        void visit(Assign node);
-    }
-    public enum AstKind
-    {
-        Invalid=0,
-        Constant,
-        Variable,
-        Label,
-        Branch,
-        BranchTrue,
-        BranchFalse,
-        IFStatment,
-        ElseStatment,
-        Expresson,
-        Conditional // Expresson that evals to bool
-    }
-    // lets make value seperate as well
-    class AstValue
-    {
-        public enum eKind { None, Number, String, Constant }
-        public eKind Kind { get; private set; }
-        public double ValueI { get; set; }
-        public string ValueS { get; set; }
-        public AstValue() { Kind = eKind.None; }
-        public AstValue(double value) { ValueI = value; Kind = eKind.Number; }
-        public AstValue(string value) { ValueS = value; Kind = eKind.String; }
-        public AstValue(AstValue value)
+        public CodeInfo CopyOf { get; private set; }
+        public Label Label { get; set; }
+        public int Offset { get; private set; }
+        protected CodeInfo(int offset) { Offset = offset; this.Label = null; CopyOf = null; }
+        protected CodeInfo(CodeInfo i)
         {
-            Kind = value.Kind;
-            ValueS = value.ValueS;
-            ValueI = value.ValueI;
-        }
-        public override string ToString()
-        {
-            string str;
-            if (Kind == eKind.None) str= "none"; else str = (this.Kind == eKind.Number ? this.ValueI.ToString() : this.ValueS.ToString());
-            return String.Format("[ kind={0:G}, value={1}]", Kind, str);
-        }
-    }
-    // I shouldof thought of this a while ago, use children, GAK
-    class AST
-    {
-        public Opcode Opcode { get;  set; }
-        public GM_Type Type { get;  set; }
-        public AstKind Kind { get; set; }
-        public List<AST> Children;
-        public AST() { Children = new List<AST>(); Kind = AstKind.Invalid; Opcode = null; }
+            if (i != null)
+            {
+                Offset = i.Offset;
+                Label = i.Label;
+                CopyOf = i;
+            }
+            else
+            {
+                Offset = -1;
+                this.Label = null;
+                CopyOf = null;
+            }
 
+        }
+        protected abstract bool PrintHeader { get; }
+
+        private const string header_format = "{0:d8} {1,-10}   ";
+        private readonly string empty_header_string = string.Format(header_format, "", "");
+        public void FormatHeadder(TextWriter wr)
+        {
+            if (PrintHeader)
+                wr.Write(header_format, Offset, Label == null ? "" : Label.ToString());
+            else
+                wr.Write(empty_header_string);
+        }
+        public void FormatHeadder(System.CodeDom.Compiler.IndentedTextWriter wr)
+        {
+            int current_ident = wr.Indent;
+            wr.Indent = 0;
+            FormatHeadder(wr as TextWriter);
+            wr.Indent = current_ident;
+        }
         /// <summary>
-        /// Attemts to find if we have an int somewhere, this is mainly because
-        /// 80% of the time we want to know an instance number of some type
+        /// So this is the main function that decompiles a statment to text.  override this instead of
+        /// ToString in ALL inherted functions
         /// </summary>
-        public virtual Constant EvalInt() { return null; }
-        public virtual void accept(Visitor v) { /* v.visit(this);*/ }
-        public bool CanEval(out int value)
+        /// <param name="indent">Amount of spaces to indent</param>
+        /// <param name="sb">String bulder that the line gets added to</param>
+        /// <returns>Lenght of line or longest line, NOT the amount of text added</returns>
+        public abstract void DecompileToText(TextWriter wr);
+        public virtual void DecompileToText(System.CodeDom.Compiler.IndentedTextWriter wr)
         {
-            
-            Constant c = EvalInt();
-            if (c == null)
-            {
-                value = 0;
-                return false;
-            } else
-            {
-                value = (int)c.IValue;
-                return true;
-            }
+            FormatHeadder(wr);
+            DecompileToText(wr as TextWriter);
         }
-    }
-    interface TypeInterface
-    {
-        GM_Type Type { get; }
-    }
-    interface StringValueInterface
-    {
-        string Value { get; }
-    }
-    interface VariableInterface  : TypeInterface, StringValueInterface
-    {
-
-    }
-    class Constant : AST, VariableInterface, IEquatable<StringValueInterface>
-    {
-        double dvalue;
-        long ivalue;
-        string svalue;
-        public GM_Type Type { get; protected set; }
-        public string Value { get; protected set; }
-
-#if false
-        // We don't use this interface anymore for creating vars
-        public static Constant CreatePsudoVariable(string str)
-        {
-            return new Constant(str, GM_Type.Var);
-        }
-         public static Constant CreateString(string str)
-        {
-            return new Constant(str, GM_Type.String);
-        }
-#endif
-     
-        public double DValue { get { return dvalue; } }
-        public long IValue { get { return ivalue; } }
-        public string SValue { get { return svalue; } }
-        public Constant(Constant value) { ivalue = value.ivalue; Value = value.Value; dvalue = value.DValue ; Type = value.Type; }
-        public Constant(Constant value, GM_Type convertTo) {
-            Type = convertTo;
-            if(value.Type == GM_Type.String && convertTo != GM_Type.String)
-            {
-                dvalue = double.Parse(value.svalue);
-                ivalue = long.Parse(value.svalue);
-            } else
-            {
-                ivalue = value.ivalue;
-                Value = value.Value;
-                dvalue = value.DValue;
-            }
-            Value = value.Value;
-        }
-        public Constant(string value) { dvalue = 0.0d; ivalue = 0 ; value = value.ToString(); Type = GM_Type.String; }
-        public Constant(int value)  { dvalue  = ivalue = value; Value = value.ToString(); Type = GM_Type.Int;   }
-        public Constant(long value) { dvalue = ivalue = value; Value = value.ToString(); Type = GM_Type.Long;  }
-        public Constant(ushort value)  { dvalue = ivalue = value; Value = value.ToString(); Type = GM_Type.Short;  }
-        public Constant(float value)  { dvalue = value; ivalue = (long)value; Value = value.ToString(); Type = GM_Type.Float;  }
-        public Constant(double value)  { dvalue = value; ivalue = (long)value; Value = value.ToString(); Type = GM_Type.Double; }
-        public Constant(bool value) { ivalue = value ? 1 : 0; dvalue = (long)ivalue; Value = value.ToString(); Type = GM_Type.Bool;  }
-        public override Constant EvalInt() { return Type == GM_Type.Int || Type == GM_Type.Long || Type == GM_Type.Short ? this : null; }
+        public virtual void Copy(CodeInfo c) { Offset = c.Offset; Label = c.Label; }
         public override string ToString()
         {
-            return Value;
+            StringWriter wr = new StringWriter();
+            // FormatHeadder(0, sb);
+            DecompileToText(wr);
+            return wr.ToString();
         }
-        public override bool Equals(object obj)
+        public override bool Equals(object that)
         {
-            StringValueInterface test = obj as StringValueInterface;
-            if (test == null) return false;
-            return Equals(test);
-        }
-        public bool Equals(StringValueInterface other)
-        {
-            return this.Value == other.Value;
+            if (object.ReferenceEquals(that, null)) return false;
+            if (object.ReferenceEquals(that, this)) return true;
+            return false; // unless the refrence equals this thing, its ALWAYS not equal
         }
         public override int GetHashCode()
         {
-            return (int)ivalue;
+            return Offset > 0 ? Offset : Offset ^ base.GetHashCode();
         }
-        public override void accept(Visitor v) { v.visit(this); }
     }
-    class ObjectVariable : AST, VariableInterface, IEquatable<StringValueInterface>
+    public abstract class AstClass : CodeInfo
     {
-        public GM_Type Type { get; protected set; }
-        public virtual string Value { get { return this.Instance + "." + this.Name; } }
-        public string Instance { get; protected set; }
+        public List<AstClass> Children { get; private set; }
+        protected AstClass(int offset) : base(offset) { Children = new List<AstClass>(); }
+        protected AstClass(CodeInfo i) : base(i) { Children = new List<AstClass>(); }
+        protected override bool PrintHeader { get { return false; } }
+        public AstClass Invert()
+        {
+            AstTree tree = this as AstTree;
+            if (tree != null && tree.op.getInvertedOp() != GMCode.BadOp)
+            {
+                AstTree ntree = new AstTree(this, tree.op.getInvertedOp());
+                ntree.Children.Add(tree.Children[0]);
+                ntree.Children.Add(tree.Children[1]);
+                return ntree;
+            }
+            else {
+                AstTree ntree = new AstTree(this, GMCode.Not);
+                ntree.Children.Add(this);
+                return ntree;
+            }
+        }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            AstClass is_that = that as AstClass;
+            if (is_that == null) return false;
+            if (is_that.Children.Count != this.Children.Count) return false;
+            for (int i = 0; i < this.Children.Count; i++) if (!(this.Children[i].Equals(is_that.Children[i]))) return false;
+            return true; // the stars align
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+    }
+    public abstract class AstStatement : CodeInfo
+    {
+        public AstStatement(int offset) : base(offset) { }
+        public AstStatement(CodeInfo i) : base(i) { }
+    }
+    // This class is used as filler leaf on an invalid stack
+    public class AstPop : AstClass
+    {
+        protected override bool PrintHeader { get { return false; } }
+        public AstPop() : base(-1) { }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            if (that is AstPop) return true; // we are just checking types on pop
+            else return false;
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+        public override void DecompileToText(TextWriter wr)
+        {
+            wr.Write("Pop()");
+        }
+    }
+    // This class is used in filler when the stack is an odd shape between labels
+    public class PushStatement : AstStatement
+    {
+        public AstClass ast { get; protected set; }
+        protected override bool PrintHeader { get { return true; } }
+        public PushStatement(AstClass ast) : base(ast) { this.ast = ast; }
+        public override void DecompileToText(TextWriter wr)
+        {
+            wr.Write("Push(");
+            if (ast != null) ast.DecompileToText(wr); else wr.Write("NullPush");
+            wr.Write(")");
+        }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            PushStatement is_that = that as PushStatement;
+            if (is_that == null) return false;
+            return ast.Equals(is_that.ast);
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+    }
+
+    public abstract class AstRValue : AstClass
+    {
+        public AstRValue(int offset) : base(offset) { }
+        public AstRValue(CodeInfo i) : base(i) { }
+        public abstract string Value { get; }
+        public GM_Type Type = GM_Type.NoType;
+        public override void DecompileToText(TextWriter wr)
+        {
+            wr.Write(Value.ToString());
+        }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            AstRValue is_that = that as AstRValue;
+            if (is_that == null) return false;
+            return Value.Equals(is_that.Value); // GM_Type equality dosn't matter when searching treess
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+    }
+    public class AstTree : AstClass
+    {
+        public GMCode op;
+        public AstTree(int offset, GMCode op) : base(offset) { this.op = op; }
+        public AstTree(CodeInfo i, GMCode op) : base(i) { this.op = op; }
+        void AddParm(TextWriter wr, string s)
+        {
+            wr.Write('(');
+            wr.Write(s);
+            wr.Write(')');
+        }
+        void WriteChild(TextWriter wr, int index)
+        {
+            wr.Write(' ');
+            bool needParns0 = Children[index] is AstTree;
+            if (needParns0) wr.Write('(');
+            wr.Write(Children[index].ToString());
+            if (needParns0) wr.Write(')');
+        }
+        public override void DecompileToText(TextWriter wr)
+        {
+            int count = op.getOpTreeCount();
+            if (count == 0 || count != Children.Count) wr.Write("Bad Op '" + op.GetName() + "'");
+            else
+            {
+                string s = op.getOpTreeString();
+                if (Children.Count > 1) { WriteChild(wr, 1); wr.Write(' '); }
+                wr.Write(s);
+                WriteChild(wr, 0);
+            }
+        }
+    }
+    public abstract class VarInstance : IEquatable<VarInstance>
+    {
+        public abstract int ObjectIndex { get; }
+        public abstract string ObjectName { get; }
+        public override string ToString()
+        {
+            return ObjectName;
+        }
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, this)) return true;
+            VarInstance i = obj as VarInstance;
+            if (i == null) return false;
+            return Equals(i);
+        }
+        public override int GetHashCode()
+        {
+            return ObjectIndex;
+        }
+        public bool Equals(VarInstance other)
+        {
+            return other.ObjectIndex == this.ObjectIndex;
+        }
+        static VarInstance s_global = new GlobalInstance();
+        static VarInstance s_self = new SelfInstance();
+        static VarInstance s_builtin = new BuiltInInstance();
+        public static VarInstance getInstance(int value)
+        {
+            if (value == -5) return s_global;
+            else if (value == -1) return s_self;
+            else if (value == -80) return s_builtin;
+            else return new AstInstance(value);
+        }
+        public static VarInstance getInstance(AstClass ast)
+        {
+            if (ast is AstConstant)
+            {
+                // if its a simple constant its simple to do
+                int value = Convert.ToInt32((ast as AstConstant).Value);
+                return getInstance(value);
+            }
+            else return new AstInstance(ast);
+        }
+    }
+    public class GlobalInstance : VarInstance
+    {
+        public override int ObjectIndex { get { return -5; } }
+        public override string ObjectName { get { return "global"; } }
+    }
+    public class SelfInstance : VarInstance
+    {
+        public override int ObjectIndex { get { return -1; } }
+        public override string ObjectName { get { return "self"; } }
+    }
+    public class BuiltInInstance : VarInstance // this is just for test for right now
+    {
+        public override int ObjectIndex { get { return -80; } }
+        public override string ObjectName { get { return "builtin"; } }
+    }
+    public class LocalInstance : VarInstance
+    {
+        public override int ObjectIndex { get { return -7; } }
+        public override string ObjectName { get { return "temp"; } }
+    }
+    public class AstInstance : VarInstance
+    {
+        int _instance;
+        AstClass _ast;
+        public override int ObjectIndex { get { return _instance; } }
+        public override string ObjectName { get { return _ast.ToString(); } }
+        public AstClass ObjectValue { get { return _ast; } }
+        public AstInstance(AstClass ast)
+        {
+            _ast = ast;
+            _instance = ObjectName.GetHashCode();
+            if (_instance > 0) _instance = -_instance;
+        }
+        public AstInstance(int instance)
+        {
+            Debug.Assert(instance > 0);
+            _instance = instance;
+            _ast = new AstConstant(null, _instance);
+        }
+    }
+    public class AstCall : AstRValue
+    {
+        public int Arguments { get { return Children.Count; } }
         public string Name { get; protected set; }
-        public ObjectVariable(string instance, string name) { this.Instance = instance; this.Name = name;  this.Type = GM_Type.Var; }
-        public ObjectVariable(ObjectVariable v, GM_Type convertTo) { this.Instance = v.Instance; this.Name = v.Name; this.Type = convertTo; }
-        protected ObjectVariable(ObjectVariable v) { this.Instance = v.Instance; this.Name = v.Name; this.Type = v.Type; }
-        public override Constant EvalInt() { return  null; }
-        public override void accept(Visitor v) { v.visit(this); }
-        public override string ToString()
-        {
-            return Value;
-        }
-        public override bool Equals(object obj)
-        {
-            StringValueInterface test = obj as StringValueInterface;
-            if (test == null) return false;
-            return Equals(test);
-        }
-        public bool Equals(StringValueInterface other)
-        {
-            return this.Value == other.Value; // lot of string compares, meh but this makes it so much easyer for all these abstract classes
-        }
-        public override int GetHashCode()
-        {
-            return this.Instance.GetHashCode() & 0xFFF0000 | this.Name.GetHashCode() & 0x0000FFFF;
-        }
-    }
-    class Conv : AST, VariableInterface, IEquatable<StringValueInterface>
-    {
-        public AST ToConvert { get; private set; }
-        public string Value
+        string _name;
+        public override string Value
         {
             get
             {
-                return ToConvert.ToString(); // mabey do some fancy converting here?
+                StringBuilder sb = new StringBuilder();
+                sb.Append(_name);
+                bool need_comma = false;
+                sb.Append('(');
+                foreach (var child in Children)
+                {
+                    if (need_comma) sb.Append(',');
+                    else need_comma = true;
+                    sb.Append(Children[0].ToString());
+                }
+                sb.Append(')');
+                return sb.ToString();
             }
         }
-        public GM_Type Type { get { return To; } }
-        public GM_Type From { get; private set; }
+        public AstCall(CodeInfo i, string name) : base(i) { Name = name; }
+    }
+    public class AstConstant : AstRValue
+    {
+        string _value;
+        public override string Value { get { return _value; } }
+        public AstConstant(CodeInfo i, short s) : base(i) { _value = s.ToString(); Type = GM_Type.Short; }
+        public AstConstant(CodeInfo i, double s) : base(i) { _value = s.ToString(); Type = GM_Type.Double; }
+        public AstConstant(CodeInfo i, long s) : base(i) { _value = s.ToString(); Type = GM_Type.Long; }
+        public AstConstant(CodeInfo i, int s) : base(i) { _value = s.ToString(); Type = GM_Type.Int; }
+        public AstConstant(CodeInfo i, float s) : base(i) { _value = s.ToString(); Type = GM_Type.Float; }
+        public AstConstant(CodeInfo i, string s) : base(i) { _value = s.ToString(); Type = GM_Type.String; }
+        public AstConstant(CodeInfo i, object v, GM_Type type) : base(i) { _value = v.ToString(); Type = type; }
+    }
+    public class AstVar : AstRValue
+    {
+        public string Name { get; set; }
+        public VarInstance Instance { get; private set; }
+        public AstClass ArrayIndex { get { return Children.Count > 1 ? Children[1] : null; } }
+        public int VarMetadate = 0;
 
-        public GM_Type To { get; private set; }
-        public Conv(AST ast, GM_Type from, GM_Type to) { this.From = from; this.To = to; this.ToConvert = ast; }
-        public override Constant EvalInt()
+
+        public AstVar(CodeInfo i, int instance, string name) : base(i)
         {
-            Constant eval = ToConvert.EvalInt();
-            if (eval != null)
+            Name = name;
+            Type = GM_Type.Var;
+            Children.Add(new AstConstant(null, instance));
+            Instance = VarInstance.getInstance(Children[0]);
+        }
+        public AstVar(CodeInfo i, AstClass instance, string name) : base(i)
+        {
+            Name = name;
+            Type = GM_Type.Var;
+            Children.Add(instance);
+            Instance = VarInstance.getInstance(instance);
+        }
+        public AstVar(CodeInfo i, int instance, string name, AstClass Index) : this(i, instance, name)
+        {
+            Children.Add(Index);
+        }
+        public AstVar(CodeInfo i, AstClass instance, string name, AstClass Index) : this(i, instance, name)
+        {
+            Children.Add(Index);
+        }
+        public override string Value
+        {
+            get
             {
-                eval = new Constant(eval, To);
-                return eval.EvalInt();
-            }
-            return null;
-        }
-        public override bool Equals(object obj)
-        {
-            StringValueInterface test = obj as Conv;
-            if (test == null) return false;
-            return Equals(test);
-        }
-        public bool Equals(StringValueInterface other)
-        {
-            return this.Value == other.Value;
-        }
-        public override int GetHashCode()
-        {
-            return ToConvert.GetHashCode(); // converts get no love
-        }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-    abstract class TreeOp : AST, IEquatable<TreeOp>
-    {
-        public readonly static Dictionary<GMCode, GMCode> invertOpType = new Dictionary<GMCode, GMCode>()
-        {
-            { GMCode.Slt, GMCode.Sge },
-            { GMCode.Sge, GMCode.Slt },
-            { GMCode.Sle, GMCode.Sgt },
-            { GMCode.Sgt, GMCode.Sle },
-            { GMCode.Sne, GMCode.Seq },
-            { GMCode.Seq, GMCode.Sne },
-        };
-        public readonly static Dictionary<GMCode, string> opMathOperation = new Dictionary<GMCode, string>()  {
-            {  (GMCode)0x03, "conv" },
-            {  (GMCode)0x04, "*" },
-            {  (GMCode)0x05, "/" },
-            { (GMCode) 0x06, "rem" },
-            {  (GMCode)0x07, "%" },
-            {  (GMCode)0x08, "+" },
-            {  (GMCode)0x09, "-" },
-            {  (GMCode)0x0a, "&" },
-            {  (GMCode)0x0b, "|" },
-            { (GMCode) 0x0c, "^" },
-            { (GMCode) 0x0d, "~" },
-            {  (GMCode)0x0e, "!" },
-
-            {  (GMCode)0x0f, "<<" },
-            {  (GMCode)0x10, ">>" },
-            { (GMCode) 0x11, "<" },
-            { (GMCode) 0x12, "<=" },
-            { (GMCode) 0x13, "==" },
-            {  (GMCode)0x14, "!=" },
-            {  (GMCode)0x15, ">=" },
-            {  (GMCode)0x16, ">" },
-        };
-        public GMCode Op { get; protected set; }
-        protected TreeOp(GMCode op) { this.Op = op;  }
-        public abstract AST Invert();
-        public override bool Equals(object obj)
-        {
-            TreeOp test = obj as TreeOp;
-            if (test == null) return false;
-            return Equals(test);
-        }
-        public bool Equals(TreeOp other)
-        {
-            return this.Op == other.Op;
-        }
-        public override int GetHashCode()
-        {
-            return this.Op.GetHashCode();
-        }
-    }
-    class MathOp : TreeOp, IEquatable<MathOp>
-    {
-        public AST Left { get { return Children[0]; } }
-        public AST Right { get { return Children[1]; } }
-
-        public MathOp(AST left, GMCode op, AST right) : base(op) { Children.Add(left); Children.Add(right); }
-        public override AST Invert()
-        {
-            switch (Op)
-            {
-                case GMCode.Slt: return new MathOp(Left, GMCode.Sge, Right);
-                case GMCode.Sge: return new MathOp(Left, GMCode.Slt, Right);
-                case GMCode.Sle: return new MathOp(Left, GMCode.Sgt, Right);
-                case GMCode.Sgt: return new MathOp(Left, GMCode.Sle, Right);
-                case GMCode.Sne: return new MathOp(Left, GMCode.Seq, Right);
-                case GMCode.Seq: return new MathOp(Left, GMCode.Sne, Right);
-                default:
-                    return null;
+                string ret;
+                if (Instance.ObjectIndex == -1 && Name[0] == '%')
+                    ret = Name;
+                else
+                    ret = Instance.ToString() + '.' + Name;
+                if (ArrayIndex != null) ret += '[' + ArrayIndex.ToString() + ']';
+                return ret;
             }
         }
-        public override bool Equals(object obj)
-        {
-            MathOp test = obj as MathOp;
-            if (test == null) return base.Equals(obj);
-            return Equals(test);
-        }
-        public bool Equals(MathOp other)
-        {
-            return this.Op == other.Op && this.Left.Equals(other.Left) && this.Right.Equals(other.Right);
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode() ^ this.Left.GetHashCode() ^ this.Right.GetHashCode();
-        }
-        public override void accept(Visitor v) { v.visit(this); }
-        public override string ToString()
-        {
-            string sop;
-            if (opMathOperation.TryGetValue(Op, out sop))
-            {
-                return "(" + Left.ToString() + " " + sop + " " + Right.ToString() + ")";
-            }
-            throw new ArgumentException("Cannot find math operation");
-        }
     }
-    class UntaryOp : TreeOp, IEquatable<UntaryOp>
+    public class AssignStatment : AstStatement
     {
-        public AST Right { get { return Children[0]; } }
-
-        public UntaryOp(GMCode op, AST right) : base(op) { Children.Add( right); }
-        public override AST Invert()
+        public AstVar Variable = null;
+        public AstClass Expression = null;
+        protected override bool PrintHeader { get { return true; } }
+        public AssignStatment(CodeInfo i) : base(i) { }
+        public AssignStatment(int offset) : base(offset) { }
+        public override void DecompileToText(TextWriter wr)
         {
-            if (Op == GMCode.Not) return Right;
-            return null;
+            if (Variable != null) Variable.DecompileToText(wr); else wr.Write("NullVariable");
+            wr.Write(" = ");
+            if (Expression != null) Expression.DecompileToText(wr); else wr.Write("NullExpression");
         }
-        public override string ToString()
+        public override bool Equals(object that)
         {
-            if (Op == GMCode.Neg) return "-(" + Right.ToString() + ")";
-            else if (Op == GMCode.Not) return "!(" + Right.ToString() + ")";
-            else if (Op == GMCode.Ret) return "return " + Right.ToString();
-            else throw new Exception("Bad UnitaryOp To string");
-        }
-        public override bool Equals(object obj)
-        {
-            UntaryOp test = obj as UntaryOp;
-            if (test == null) return base.Equals(obj);
-            return Equals(test);
-        }
-        public bool Equals(UntaryOp other)
-        {
-            return this.Op == other.Op && this.Right.Equals(other.Right);
-        }
-        public override int GetHashCode()
-        {
-            return this.Op.GetHashCode() ^ this.Right.GetHashCode();
-        }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-
-    class ArrayAccess : ObjectVariable, IEquatable<ArrayAccess>
-    {
-        public AST Index { get { return Children[0]; } }
-        public override string Value { get { return base.Value + "[" + Index.ToString() + "]"; } }
-        public ArrayAccess(ObjectVariable o, AST index) : base(o) {
-            Debug.Assert(index != null);
-            Children.Add(index);
-        }
-        public ArrayAccess(string instance, string var_name, AST index) : base(instance, var_name) {
-            Debug.Assert(index != null);
-            Children.Add(index);
-        }
-        public override bool Equals(object obj)
-        {
-            ArrayAccess test = obj as ArrayAccess;
-            if (test == null) return base.Equals(obj);
-            return Equals(test);
-        }
-        public bool Equals(ArrayAccess other)
-        {
-            return base.Equals(other) && other.Index == Index;
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode() ^ Index.GetHashCode();
-        }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-    class Assign : AST, IEquatable<Assign>
-    {
-        public AST Object { get { return Children[1]; } }
-        public AST Value { get { return Children[1]; } }
-        public Assign(AST o, AST value) { Children.Add(o); Children.Add(value); }
-        public override string ToString()
-        {
-            return Object.ToString() + '=' + Value.ToString();
-        }
-        public override bool Equals(object obj)
-        {
-            Assign test = obj as Assign;
-            if (test == null) return base.Equals(obj);
-            return Equals(test);
-        }
-        public bool Equals(Assign other)
-        {
-            return Object.Equals(other.Object) && Value.Equals(other.Value);
-        }
-        public override int GetHashCode()
-        {
-            return Object.GetHashCode() ^ Value.GetHashCode();
-        }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-    class ASTLabel : AST, IEquatable<ASTLabel>
-    {
-        public static string FormatWithLabel(ASTLabel label, AST statment)
-        {
-            return String.Format("{0,-15} {1}", label == null ? "" : label.ToString(), statment == null ? "" : statment.ToString());
-        }
-        public static string FormatWithLabel(AST statment)
-        {
-            LabelStart start = statment as LabelStart;
-            if (start != null)
-                return FormatWithLabel(start, start.Right);
-            else return FormatWithLabel(null, statment);
-        }
-        public int Target { get; private set; }
-        public int Offset {  get { return Target - Pc; } }
-        public int Pc { get; private set; }
-        public ASTLabel(int value, int pc) { this.Target = value; this.Pc = pc; }
-        public ASTLabel(ASTLabel label) : this(label.Target, label.Pc) { }
-        public override void accept(Visitor v) { v.visit(this); }
-
-        public override int GetHashCode()
-        {
-            return (Target << 16) | (Pc & 0xFFFF);
-        }
-        public override bool Equals(object obj)
-        {
-            ASTLabel l = obj as ASTLabel;
-            if (l != null) return Equals(l);
-            else return false;
-        }
-        public bool Equals(ASTLabel other)
-        {
-            return other.Target == Target;
-        }
-        public override string ToString()
-        {
-            return "Label_" + Target + "(" + Pc + ")";
-        }
-    }
-    // this is for if statments and goto statments
-    class GotoLabel : ASTLabel,IEquatable<GotoLabel>
-    {
-        public GotoLabel(ASTLabel value) : base(value) { }
-        public override string ToString()
-        {
-            return "goto " + base.ToString();
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            AssignStatment is_that = that as AssignStatment;
+            if (is_that == null) return false;
+            return Variable.Equals(is_that.Variable) && Expression.Equals(is_that.Expression); // GM_Type equality dosn't matter when searching treess
         }
         public override int GetHashCode()
         {
             return base.GetHashCode();
         }
-        public override bool Equals(object obj)
-        {
-            GotoLabel l = obj as GotoLabel;
-            if (l != null) return Equals(l);
-            else return base.Equals(obj); // its also equal to a label
-        }
-        public bool Equals(GotoLabel other)
-        {
-            return other.Target == Target;
-        }
-        public override void accept(Visitor v) { v.visit(this); }
     }
-    // This is if the statment starts with a label
-    class LabelStart : ASTLabel, IEquatable<LabelStart>
+    public class CallStatement : AstStatement
     {
-        public AST Right { get; private set; }
-        public LabelStart(ASTLabel value, AST right) : base(value) { this.Right = right; }
-        public override string ToString()
+        public AstCall Call { get; protected set; }
+        protected override bool PrintHeader { get { return true; } }
+        public CallStatement(AstCall call) : base(call)
         {
-            return base.ToString() + ":";
+            Debug.Assert(call != null);
+            this.Call = call;
         }
-        public override bool Equals(object obj)
+        public override void DecompileToText(TextWriter wr)
         {
-            LabelStart l = obj as LabelStart;
-            if (l != null) return Equals(l);
-            else return false; // its also equal to a label
+            wr.Write("void ");
+            if (Call != null) Call.DecompileToText(wr); else wr.Write("NullCall()");
+        }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            CallStatement is_that = that as CallStatement;
+            if (is_that == null) return false;
+            return Call.Equals(is_that.Call); // GM_Type equality dosn't matter when searching treess
         }
         public override int GetHashCode()
         {
             return base.GetHashCode();
         }
-        public bool Equals(LabelStart other)
-        {
-            return other.Target == Target && Right.Equals(Right);
-        }
-        public override void accept(Visitor v) { v.visit(this); }
     }
-        class Conditional : AST
+    public class StatementBlock : AstStatement, ICollection<AstStatement>
     {
-        public AST Condition { get; private set; }
-        public AST ifTrue { get; private set; }
-        public AST ifFalse { get; private set; }
-        public Conditional(AST Condition, AST ifTrue, AST ifFalse = null) 
+        protected override bool PrintHeader { get { return false; } }
+        public LinkedList<AstStatement> statements = null;
+        public StatementBlock() : base(null) { statements = new LinkedList<AstStatement>(); }
+        public StatementBlock(StatementBlock block) : base(null)
         {
-            this.Condition = Condition;
-            this.ifTrue = ifTrue;
-            Debug.Assert(this.ifTrue != null);
-            this.ifFalse = ifFalse;
+
         }
-        public override string ToString()
+        public void Copy(StatementBlock c)
         {
-            string ret = "if " + Condition.ToString() + " then " + ifTrue.ToString();
-            if (ifFalse != null) ret += " else " + ifFalse.ToString();
-            return ret;
+            base.Copy(c);
+            if (c is StatementBlock) statements = new LinkedList<AstStatement>((c as StatementBlock));
         }
-        // Flip targets to false is useful if your converting the BF to a BT but don't want to rewrite a bunch of code
-        public Conditional Invert(bool flipTargets = true)
+        public override void Copy(CodeInfo c)
         {
-            AST invertedCondition = null;
-            TreeOp uop = Condition as TreeOp;
-            if (uop == null) invertedCondition = new UntaryOp(GMCode.Not, Condition); // if its not a condition, throw a Not op in front of it
-            else {
-                invertedCondition = uop.Invert();
-            }
-            Debug.Assert(invertedCondition != null); // we shouldn't get here
-            return flipTargets ? new Conditional(invertedCondition, ifFalse, ifTrue) : new Conditional(invertedCondition, ifTrue, ifFalse);
+            if (c is StatementBlock) Copy(c as StatementBlock);
+            else base.Copy(c);
         }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-    class Enviroment : AST
-    {
-        public string Env { get; private set; }
-        public AST Statements { get; private set; }
-        public Enviroment(string env, AST statements)  { this.Env = env; this.Statements = statements; }
-        public override string ToString()
-        {
-            Call test = Statements as Call;
-            if (test == null) return "using(" + Env + "){ " + Statements + " }";
-            else return Env + "." + test.ToString();
-        }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-    class Statements : AST, ICollection<AST>
-    {
-        List<AST> _statements;
-        public ASTLabel Label { get; set; }
+        public LinkedList<AstStatement> Block { get { return statements; } }
+        public LinkedListNode<AstStatement> First { get { return statements.First; } }
+        public LinkedListNode<AstStatement> Last { get { return statements.Last; } }
+        public LinkedList<AstStatement> List { get { return statements; } }
         public int Count
         {
             get
             {
-                return _statements.Count;
+                return statements.Count;
             }
         }
 
@@ -581,101 +477,168 @@ namespace betteribttest
             }
         }
 
-        public Statements() { _statements = new List<AST>(); Label = null; }
-        public Statements(IEnumerable<AST> en) { _statements = new List<AST>(en); Label = null; }
-        public Statements(params AST[] en)  { _statements = new List<AST>(en); Label = null; }
-        public override string ToString()
+        public void Add(AstStatement item)
         {
-            if (this.Count == 0) return null;
-            else if (this.Count == 1) return ASTLabel.FormatWithLabel(Label, this[0]);
-            else
+            statements.AddLast(item);
+        }
+        public void Add(LinkedListNode<AstStatement> item)
+        {
+            statements.AddLast(item.Value);
+        }
+        public void AddTheUnlink(LinkedList<AstStatement> s)
+        {
+            while (s.First != null) AddTheUnlink(s.First);
+        }
+        public void AddTheUnlink(LinkedListNode<AstStatement> s)
+        {
+            if (s.List != null)
             {
-                StringBuilder sb = new StringBuilder();
-                if (Label != null) { sb.Append(Label.ToString()); sb.Append(":  "); }
-                sb.Append(' ', 5);
-                sb.AppendLine("{");
-                foreach (var o in this)
-                {
-                    sb.Append(' ', 5);
-                    sb.AppendLine(o.ToString());
-                }
-                sb.Append(' ', 5);
-                sb.AppendLine("}");
-                return sb.ToString();
+                statements.AddLast(s.Value);
+                s.List.Remove(s);
             }
         }
-        public void Add(AST ast) { _statements.Add(ast); }
-
         public void Clear()
         {
-            _statements.Clear();
+            statements.Clear();
         }
 
-        public bool Contains(AST item)
+        public bool Contains(AstStatement item)
         {
-            return _statements.Contains(item);
+            return statements.Contains(item);
         }
-
-        public void CopyTo(AST[] array, int arrayIndex)
+        public bool Contains(LinkedListNode<AstStatement> item)
         {
-            _statements.CopyTo(array, arrayIndex);
+            return object.ReferenceEquals(item.List, statements) || statements.Contains(item.Value);
         }
-
-        public bool Remove(AST item)
+        public void CopyTo(AstStatement[] array, int arrayIndex)
         {
-            return _statements.Remove(item);
+            statements.CopyTo(array, arrayIndex);
         }
 
-        public IEnumerator<AST> GetEnumerator()
+        public override void DecompileToText(TextWriter wr)
         {
-            return _statements.GetEnumerator();
+            if (statements.Count == 0) wr.Write("{ Empty Statment Block }");
+            else if (statements.Count == 1) statements.First.Value.DecompileToText(wr);
+            else
+            {
+                System.CodeDom.Compiler.IndentedTextWriter ident_wr = wr as System.CodeDom.Compiler.IndentedTextWriter;
+                if (ident_wr == null) // we are NOT in a statment block so we need to make this
+                    ident_wr = new System.CodeDom.Compiler.IndentedTextWriter(wr);
+                this.FormatHeadder(ident_wr);
+                wr.WriteLine('{');
+                ident_wr.Indent++;
+                foreach (var statement in statements)
+                {
+                    statement.DecompileToText(ident_wr);
+                    wr.WriteLine();
+                }
+                ident_wr.Indent--;
+                this.FormatHeadder(ident_wr);
+                wr.WriteLine('}');
+            }
+        }
+        public IEnumerator<AstStatement> GetEnumerator()
+        {
+            return statements.GetEnumerator();
         }
 
+        public bool Remove(AstStatement item)
+        {
+            return statements.Remove(item);
+        }
+        public bool Remove(LinkedListNode<AstStatement> item)
+        {
+            if (!Contains(item)) throw new ArgumentOutOfRangeException("Not in statment list");
+            statements.Remove(item);
+            return true;
+        }
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return _statements.GetEnumerator();
+            return GetEnumerator();
         }
-
-        public AST this[int i] { get { return _statements[i]; } }
-        public override void accept(Visitor v) { v.visit(this); }
-    }
-    class Call : AST
-    {
-        Constant constant;
-
-        public string FunctionName { get; private set; }
-        public int ArgumentCount { get; private set; }
-        public AST[] Arguments { get; private set; }
-        public Call(string functionname, params AST[] args) 
+        public override bool Equals(object that)
         {
-            this.FunctionName = functionname;
-            ArgumentCount = args.Length;
-            Arguments = args;
-            constant = null;
-            // special case for a constant going though a real function
-            if (functionname == "real" && args.Length == 1) {
-                Constant c = args[0].EvalInt();
-                if (c != null) constant = c;
-            }
-            // some sepcial cases for evaling
-        }
-        public override Constant EvalInt()
-        {
-            return constant;
-        }
-
-        public override string ToString()
-        {
-            string ret = FunctionName + "(";
-            if (ArgumentCount > 0)
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            StatementBlock is_that = that as StatementBlock;
+            if (is_that == null) return false;
+            if (is_that.Count != is_that.Count) return false;
+            var start = this.First;
+            var start2 = is_that.First;
+            while (start != null)
             {
-                for (int i = 0; i < ArgumentCount - 1; i++)
-                    ret += Arguments[i].ToString() + ",";
-                ret += Arguments.Last();
+                if (!start.Value.Equals(start2.Value)) return false;
+                start = start.Next;
+                start2 = start2.Next;
             }
-            ret += ")";
-            return ret;
+            return true; // ugh.  Mabey I should make a single link list chains for statments?
         }
-        public override void accept(Visitor v) { v.visit(this); }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+    }
+    // Used for decoding other statements
+    public class IfStatement : AstStatement
+    {
+        protected override bool PrintHeader { get { return true; } }
+        public AstClass Expression { get; set; }
+        public AstStatement Statement { get; set; }
+        public IfStatement(CodeInfo info) : base(info) { Statement = null; Expression = null; }
+        public override void DecompileToText(TextWriter wr)
+        {
+
+            if (Expression != null)
+            {
+                wr.Write(" if ");
+                Expression.DecompileToText(wr);
+                wr.Write(" then ");
+            }
+            else {
+                wr.Write("goto ");
+            }
+            if (Statement != null)
+                Statement.DecompileToText(wr);
+            else if (this.Label != null) /// HAACK
+            {
+                wr.Write(this.Label.ToString());
+            }
+            else wr.Write("NullStatement");
+        }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            IfStatement is_that = that as IfStatement;
+            if (is_that == null) return false;
+            return Expression.Equals(is_that.Expression) && Statement.Equals(is_that.Statement);
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
+    }
+    public class LabelStatement : AstStatement
+    {
+        protected override bool PrintHeader { get { return true; } }
+        public StatementBlock block;
+        public LabelStatement(Label label) : base(label.Target) { this.Label = label; block = null; }
+
+        public override void DecompileToText(TextWriter wr)
+        {
+            wr.Write(this.Label);
+            wr.WriteLine(": ");
+            if (block != null) block.DecompileToText(wr);
+
+        }
+        public override bool Equals(object that)
+        {
+            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
+            LabelStatement is_that = that as LabelStatement;
+            if (is_that == null) return false;
+            return this.Label.Equals(is_that.Label) && block.Equals(is_that.block);
+        }
+        public override int GetHashCode()
+        {
+            return base.GetHashCode();
+        }
     }
 }

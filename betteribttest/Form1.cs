@@ -170,7 +170,7 @@ namespace betteribttest
             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-            Decompiler dism = new Decompiler(cr);
+            //Decompiler dism = new Decompiler(cr);
             DecompilerNew newDecompiler = new DecompilerNew();
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
             // we assume all the patches were done to calls and pushes
