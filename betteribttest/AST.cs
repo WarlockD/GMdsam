@@ -10,46 +10,39 @@ using System.IO;
 
 namespace betteribttest
 {
-    public abstract class CodeInfo
+    public abstract class Ast : IEquatable<Ast>, IList<Ast>
     {
-        public CodeInfo CopyOf { get; private set; }
-        public Label Label { get; set; }
-        public int Offset { get; private set; }
-        protected CodeInfo(int offset) { Offset = offset; this.Label = null; CopyOf = null; }
-        protected CodeInfo(CodeInfo i)
+        protected void CopyChildren(Ast target)
         {
-            if (i != null)
+            foreach(var child in Children)
             {
-                Offset = i.Offset;
-                Label = i.Label;
-                CopyOf = i;
+                Ast copy = child.Copy();
+                copy.Parent = null; // make sure its null
+                target.Add(copy);
             }
-            else
+        }
+        public void SaveToFile(string filename)
+        {
+            using (StreamWriter wr = new StreamWriter("temp_statement.txt"))
             {
-                Offset = -1;
-                this.Label = null;
-                CopyOf = null;
+                this.DecompileToText(wr);
             }
+        }
+        
+/// <summary>
+/// Makes a copy of this Ast
+/// </summary>
+/// <returns>Deap copy of this ast</returns>
+public abstract Ast Copy();
+        public Ast Parent { get; private set; }
+        public int ParentIndex { get; private set; }
+        public virtual bool TryParse(out int value) { value = 0; return false; }
+        List<Ast> Children;
+        public Instruction Instruction { get; private set; }
 
-        }
-        protected abstract bool PrintHeader { get; }
+        protected Ast(Instruction i) { Instruction = i; Children = new List<Ast>(); ParentIndex = -1; }
+        protected Ast() { Instruction = null; Children = new List<Ast>(); ParentIndex = -1; }
 
-        private const string header_format = "{0:d8} {1,-10}   ";
-        private readonly string empty_header_string = string.Format(header_format, "", "");
-        public void FormatHeadder(TextWriter wr)
-        {
-            if (PrintHeader)
-                wr.Write(header_format, Offset, Label == null ? "" : Label.ToString());
-            else
-                wr.Write(empty_header_string);
-        }
-        public void FormatHeadder(System.CodeDom.Compiler.IndentedTextWriter wr)
-        {
-            int current_ident = wr.Indent;
-            wr.Indent = 0;
-            FormatHeadder(wr as TextWriter);
-            wr.Indent = current_ident;
-        }
         /// <summary>
         /// So this is the main function that decompiles a statment to text.  override this instead of
         /// ToString in ALL inherted functions
@@ -57,144 +50,263 @@ namespace betteribttest
         /// <param name="indent">Amount of spaces to indent</param>
         /// <param name="sb">String bulder that the line gets added to</param>
         /// <returns>Lenght of line or longest line, NOT the amount of text added</returns>
-        public abstract void DecompileToText(TextWriter wr);
-        public virtual void DecompileToText(System.CodeDom.Compiler.IndentedTextWriter wr)
-        {
-            FormatHeadder(wr);
-            DecompileToText(wr as TextWriter);
-        }
-        public virtual void Copy(CodeInfo c) { Offset = c.Offset; Label = c.Label; }
+        public abstract int DecompileToText(TextWriter wr);
+
         public override string ToString()
         {
             StringWriter wr = new StringWriter();
-            // FormatHeadder(0, sb);
             DecompileToText(wr);
             return wr.ToString();
         }
-        public override bool Equals(object that)
+        public bool Equals(Ast that)
         {
-            if (object.ReferenceEquals(that, null)) return false;
-            if (object.ReferenceEquals(that, this)) return true;
-            return false; // unless the refrence equals this thing, its ALWAYS not equal
+            if (this.Count != that.Count) return false;
+            for (int i = 0; i < Children.Count; i++)
+                if (!(this.Children[i].Equals(that.Children[i]))) return false;
+            return true;
+        }
+        /// <summary>
+        /// Sealed Equals, eveything below this is sealed as all leafs use children
+        /// </summary>
+        /// <param name="obj"></param>
+        /// <returns></returns>
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (obj.GetType() != this.GetType()) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
+            Ast that = obj as Ast;
+            return Equals(that);
         }
         public override int GetHashCode()
         {
-            return Offset > 0 ? Offset : Offset ^ base.GetHashCode();
+            return Instruction != null ? Instruction.Offset : base.GetHashCode();
         }
-    }
-    public abstract class AstClass : CodeInfo
-    {
-        public List<AstClass> Children { get; private set; }
-        protected AstClass(int offset) : base(offset) { Children = new List<AstClass>(); }
-        protected AstClass(CodeInfo i) : base(i) { Children = new List<AstClass>(); }
-        protected override bool PrintHeader { get { return false; } }
-        public AstClass Invert()
+        public Ast Invert()
         {
             AstTree tree = this as AstTree;
             if (tree != null && tree.op.getInvertedOp() != GMCode.BadOp)
             {
-                AstTree ntree = new AstTree(this, tree.op.getInvertedOp());
-                ntree.Children.Add(tree.Children[0]);
-                ntree.Children.Add(tree.Children[1]);
-                return ntree;
+                if (tree.op == GMCode.Not)
+                { // we just remove it
+                    return Children[0].Copy();
+                }
+                else
+                {
+                    AstTree ntree = new AstTree(Instruction, tree.op.getInvertedOp());
+                    CopyChildren(ntree);
+                    return ntree;
+                }
             }
             else {
-                AstTree ntree = new AstTree(this, GMCode.Not);
-                ntree.Children.Add(this);
+                AstTree ntree = new AstTree(Instruction, GMCode.Not);
+                ntree.Add(this.Copy());
                 return ntree;
             }
         }
-        public override bool Equals(object that)
+
+        #region IList Interface
+        public virtual void Remove()
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            AstClass is_that = that as AstClass;
-            if (is_that == null) return false;
-            if (is_that.Children.Count != this.Children.Count) return false;
-            for (int i = 0; i < this.Children.Count; i++) if (!(this.Children[i].Equals(is_that.Children[i]))) return false;
-            return true; // the stars align
+            if (this.Parent == null) throw new Exception("Cannot remove a null parrent");
+            this.Parent.Remove(this); // if we are at the end of the parent array, do this
         }
-        public override int GetHashCode()
+        
+        // I created these AddItem Event and Remove Item events so inherted objects don't have
+        // to override a bunch of the IList.  These are called After the parent has been set
+        // but before its added to the list
+
+        /// <summary>
+        /// Called before the 
+        /// </summary>
+        /// <param name="ast">Child to be removed</param>
+        /// <returns>Return true if child removeal was handled by override</returns>
+        protected virtual void OnRemoveChild(Ast ast) {
+            ast.Parent = null;
+            ast.ParentIndex = -1;
+        }
+        protected virtual void OnInsertChild(Ast ast,int index) {
+            ast.Parent = this;
+            ast.ParentIndex = index;
+        }
+        public int Count { get { return Children.Count; } }
+        public virtual bool IsReadOnly { get { return false; } }
+        public Ast this[int index] { get { return Children[index]; }
+            set {
+                if (index < 0 || index > Count) throw new IndexOutOfRangeException("Index out of range");
+                if (value == null) throw new ArgumentNullException("value", "Ast is null");
+                ParentClear(Children[index]);
+                ParentSet(value,index);
+                Children[index] = value;
+            }
+        }
+        void ParentSet(Ast item, int index)
         {
-            return base.GetHashCode();
+            if (item == null) throw new ArgumentNullException("Item is null", "item");
+            OnInsertChild(item, index);
+            if (!object.ReferenceEquals(item.Parent, this)) throw new ArgumentException("Ast parrent is not set", "item");
         }
+        void ParentClear(Ast item)
+        {
+            if (item == null) throw new ArgumentNullException("Item is null", "item");
+            OnRemoveChild(item);
+            if (object.ReferenceEquals(item.Parent, this)) throw new ArgumentException("Parent still set for this", "item");
+        }
+        public void Add(Ast item) {
+            ParentSet(item,Count);
+            Children.Add(item);   
+        }
+        public bool isBlock {  get { return this is StatementBlock; } }
+        public IEnumerable<T> FindType<T>(bool recursive = true) where T : Ast
+        {
+            List<T> ret = new List<T>();
+            foreach (var child in Children)
+            {
+                T test = child as T;
+                if (test != null) yield return test;
+                else if(recursive) foreach(var subChild in child.FindType<T>(recursive)) yield return subChild;
+            }
+        }
+        public void Clear() {
+            for(int i=0;i< Count; i++)
+            {
+                Ast child = Children[i];
+                ParentClear(child);
+            }
+            Children.Clear();
+        }
+        public bool Contains(Ast item) {
+            if (item == null) throw new ArgumentNullException("Item is null", "item");
+#if DEBUG
+            Debug.Assert((Children.Contains(item) && object.ReferenceEquals(this, item.Parent)) || (!Children.Contains(item) && !object.ReferenceEquals(this, item.Parent)));
+#endif
+            return  object.ReferenceEquals(this,item.Parent);  
+        } // could just test if the parrent equals this
+        public void CopyTo(Ast[] array, int arrayIndex) {
+            if (array == null) throw new ArgumentNullException("Array is null", "array");
+            for (int i=arrayIndex; i< array.Length;i++ )
+            {
+                Ast item = array[i];
+                if (item == null) throw new ArgumentNullException("Item is null", "array[" + i + "]");
+                if (item.Parent != null) throw new ArgumentException("Ast already has parent", "array[" + i + "]");
+                ParentSet(item,i);
+            }
+            Children.CopyTo(array, arrayIndex);
+        }
+        void ResetParentIndexs()
+        {
+            for (int i = 0; i < Children.Count; i++) Children[i].ParentIndex = i;
+        }
+        public bool Remove(Ast item) {
+            if (item == null) throw new ArgumentNullException("Item is null", "item");
+            if (!Contains(item)) return false;
+            ParentClear(item);
+            bool ret =Children.Remove(item);
+            ResetParentIndexs();
+            return ret;
+        }
+        public int IndexOf(Ast item) { return Children.IndexOf(item); }
+        public void Insert(int index, Ast item) {
+            ParentSet(item, index);
+            Children.Insert(index,item);
+            ResetParentIndexs();
+        }
+        public void RemoveAt(int index) {
+            if (index < 0 || index > Count) throw new IndexOutOfRangeException("Index out of range");
+            Ast item = Children[index];
+            ParentClear(item);
+            Children.RemoveAt(index);
+            ResetParentIndexs();
+        }
+        public IEnumerator<Ast> GetEnumerator() { return Children.GetEnumerator(); }
+        IEnumerator IEnumerable.GetEnumerator() { return Children.GetEnumerator(); }
+#endregion
     }
-    public abstract class AstStatement : CodeInfo
+    /// <summary>
+    /// Statment Class is a statment, duh.  Ast can NEVER be by itself unless its in here 
+    /// </summary>
+    public abstract class AstStatement : Ast
     {
-        public AstStatement(int offset) : base(offset) { }
-        public AstStatement(CodeInfo i) : base(i) { }
+        public AstStatement(Instruction i) : base(i) { }
+        public AstStatement() : base() { }
+        protected int DecompileLinesOfText(System.CodeDom.Compiler.IndentedTextWriter wr)
+        {
+            int count = 2; // the two {}
+            wr.WriteLine('{');
+            wr.Indent++;
+            foreach (var statement in this)
+            {
+#if DEBUG
+                Debug.Assert(statement is AstStatement); // these all should be statements
+                int line_count = statement.DecompileToText(wr);
+                Debug.Assert(line_count != 0); // all statments should return atleast 1
+                count += line_count;
+#else
+                count+= statement.DecompileToText(wr);
+#endif
+            }
+            wr.Indent--;
+            wr.WriteLine('}');
+            wr.Flush();
+            return count;
+        }
+        protected int DecompileLinesOfText(TextWriter wr)
+        {
+            if (Count == 0) { wr.WriteLine("{ Empty Statment Block }"); return 1; }
+            else if (Count == 1) { return this[0].DecompileToText(wr); }
+            else
+            {
+                System.CodeDom.Compiler.IndentedTextWriter ident_wr = wr as System.CodeDom.Compiler.IndentedTextWriter;
+                if (ident_wr == null) ident_wr = new System.CodeDom.Compiler.IndentedTextWriter(wr); // we are NOT in a statment block so we need to make this
+                return DecompileToText(ident_wr);
+            }
+        }
     }
     // This class is used as filler leaf on an invalid stack
-    public class AstPop : AstClass
+    public class AstPop : Ast
     {
-        protected override bool PrintHeader { get { return false; } }
-        public AstPop() : base(-1) { }
-        public override bool Equals(object that)
-        {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            if (that is AstPop) return true; // we are just checking types on pop
-            else return false;
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
-        }
-        public override void DecompileToText(TextWriter wr)
+        public AstPop() : base(null) { }
+        public override int DecompileToText(TextWriter wr)
         {
             wr.Write("Pop()");
+            return 0;
+        }
+        public override Ast Copy()
+        {
+            AstPop copy = new AstPop();
+            CopyChildren(copy);
+            return copy;
         }
     }
     // This class is used in filler when the stack is an odd shape between labels
     public class PushStatement : AstStatement
     {
-        public AstClass ast { get; protected set; }
-        protected override bool PrintHeader { get { return true; } }
-        public PushStatement(AstClass ast) : base(ast) { this.ast = ast; }
-        public override void DecompileToText(TextWriter wr)
+        public PushStatement(Ast ast) : base(ast.Instruction) { Add(ast); }
+        PushStatement(Instruction i) : base(i) { }
+        public override int DecompileToText(TextWriter wr)
         {
             wr.Write("Push(");
-            if (ast != null) ast.DecompileToText(wr); else wr.Write("NullPush");
+            if (Count > 0) this[0].DecompileToText(wr); else wr.Write("NullPush");
             wr.Write(")");
+            return 0;
         }
-        public override bool Equals(object that)
+        public override Ast Copy()
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            PushStatement is_that = that as PushStatement;
-            if (is_that == null) return false;
-            return ast.Equals(is_that.ast);
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
+            PushStatement copy = new PushStatement(this.Instruction);
+            CopyChildren(copy);
+            return copy;
         }
     }
-
-    public abstract class AstRValue : AstClass
-    {
-        public AstRValue(int offset) : base(offset) { }
-        public AstRValue(CodeInfo i) : base(i) { }
-        public abstract string Value { get; }
-        public GM_Type Type = GM_Type.NoType;
-        public override void DecompileToText(TextWriter wr)
-        {
-            wr.Write(Value.ToString());
-        }
-        public override bool Equals(object that)
-        {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            AstRValue is_that = that as AstRValue;
-            if (is_that == null) return false;
-            return Value.Equals(is_that.Value); // GM_Type equality dosn't matter when searching treess
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
-        }
-    }
-    public class AstTree : AstClass
+    public class AstTree : Ast
     {
         public GMCode op;
-        public AstTree(int offset, GMCode op) : base(offset) { this.op = op; }
-        public AstTree(CodeInfo i, GMCode op) : base(i) { this.op = op; }
+        public AstTree(Instruction i, GMCode op) : base(i) { this.op = op; }
+        public override Ast Copy()
+        {
+            AstTree copy = new AstTree(this.Instruction,this.op);
+            CopyChildren(copy);
+            return copy;
+        }
         void AddParm(TextWriter wr, string s)
         {
             wr.Write('(');
@@ -203,442 +315,463 @@ namespace betteribttest
         }
         void WriteChild(TextWriter wr, int index)
         {
-            wr.Write(' ');
-            bool needParns0 = Children[index] is AstTree;
+            bool needParns0 = this[index] is AstTree;
             if (needParns0) wr.Write('(');
-            wr.Write(Children[index].ToString());
+            wr.Write(this[index].ToString());
             if (needParns0) wr.Write(')');
         }
-        public override void DecompileToText(TextWriter wr)
+        public override int DecompileToText(TextWriter wr)
         {
             int count = op.getOpTreeCount();
-            if (count == 0 || count != Children.Count) wr.Write("Bad Op '" + op.GetName() + "'");
+            if (count == 0 || count != Count) wr.Write("Bad Op '" + op.GetName() + "'");
             else
             {
                 string s = op.getOpTreeString();
-                if (Children.Count > 1) { WriteChild(wr, 1); wr.Write(' '); }
+                if (Count > 1) { WriteChild(wr, 1); wr.Write(' '); }
                 wr.Write(s);
+                wr.Write(' ');
                 WriteChild(wr, 0);
             }
+            return 0;
         }
     }
-    public abstract class VarInstance : IEquatable<VarInstance>
+    public class VarInstance : Ast 
     {
-        public abstract int ObjectIndex { get; }
-        public abstract string ObjectName { get; }
-        public override string ToString()
+        public int ObjectIndex { get; private set; }
+        public override bool TryParse(out int value) { value = ObjectIndex; return true; }
+        public string ObjectName { get; private set; }
+        public override int DecompileToText(TextWriter wr)
         {
-            return ObjectName;
+            wr.Write(ObjectName);
+            return 0;
         }
-        public override bool Equals(object obj)
+        private VarInstance(Ast ast, string name, int index) : base() { ObjectIndex = index; ObjectName = name; if(ast != null) Add(ast); }
+        private VarInstance(string name, int index) : base() { ObjectIndex = index; ObjectName = name;  }
+        public override Ast Copy()
         {
-            if (object.ReferenceEquals(obj, this)) return true;
-            VarInstance i = obj as VarInstance;
-            if (i == null) return false;
-            return Equals(i);
+            VarInstance copy = new VarInstance(this.ObjectName, this.ObjectIndex);
+            CopyChildren(copy);
+            return copy;
         }
-        public override int GetHashCode()
-        {
-            return ObjectIndex;
-        }
-        public bool Equals(VarInstance other)
-        {
-            return other.ObjectIndex == this.ObjectIndex;
-        }
-        static VarInstance s_global = new GlobalInstance();
-        static VarInstance s_self = new SelfInstance();
-        static VarInstance s_builtin = new BuiltInInstance();
         public static VarInstance getInstance(int value)
         {
-            if (value == -5) return s_global;
-            else if (value == -1) return s_self;
-            else if (value == -80) return s_builtin;
-            else return new AstInstance(value);
+            if (value == -5) return new VarInstance("global", -5);
+            else if (value == -1) return new VarInstance("self", -1);
+            else if (value == -80) return new VarInstance("builtin", -80);
+            else return new VarInstance(null, "Object(" + value + ")", value);
         }
-        public static VarInstance getInstance(AstClass ast)
+        public static VarInstance getInstance(Ast ast)
         {
-            if (ast is AstConstant)
-            {
-                // if its a simple constant its simple to do
-                int value = Convert.ToInt32((ast as AstConstant).Value);
-                return getInstance(value);
-            }
-            else return new AstInstance(ast);
+            VarInstance ret = null;// if its a simple constant its simple to do
+            int value;
+            if(ast.TryParse(out value)) ret = getInstance(value);
+            if(ret == null) ret= new VarInstance(ast, "Object(" + ast.ToString() + ")",-10000);
+            return ret;
         }
     }
-    public class GlobalInstance : VarInstance
+   
+    public class AstCall : Ast
     {
-        public override int ObjectIndex { get { return -5; } }
-        public override string ObjectName { get { return "global"; } }
-    }
-    public class SelfInstance : VarInstance
-    {
-        public override int ObjectIndex { get { return -1; } }
-        public override string ObjectName { get { return "self"; } }
-    }
-    public class BuiltInInstance : VarInstance // this is just for test for right now
-    {
-        public override int ObjectIndex { get { return -80; } }
-        public override string ObjectName { get { return "builtin"; } }
-    }
-    public class LocalInstance : VarInstance
-    {
-        public override int ObjectIndex { get { return -7; } }
-        public override string ObjectName { get { return "temp"; } }
-    }
-    public class AstInstance : VarInstance
-    {
-        int _instance;
-        AstClass _ast;
-        public override int ObjectIndex { get { return _instance; } }
-        public override string ObjectName { get { return _ast.ToString(); } }
-        public AstClass ObjectValue { get { return _ast; } }
-        public AstInstance(AstClass ast)
-        {
-            _ast = ast;
-            _instance = ObjectName.GetHashCode();
-            if (_instance > 0) _instance = -_instance;
-        }
-        public AstInstance(int instance)
-        {
-            Debug.Assert(instance > 0);
-            _instance = instance;
-            _ast = new AstConstant(null, _instance);
-        }
-    }
-    public class AstCall : AstRValue
-    {
-        public int Arguments { get { return Children.Count; } }
+        public int Arguments { get { return Count; } }
         public string Name { get; protected set; }
-        string _name;
-        public override string Value
+        public override int DecompileToText(TextWriter wr)
         {
-            get
+            StringBuilder sb = new StringBuilder();
+            wr.Write(Name);
+            bool need_comma = false;
+            wr.Write('(');
+            foreach (var child in this)
             {
-                StringBuilder sb = new StringBuilder();
-                sb.Append(_name);
-                bool need_comma = false;
-                sb.Append('(');
-                foreach (var child in Children)
-                {
-                    if (need_comma) sb.Append(',');
-                    else need_comma = true;
-                    sb.Append(Children[0].ToString());
-                }
-                sb.Append(')');
-                return sb.ToString();
+                if (need_comma) sb.Append(',');
+                else need_comma = true;
+                if (this[0].DecompileToText(wr) != 0) throw new Exception("Wierd expression in call");
+            }
+            wr.Write(')');
+            return 0;
+        }
+        public AstCall(Instruction i, string name) : base(i) { Name = name; }
+        public override Ast Copy()
+        {
+            AstCall copy = new AstCall(this.Instruction,this.Name);
+            CopyChildren(copy);
+            return copy;
+        }
+    }
+    public class AstConstant : Ast
+    {
+        int _parsedValue;
+        public string Value { get; private set; }
+        public GM_Type Type { get; private set; }
+        public override bool TryParse(out int value)
+        {
+            if(Type ==  GM_Type.Int || Type == GM_Type.Short || Type == GM_Type.Long || Type == GM_Type.Bool)
+            {
+                value = _parsedValue;
+                return true;
+            }
+            else
+            {
+                value = 0;
+                return false;
             }
         }
-        public AstCall(CodeInfo i, string name) : base(i) { Name = name; }
+        private AstConstant(Instruction i, string value, GM_Type type, int parsedValue) :base(i)
+        {
+            Value = value;
+            Type = type;
+            _parsedValue = parsedValue;
+        }
+        public override Ast Copy()
+        {
+            AstConstant copy = new AstConstant(this.Instruction, this.Value, this.Type,_parsedValue);
+           // CopyChildren(copy);
+            return copy;
+        }
+        public AstConstant(int i) : base() { Value = i.ToString(); Type = GM_Type.Int; _parsedValue = i; }
+        public AstConstant(string value) : base() { Value = value; Type = GM_Type.String; _parsedValue = 0; }
+        public AstConstant(Instruction i, short s) : base(i) { Value = s.ToString(); Type = GM_Type.Short; _parsedValue = s; }
+        private AstConstant(Instruction i, object v, GM_Type type) : base(i) {
+            Value = v.ToString();
+            Type = type;
+            if (Type == GM_Type.Int || Type == GM_Type.Short || Type == GM_Type.Long) _parsedValue = int.Parse(Value);
+            else if (Type == GM_Type.Bool) _parsedValue = (bool)(v) ? 1 : 0;
+            else _parsedValue = 0;
+        }
+        public static AstConstant FromInstruction(Instruction i)
+        {
+            Debug.Assert(i.GMCode == GMCode.Push && i.FirstType != GM_Type.Var);
+            AstConstant con = null;
+            switch (i.FirstType)
+            {
+                case GM_Type.Double:
+                case GM_Type.Float:
+                case GM_Type.Int:
+                case GM_Type.Long:
+                case GM_Type.String:
+                    con = new AstConstant(i, i.Operand, i.FirstType); break;
+                case GM_Type.Short:
+                    con = new AstConstant(i, i.Instance); break;
+                default:
+                    throw new Exception("Bad Type");
+            }
+            return con;
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            wr.Write(Value);
+            return 0;
+        }
     }
-    public class AstConstant : AstRValue
-    {
-        string _value;
-        public override string Value { get { return _value; } }
-        public AstConstant(CodeInfo i, short s) : base(i) { _value = s.ToString(); Type = GM_Type.Short; }
-        public AstConstant(CodeInfo i, double s) : base(i) { _value = s.ToString(); Type = GM_Type.Double; }
-        public AstConstant(CodeInfo i, long s) : base(i) { _value = s.ToString(); Type = GM_Type.Long; }
-        public AstConstant(CodeInfo i, int s) : base(i) { _value = s.ToString(); Type = GM_Type.Int; }
-        public AstConstant(CodeInfo i, float s) : base(i) { _value = s.ToString(); Type = GM_Type.Float; }
-        public AstConstant(CodeInfo i, string s) : base(i) { _value = s.ToString(); Type = GM_Type.String; }
-        public AstConstant(CodeInfo i, object v, GM_Type type) : base(i) { _value = v.ToString(); Type = type; }
-    }
-    public class AstVar : AstRValue
+    public class AstVar : Ast
     {
         public string Name { get; set; }
-        public VarInstance Instance { get; private set; }
-        public AstClass ArrayIndex { get { return Children.Count > 1 ? Children[1] : null; } }
+        public GM_Type Type { get { return GM_Type.Var; } }
+        public VarInstance Instance { get { return this[0] as VarInstance; } }
+        public Ast ArrayIndex { get { return Count > 2 ? this[1] : null; } }
         public int VarMetadate = 0;
-
-
-        public AstVar(CodeInfo i, int instance, string name) : base(i)
+        public AstVar(Instruction i, int instance, string name) : base(i)
         {
             Name = name;
-            Type = GM_Type.Var;
-            Children.Add(new AstConstant(null, instance));
-            Instance = VarInstance.getInstance(Children[0]);
+            Add(VarInstance.getInstance(instance));
         }
-        public AstVar(CodeInfo i, AstClass instance, string name) : base(i)
+        public AstVar(Instruction i, Ast instance, string name) : base(i)
         {
             Name = name;
-            Type = GM_Type.Var;
-            Children.Add(instance);
-            Instance = VarInstance.getInstance(instance);
+            Add(VarInstance.getInstance(instance));
         }
-        public AstVar(CodeInfo i, int instance, string name, AstClass Index) : this(i, instance, name)
+        public AstVar(Instruction i, int instance, string name, Ast Index) : this(i, instance, name)
         {
-            Children.Add(Index);
+            Add(Index);
         }
-        public AstVar(CodeInfo i, AstClass instance, string name, AstClass Index) : this(i, instance, name)
+        public AstVar(Instruction i, Ast instance, string name, Ast Index) : this(i, instance, name)
         {
-            Children.Add(Index);
+            Add(Index);
         }
-        public override string Value
+        private AstVar(Instruction i,  string name) : base(i) { Name = name; }
+        public override Ast Copy()
         {
-            get
+            AstVar copy = new AstVar(this.Instruction, this.Name);
+            CopyChildren(copy);
+            return copy;
+        }
+        public static bool _showSelf = false;
+        public static bool Debug_DisplaySelf { get { return _showSelf; } set { _showSelf = false; } }
+        public override int DecompileToText(TextWriter wr)
+        {
+            if (_showSelf || Instance.ObjectIndex != -1)
             {
-                string ret;
-                if (Instance.ObjectIndex == -1 && Name[0] == '%')
-                    ret = Name;
-                else
-                    ret = Instance.ToString() + '.' + Name;
-                if (ArrayIndex != null) ret += '[' + ArrayIndex.ToString() + ']';
-                return ret;
+                this[0].DecompileToText(wr);
+                wr.Write('.');
             }
+            wr.Write(Name);
+            if (Count > 1)
+            {
+                wr.Write('[');
+                this[1].DecompileToText(wr);
+                wr.Write(']');
+            }
+            return 0;
         }
     }
     public class AssignStatment : AstStatement
     {
-        public AstVar Variable = null;
-        public AstClass Expression = null;
-        protected override bool PrintHeader { get { return true; } }
-        public AssignStatment(CodeInfo i) : base(i) { }
-        public AssignStatment(int offset) : base(offset) { }
-        public override void DecompileToText(TextWriter wr)
+        public AstVar Variable { get { return this[0] as AstVar; } }
+        public AstVar Expression { get { return this[1] as AstVar; } }
+        public AssignStatment(Instruction i) : base(i) { }
+        public override int DecompileToText(TextWriter wr)
         {
-            if (Variable != null) Variable.DecompileToText(wr); else wr.Write("NullVariable");
+            if(Count > 0) this[0].DecompileToText(wr); else wr.Write("NullVariable");
             wr.Write(" = ");
-            if (Expression != null) Expression.DecompileToText(wr); else wr.Write("NullExpression");
+            if (Count > 1) this[1].DecompileToText(wr); else wr.Write("NullExpression");
+            wr.WriteLine();
+            return 1;
         }
-        public override bool Equals(object that)
+        public override Ast Copy()
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            AssignStatment is_that = that as AssignStatment;
-            if (is_that == null) return false;
-            return Variable.Equals(is_that.Variable) && Expression.Equals(is_that.Expression); // GM_Type equality dosn't matter when searching treess
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
+            AssignStatment copy = new AssignStatment(this.Instruction);
+            CopyChildren(copy);
+            return copy;
         }
     }
     public class CallStatement : AstStatement
     {
-        public AstCall Call { get; protected set; }
-        protected override bool PrintHeader { get { return true; } }
-        public CallStatement(AstCall call) : base(call)
+        public AstCall Call { get { return this[0] as AstCall; } }
+        public CallStatement(Instruction popz, AstCall call) : base(popz)
         {
             Debug.Assert(call != null);
-            this.Call = call;
+            Add(call);
         }
-        public override void DecompileToText(TextWriter wr)
+        CallStatement(Instruction i) : base(i)
+        {
+        }
+        public override int DecompileToText(TextWriter wr)
         {
             wr.Write("void ");
-            if (Call != null) Call.DecompileToText(wr); else wr.Write("NullCall()");
+            if (Count >0) this[0].DecompileToText(wr); else wr.Write("NullCall()");
+            wr.WriteLine();
+            return 1;
         }
-        public override bool Equals(object that)
+        public override Ast Copy()
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            CallStatement is_that = that as CallStatement;
-            if (is_that == null) return false;
-            return Call.Equals(is_that.Call); // GM_Type equality dosn't matter when searching treess
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
+            CallStatement copy = new CallStatement(this.Instruction);
+            CopyChildren(copy);
+            return copy;
         }
     }
-    public class StatementBlock : AstStatement, ICollection<AstStatement>
+    public class StatementBlock : AstStatement
     {
-        protected override bool PrintHeader { get { return false; } }
-        public LinkedList<AstStatement> statements = null;
-        public StatementBlock() : base(null) { statements = new LinkedList<AstStatement>(); }
-        public StatementBlock(StatementBlock block) : base(null)
-        {
-
+        public Dictionary<Label, LabelStatement> LabelStatments = new Dictionary<Label, LabelStatement>();
+        protected override void OnRemoveChild(Ast ast) {
+            base.OnRemoveChild(ast); // just in case if I screw with the base class atall
+            LabelStatement lstatement = ast as LabelStatement;
+            if(lstatement != null) LabelStatments.Remove(lstatement.Target);
         }
-        public void Copy(StatementBlock c)
-        {
-            base.Copy(c);
-            if (c is StatementBlock) statements = new LinkedList<AstStatement>((c as StatementBlock));
-        }
-        public override void Copy(CodeInfo c)
-        {
-            if (c is StatementBlock) Copy(c as StatementBlock);
-            else base.Copy(c);
-        }
-        public LinkedList<AstStatement> Block { get { return statements; } }
-        public LinkedListNode<AstStatement> First { get { return statements.First; } }
-        public LinkedListNode<AstStatement> Last { get { return statements.Last; } }
-        public LinkedList<AstStatement> List { get { return statements; } }
-        public int Count
-        {
-            get
+        public StatementBlock() : base() { }
+        public StatementBlock(IEnumerable<Ast> list,bool copyList) : base() {
+            foreach(var a in list)
             {
-                return statements.Count;
+                Debug.Assert(a is AstStatement);
+                if (copyList) Add(a.Copy());
+                else
+                {
+                    a.Remove();
+                    Add(a);
+                }
             }
         }
-
-        public bool IsReadOnly
+        public override Ast Copy()
         {
-            get
+            StatementBlock copy = new StatementBlock();
+            CopyChildren(copy);
+            return copy;
+        }
+        protected override void OnInsertChild(Ast ast,int index) {
+            base.OnInsertChild(ast,index);// just in case if I screw with the base class atall
+            LabelStatement lstatement = ast as LabelStatement;
+            if (lstatement != null) LabelStatments.Add(lstatement.Target, lstatement);
+        }
+        public int IndexOfLabelStatement(Label l)
+        {
+            for (int i = 0; i < Count; i++)
             {
-                return false;
+                LabelStatement lstate = this[i] as LabelStatement;
+                if (lstate != null) return i;
             }
+            return -1;
         }
 
-        public void Add(AstStatement item)
+        public int DecompileToText(System.CodeDom.Compiler.IndentedTextWriter wr)
         {
-            statements.AddLast(item);
-        }
-        public void Add(LinkedListNode<AstStatement> item)
-        {
-            statements.AddLast(item.Value);
-        }
-        public void AddTheUnlink(LinkedList<AstStatement> s)
-        {
-            while (s.First != null) AddTheUnlink(s.First);
-        }
-        public void AddTheUnlink(LinkedListNode<AstStatement> s)
-        {
-            if (s.List != null)
+            int count = 2; // the two {}
+            wr.WriteLine('{');
+            wr.Indent++;
+            foreach (var statement in this)
             {
-                statements.AddLast(s.Value);
-                s.List.Remove(s);
+#if DEBUG
+                Debug.Assert(statement is AstStatement); // these all should be statements
+                int line_count = statement.DecompileToText(wr);
+                Debug.Assert(line_count != 0); // all statments should return atleast 1
+                count += line_count;
+#else
+                count+= statement.DecompileToText(wr);
+#endif
             }
+            wr.Indent--;
+            wr.WriteLine('}');
+            wr.Flush();
+            return count;
         }
-        public void Clear()
+        public override int DecompileToText(TextWriter wr)
         {
-            statements.Clear();
-        }
-
-        public bool Contains(AstStatement item)
-        {
-            return statements.Contains(item);
-        }
-        public bool Contains(LinkedListNode<AstStatement> item)
-        {
-            return object.ReferenceEquals(item.List, statements) || statements.Contains(item.Value);
-        }
-        public void CopyTo(AstStatement[] array, int arrayIndex)
-        {
-            statements.CopyTo(array, arrayIndex);
-        }
-
-        public override void DecompileToText(TextWriter wr)
-        {
-            if (statements.Count == 0) wr.Write("{ Empty Statment Block }");
-            else if (statements.Count == 1) statements.First.Value.DecompileToText(wr);
+            if (Count == 0) { wr.WriteLine("{ Empty Statment Block }"); return 1; }
+            else if (Count == 1) { return this[0].DecompileToText(wr); }
             else
             {
                 System.CodeDom.Compiler.IndentedTextWriter ident_wr = wr as System.CodeDom.Compiler.IndentedTextWriter;
-                if (ident_wr == null) // we are NOT in a statment block so we need to make this
-                    ident_wr = new System.CodeDom.Compiler.IndentedTextWriter(wr);
-                this.FormatHeadder(ident_wr);
-                wr.WriteLine('{');
-                ident_wr.Indent++;
-                foreach (var statement in statements)
-                {
-                    statement.DecompileToText(ident_wr);
-                    wr.WriteLine();
-                }
-                ident_wr.Indent--;
-                this.FormatHeadder(ident_wr);
-                wr.WriteLine('}');
+                if (ident_wr == null) ident_wr = new System.CodeDom.Compiler.IndentedTextWriter(wr); // we are NOT in a statment block so we need to make this
+                return DecompileToText(ident_wr);
             }
         }
-        public IEnumerator<AstStatement> GetEnumerator()
+    }
+    // This is filler for a blank statement or a message statment for debugging
+    public class CommentStatement : AstStatement
+    {
+        public override Ast Copy()
         {
-            return statements.GetEnumerator();
+            StatementBlock copy = new StatementBlock();
+            CopyChildren(copy);
+            return copy;
+        }
+        public void AddLine(string message)
+        {
+            Add(new AstConstant(message));
+        }
+        public int DecompileToText(System.CodeDom.Compiler.IndentedTextWriter wr)
+        {
+            int count = 1; // the two {}
+            wr.Indent++;
+            wr.Write("/* ");
+            foreach (var line in this)
+            {
+                Debug.Assert(line is AstConstant); // these all should be statements
+                int line_count = line.DecompileToText(wr);
+                Debug.Assert(line_count == 0); // all statments should return atleast 1
+                count++;
+            }
+            wr.WriteLine(" */");
+             wr.Indent--;
+            wr.Flush();
+            return count;
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            if (Count == 0) { wr.WriteLine("// No Comments"); return 1; }
+            else if (Count == 1) {
+                wr.Write("//");
+                return this[0].DecompileToText(wr);
+            }
+            else
+            {
+                System.CodeDom.Compiler.IndentedTextWriter ident_wr = wr as System.CodeDom.Compiler.IndentedTextWriter;
+                if (ident_wr == null) ident_wr = new System.CodeDom.Compiler.IndentedTextWriter(wr); // we are NOT in a statment block so we need to make this
+                return DecompileToText(ident_wr);
+            }
         }
 
-        public bool Remove(AstStatement item)
+        public CommentStatement(Instruction info, string message) : base(info) { AddLine(message); }
+        public CommentStatement(Instruction info) : base(info) {  }
+        public CommentStatement(string message) : base() { AddLine(message); }
+    }
+    public class GotoStatement : AstStatement
+    {
+        public LabelStatement LabelLinkTo=null;
+        public override Ast Copy()
         {
-            return statements.Remove(item);
+            GotoStatement copy = new GotoStatement(this.Instruction, Target);
+            CopyChildren(copy);
+            return copy;
         }
-        public bool Remove(LinkedListNode<AstStatement> item)
-        {
-            if (!Contains(item)) throw new ArgumentOutOfRangeException("Not in statment list");
-            statements.Remove(item);
-            return true;
+        public Label Target { get; set; }
+        public GotoStatement(Instruction info) : base(info) {
+           // Debug.Assert(info.GMCode == GMCode.B);
+            Target = info.Operand as Label;
         }
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
+        public GotoStatement(Label target) : base() {
+            Debug.Assert(target != null);
+            Target = target;
         }
-        public override bool Equals(object that)
+        public GotoStatement(Instruction info,Label target) : base(info)
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            StatementBlock is_that = that as StatementBlock;
-            if (is_that == null) return false;
-            if (is_that.Count != is_that.Count) return false;
-            var start = this.First;
-            var start2 = is_that.First;
-            while (start != null)
-            {
-                if (!start.Value.Equals(start2.Value)) return false;
-                start = start.Next;
-                start2 = start2.Next;
-            }
-            return true; // ugh.  Mabey I should make a single link list chains for statments?
+            Debug.Assert(target != null);
+            Target = target;
         }
-        public override int GetHashCode()
+        public override int DecompileToText(TextWriter wr)
         {
-            return base.GetHashCode();
+#if TEST_LATTER
+            Debug.Assert(Target != null && Count == 1 && Goto != null,"No Linking Label Statement"); // no linking Label Statement?
+#endif
+            wr.Write("goto ");
+            wr.WriteLine(Target);
+            return 1;
         }
     }
     // Used for decoding other statements
     public class IfStatement : AstStatement
     {
-        protected override bool PrintHeader { get { return true; } }
-        public AstClass Expression { get; set; }
-        public AstStatement Statement { get; set; }
-        public IfStatement(CodeInfo info) : base(info) { Statement = null; Expression = null; }
-        public override void DecompileToText(TextWriter wr)
+        public override Ast Copy()
         {
-
-            if (Expression != null)
-            {
-                wr.Write(" if ");
-                Expression.DecompileToText(wr);
-                wr.Write(" then ");
-            }
-            else {
-                wr.Write("goto ");
-            }
-            if (Statement != null)
-                Statement.DecompileToText(wr);
-            else if (this.Label != null) /// HAACK
-            {
-                wr.Write(this.Label.ToString());
-            }
-            else wr.Write("NullStatement");
+            IfStatement copy = new IfStatement(this.Instruction);
+            CopyChildren(copy);
+            return copy;
         }
-        public override bool Equals(object that)
+        public Ast Condition { get { return this[0]; }  }
+        public AstStatement Then { get { if (Count > 1) return this[1] as AstStatement; else return null; } }
+        public AstStatement Else { get { if (Count > 2) return this[2] as AstStatement; else return null; } }
+        public IfStatement(Instruction info) : base(info) {  }
+        public override int DecompileToText(TextWriter wr)
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            IfStatement is_that = that as IfStatement;
-            if (is_that == null) return false;
-            return Expression.Equals(is_that.Expression) && Statement.Equals(is_that.Statement);
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
+            int count=0;
+#if DEBUG
+            Debug.Assert(Count > 1, "Not enough children in IfStatement"); // no linking Label Statement?
+#endif
+            wr.Write("if ");
+            count= this[0].DecompileToText(wr);
+#if DEBUG
+            Debug.Assert(count== 0, "Statements in Condition"); // no linking Label Statement?
+#endif
+            wr.Write(" then "); // we could have a block here
+            count += this[1].DecompileToText(wr);
+            if(Count >2) // have an else
+            {
+                wr.Write(" else "); // we could have a block here
+                count += this[2].DecompileToText(wr);
+            }
+            if(count == 0) { count = 1; wr.WriteLine(); }
+            return count;
         }
     }
+    /// <summary>
+    /// All Children of this calss are calls TO this statement so we can find where they all are
+    /// </summary>
     public class LabelStatement : AstStatement
     {
-        protected override bool PrintHeader { get { return true; } }
-        public StatementBlock block;
-        public LabelStatement(Label label) : base(label.Target) { this.Label = label; block = null; }
-
-        public override void DecompileToText(TextWriter wr)
+        public List<GotoStatement> CallsHere = null;
+       
+        public override Ast Copy()
         {
-            wr.Write(this.Label);
-            wr.WriteLine(": ");
-            if (block != null) block.DecompileToText(wr);
-
+            LabelStatement copy = new LabelStatement(this.Instruction,Target);
+            return copy;
         }
-        public override bool Equals(object that)
+        public Label Target { get;  set; }
+        
+        public LabelStatement(Label label) : base() { this.Target = label; }
+        public LabelStatement(Instruction i) : base(i) { this.Target = i.Label; }
+        public LabelStatement(Instruction i, Label label) : base(i) { this.Target = label; }
+        public override int DecompileToText(TextWriter wr)
         {
-            if (base.Equals(that)) return true; // if the refrences equal, don't worry about it
-            LabelStatement is_that = that as LabelStatement;
-            if (is_that == null) return false;
-            return this.Label.Equals(is_that.Label) && block.Equals(is_that.block);
-        }
-        public override int GetHashCode()
-        {
-            return base.GetHashCode();
+            wr.Write(this.Target);
+            wr.WriteLine(":");
+            return 1;
         }
     }
 }
