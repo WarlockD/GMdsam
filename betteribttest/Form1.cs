@@ -174,21 +174,22 @@ namespace betteribttest
             
             DecompilerNew newDecompiler = new DecompilerNew();
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
+            List<string> InstanceList=newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
             // we assume all the patches were done to calls and pushes
             // string filename_to_test = "obj_face_alphys_Step";
-          //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
-           // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
+            //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
+            // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
             string filename_to_test = "gml_Object_obj_emptyborder_s"; // slighty harder now
           //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3";
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
-                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList);
+                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
             }
 
             
             foreach (var files in cr.GetCodeStreams())
             {
-                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList);
+                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
             }
             return;
             //       cr.DumpAllStrings("STRINGS.TXT");

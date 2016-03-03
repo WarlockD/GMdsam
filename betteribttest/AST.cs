@@ -10,11 +10,22 @@ using System.IO;
 
 namespace betteribttest
 {
+    public static class AstIListExtinson
+    {
+        public static bool ContainsType<T>(this List<Ast> list) where T : Ast
+        {
+            foreach (var ast in list) if (ast.HasType<T>()) return true;
+            return false;
+        }
+    }
     public abstract class Ast : IEquatable<Ast>, IList<Ast>
     {
+        List<Ast> Children;
+        protected static bool _debugOn = true;
+        public static bool DebugOutput { get { return _debugOn; } set { _debugOn = value; } }
         protected void CopyChildren(Ast target)
         {
-            foreach(var child in Children)
+            foreach (var child in Children)
             {
                 Ast copy = child.Copy();
                 copy.Parent = null; // make sure its null
@@ -28,16 +39,28 @@ namespace betteribttest
                 this.DecompileToText(wr);
             }
         }
-        
-/// <summary>
-/// Makes a copy of this Ast
-/// </summary>
-/// <returns>Deap copy of this ast</returns>
-public abstract Ast Copy();
+        static protected void AddParm(TextWriter wr, string s)
+        {
+            wr.Write('(');
+            wr.Write(s);
+            wr.Write(')');
+        }
+        protected void WriteChildParms(TextWriter wr, int index)
+        {
+            bool needParns0 = this[index] is AstTree;
+            if (needParns0) wr.Write('(');
+            wr.Write(this[index].ToString());
+            if (needParns0) wr.Write(')');
+        }
+        /// <summary>
+        /// Makes a copy of this Ast
+        /// </summary>
+        /// <returns>Deap copy of this ast</returns>
+        public abstract Ast Copy();
         public Ast Parent { get; private set; }
         public int ParentIndex { get; private set; }
         public virtual bool TryParse(out int value) { value = 0; return false; }
-        List<Ast> Children;
+        
         public Instruction Instruction { get; private set; }
 
         protected Ast(Instruction i) { Instruction = i; Children = new List<Ast>(); ParentIndex = -1; }
@@ -82,23 +105,12 @@ public abstract Ast Copy();
         {
             return Instruction != null ? Instruction.Offset : base.GetHashCode();
         }
-        public Ast Invert()
+        public virtual Ast Invert() // just too lazy
         {
             AstTree tree = this as AstTree;
-            if (tree != null && tree.op.getInvertedOp() != GMCode.BadOp)
+            if (tree != null) return tree.Invert();
+            else
             {
-                if (tree.op == GMCode.Not)
-                { // we just remove it
-                    return Children[0].Copy();
-                }
-                else
-                {
-                    AstTree ntree = new AstTree(Instruction, tree.op.getInvertedOp());
-                    CopyChildren(ntree);
-                    return ntree;
-                }
-            }
-            else {
                 AstTree ntree = new AstTree(Instruction, GMCode.Not);
                 ntree.Add(this.Copy());
                 return ntree;
@@ -111,7 +123,7 @@ public abstract Ast Copy();
             if (this.Parent == null) throw new Exception("Cannot remove a null parrent");
             this.Parent.Remove(this); // if we are at the end of the parent array, do this
         }
-        
+
         // I created these AddItem Event and Remove Item events so inherted objects don't have
         // to override a bunch of the IList.  These are called After the parent has been set
         // but before its added to the list
@@ -125,7 +137,7 @@ public abstract Ast Copy();
             ast.Parent = null;
             ast.ParentIndex = -1;
         }
-        protected virtual void OnInsertChild(Ast ast,int index) {
+        protected virtual void OnInsertChild(Ast ast, int index) {
             ast.Parent = this;
             ast.ParentIndex = index;
         }
@@ -136,7 +148,7 @@ public abstract Ast Copy();
                 if (index < 0 || index > Count) throw new IndexOutOfRangeException("Index out of range");
                 if (value == null) throw new ArgumentNullException("value", "Ast is null");
                 ParentClear(Children[index]);
-                ParentSet(value,index);
+                ParentSet(value, index);
                 Children[index] = value;
             }
         }
@@ -153,10 +165,10 @@ public abstract Ast Copy();
             if (object.ReferenceEquals(item.Parent, this)) throw new ArgumentException("Parent still set for this", "item");
         }
         public void Add(Ast item) {
-            ParentSet(item,Count);
-            Children.Add(item);   
+            ParentSet(item, Count);
+            Children.Add(item);
         }
-        public bool isBlock {  get { return this is StatementBlock; } }
+        public bool isBlock { get { return this is StatementBlock; } }
         public IEnumerable<T> FindType<T>(bool recursive = true) where T : Ast
         {
             List<T> ret = new List<T>();
@@ -164,11 +176,17 @@ public abstract Ast Copy();
             {
                 T test = child as T;
                 if (test != null) yield return test;
-                else if(recursive) foreach(var subChild in child.FindType<T>(recursive)) yield return subChild;
+                else if (recursive) foreach (var subChild in child.FindType<T>(recursive)) yield return subChild;
             }
         }
+        public bool HasType<T>() where T : Ast
+        {
+            if (this is T) return true;
+            else foreach (var child in Children) if (child.HasType<T>()) return true;
+            return false;
+        }
         public void Clear() {
-            for(int i=0;i< Count; i++)
+            for (int i = 0; i < Count; i++)
             {
                 Ast child = Children[i];
                 ParentClear(child);
@@ -180,16 +198,16 @@ public abstract Ast Copy();
 #if DEBUG
             Debug.Assert((Children.Contains(item) && object.ReferenceEquals(this, item.Parent)) || (!Children.Contains(item) && !object.ReferenceEquals(this, item.Parent)));
 #endif
-            return  object.ReferenceEquals(this,item.Parent);  
+            return object.ReferenceEquals(this, item.Parent);
         } // could just test if the parrent equals this
         public void CopyTo(Ast[] array, int arrayIndex) {
             if (array == null) throw new ArgumentNullException("Array is null", "array");
-            for (int i=arrayIndex; i< array.Length;i++ )
+            for (int i = arrayIndex; i < array.Length; i++)
             {
                 Ast item = array[i];
                 if (item == null) throw new ArgumentNullException("Item is null", "array[" + i + "]");
                 if (item.Parent != null) throw new ArgumentException("Ast already has parent", "array[" + i + "]");
-                ParentSet(item,i);
+                ParentSet(item, i);
             }
             Children.CopyTo(array, arrayIndex);
         }
@@ -201,14 +219,14 @@ public abstract Ast Copy();
             if (item == null) throw new ArgumentNullException("Item is null", "item");
             if (!Contains(item)) return false;
             ParentClear(item);
-            bool ret =Children.Remove(item);
+            bool ret = Children.Remove(item);
             ResetParentIndexs();
             return ret;
         }
         public int IndexOf(Ast item) { return Children.IndexOf(item); }
         public void Insert(int index, Ast item) {
             ParentSet(item, index);
-            Children.Insert(index,item);
+            Children.Insert(index, item);
             ResetParentIndexs();
         }
         public void RemoveAt(int index) {
@@ -220,7 +238,7 @@ public abstract Ast Copy();
         }
         public IEnumerator<Ast> GetEnumerator() { return Children.GetEnumerator(); }
         IEnumerator IEnumerable.GetEnumerator() { return Children.GetEnumerator(); }
-#endregion
+        #endregion
     }
     /// <summary>
     /// Statment Class is a statment, duh.  Ast can NEVER be by itself unless its in here 
@@ -297,10 +315,73 @@ public abstract Ast Copy();
             return copy;
         }
     }
+    public class LogicalOr : Ast
+    {
+        public LogicalOr() : base() { }
+        public override Ast Invert() // Never call base.Invert as it will recursive loop for resons
+        {
+            LogicalAnd or = new LogicalAnd();
+            foreach (var child in this) or.Add(child.Invert());
+            return or;
+        }
+        public override Ast Copy()
+        {
+            LogicalOr copy = new LogicalOr();
+            CopyChildren(copy);
+            return copy;
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            bool need_logical = false;
+            foreach (var child in this)
+            {
+                if (need_logical) wr.Write(" || ");
+                child.DecompileToText(wr);
+                need_logical = true;
+            }
+            return 0;
+        }
+    }
+    public class LogicalAnd : Ast
+    {
+        public LogicalAnd() : base() {  }
+        public override Ast Invert() // Never call base.Invert as it will recursive loop for resons
+        {
+            LogicalOr or = new LogicalOr();
+            foreach(var child in this) or.Add(child.Invert());
+            return or;
+        }
+        public override Ast Copy()
+        {
+            LogicalAnd copy = new LogicalAnd();
+            CopyChildren(copy);
+            return copy;
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            bool need_logical = false;
+            foreach (var child in this)
+            {
+                if (need_logical) wr.Write(" && ");
+                child.DecompileToText(wr);
+                need_logical = true;
+            }
+            return 0;
+        }
+    }
     public class AstTree : Ast
     {
         public GMCode op;
         public AstTree(Instruction i, GMCode op) : base(i) { this.op = op; }
+        public override Ast Invert() // Never call base.Invert as it will recursive loop for resons
+        {
+            if (op == GMCode.Not) return this[0].Copy();// we just remove it
+            GMCode io = op.getInvertedOp();
+            Debug.Assert(io != GMCode.BadOp);
+            AstTree ntree = new AstTree(Instruction, io);
+            CopyChildren(ntree);
+            return ntree;
+        }
         public override Ast Copy()
         {
             AstTree copy = new AstTree(this.Instruction,this.op);
@@ -323,14 +404,18 @@ public abstract Ast Copy();
         public override int DecompileToText(TextWriter wr)
         {
             int count = op.getOpTreeCount();
+            string s = op.getOpTreeString();
             if (count == 0 || count != Count) wr.Write("Bad Op '" + op.GetName() + "'");
+            else if(count == 1)
+            {
+                wr.Write(s);
+                WriteChild(wr, 0);
+            }
             else
             {
-                string s = op.getOpTreeString();
-                if (Count > 1) { WriteChild(wr, 1); wr.Write(' '); }
-                wr.Write(s);
-                wr.Write(' ');
                 WriteChild(wr, 0);
+                wr.Write(s);
+                WriteChild(wr, 1);
             }
             return 0;
         }
@@ -462,6 +547,7 @@ public abstract Ast Copy();
             return 0;
         }
     }
+
     public class AstVar : Ast
     {
         public string Name { get; set; }
@@ -481,11 +567,11 @@ public abstract Ast Copy();
         }
         public AstVar(Instruction i, int instance, string name, Ast Index) : this(i, instance, name)
         {
-            Add(Index);
+            if (Index != null) Add(Index);
         }
         public AstVar(Instruction i, Ast instance, string name, Ast Index) : this(i, instance, name)
         {
-            Add(Index);
+            if(Index != null) Add(Index);
         }
         private AstVar(Instruction i,  string name) : base(i) { Name = name; }
         public override Ast Copy()
@@ -682,6 +768,21 @@ public abstract Ast Copy();
         public CommentStatement(Instruction info) : base(info) {  }
         public CommentStatement(string message) : base() { AddLine(message); }
     }
+    public class ExitStatement : AstStatement
+    {
+        public override Ast Copy()
+        {
+            ExitStatement copy = new ExitStatement(this.Instruction);
+            CopyChildren(copy);
+            return copy;
+        }
+        public ExitStatement(Instruction i) : base(i) { }
+        public override int DecompileToText(TextWriter wr)
+        {
+            wr.WriteLine("return // Exit Statement ");
+            return 1;
+        }
+    }
     public class GotoStatement : AstStatement
     {
         public LabelStatement LabelLinkTo=null;
@@ -710,8 +811,10 @@ public abstract Ast Copy();
 #if TEST_LATTER
             Debug.Assert(Target != null && Count == 1 && Goto != null,"No Linking Label Statement"); // no linking Label Statement?
 #endif
+            if (_debugOn && LabelLinkTo != null) wr.Write("/* Linked */");
             wr.Write("goto ");
             wr.WriteLine(Target);
+            
             return 1;
         }
     }
@@ -770,7 +873,9 @@ public abstract Ast Copy();
         public override int DecompileToText(TextWriter wr)
         {
             wr.Write(this.Target);
+            if (_debugOn && CallsHere != null) wr.Write("/* Calls to Here: " + CallsHere.Count + " */");
             wr.WriteLine(":");
+            
             return 1;
         }
     }

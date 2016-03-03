@@ -90,6 +90,22 @@ namespace betteribttest
             {  (GMCode)0x15, 2},
             {  (GMCode)0x16, 2 },
         };
+        public static uint toUInt(this GMCode t, int operand)
+        {
+            byte b = (byte)t;
+            return (uint)(b << 24) | (uint)(0x1FFFFFF | operand);
+        }
+        public static uint toUInt(this GMCode t)
+        {
+            byte b = (byte)t;
+            return (uint)(b << 24);
+        }
+        public static uint toUInt(this GMCode t, GM_Type type)
+        {
+            byte b = (byte)t;
+            byte bt = (byte)type;
+            return (uint)(b << 24) | (uint)(bt << 16);
+        }
         public static int getOpTreeCount(this GMCode t)
         {
             int count;
@@ -148,19 +164,20 @@ namespace betteribttest
             {  -4, "noone" },
             {  -5, "global" },
         };
-        public static string lookupInstance(short instance)
+        public static string lookupInstance(short instance, List<string> InstanceLookup = null)
         {
             string ret;
             if (instanceLookup.TryGetValue(instance, out ret)) return ret;
+            else if (InstanceLookup != null && instance < InstanceLookup.Count) return InstanceLookup[instance];
             else return String.Format("%{0}%", instance);
         }
-        public static string lookupInstanceFromRawOpcode(uint opcode)
+        public static string lookupInstanceFromRawOpcode(uint opcode, List<string> InstanceLookup = null)
         {
-            return lookupInstance((short)(opcode & 0xFFFF));
+            return lookupInstance((short)(opcode & 0xFFFF), InstanceLookup);
         }
-        public static bool IsArrayPushPop(uint opcode)
+        public static bool IsArrayPushPop(uint operand)
         {
-            return (opcode & 0x8000000) == 0;
+            return (operand & 0x8000000) != 0;
         }
         public static string EscapeString(string s)
         {
@@ -264,28 +281,57 @@ namespace betteribttest
     }
     public sealed class Label :  IComparable<Label>, IComparable<Instruction>, IEquatable<Label>, ITextOut
     {
-        internal SortedSet<Instruction> _callsTo;
-        public IReadOnlyCollection<Instruction> CallsTo { get { return _callsTo; } }
+        internal List<LinkedListNode<Instruction>> _callsTo; 
+        public IReadOnlyList<LinkedListNode<Instruction>> CallsTo { get { return _callsTo; } }
         public int Target { get; internal set; }
    
-        public LinkedListNode<Instruction> InstructionTarget { get; set; }
-        internal Label(int offset)
+        public LinkedListNode<Instruction> InstructionOrigin { get; set; }
+        private Label(List<LinkedListNode<Instruction>> callsTo, int target, LinkedListNode<Instruction> origin)
         {
-            this.Target = offset;
-            _callsTo = new SortedSet<Instruction>();
-            InstructionTarget = null;
+            InstructionOrigin = origin;
+            _callsTo = new List<LinkedListNode<Instruction>>(callsTo);
+            Target = target;
+        }
+        public Label(Label l)
+        {
+            Target = l.Target;
+            InstructionOrigin = null;
+            _callsTo = new List<LinkedListNode<Instruction>>();
+        }
+        public Label Copy()
+        {
+            Label l = new Label(this._callsTo,Target,InstructionOrigin);
+            return l;
+        }
+        internal Label(int target)
+        {
+            this.Target = target;
+            _callsTo = new List<LinkedListNode<Instruction>>();
+            InstructionOrigin = null;
         }
         internal Label(Instruction i)
         {
             this.Target = i.Offset + GMCodeUtil.getBranchOffset(i.OpCode);
-            _callsTo = new SortedSet<Instruction>();
-            AddCallsTo(i);
-            InstructionTarget = null;
+            _callsTo = new List<LinkedListNode<Instruction>>();
+            InstructionOrigin = null;
         }
-        public void AddCallsTo(Instruction i)
+        public int ResolveCallsTo(LinkedList<Instruction> i)
         {
-            //System.Diagnostics.Debug.Assert(i.GMCode == GMCode.B || i.GMCode == GMCode.Bf || i.GMCode == GMCode.Bt);
-            _callsTo.Add(i);
+            _callsTo.Clear();
+            // can't use linq sadly
+            var start = i.First;
+            InstructionOrigin = null;
+            while (start != null)
+            {
+                if (start.Value.Offset == Target) start.Value.Label = this;
+                Label operand = start.Value.Operand as Label;
+                if (operand != null && operand == this) _callsTo.Add(start);
+                else if (start.Value.Label == this) InstructionOrigin = start;
+
+
+                start = start.Next;
+            }
+            return _callsTo.Count;
         }
         public int WriteTextLine(TextWriter wr)
         {
@@ -295,9 +341,9 @@ namespace betteribttest
         public override string ToString()
         {
             if (Target == 0)
-                return "Start";
+                return "LStart";
             else
-                return String.Format("Label_{0}", Target);
+                return String.Format("L{0}", Target);
         }
         public override bool Equals(object obj)
         {
@@ -332,8 +378,8 @@ namespace betteribttest
         byte[] raw_opcode;
         int _operandInt;
         // makes it a bad op code that just has the offset and the operand
-
-        public int Offset { get; protected set; }
+        public string Comment { get; set; }
+        public int Offset { get; private set; }
         public Label Label { get;  set; }
         public uint OpCode { get; private set; }
         public GMCode GMCode { get { return GMCodeUtil.getFromRaw(OpCode); } }
@@ -346,6 +392,7 @@ namespace betteribttest
             this.Operand = null;
             this._operandInt = 0;
             this.Label = null;
+            this.Comment = null;
         }
         internal Instruction(int offset, BinaryReader r) 
         {
@@ -397,6 +444,9 @@ namespace betteribttest
                 System.Diagnostics.Debug.Assert(Operand != null);
             }
         }
+        // Screw it, this is hemerging memory anyway
+        public List<string> InstanceLookup = null;
+        public List<string> StringLookup = null;
         // Common enough for me to put it here
         public short Instance
         {
@@ -431,10 +481,41 @@ namespace betteribttest
             if (Operand != null && Operand is int) return (int)Operand & 0x1FFFFFF;
             throw new Exception("Needed that operand");
         }
-        private const string header_format = "{0:d8} {1,-10}   ";
-        private readonly string empty_header_string = string.Format(header_format, "", "");
-        void FormatHeadder(TextWriter wr) { 
-                wr.Write(header_format, Offset, this.Label == null ? "" : this.Label.ToString());
+        void FormatPrefix(StringBuilder line,int opcode,int type) {
+            line.AppendFormat("{0,-5}{1,-5} ", Offset, this.Label == null ? "" : this.Label.ToString());
+            line.Append(this.GMCode.GetName());
+            if ((opcode & 160) == 128)
+            {
+                line.Append(GMCodeUtil.TypeToStringPostfix(type & 0xF));
+            }
+            else if ((opcode & 160) == 0)
+            {
+                line.Append(GMCodeUtil.TypeToStringPostfix(type & 0xF));
+                line.Append(GMCodeUtil.TypeToStringPostfix(type >> 4));
+            }
+            // so we should have 28 spaces here
+            if (line.Length < 21) line.Append(' ', 21 - line.Length);
+        }
+        void FormatPostFix(StringBuilder line)
+        {
+            if(Comment != null || Label != null)
+            {
+                if (line.Length < 40) line.Append(' ', 40 - line.Length); // make sure all the comments line up
+                line.Append("; ");
+                if(Label != null)
+                {
+                    line.Append("Label[");
+                    bool need_comma = false;
+                    foreach(var c in Label.CallsTo)
+                    {
+                        if (need_comma) line.Append(',');
+                        line.Append(c.Value.Offset);
+                        need_comma = true;
+                    }
+                    line.Append("] ");
+                }
+                if (Comment != null) line.Append(Comment);
+             }
         }
         public override string ToString()
         {
@@ -444,35 +525,18 @@ namespace betteribttest
         }
         public int WriteTextLine(TextWriter wr)
         {
+            StringBuilder line = new StringBuilder();
             int opcode = (int)((OpCode >> 24) & 0xFF);
             int type = (int)((OpCode >> 16) & 0xFF);
             string str;
-            int spacing = 0;
-            //  int line_start = FormatHeadder(indent, sb);
-            FormatHeadder(wr);
-            str = ((GMCode)opcode).GetName();
-            spacing += str.Length;
-            wr.Write(str);
-           
 
-            if ((opcode & 160) == 128)
-            {
-                wr.Write(GMCodeUtil.TypeToStringPostfix(type & 0xF));
-                spacing += 2;
-            }
-            else if ((opcode & 160) == 0)
-            {
-                wr.Write(GMCodeUtil.TypeToStringPostfix(type & 0xF));
-                wr.Write(GMCodeUtil.TypeToStringPostfix(type >> 4));
-                spacing += 4;
-            }
-            wr.Write(new string(' ', 20- spacing));
+            FormatPrefix(line,opcode,type); // both type prints are caculated in prefix
 
            // if(GMCode.IsConditional() && Operand is Label)
            if(Operand is Label)
             {
                 str = Operand.ToString();
-                wr.Write(str);
+                line.Append(str);
             }
             else if ((opcode & 64) != 0) // we have an operand
             {
@@ -483,23 +547,27 @@ namespace betteribttest
                     case GM_Type.Int:
                     case GM_Type.Long:
                     case GM_Type.Bool:
-                        wr.Write(Operand.ToString());
+                        line.Append(Operand.ToString());
                         break;
                     case GM_Type.Var:
-                        wr.Write(GMCodeUtil.lookupInstanceFromRawOpcode(OpCode));
-                        wr.Write('.');
-                        if (Operand is int) wr.Write("${0}$", ((int)Operand & 0x1FFFFFF));
-                        else wr.Write(Operand.ToString());
-                        if (GMCodeUtil.IsArrayPushPop(OpCode)) wr.Write("[]");
+                        line.Append(GMCodeUtil.lookupInstanceFromRawOpcode(OpCode, InstanceLookup));
+                        line.Append('.');
+                        if (Operand is int)
+                        {
+                            int operand = (int)Operand & 0x1FFFFFF;
+                            if (StringLookup != null) line.Append(StringLookup[operand]);
+                            else line.AppendFormat("${0}$", operand);        
+                        } else line.Append(Operand.ToString());
+                        if (GMCodeUtil.IsArrayPushPop((uint)_operandInt)) line.Append("[]");
                         break;
                     case GM_Type.String:
                         if (Operand is int)
-                            wr.Write("\"{0}\"", ((int)Operand & 0x1FFFFFF));
+                            line.AppendFormat("\"{0}\"", ((int)Operand & 0x1FFFFFF));
                         else goto case GM_Type.Bool;
 
                         break;
                     case GM_Type.Short:
-                        wr.Write((short)(OpCode << 16 >> 16));
+                        line.Append((short)(OpCode << 16 >> 16));
                         break;
                 }
             }
@@ -507,18 +575,20 @@ namespace betteribttest
             { //// ooooooooooh
                 if(OpCode == breakPopenvOpcode)
                 {
-                    wr.Write("break enviroment");
+                    line.Append("break enviroment");
 
                 } else if (GMCode.IsConditional() || GMCode == GMCode.Pushenv || GMCode == GMCode.Popenv)
                 {
                     int offset = GMCodeUtil.getBranchOffset(OpCode);
-                    wr.Write("{0}", Offset-offset);
+                    line.Append(Offset-offset);
                 } else
                 {
                     int new_offset = Offset + (int)(OpCode << 8 >> 8); // << 8 >> 6 // changed cause we are doing pc by int
-                    wr.Write("0x{0:x8}", new_offset);
+                    line.AppendFormat("0x{0:x8}", new_offset);
                 }
             }
+            FormatPostFix(line);
+            wr.Write(line.ToString());
             return 0;
         }
         public class Instructions : LinkedList<Instruction>, ITextOut
@@ -603,15 +673,19 @@ namespace betteribttest
             }
         }
         // first pass simple create form a stream
-     
-        public static Instructions Create(System.IO.BinaryReader r, List<string> StringIndex)
+        
+        public static Instructions Create(System.IO.BinaryReader r, List<string> StringIndex, List<string> InstanceList=null)
         {
             r.BaseStream.Position = 0;
             Instructions instructions = new Instructions();
             int pc = 0;
+            List<Label> LabelsOutsideOfFuntion = new List<Label>();
+            long lastpc = r.BaseStream.Length / 4;
             while (r.BaseStream.Length > r.BaseStream.Position)
             {
                 Instruction inst = new Instruction(pc, r);
+                inst.InstanceLookup = InstanceList; // hack I know but I want prity print
+                inst.StringLookup = StringIndex; 
                 instructions.AddLast(inst);
                 System.Diagnostics.Debug.Assert(inst.Offset == pc);
                 if (inst.GMCode.isBranch() || inst.GMCode == GMCode.Pushenv || (inst.GMCode == GMCode.Popenv && inst.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
@@ -623,32 +697,20 @@ namespace betteribttest
                     {
                         l = new Label(inst);
                         instructions.labels.Add(target, l);
+                        if (target >= lastpc) LabelsOutsideOfFuntion.Add(l);
                     }
-                    else l.AddCallsTo(inst);
                     inst.Operand = l;
                 }
                 pc += inst.Size;
             }
-            if(instructions.labels.Count > 0)
+            LabelsOutsideOfFuntion.Sort();
+            foreach (var l in LabelsOutsideOfFuntion)
             {
-                // Check if we have a label that goes to the end of the arguments
-                var last_label = instructions.labels.Last();
-                if (instructions.Last.Value.Offset < last_label.Key) instructions.AddLast(new Instruction(last_label.Key, ((int)GMCode.BadOp) << 24)); // add filler op
-                var start = instructions.First;
-                while(start != null)
-                {
-                    Instruction l = start.Value;
-                    Label label;
-                    if (instructions.labels.TryGetValue(l.Offset, out label))
-                    {
-                        l.Label = label;
-                        label.InstructionTarget = start;
-                        instructions.labels.Remove(l.Offset);
-                    }
-                    start = start.Next;
-                }
-                Debug.Assert(instructions.labels.Count == 0);
+                Instruction i = new Instruction(l.Target, GMCode.Exit.toUInt(GM_Type.Var));// add filler op 
+                i.Label = l; // give it the label
+                instructions.AddLast(i);
             }
+            if (instructions.labels.Count > 0) foreach (var l in instructions.labels) l.Value.ResolveCallsTo(instructions);
            
             // now fix string indexes 
             foreach(var i in instructions)
