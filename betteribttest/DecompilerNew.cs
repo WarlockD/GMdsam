@@ -28,7 +28,6 @@ namespace betteribttest
         // from what I have dug down, all streight assign statments are simple and the compiler dosn't do any
         // wierd things like branching with uneven stack values unless its in loops, so if we find all the assigns
         // we make life alot easyer down the road
-
         AstVar DoRValueComplex(Stack<Ast> stack, Instruction i) // instance is  0 and may be an array
         {
             string var_name = i.Operand as string;
@@ -39,19 +38,19 @@ namespace betteribttest
             Ast index = i.OperandInt > 0?stack.Pop() : null;// if we are an array
             Ast objectInstance = stack.Pop();
             int value;
-            if (InstanceList != null && objectInstance.TryParse(out value))
-                ret = new AstVar(i, new AstConstant(InstanceList[value]), var_name, index);
+            if (objectInstance.TryParse(out value))
+                ret = new AstVar(i, value, GMCodeUtil.lookupInstance(value, InstanceList), var_name, index);
             else
-                ret = new AstVar(i, objectInstance, var_name, index);
+                throw new Exception("Have some instance issue");
             return ret;
         }
         AstVar DoRValueSimple(Instruction i) // instance is != 0 or and not an array
         {
             Debug.Assert(i.Instance != 0);
             AstVar v = null;
-            if(InstanceList != null && i.Instance > 0) // we are screwing with a specifice object
+            if(i.Instance !=0) // we are screwing with a specifice object
             {
-                return new AstVar(i, new AstConstant(InstanceList[i.Instance]), i.Operand as string);
+                return new AstVar(i, i.Instance, GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
             }
             // Here is where it gets wierd.  iOperandInt could have two valus 
             // I think 0xA0000000 means its local and
@@ -62,10 +61,11 @@ namespace betteribttest
                 if ((i.OperandInt & 0x40000000) != 0)
                 {
                     // Debug.Assert(i.Instance != -1); // built in self?
-                    v = new AstVar(i, i.Instance, i.Operand as string);
+                    v = new AstVar(i, i.Instance,GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
                 }
                 else {
-                    v = new AstVar(i, i.Instance, i.Operand as string);
+                    v =  new AstVar(i, i.Instance, GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
+                    //v = new AstVar(i, i.Instance, i.Operand as string);
                 }
                 return v;
             }
@@ -91,18 +91,19 @@ namespace betteribttest
         {
             Instruction i = node.Value;
             int arguments = i.Instance;
-            AstCall call = new AstCall(i, i.Operand as string);
-            for (int a = 0; a < arguments; a++) call.Add(stack.Pop());
+            List<Ast> args = new List<Ast>();
+            for (int a = 0; a < arguments; a++) args.Add(stack.Pop());
+            AstCall call = new AstCall(i, i.Operand as string, args);
             node = node.Next;
             return call;
         }
         AstStatement DoAssignStatment(Stack<Ast> stack, ref LinkedListNode<Instruction> node)
         {
             Instruction i = node.Value;
-            AssignStatment assign = new AssignStatment(i);
             if (stack.Count < 1) throw new Exception("Stack size issue");
-            assign.Add(DoRValueVar(stack, i));
-            assign.Add(stack.Pop());
+            AstVar v = DoRValueVar(stack, i);
+            Ast value = stack.Pop();
+            AssignStatment assign = new AssignStatment(i,v, value);
             node = node.Next;
             return assign;
         }
@@ -153,9 +154,9 @@ namespace betteribttest
                             if (ti.GMCode.IsConditional())
                             {
                                 // lets consume this stack and change it
-                                ret = new IfStatement(i);
-                                ret.Add(ti.GMCode == GMCode.Bf ? stack.Pop().Invert() : stack.Pop());
-                                ret.Add(EmptyStack(stack, new GotoStatement(ti)));
+                                Ast condition = ti.GMCode == GMCode.Bf ? stack.Pop().Invert() : stack.Pop();
+                                AstStatement then = EmptyStack(stack, new GotoStatement(ti));
+                                ret = new IfStatement(i,condition,then);
                                 break;
                             }
                             else throw new Exception("Patern we havn't seend before");
@@ -204,17 +205,14 @@ namespace betteribttest
                                 {
                                     // we have a winner!
                                     ignoreLabels.Add(l); // kill the label
-                                    ret = new IfStatement(i);
-                                    ret.Add(condition.Invert());
-                                    ret.Add(EmptyStack(stack, new GotoStatement((next_instruction.Value))));
+                                    AstStatement then = EmptyStack(stack, new GotoStatement((next_instruction.Value)));
+                                    ret = new IfStatement(i, condition.Invert(), then);
                                     break;
                                 }
-
                             }
                             // eveything is normal, nothing to see here
-                            ret = new IfStatement(i);
-                            ret.Add(i.GMCode == GMCode.Bf ? condition.Invert() : condition);
-                            ret.Add(EmptyStack(stack, new GotoStatement(i)));
+                            ignoreLabels.Add(l); // kill the label
+                            ret = new IfStatement(i, i.GMCode == GMCode.Bf ? stack.Pop().Invert() : stack.Pop(), i.Label);
                         } 
                     }
                     else throw new Exception("No expression for an iff?");
@@ -246,11 +244,10 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
                         block.Add(new LabelStatement(i.Label)); // we add this so we know where they are, if that makes sense
                 }
                 int count = i.GMCode.getOpTreeCount(); // not a leaf
-                if (count != 0)
+                if (count == 2)
                 {
                     if (count > stack.Count) throw new Exception("Stack issue");
-                    AstTree ast = new AstTree(i, i.GMCode);
-                    while (count-- != 0) { ast.Add(stack.Pop()); }
+                    AstTree ast = new AstTree(i, i.GMCode,stack.Pop(),stack.Pop());
                     stack.Push(ast);
                     node = node.Next;
                 }
@@ -258,6 +255,12 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
                 {
                     switch (i.GMCode)
                     {
+                        case GMCode.Not:
+                            stack.Push(new AstNot(i, stack.Pop()));
+                            break;
+                        case GMCode.Neg:
+                            stack.Push(new AstNegate(i, stack.Pop()));
+                            break;
                         case GMCode.Push:
                             stack.Push(DoPush(stack, ref node));
                             break;
@@ -313,10 +316,7 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
                 ls.CallsHere.Add(g);
                 g.LabelLinkTo = ls;
             }
-            if (remove_unused) foreach (var ls in labelStatements)
-                {
-                    if (ls.CallsHere.Count == 0) ls.Remove();
-                }
+            if (remove_unused) foreach (var ls in labelStatements) block.Remove(ls);
         }
 
 
@@ -333,7 +333,7 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
                 if (gs != null && gs.LabelLinkTo.CallsHere.Count == 1) // simple call only one branch
                 {
                     List<Ast> statements = new List<Ast>();
-                    int i = ifs.ParentIndex + 1;
+
                     LabelStatement ls = block[i] as LabelStatement;
                     for (; i < block.Count; ++i)
                     {

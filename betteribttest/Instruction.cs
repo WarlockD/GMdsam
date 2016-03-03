@@ -164,7 +164,7 @@ namespace betteribttest
             {  -4, "noone" },
             {  -5, "global" },
         };
-        public static string lookupInstance(short instance, List<string> InstanceLookup = null)
+        public static string lookupInstance(int instance, List<string> InstanceLookup = null)
         {
             string ret;
             if (instanceLookup.TryGetValue(instance, out ret)) return ret;
