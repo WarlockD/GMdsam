@@ -6,13 +6,14 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
 using System.Collections;
+using Antlr4;
 
 namespace betteribttest
 {
-   
+
     public class DecompilerNew
     {
-     
+        // Antlr4.Runtime.
         public string ScriptName { get; private set; }
         public Instruction.Instructions Instructions { get; private set; }
         public List<string> StringIndex { get; set; }
@@ -28,27 +29,30 @@ namespace betteribttest
         // from what I have dug down, all streight assign statments are simple and the compiler dosn't do any
         // wierd things like branching with uneven stack values unless its in loops, so if we find all the assigns
         // we make life alot easyer down the road
-        AstVar DoRValueComplex(Stack<Ast> stack, Instruction i) // instance is  0 and may be an array
+        Ast DoRValueComplex(Stack<Ast> stack, Instruction i) // instance is  0 and may be an array
         {
             string var_name = i.Operand as string;
             Debug.Assert(i.Instance == 0);
             // since we know the instance is 0, we hae to look up a stack value
             Debug.Assert(stack.Count > 1);
             AstVar ret = null;
-            Ast index = i.OperandInt > 0?stack.Pop() : null;// if we are an array
+            Ast index = i.OperandInt > 0 ? stack.Pop() : null;// if we are an array
             Ast objectInstance = stack.Pop();
             int value;
             if (objectInstance.TryParse(out value))
-                ret = new AstVar(i, value, GMCodeUtil.lookupInstance(value, InstanceList), var_name, index);
+                ret = new AstVar(i, value, GMCodeUtil.lookupInstance(value, InstanceList), var_name);
             else
                 throw new Exception("Have some instance issue");
-            return ret;
+            if (index != null)
+                return new AstArrayAccess(ret, index);
+            else
+                return ret;
         }
         AstVar DoRValueSimple(Instruction i) // instance is != 0 or and not an array
         {
             Debug.Assert(i.Instance != 0);
             AstVar v = null;
-            if(i.Instance !=0) // we are screwing with a specifice object
+            if (i.Instance != 0) // we are screwing with a specifice object
             {
                 return new AstVar(i, i.Instance, GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
             }
@@ -61,35 +65,35 @@ namespace betteribttest
                 if ((i.OperandInt & 0x40000000) != 0)
                 {
                     // Debug.Assert(i.Instance != -1); // built in self?
-                    v = new AstVar(i, i.Instance,GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
+                    v = new AstVar(i, i.Instance, GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
                 }
                 else {
-                    v =  new AstVar(i, i.Instance, GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
+                    v = new AstVar(i, i.Instance, GMCodeUtil.lookupInstance(i.Instance, InstanceList), i.Operand as string);
                     //v = new AstVar(i, i.Instance, i.Operand as string);
                 }
                 return v;
             }
             else throw new Exception("UGH check this");
         }
-        AstVar DoRValueVar(Stack<Ast> stack, Instruction i)
+        Ast DoRValueVar(Stack<Ast> stack, Instruction i)
         {
-            AstVar v = null;
+            Ast v = null;
             if (i.Instance != 0) v = DoRValueSimple(i);
-            else v = DoRValueComplex(stack,i);
+            else v = DoRValueComplex(stack, i);
             return v;
         }
-        Ast DoPush(Stack<Ast> stack, ref LinkedListNode<Instruction> node)
+        Ast DoPush(Stack<Ast> stack, ref Instruction node)
         {
-            Instruction i = node.Value;
+            Instruction i = node;
             Ast ret = null;
-            if (i.FirstType == GM_Type.Var) ret= DoRValueVar(stack,i);
-            else ret= AstConstant.FromInstruction(i);
+            if (i.FirstType == GM_Type.Var) ret = DoRValueVar(stack, i);
+            else ret = AstConstant.FromInstruction(i);
             node = node.Next;
             return ret;
         }
-        AstCall DoCallRValue(Stack<Ast> stack, ref LinkedListNode<Instruction> node)
+        AstCall DoCallRValue(Stack<Ast> stack, ref Instruction node)
         {
-            Instruction i = node.Value;
+            Instruction i = node;
             int arguments = i.Instance;
             List<Ast> args = new List<Ast>();
             for (int a = 0; a < arguments; a++) args.Add(stack.Pop());
@@ -97,32 +101,21 @@ namespace betteribttest
             node = node.Next;
             return call;
         }
-        AstStatement DoAssignStatment(Stack<Ast> stack, ref LinkedListNode<Instruction> node)
+        AstStatement DoAssignStatment(Stack<Ast> stack, ref Instruction node)
         {
-            Instruction i = node.Value;
+            Instruction i = node;
             if (stack.Count < 1) throw new Exception("Stack size issue");
-            AstVar v = DoRValueVar(stack, i);
+            Ast v = DoRValueVar(stack, i);
             Ast value = stack.Pop();
-            AssignStatment assign = new AssignStatment(i,v, value);
+            AssignStatment assign = new AssignStatment(i, v, value);
             node = node.Next;
             return assign;
         }
         // convert into general statments and find each group of statements between labels
-       
-        LinkedListNode<Instruction> FindLabel(LinkedListNode<Instruction> node, Label l)
-        {
-            var list = node.List;
-            var start = list.First;
-            while(start != null)
-            {
-                if (start.Value.Label == l) return start;
-                start = start.Next;
-            }
-            throw new Exception("Can't find the label!");
-        }
+
         // makes a statment blocks that fixes the stack before the call
         // Emulation is starting to look REALLY good about now
-        AstStatement EmptyStack(Stack<Ast> stack,  AstStatement statment, int top=0)
+        AstStatement EmptyStack(Stack<Ast> stack, AstStatement statment, int top = 0)
         {
             if (stack.Count > top)
             {
@@ -130,131 +123,59 @@ namespace betteribttest
                 StatementBlock block = new StatementBlock();
                 block.Add(new CommentStatement("Had to fix the stack"));
                 for (int i = top; i < items.Length; i++) block.Add(new PushStatement(items[i].Copy()));
+                if (statment is StatementBlock)
+                {
+                    foreach (var s in statment as StatementBlock) block.Add(s.Copy() as AstStatement);
+                }
                 block.Add(statment);
                 return block;
             }
             else return statment;
         }
-        // branch search checks the branches to see if we have an issue
-        AstStatement BranchSearch(Instruction i, Stack<Ast> stack, ref LinkedListNode<Instruction> node)
+        AstStatement EmptyStack(Stack<Ast> stack, Label target, int top = 0)
         {
-            var list = node.List; // branch
-            Label l = i.Operand as Label;
-            AstStatement ret = null;
-            switch (i.GMCode)
+            if (stack.Count > top)
             {
-                case GMCode.B:
-                    if (stack.Count > 0) // might be an && or a ||
-                    {
-                        if (l.CallsTo.Count == 1) // simple case, 
-                        {
-                            ignoreLabels.Add(l); // we are handling this branch statment so we don't need a LabelStatement
-                            Instruction ti = l.InstructionOrigin.Value;
-
-                            if (ti.GMCode.IsConditional())
-                            {
-                                // lets consume this stack and change it
-                                Ast condition = ti.GMCode == GMCode.Bf ? stack.Pop().Invert() : stack.Pop();
-                                AstStatement then = EmptyStack(stack, new GotoStatement(ti));
-                                ret = new IfStatement(i,condition,then);
-                                break;
-                            }
-                            else throw new Exception("Patern we havn't seend before");
-                        }
-                        else
-                        {
-                            ret = EmptyStack(stack, new GotoStatement(i));
-                        }
-                    }
-                    else // normal goto, and resolved stack
-                    {
-                        ret = new GotoStatement(i);
-                    }
-                    break;
-                case GMCode.Bf:
-                case GMCode.Bt:
-                    if (stack.Count > 0){ 
-                        /* 
-                            Need to test for this wierd condtion that crops up.
-                            somewhere B L1
-                            somewhere Bf L0
-                            L0 push.E
-                            l1 bf L50
-                            When we have anything that goes to L0, we need the label that the bf uses
-                            and anything that goes to l1, there must be something on the stack we can use
-                            This appers to only happen on forward if statments so we should be good removeing them
-                        */
-                        Ast condition = stack.Pop();
-                        // so first, lets get the target
-
-
-                        if (condition is AstConstant) // Another wierd statment
-                        {
-                            int value;
-                            Debug.Assert(condition.TryParse(out value)); // this should work
-                            Debug.Assert(i.GMCode == GMCode.Bf); // normaly this is a push.e 0 and a bf label, if not..er humm.
-                            ret = EmptyStack(stack, new GotoStatement(i));
-                        }
-                        else {
-                            var target = l.InstructionOrigin;
-                            if (target.Value.GMCode == GMCode.Push && target.Value.Instance == 0)
-                            {
-                                // ok, now we test the next one
-                                var next_instruction = target.Next;
-                                if (next_instruction.Value.GMCode == GMCode.Bf)
-                                {
-                                    // we have a winner!
-                                    ignoreLabels.Add(l); // kill the label
-                                    AstStatement then = EmptyStack(stack, new GotoStatement((next_instruction.Value)));
-                                    ret = new IfStatement(i, condition.Invert(), then);
-                                    break;
-                                }
-                            }
-                            // eveything is normal, nothing to see here
-                            ignoreLabels.Add(l); // kill the label
-                            ret = new IfStatement(i, i.GMCode == GMCode.Bf ? stack.Pop().Invert() : stack.Pop(), i.Label);
-                        } 
-                    }
-                    else throw new Exception("No expression for an iff?");
-                    break;
-                default:
-                    throw new Exception("Bad op in branch search");
+                var items = stack.ToArray();
+                StatementBlock block = new StatementBlock();
+                block.Add(new CommentStatement("Had to fix the stack"));
+                for (int i = top; i < items.Length; i++) block.Add(new PushStatement(items[i].Copy()));
+                block.Add(new GotoStatement(target));
+                return block;
             }
-            Debug.Assert(ret != null);
-            node = node.Next;
-            return ret;
+            else return new GotoStatement(target);
         }
+  
 
-StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
+        public StatementBlock DoStatements(Stack<Ast> stack, Instruction start, Instruction end)
         {
-            Instruction last = null;
             StatementBlock block = new StatementBlock();
-            LinkedListNode<Instruction> node = list.First;
-            while (node != null)
+            Instruction i = start;
+            while (i != null)
             {
-#if DEBUG
-                block.SaveToFile("temp_statement.txt");
-#endif
-                Instruction i = node.Value;
-                Debug.Assert(!object.ReferenceEquals(last, i)); // this shouldn't happen
-                last = i;
+                
                 if (i.Label != null)
                 {
                     if (!ignoreLabels.Contains(i.Label))
                         block.Add(new LabelStatement(i.Label)); // we add this so we know where they are, if that makes sense
+                    else
+                        block.Add(new CommentStatement(i,"Ignoreing this label: " + i.Label.ToString())); // we add this so we know where they are, if that makes sense
                 }
                 int count = i.GMCode.getOpTreeCount(); // not a leaf
                 if (count == 2)
                 {
                     if (count > stack.Count) throw new Exception("Stack issue");
-                    AstTree ast = new AstTree(i, i.GMCode,stack.Pop(),stack.Pop());
+                    AstTree ast = new AstTree(i, i.GMCode, stack.Pop(), stack.Pop());
                     stack.Push(ast);
-                    node = node.Next;
+                     i= i.Next;
                 }
                 else
                 {
                     switch (i.GMCode)
                     {
+                        case GMCode.Conv:
+                            i = i.Next; // ignore
+                            break;
                         case GMCode.Not:
                             stack.Push(new AstNot(i, stack.Pop()));
                             break;
@@ -262,38 +183,46 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
                             stack.Push(new AstNegate(i, stack.Pop()));
                             break;
                         case GMCode.Push:
-                            stack.Push(DoPush(stack, ref node));
+                            stack.Push(DoPush(stack, ref i));
                             break;
                         case GMCode.Call:
-                            stack.Push(DoCallRValue(stack, ref node));
+                            stack.Push(DoCallRValue(stack, ref i));
                             break;
                         case GMCode.Popz:   // the call is now a statlemtn
-                            node = node.Next;
+                            i = i.Next;
                             block.Add(new CallStatement(i, stack.Pop() as AstCall));
                             break;
                         case GMCode.Pop:
-                            block.Add(DoAssignStatment(stack, ref node));// assign statment
+                            block.Add(DoAssignStatment(stack, ref i));// assign statment
                             break;
                         case GMCode.B: // this is where the magic happens...woooooooooo
+                            block.Add(new GotoStatement(i));
+                            Debug.Assert(i == end);
+                            return block;
                         case GMCode.Bf:
                         case GMCode.Bt:
-                            block.Add(BranchSearch(i, stack, ref node));
-                            break;
+                            {
+                                Ast condition = stack.Pop();
+                                block.Add(new IfStatement(i, i.GMCode == GMCode.Bf ? condition.Invert() : condition, i.Operand as Label));
+                            }
+                            
+                            Debug.Assert(i == end);
+                            return block;
                         case GMCode.BadOp:
-                            node = node.Next; // skip
+                            i = i.Next; // skip
                             break; // skip those
                         case GMCode.Exit:
                             block.Add(new ExitStatement(i));
-                            node = node.Next;
+                            i = i.Next;
                             break;
                         default:
                             throw new Exception("Not Implmented! ugh");
                     }
                 }
+                if (i == null || i == end.Next)
+                    break;
             }
-#if DEBUG
-            block.SaveToFile("temp_statement.txt");
-#endif
+
             return block;
         }
         /// <summary>
@@ -320,138 +249,6 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
         }
 
 
-        // We try to detect any if blocks that are blatently simple
-        // like if(x>4) x+3;   No else blocks, loops or anything else
-        // so its only if statments that have no other branchs inside of them
-        public void TryToDetectVerySimpleIfBlocks(StatementBlock block)
-        {
-            FillInGotoLabelMarkers(block);
-            List<IfStatement> ifstatements = block.FindType<IfStatement>(false).ToList();
-            foreach (var ifs in ifstatements)
-            {
-                GotoStatement gs = ifs.Then as GotoStatement;
-                if (gs != null && gs.LabelLinkTo.CallsHere.Count == 1) // simple call only one branch
-                {
-                    List<Ast> statements = new List<Ast>();
-
-                    LabelStatement ls = block[i] as LabelStatement;
-                    for (; i < block.Count; ++i)
-                    {
-                        ls = block[i] as LabelStatement;
-                        if (ls != null) break;
-                        statements.Add(block[i]);
-                    }
-                    if (ls.Target != gs.Target) continue; // found incorrect label statment, so found a bad if
-                    if (statements.ContainsType<GotoStatement>()) continue; // we have a goto statment somewhere so not a simple if
-
-                    Debug.Assert(statements.Count != 0);
-                    ls.Remove(); // remove the label, not needed anymore
-                    ifs[0] = ifs[0].Invert(); // change the conditional
-                    if (statements.Count == 1)
-                    {
-                        statements[0].Remove();
-                        ifs[1] = statements[0];
-                    }
-                    else ifs[1] = new StatementBlock(statements, false);
-                }
-            }
-
-        }
-        public StatementBlock GetBlockToLabel(StatementBlock block, int start, Label target, out LabelStatement ls)
-        {
-            Debug.Assert(block != null);
-            ls = null;
-            List<Ast> toRemove = new List<Ast>();
-                
-            for (int j = start; j < block.Count; j++)
-            {
-                ls = block[j] as LabelStatement;
-                if (ls != null)
-                {
-                    if (ls.Target != target) return null; // another target is in here
-                    else {
-                        StatementBlock testBlock = new StatementBlock();
-                        foreach (var o in toRemove)
-                        {
-                            block.Remove(o);
-                            testBlock.Add(o);
-                        }
-                        return testBlock;
-                    }
-                }
-                toRemove.Add(block[j]);
-            }
-            return null;
-        }
-        public void TryToDetectIfStatmentBlocks(StatementBlock block)
-        {
-            StatementBlock ret = new StatementBlock();
-
-            LabelStatement labelStatement = null;
-            IfStatement ifs = null;
-            for (int i = 0; i < block.Count; i++)
-            {
-                ifs = block[i] as IfStatement;
-                if (ifs != null)
-                {
-                    GotoStatement gos = ifs.Then as GotoStatement;
-                    if (gos == null) continue;
-                    Label target = gos.Target;
-                    StatementBlock newBlock = GetBlockToLabel(block, ifs.ParentIndex + 1, target, out labelStatement);
-                    if (newBlock == null) continue; // nope
-                    if (newBlock.HasType<GotoStatement>()) continue; // Not handling any aditional gotos here
-                    ignoreLabels.Add(target); // don't print this label
-                    if (labelStatement.CallsHere.Contains(gos)) labelStatement.Remove(gos);
-                    else throw new Exception("It SHOULD be in here");
-                    if (labelStatement.CallsHere.Count == 0) block.Remove(labelStatement);
-                    IfStatement nifs = new IfStatement(ifs.Instruction);
-                    nifs.Add(ifs.Condition.Invert());
-                    nifs.Add(newBlock);// lets see if this works!
-                    block[ifs.ParentIndex] = nifs;
-                }
-            }
-        }
-        // This pattern should so up on simple and's that were pre processed 
-        public void CheckForAndPatterns(StatementBlock block)
-        {
-            IfStatement if0, if1;
-            GotoStatement go0, if0_go0, if1_go1;
-            for (int i=0;i < block.Count-2;i++)
-            {
-                if0 = block[i] as IfStatement;
-                if1 = block[i+1] as IfStatement;
-                go0 = block[i+2] as GotoStatement;
-                if (if0 != null && if1 != null && go0 != null) // we got a start
-                {
-                    if0_go0 = if0.Then as GotoStatement;
-                    if1_go1 = if1.Then as GotoStatement;
-                    if (if0_go0 == null && if1_go1 == null) continue; // nope
-                    Label l = go0.Target;
-                    if (if0_go0.Target != l && if1_go1.Target != l) continue; // nope again
-                    // IF exp AND exp statment is verfied
-                    int index = i;
-                    block.Remove(if0);
-                    block.Remove(if1);
-                    block.Remove(go0);
-
-                }
-            }
-        }
-        public void RemoveUnusedLabels(StatementBlock block)
-        {
-            List<LabelStatement> labelStatements = block.FindType<LabelStatement>().ToList();
-            Dictionary<Label, HashSet<GotoStatement>> callsTo = new Dictionary<Label, HashSet<GotoStatement>>();
-            foreach(var labelStatement in labelStatements)
-            {
-                callsTo.Add(labelStatement.Target, new HashSet<GotoStatement>());
-            }
-            foreach (var gotoStatement in block.FindType<GotoStatement>())
-            {
-                if (!callsTo[gotoStatement.Target].Add(gotoStatement)) throw new Exception("How this happen");
-            }
-            // we can do some block checking or whatever but right now kill all the stupid extra labels
-            foreach(var ls in labelStatements) if (callsTo[ls.Target].Count == 0) ls.Remove();
-        }
         public void RemoveAllConv(Instruction.Instructions instructions)
         {
 #if DEBUG
@@ -491,22 +288,29 @@ StatementBlock DoStatements(Stack<Ast> stack, LinkedList<Instruction> list)
             
             
             SaveOutput(instructions, scriptName + "_original.txt");
-          //  DFS dfs = new DFS(instructions);
-          //  dfs.CreateDFS();
+            //  DFS dfs = new DFS(instructions);
+            //  dfs.CreateDFS();
 
+            BasicBlocks basic = new BasicBlocks(instructions,this);
 
-
-
+            // var testi=  AstInstruction.DoThisBackwards(instructions.First);
+   
+            SaveOutput(basic.EntryBlock.AstBlock, scriptName + "_forreals.txt");
+      
             Stack<Ast> stack = new Stack<Ast>();
-            StatementBlock decoded = DoStatements(stack,instructions); // DoBranchDecode(instructions);
-            FillInGotoLabelMarkers(decoded, true);
+           // StatementBlock decoded = DoStatements(stack,instructions); // DoBranchDecode(instructions);
+
+          
+            //FillInGotoLabelMarkers(decoded, true);
             //  StatementBlock ifs_fixed = TryToDetectIfStatmentBlocks(decoded);
             //   SaveOutput(ifs_fixed, scriptName + "_forreals.txt");
-            SaveOutput(decoded, scriptName + "_forreals.txt");
-            TryToDetectIfStatmentBlocks(decoded);
-            SaveOutput(decoded, scriptName + "_forreals.txt");
-            FillInGotoLabelMarkers(decoded, true);
-            SaveOutput(decoded, scriptName + "_forreals.txt");
+         //   SaveOutput(decoded, scriptName + "_forreals.txt");
+            //  TryToDetectIfStatmentBlocks(decoded);
+          //  LinkAllGotosAndStatements visitor = new LinkAllGotosAndStatements();
+          //  visitor.Run(decoded);
+         //     SaveOutput(decoded, scriptName + "_forreals.txt");
+        //    FillInGotoLabelMarkers(decoded, true);
+          //  SaveOutput(decoded, scriptName + "_forreals.txt");
         }
     }
 }

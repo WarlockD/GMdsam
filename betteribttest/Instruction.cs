@@ -279,59 +279,86 @@ namespace betteribttest
         /// <returns>Number of lines written, 0 means no new line was written</returns>
         int WriteTextLine(TextWriter wr);
     }
-    public sealed class Label :  IComparable<Label>, IComparable<Instruction>, IEquatable<Label>, ITextOut
+    public sealed class Label : IComparable<Label>, IComparable<Instruction>, IEquatable<Label>, ITextOut
     {
-        internal List<LinkedListNode<Instruction>> _callsTo; 
-        public IReadOnlyList<LinkedListNode<Instruction>> CallsTo { get { return _callsTo; } }
-        public int Target { get; internal set; }
-   
-        public LinkedListNode<Instruction> InstructionOrigin { get; set; }
-        private Label(List<LinkedListNode<Instruction>> callsTo, int target, LinkedListNode<Instruction> origin)
-        {
-            InstructionOrigin = origin;
-            _callsTo = new List<LinkedListNode<Instruction>>(callsTo);
-            Target = target;
-        }
+        private List<Instruction> _forwardRefrences;
+        private List<Instruction> _backardRefrences;
+        private List<Instruction> _refrences;
+        public IReadOnlyList<Instruction> ForwardRefrences { get { return _forwardRefrences; } }
+        public IReadOnlyList<Instruction> BackwardRefrences { get { return _backardRefrences; } }
+        public IReadOnlyList<Instruction> AllRefrencess { get { return _refrences; } }
+        public int CallsTo { get { return _refrences.Count; } }
+        public bool hasBackwardRefrences { get { return _backardRefrences.Count != 0; } }
+        public bool hasForwardRefrences { get { return _backardRefrences.Count != 0; } }
+        public int Address { get; internal set; }
+
+        public Instruction InstructionOrigin { get; private set; }
         public Label(Label l)
         {
-            Target = l.Target;
-            InstructionOrigin = null;
-            _callsTo = new List<LinkedListNode<Instruction>>();
-        }
-        public Label Copy()
-        {
-            Label l = new Label(this._callsTo,Target,InstructionOrigin);
-            return l;
+            Address = l.Address;
+            _forwardRefrences = l._forwardRefrences;
+            _backardRefrences = l._backardRefrences;
+            _refrences = l._refrences;
+            InstructionOrigin = l.InstructionOrigin;
         }
         internal Label(int target)
         {
-            this.Target = target;
-            _callsTo = new List<LinkedListNode<Instruction>>();
+            Address = target;
+            _forwardRefrences = null;
+            _backardRefrences = null;
+            _refrences = null;
             InstructionOrigin = null;
         }
-        internal Label(Instruction i)
+        public Label Copy()
         {
-            this.Target = i.Offset + GMCodeUtil.getBranchOffset(i.OpCode);
-            _callsTo = new List<LinkedListNode<Instruction>>();
-            InstructionOrigin = null;
+            Label l = new Label(this);
+            return l;
         }
-        public int ResolveCallsTo(LinkedList<Instruction> i)
+        const uint breakPopenvOpcode = (uint)(((uint)(GMCode.Popenv)) << 24 | 0x00F00000);
+        // this fixes all the instructions, and branches with labels so we can track them all
+        public static void ResolveCalls(LinkedList<Instruction> list)
         {
-            _callsTo.Clear();
-            // can't use linq sadly
-            var start = i.First;
-            InstructionOrigin = null;
-            while (start != null)
+            HashSet<Label> allLabels = new HashSet<Label>();
+            foreach (var i in list)
             {
-                if (start.Value.Offset == Target) start.Value.Label = this;
-                Label operand = start.Value.Operand as Label;
-                if (operand != null && operand == this) _callsTo.Add(start);
-                else if (start.Value.Label == this) InstructionOrigin = start;
-
-
-                start = start.Next;
+                if (i.Label != null) allLabels.Add(i.Label);
+                Label l = i.Operand as Label;
+                if (l != null) allLabels.Add(l);
             }
-            return _callsTo.Count;
+            foreach (var l in allLabels) ResolveCalls(l, list);
+        }
+        public static void ResolveCalls(Label l, LinkedList<Instruction> list)
+        {
+            var fRefs = new List<Instruction>();
+            var bRefs = new List<Instruction>();
+            var Refs = new List<Instruction>();
+            var node = list.First;
+            bool behind = true;
+            while (node != null)
+            {
+                Instruction i = node.Value;
+                if (i.Address == l.Address) {
+                    i.Label = l;                    // Link the label, even if it wasn't there before
+                    l.InstructionOrigin = node.Value;     // Link the instruction its attached too
+                    behind = false;                 // tell the system to start to ad to the forward list
+                } else {
+                    if (i.GMCode.isBranch() || i.GMCode == GMCode.Pushenv || (i.GMCode == GMCode.Popenv && i.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
+                    {
+                        int target = GMCodeUtil.getBranchOffset(i.OpCode);
+                        target += i.Address;
+                        if (target == l.Address)
+                        {
+                            if (behind) bRefs.Add(node.Value); else fRefs.Add(node.Value);
+                            i.Operand = l; // make sure the label is in the operand even if it wasnt before
+                            Refs.Add(node.Value);
+                        }
+                    }
+                }
+                node = node.Next;
+            }
+            l._forwardRefrences = fRefs;
+            l._backardRefrences = bRefs;
+            l._refrences = Refs;
         }
         public int WriteTextLine(TextWriter wr)
         {
@@ -340,10 +367,10 @@ namespace betteribttest
         }
         public override string ToString()
         {
-            if (Target == 0)
+            if (Address == 0)
                 return "LStart";
             else
-                return String.Format("L{0}", Target);
+                return String.Format("L{0}", Address);
         }
         public override bool Equals(object obj)
         {
@@ -356,38 +383,78 @@ namespace betteribttest
         }
         public override int GetHashCode()
         {
-            return Target;
+            return Address;
         }
 
         public int CompareTo(Label other)
         {
-            return Target.CompareTo(other.Target);
+            return Address.CompareTo(other.Address);
         }
         public int CompareTo(Instruction other)
         {
-            return Target.CompareTo(other.Offset);
+            return Address.CompareTo(other.Address);
         }
         public bool Equals(Label l)
         {
-            return l.Target == Target;
+            return l.Address == Address;
         }
     }
-    public sealed class Instruction :  IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>, ITextOut
+    public sealed class Instruction : IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>, ITextOut
     {
+        // Internal next instruction, or previous instruction of code 
+        // not sure if I want to expose it or not
+        LinkedListNode<Instruction> _link = null;
+        // We don't want to expose the LinkList in case I get an idea to modify it
+        public Instruction First {  get { return _link.List.First.Value; } }
+        public Instruction Last { get { return _link.List.Last.Value; } }
+        public Instruction Next {  get { return _link.Next == null ? null : _link.Next.Value; } }
+        public Instruction Prev {  get { return _link.Previous == null ? null : _link.Previous.Value; } }
+
+        public IEnumerable<Instruction> RangeFrom(Instruction to)
+        {
+            Debug.Assert(to != null);
+            var at = this;
+            while (at != to && at !=null)
+            {
+                yield return at;
+                at = at.Next;
+            }
+            Debug.Assert(at != null); // return an issue if it was before, maybe we can compare addresses
+            yield return to;
+        }
         const uint breakPopenvOpcode = (uint)(((uint)(GMCode.Popenv)) << 24 | 0x00F00000);
         byte[] raw_opcode;
         int _operandInt;
         // makes it a bad op code that just has the offset and the operand
+        public bool isBranch { get { return this.GMCode.isBranch(); } }
+        public int BranchDesitation
+        {
+            get
+            {
+                Debug.Assert(isBranch);
+                Label l = Operand as Label;
+                return l.Address;
+            }
+        }
         public string Comment { get; set; }
-        public int Offset { get; private set; }
+        public int Address { get; private set; }
         public Label Label { get;  set; }
         public uint OpCode { get; private set; }
         public GMCode GMCode { get { return GMCodeUtil.getFromRaw(OpCode); } }
         public object Operand { get; set; }
         public int OperandInt { get { return _operandInt; } }
+        public static Instruction CreateFakeExitNode(Instruction i, bool need_label)
+        {
+            uint op = ((uint)GMCode.Exit << 24);
+            op |= ((uint)GM_Type.Var << 16);
+
+            Instruction ni = new Instruction(i.Address + i.Size, op);
+            if (need_label) ni.Label = new Label(ni.Address);
+            return ni;
+        }
         internal Instruction(int offset, uint opCode) 
         {
-            this.Offset = offset;
+            this.Address = offset;
             this.OpCode = opCode;
             this.Operand = null;
             this._operandInt = 0;
@@ -398,7 +465,7 @@ namespace betteribttest
         {
             this.Operand = null;
             this.Label = null;
-            this.Offset = offset;
+            this.Address = offset;
             // raw_opcode = r.ReadBytes(sizeof(int));
             this.OpCode = r.ReadUInt32();
             raw_opcode = BitConverter.GetBytes(this.OpCode);
@@ -482,7 +549,7 @@ namespace betteribttest
             throw new Exception("Needed that operand");
         }
         void FormatPrefix(StringBuilder line,int opcode,int type) {
-            line.AppendFormat("{0,-5}{1,-5} ", Offset, this.Label == null ? "" : this.Label.ToString());
+            line.AppendFormat("{0,-5}{1,-5} ", Address, this.Label == null ? "" : this.Label.ToString());
             line.Append(this.GMCode.GetName());
             if ((opcode & 160) == 128)
             {
@@ -496,6 +563,16 @@ namespace betteribttest
             // so we should have 28 spaces here
             if (line.Length < 21) line.Append(' ', 21 - line.Length);
         }
+        void CommaList(StringBuilder line, IReadOnlyCollection<Instruction> list)
+        {
+            bool need_comma = false;
+            foreach (var c in list)
+            {
+                if (need_comma) line.Append(',');
+                line.Append(c.Address);
+                need_comma = true;
+            }
+        }
         void FormatPostFix(StringBuilder line)
         {
             if(Comment != null || Label != null)
@@ -504,15 +581,18 @@ namespace betteribttest
                 line.Append("; ");
                 if(Label != null)
                 {
-                    line.Append("Label[");
-                    bool need_comma = false;
-                    foreach(var c in Label.CallsTo)
+                    if(Label.BackwardRefrences.Count !=0)
                     {
-                        if (need_comma) line.Append(',');
-                        line.Append(c.Value.Offset);
-                        need_comma = true;
+                        line.Append("BackwardRefs[");
+                        CommaList(line, Label.BackwardRefrences);
+                        line.Append("] ");
                     }
-                    line.Append("] ");
+                    if (Label.ForwardRefrences.Count > 0)
+                    {
+                        line.Append("ForwardRefs[");
+                        CommaList(line, Label.ForwardRefrences);
+                        line.Append("] ");
+                    }
                 }
                 if (Comment != null) line.Append(Comment);
              }
@@ -580,10 +660,10 @@ namespace betteribttest
                 } else if (GMCode.IsConditional() || GMCode == GMCode.Pushenv || GMCode == GMCode.Popenv)
                 {
                     int offset = GMCodeUtil.getBranchOffset(OpCode);
-                    line.Append(Offset-offset);
+                    line.Append(Address-offset);
                 } else
                 {
-                    int new_offset = Offset + (int)(OpCode << 8 >> 8); // << 8 >> 6 // changed cause we are doing pc by int
+                    int new_offset = Address + (int)(OpCode << 8 >> 8); // << 8 >> 6 // changed cause we are doing pc by int
                     line.AppendFormat("0x{0:x8}", new_offset);
                 }
             }
@@ -687,7 +767,7 @@ namespace betteribttest
                 inst.InstanceLookup = InstanceList; // hack I know but I want prity print
                 inst.StringLookup = StringIndex; 
                 instructions.AddLast(inst);
-                System.Diagnostics.Debug.Assert(inst.Offset == pc);
+                System.Diagnostics.Debug.Assert(inst.Address == pc);
                 if (inst.GMCode.isBranch() || inst.GMCode == GMCode.Pushenv || (inst.GMCode == GMCode.Popenv && inst.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
                 { 
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
@@ -695,7 +775,7 @@ namespace betteribttest
                     Label l;
                     if (!instructions.labels.TryGetValue(target, out l))
                     {
-                        l = new Label(inst);
+                        l = new Label(target);
                         instructions.labels.Add(target, l);
                         if (target >= lastpc) LabelsOutsideOfFuntion.Add(l);
                     }
@@ -706,11 +786,19 @@ namespace betteribttest
             LabelsOutsideOfFuntion.Sort();
             foreach (var l in LabelsOutsideOfFuntion)
             {
-                Instruction i = new Instruction(l.Target, GMCode.Exit.toUInt(GM_Type.Var));// add filler op 
+                Instruction i = new Instruction(l.Address, GMCode.Exit.toUInt(GM_Type.Var));// add filler op 
                 i.Label = l; // give it the label
                 instructions.AddLast(i);
             }
-            if (instructions.labels.Count > 0) foreach (var l in instructions.labels) l.Value.ResolveCallsTo(instructions);
+            // Link all the instructions together, mabye I should just include linkList
+            var node = instructions.First;
+            while(node != null)
+            {
+                node.Value._link = node;
+                node = node.Next;
+            }
+
+            if (instructions.labels.Count > 0) foreach (var l in instructions.labels) Label.ResolveCalls(l.Value, instructions);
            
             // now fix string indexes 
             foreach(var i in instructions)
@@ -750,20 +838,21 @@ namespace betteribttest
         }
         public override int GetHashCode()
         {
-            return Offset;
+            return Address;
         }
         public int CompareTo(Label other)
         {
-            return Offset.CompareTo(other.Target);
+            return Address.CompareTo(other.Address);
         }
         public int CompareTo(Instruction other)
         {
-            return Offset.CompareTo(other.Offset);
+            return Address.CompareTo(other.Address);
         }
         public bool Equals(Instruction other)
         {
+            if (Object.ReferenceEquals(other, null)) return false;
             if (Object.ReferenceEquals(other, this)) return true;
-            return other.Offset == Offset;
+            return other.Address == Address;
         }
  
     }
