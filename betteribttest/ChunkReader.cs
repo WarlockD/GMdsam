@@ -1336,8 +1336,7 @@ namespace betteribttest
             // this.debugOn = debugOn;
             this.debugOn = true;
             Stream s = null;
-
-            if (filename.ToLower().IndexOf(".exe") !=-1){
+            if (filename != "data.win" && filename.ToLower().IndexOf(".exe") !=-1){
                 CabInfo cab = new CabInfo(filename);
                 if (File.Exists("data.win")) File.Delete("data.win");
                 cab.UnpackFile("data.win","data.win");  // cab.OpenRead("data.win"); doesn't work for some reason

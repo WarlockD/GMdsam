@@ -167,9 +167,9 @@ namespace betteribttest
         public Form1()
         {
             InitializeComponent();
-            cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
+           // cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
             //  cr.DumpAllObjects("objects.txt");
-            // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
+             cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             //Decompiler dism = new Decompiler(cr);
             
             DecompilerNew newDecompiler = new DecompilerNew();
@@ -179,7 +179,8 @@ namespace betteribttest
             // string filename_to_test = "obj_face_alphys_Step";
             //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
-            string filename_to_test = "gml_Object_obj_emptyborder_s"; // slighty harder now
+            //   string filename_to_test = "gml_Object_obj_emptyborder_s"; // slighty harder now
+            string filename_to_test = "SCR_DIRECT"; // loop
           //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3";
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {

@@ -220,6 +220,7 @@ namespace betteribttest
     /// </summary>
     public class Block : IEquatable<Block>, IComparable<Block>
     {
+        public Label LabelEntry { get; set; }
         public StatementBlock AstBlock { get; set; }
         public int Id { get; set; }
         public BitArray dominators { get;  set; }
@@ -248,6 +249,7 @@ namespace betteribttest
             Id = -1;
             dominators = null;
             AstBlock = null;
+            LabelEntry = null;
         }
         public void ClearVisits()
         {
@@ -275,7 +277,7 @@ namespace betteribttest
         }
         public bool Equals(Block b)
         {
-            return Address == b.Address && Code.Equals(b.Code); 
+            return Address == b.Address; 
         }
         public override bool Equals(object obj)
         {
@@ -525,6 +527,8 @@ namespace betteribttest
 #endif
             return block.AstBlock;
         }
+        int[] _offsets;
+        bool[] _hasIncomingJumps;
         public BasicBlocks(IEnumerable<Instruction> list, DecompilerNew dn)
         {
             this.dn = dn;
@@ -533,22 +537,44 @@ namespace betteribttest
             foreach (var l in list) code.Add(l.Address, l);
             First = code.Values.First().First;
             Last = code.Values.First().Last;
-            Instruction i = code.Values.Last();
-            _last_pc = i.Address;
-            if (i.GMCode != GMCode.Exit)
-            {
-                Instruction ni = Instruction.CreateFakeExitNode(i, false);
-                code.Add(ni.Address, ni);
-            }
+            Instruction lasti = code.Values.Last();
+            _last_pc = lasti.Address;
+
             EntryBlock = null;
             CodeBlocks = new Dictionary<int, CodeBlock>();
-            CreateBasicBlocks();
+            _offsets = new int[code.Count];
+            _hasIncomingJumps = new bool[code.Count];
+
+            for (int i = 0; i < code.Count; i++)
+            {
+                Instruction inst = code.Values[i];
+                _offsets[i] = inst.Address;
+                _hasIncomingJumps[i] = inst.Label != null;
+            }
+            createNodes();
+
+                    CreateBasicBlocks();
             DebugWrite("_tree.txt");
             ComputeDominators();
             ComputeNatrualLoops();
             Stack<Ast> stack = new Stack<Ast>();
             EntryBlock.ClearVisits();
             root = TryToMakeStatements(EntryBlock,stack);
+        }
+        void createNodes()
+        {
+            for (int i = 0, n = code.Values.Count; i < n; i++)
+            {
+                Instruction blockStart = code.Values[i];
+                for (; i + 1 < n; i++)// See how big we can make that block...
+                {
+                    Instruction instruction = code.Values[i];
+                    if (instruction.isBranch || _hasIncomingJumps[i + 1]) break;
+                    //Instruction next = instruction.Next;
+
+                }
+                
+            }
         }
         Block GetBlockAt(Instruction i) { return GetBlockAt(i.Address); }
         Block GetBlockAt(int start)
@@ -640,11 +666,13 @@ namespace betteribttest
             CodeBlocks.Add(key, block);
             return block;
         }
-        void CreateBasicBlocks()
-        {
-         //    BlockList = new SortedDictionary<int, Block>();
       
-           int last_pc = code.Values.Last().Address + 1;
+      
+       void CreateBasicBlocks()
+        {
+            //    BlockList = new SortedDictionary<int, Block>();
+
+            _last_pc =code.Values.Last().Address + 1;
             int current_address = First.Address;
             Block block = GetBlockAt(current_address);
             EntryBlock = block;
@@ -654,20 +682,25 @@ namespace betteribttest
             {
                 current_address = workList.Pop();
                 block = GetBlockAt(current_address);
-            label_next:
+                label_next:
+                Debug.Assert(workList.Count < 10000); // sanity check
                 //Debug.Assert(current_address != 125);
                 Label label = FindLAabelAfter(current_address);
                 //   Debug.Assert(label == null || label.Address != 125);
                 Branch branch = FindBranchAfter(current_address);
-                if (label != null && label.Address < branch.Address)
+                if (label != null  && label.Address < (branch.Address+1))
                 {
                     Debug.Assert(label == null || label.Address != 125);
-                    block.Code = getList(label.Address, branch.Address);
+                    if (block.Code != null)
+                    {
+                        block.Code = getList(label.Address, branch.Address);
+                        block.LabelEntry = label;
+                    }
                     current_address = label.Address;
                     block = LinkBlock(block, current_address);
                     goto label_next;
                 }
-                block.Code = getList(block.Address, branch.Address);
+                if(block.Code != null) block.Code = getList(block.Address,branch.Address );
                 if (branch.isReturn) continue; 
 
                 LinkBlock(block, branch.BranchDesitation);

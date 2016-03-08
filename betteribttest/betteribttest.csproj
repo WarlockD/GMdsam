@@ -59,6 +59,7 @@
     <Compile Include="AstStatements.cs" />
     <Compile Include="ChunkReader.cs" />
     <Compile Include="ChunkStream.cs" />
+    <Compile Include="ControlFlow.cs" />
     <Compile Include="DecompilerNew.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
@@ -68,6 +69,7 @@
     </Compile>
     <Compile Include="GMDisasembler.cs" />
     <Compile Include="Instruction.cs" />
+    <Compile Include="LinkedHashSet.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="PListDict.cs" />
     <Compile Include="Program.cs" />
