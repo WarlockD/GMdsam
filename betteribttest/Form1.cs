@@ -180,8 +180,8 @@ namespace betteribttest
             //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
             //   string filename_to_test = "gml_Object_obj_emptyborder_s"; // slighty harder now
-            string filename_to_test = "SCR_DIRECT"; // loop
-          //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3";
+            string filename_to_test = "SCR_DIRECT"; // simple loop
+          //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
                 newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);

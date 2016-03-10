@@ -60,6 +60,7 @@
     <Compile Include="ChunkReader.cs" />
     <Compile Include="ChunkStream.cs" />
     <Compile Include="ControlFlow.cs" />
+    <Compile Include="ControlFlowGraphBuilder.cs" />
     <Compile Include="DecompilerNew.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>

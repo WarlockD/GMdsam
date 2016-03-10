@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define USE_BADDOM
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,6 +9,7 @@ using System.Diagnostics;
 using System.Collections;
 using System.IO;
 using System.Text.RegularExpressions;
+
 //https://bitbucket.org/mstrobel/procyon/src/fa7db1e6bf42bfee84f6f4c58fd9668ee290802e/Procyon.CompilerTools/src/main/java/com/strobel/assembler/flowanalysis/ControlFlowGraph.java?at=default&fileviewer=file-view-default
 namespace betteribttest
 {
@@ -14,76 +17,55 @@ namespace betteribttest
     {
         void Accept(T input);
     }
-    public enum ControlFlowNodeType
-    {
-        Normal,
-        EntryPoint,
-        RegularExit,
-        ExceptionalExit,
-        CatchHandler,
-        FinallyHandler,
-        EndFinally
-    }
-    public enum JumpType
-    {
-        /**
-         * A regular control flow edge.
-         */
-        Normal,
-
-        /**
-         * Jump to exception handler (an exception occurred).
-         */
-        JumpToExceptionHandler,
-
-        /**
-         * Jump from try block (not a real jump, as the finally handler executes first).
-         */
-        LeaveTry,
-
-        /**
-         * Jump at the end of a finally block.
-         */
-        EndFinally
-    }
-    public class ControlFlowEdge
+  
+    public class ControlFlowEdge :IEquatable<ControlFlowEdge>
     {
         public ControlFlowNode Source { get; private set; }
         public ControlFlowNode Target { get; private set; }
-        public JumpType Type { get; private set; }
-
-        public ControlFlowEdge(ControlFlowNode source, ControlFlowNode target, JumpType type)
+        public ControlFlowEdge(ControlFlowNode source, ControlFlowNode target)
         {
             Debug.Assert(source != null && target != null);
             Source = source;
             Target = target;
-            Type = type;
+        }
+        public  bool Equals(ControlFlowEdge edge)
+        {
+            return Source == edge.Source && Target == edge.Target;
         }
         public override bool Equals(object obj)
         {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
             ControlFlowEdge edge = obj as ControlFlowEdge;
-            if (edge == null) return false;
-            return edge.Source == Source && edge.Target == Target;
+            return edge != null && Equals(edge);
         }
         public override string ToString()
         {
-            switch (Type)
-            {
-                case JumpType.Normal: return "#" + Target.BlockIndex;
-                default:
-                    return Type.GetType().GetEnumNames()[(int)Type] + ":#" + Target.BlockIndex;
-            }
+            return "#" + Target.BlockIndex;
         }
         public override int GetHashCode()
         {
             return Source.GetHashCode() ^ Target.GetHashCode();
         }
     }
-    public class ControlFlowNode : IComparable<ControlFlowNode>
+    public class ControlFlowNode : IComparable<ControlFlowNode>, IEquatable<ControlFlowNode> , ITextOut
     {
-
-        public ControlFlowNodeType NodeType { get; private set; }
-        public ControlFlowNode EndFinallyNode { get; private set; }
+        public BitArray BadDominatorArray;
+        public override int GetHashCode()
+        {
+            return BlockIndex << 16 | Address;
+        }
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
+            ControlFlowNode node = obj as ControlFlowNode;
+            return node != null && Equals(node);
+        }
+        public bool Equals(ControlFlowNode node)
+        {
+            return BlockIndex == node.BlockIndex && Address == node.Address;
+        }
         public List<ControlFlowNode> DominatorTreeChildren = new List<ControlFlowNode>();
         private LinkedHashSet<ControlFlowNode> _dominanceFrontier = new LinkedHashSet<ControlFlowNode>();
         public LinkedHashSet<ControlFlowNode> DomianceFrontier {  get { return _dominanceFrontier; } }
@@ -95,17 +77,15 @@ namespace betteribttest
         public Instruction Start { get; set; }
         public Instruction End { get; set; }
         public int BlockIndex { get; private set; }
-        public int Offset { get; private set; }
+        public int Address { get; private set; }
         public ControlFlowNode CopyFrom { get; set; }
         public bool Visited { get; set; }
-        public bool isReachable { get { return ImmediateDominator != null || NodeType == ControlFlowNodeType.EntryPoint; } }
+        public bool isReachable { get { return ImmediateDominator != null || Address == 0; } }
         public Object UserData { get; set; }
-        public ControlFlowNode(int blockIndex, int offset, ControlFlowNodeType nodeType)
+        public ControlFlowNode(int blockIndex, int offset)
         {
             BlockIndex = blockIndex;
-            Offset = offset;
-            NodeType = nodeType;
-            EndFinallyNode = null;
+            Address = offset;
             Start = null;
             End = null;
         }
@@ -115,9 +95,7 @@ namespace betteribttest
             Debug.Assert(start != null && end != null);
             Start = start;
             End = end;
-            Offset = start.Address;
-            NodeType = ControlFlowNodeType.Normal;
-            EndFinallyNode = null;
+            Address = start.Address;
         }
         public bool Succeds(ControlFlowNode other)
         {
@@ -131,9 +109,8 @@ namespace betteribttest
             foreach (var i in _outgoing) if (i.Source == other) return true;
             return false;
         }
-
-        public IEnumerable<ControlFlowNode> Predecessors { get { return _incoming as IEnumerable<ControlFlowNode>; } }
-        public IEnumerable<ControlFlowNode> Successors { get { return _incoming as IEnumerable<ControlFlowNode>; } }
+        public IEnumerable<ControlFlowNode> Predecessors { get { foreach (var i in _incoming) yield return i.Target; }  }
+        public IEnumerable<ControlFlowNode> Successors { get { foreach (var i in _outgoing) yield return i.Target; } }
         public IEnumerable<Instruction> Instructions
         {
             get
@@ -164,12 +141,16 @@ namespace betteribttest
         public bool Dominates(ControlFlowNode node)
         {
             ControlFlowNode current = node;
+#if USE_BADDOM
+            return BadDominatorArray[node.BlockIndex];
+#else
             while (current != null)
             {
                 if (current == this) return true;
                 current = current.ImmediateDominator;
             }
             return false;
+#endif
         }
 
         public int CompareTo(ControlFlowNode other)
@@ -177,24 +158,20 @@ namespace betteribttest
             return BlockIndex.CompareTo(other.BlockIndex);
         }
         public static Predicate<ControlFlowNode> REACHABLE_PREDICATE = node => node.isReachable;
-        public override string ToString()
+
+        public int WriteTextLine(TextWriter wr)
         {
-            StringWriter ret = new StringWriter();
-            System.CodeDom.Compiler.IndentedTextWriter sw = new System.CodeDom.Compiler.IndentedTextWriter(ret);
-            switch (NodeType)
-            {
-                case ControlFlowNodeType.Normal:
+            int count = 0;
+            System.CodeDom.Compiler.IndentedTextWriter sw = wr as System.CodeDom.Compiler.IndentedTextWriter;
+            if(sw == null) sw = new System.CodeDom.Compiler.IndentedTextWriter(wr);
+
                     sw.Write("Block #{0}", BlockIndex);
                     if (Start != null) sw.Write(": {0} to {1}", Start.Address, End.Address);
-                    break;
-                default:
-                    sw.Write("Block #{0}: {1}", BlockIndex, NodeType.GetType().GetEnumName(NodeType));
-                    break;
-            }
+
             sw.Indent++;
             if (_dominanceFrontier.Count > 0)
             {
-                sw.WriteLine();
+                sw.WriteLine(); count++;
                 sw.Write("DominanceFrontier: ");
                 int[] blockIndexes = new int[_dominanceFrontier.Count];
                 int i = 0;
@@ -204,10 +181,16 @@ namespace betteribttest
             }
             foreach (var instruction in Instructions)
             {
-                sw.WriteLine();
+                sw.WriteLine(); count++;
                 sw.Write(instruction.ToString());
             }
             sw.Indent--;
+            return count;
+        }
+        public override string ToString()
+        {
+            StringWriter ret = new StringWriter();
+            WriteTextLine(ret);
             return ret.ToString();
         }
     };
@@ -216,8 +199,7 @@ namespace betteribttest
     {
         List<ControlFlowNode> _nodes;
         public ControlFlowNode EntryPoint { get { return _nodes[0]; } }
-        public ControlFlowNode RegularExit { get { return _nodes[1]; } }
-        public ControlFlowNode ExceptionalExit { get { return _nodes[2]; } }
+        public ControlFlowNode RegularExit { get { return _nodes.Last(); } }
         public List<ControlFlowNode> Nodes { get { return _nodes; } }
         public ControlFlowGraph(params ControlFlowNode[] nodes)
         {
@@ -228,41 +210,59 @@ namespace betteribttest
                 _nodes.Add(node);
             }
             //   _nodes = ArrayUtilities.asUnmodifiableList(VerifyArgument.noNullElements(nodes, "nodes"));
-            Debug.Assert(_nodes.Count >= 3);
-            Debug.Assert(EntryPoint.NodeType == ControlFlowNodeType.EntryPoint);
-            Debug.Assert(EntryPoint.NodeType == ControlFlowNodeType.RegularExit);
-            Debug.Assert(EntryPoint.NodeType == ControlFlowNodeType.ExceptionalExit);
         }
         public void ResetVisited() { foreach (var node in _nodes) node.Visited = false; }
-
-        bool DomianceVisitorAction(ControlFlowNode b)
+        // I canno't get the old domintor to work.  I think its because I am missing bits of code, but I KNOW this works
+        // even if it is a bit ineffecent
+        void ComputeDominators2()
         {
-            if (b == EntryPoint) return false;
-            ControlFlowNode newImmediateDominator = null;
-            foreach (var p in b.Predecessors)
+            int size = _nodes.Count;
+            foreach (var node in _nodes)
             {
-                if (p.Visited && p != b)
-                {
-                    newImmediateDominator = p;
-                    break;
-                }
-            }
-            if (newImmediateDominator == null) throw new Exception("Could not compute new immediate dominator!");
-            foreach (var p in b.Predecessors)
-            {
-                if (p != b && p.ImmediateDominator != null)
-                {
-                    newImmediateDominator = findCommonDominator(p, newImmediateDominator);
-                }
-            }
+                if (node.BadDominatorArray == null) node.BadDominatorArray = new BitArray(size);
+                else node.BadDominatorArray.Length = size;
+                node.BadDominatorArray.SetAll(true);
 
-            if (b.ImmediateDominator != newImmediateDominator)
-            {
-                b.ImmediateDominator = newImmediateDominator;
-                return true;
             }
-            else return false;
+            ControlFlowNode entryPoint = EntryPoint;
+
+            entryPoint.BadDominatorArray.SetAll(false);
+            entryPoint.BadDominatorArray.Set(entryPoint.BlockIndex, true);
+            BitArray T = new BitArray(size);
+            bool changed = false;
+            do
+            {
+                changed = false;
+                foreach (var node in _nodes)
+                {
+                    if (node == EntryPoint) continue;
+                    foreach (var pred in node.Predecessors)
+                    {
+                        T.SetAll(false);
+                        T.Or(node.BadDominatorArray);
+                        node.BadDominatorArray.And(pred.BadDominatorArray);
+                        node.BadDominatorArray.Set(node.BlockIndex, true);
+                        if (!Enumerable.SequenceEqual(node.BadDominatorArray.Cast<bool>(), T.Cast<bool>())) changed = true;
+                    }
+                }
+            } while (changed);
+
+            entryPoint.ImmediateDominator = null;
+            foreach (var node in _nodes)
+            {
+                for(int i =0;i< node.BadDominatorArray.Count; i++)
+                {
+                    bool b = node.BadDominatorArray[i];
+                    if (b) node.DominatorTreeChildren.Add(_nodes[i]);
+                }
+            }
         }
+        public void ComputeDomiance()
+        {
+            bool cancelled = false;
+            ComputeDomiance(ref cancelled);
+        }
+ 
         public void ComputeDomiance(ref bool cancelled)
         {
             ControlFlowNode entryPoint = EntryPoint;
@@ -272,7 +272,7 @@ namespace betteribttest
             {
                 changed = false;
                 ResetVisited();
-                if (cancelled) throw new Exception("Cancelled");
+               if (cancelled) throw new Exception("Cancelled");
                 entryPoint.TraversePreOrder(input => input.Successors, delegate (ControlFlowNode b) {
                     if (b == entryPoint) return;
                     ControlFlowNode newImmediateDominator = null;
@@ -300,13 +300,7 @@ namespace betteribttest
                     }
                 }); 
             }
-            entryPoint.ImmediateDominator = null;
-            foreach (var node in _nodes)
-            {
-                ControlFlowNode immediateDominator = node.ImmediateDominator;
-
-                if (immediateDominator != null) immediateDominator.DominatorTreeChildren.Add(node);
-            }
+          
         }
         public void computeDominanceFrontier()
         {
@@ -344,8 +338,6 @@ namespace betteribttest
         private static string nodeName(ControlFlowNode node)
         {
             String name = "node" + node.BlockIndex;
-
-            if (node.NodeType == ControlFlowNodeType.EndFinally) name += "_ef";
             return name;
         }
         private static Regex SAFE_PATTERN = new Regex("^[\\w\\d]+$", RegexOptions.Compiled);
@@ -372,72 +364,42 @@ namespace betteribttest
             System.CodeDom.Compiler.IndentedTextWriter output = new System.CodeDom.Compiler.IndentedTextWriter(wr);
             output.WriteLine("digraph g {");
             output.Indent++;
-            ISet<ControlFlowEdge> edges = new LinkedHashSet<ControlFlowEdge>();
             foreach (var node in _nodes)
             {
                 output.WriteLine("\"{0}\"", nodeName(node));
                 output.Indent++;
-                output.WriteLine("label = \"{0}\\l\"", escapeGraphViz(node.ToString()));
+                output.WriteLine("label=\"{");
+                if (node.WriteTextLine(output) > 0) output.WriteLine();
+                //  output.WriteLine("label = \"{0}\\l\"", escapeGraphViz(node.ToString()));
                 output.WriteLine(", shape = \"box\"");
                 output.Indent--;
                 output.WriteLine("];");
-                foreach (var e in node.Incomming) edges.Add(e);
-                foreach (var e in node.Outgoing) edges.Add(e);
-                ControlFlowNode endFinallyNode = node.EndFinallyNode;
-                if (endFinallyNode != null)
+                if (node.Incomming.Count > 0)
                 {
-                    output.WriteLine("\"{0}\" [", nodeName(endFinallyNode));
+                    output.WriteLine("Incomming=");
                     output.Indent++;
-
-                    output.WriteLine(
-                        "label = \"{0}\"",
-                        escapeGraphViz(endFinallyNode.ToString())
-                    );
-
-                    output.WriteLine("shape = \"box\"");
-
-                    output.Indent--;
-                    output.WriteLine("];");
-                    foreach (var e in endFinallyNode.Incomming) edges.Add(e);
-                    foreach (var e in endFinallyNode.Outgoing) edges.Add(e);
-                    //                edges.add(new ControlFlowEdge(node, endFinallyNode, JumpType.EndFinally));
-                }
-                foreach (var edge in edges)
-                {
-                    ControlFlowNode from = edge.Source;
-                    ControlFlowNode to = edge.Target;
-
-                    output.WriteLine("\"%s\" -> \"%s\" [", nodeName(from), nodeName(to));
-                    output.Indent++;
-
-                    switch (edge.Type)
+                    foreach (var edge in node.Incomming)
                     {
-                        case JumpType.Normal:
-                            break;
-
-                        case JumpType.LeaveTry:
-                            output.WriteLine("color = \"blue\"");
-                            break;
-
-                        case JumpType.EndFinally:
-                            output.WriteLine("color = \"red\"");
-                            break;
-
-                        case JumpType.JumpToExceptionHandler:
-                            output.WriteLine("color = \"gray\"");
-                            break;
-
-                        default:
-                            output.WriteLine("label = \"{0}\"", edge.Type);
-                            break;
+                        ControlFlowNode from = edge.Source;
+                        ControlFlowNode to = edge.Target;
+                        // we just have normal edges
+                        output.WriteLine("\"{0}\" -> \"{1}\" []", nodeName(from), nodeName(to));
                     }
-
                     output.Indent--;
-                    output.WriteLine("];");
                 }
-
-                
-               
+                if (node.Outgoing.Count > 0)
+                {
+                    output.WriteLine("Outgoing=");
+                    output.Indent++;
+                    foreach (var edge in node.Outgoing)
+                    {
+                        ControlFlowNode from = edge.Source;
+                        ControlFlowNode to = edge.Target;
+                        // we just have normal edges
+                        output.WriteLine("\"{0}\" -> \"{1}\" []", nodeName(from), nodeName(to));
+                    }
+                    output.Indent--;
+                }
             }
             output.Indent--;
 

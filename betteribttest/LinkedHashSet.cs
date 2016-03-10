@@ -13,6 +13,23 @@ namespace betteribttest
         private readonly IDictionary<T, LinkedListNode<T>> dict;
         private readonly LinkedList<T> list;
 
+        // this might have bad preformance, but I need to know what the first
+        // few items are
+        public T this[int index]
+        {
+            get
+            {
+                if (index < 0 || index >= list.Count) throw new ArgumentOutOfRangeException("index", "Argument out of Range");
+                if (index == 0) return list.First.Value;
+                else if (index == (list.Count - 1)) return list.Last.Value;
+                else // have to index the whole thing
+                {
+                    var node = list.First;
+                    while (index-- != 0) node = node.Next;
+                    return node.Value; 
+                }
+            }
+        }
         public LinkedHashSet(int initialCapacity)
         {
             this.dict = new Dictionary<T, LinkedListNode<T>>(initialCapacity);

@@ -226,8 +226,8 @@ namespace betteribttest
         public BitArray dominators { get;  set; }
         public int Address { get; private set; }
         public bool Visited = false;
-        public List<Block> preds { get; private set; }
-        public List<Block> succs { get; private set; }
+        public LinkedHashSet<Block> preds { get; private set; }
+        public LinkedHashSet<Block> succs { get; private set; }
         public void AddPre(Block pre)
         {
             if (!preds.Contains(pre)) preds.Add(pre);
@@ -242,8 +242,8 @@ namespace betteribttest
         public Block(int address)
         {
             Address = address;
-            preds = new List<Block>();
-            succs = new List<Block>();
+            preds = new LinkedHashSet<Block>();
+            succs = new LinkedHashSet<Block>();
             Code = null;
             Visited = false;
             Id = -1;
@@ -299,7 +299,7 @@ namespace betteribttest
                     sb.Append(' ');
                 } 
             }
-            if (preds != null && preds.Count > 0)
+            if (succs != null && succs.Count > 0)
             {
                 sb.Append(" Succss=");
                 foreach (var p in succs)
@@ -329,10 +329,10 @@ namespace betteribttest
         public Dictionary<int,CodeBlock> CodeBlocks = new Dictionary<int, CodeBlock>();
         public Instruction First;
         public Instruction Last;
-        public void DebugWrite(string filename)
+        public static void DebugWrite(IEnumerable<Block> blocks,  string filename)
         {
             StreamWriter tw = new StreamWriter(filename);
-            foreach (var b in BlockList) b.Value.WriteIT(tw);
+            foreach (var b in blocks) b.WriteIT(tw);
             tw.Close();
         }
         public Block EntryBlock { get; private set; }
@@ -553,8 +553,9 @@ namespace betteribttest
             }
             createNodes();
 
-                    CreateBasicBlocks();
-            DebugWrite("_tree.txt");
+        //    CreateBasicBlocks();
+            DebugWrite(BlockList.Values,"0_tree.txt");
+            CreateBasicBlocks2();
             ComputeDominators();
             ComputeNatrualLoops();
             Stack<Ast> stack = new Stack<Ast>();
@@ -642,6 +643,7 @@ namespace betteribttest
             block.AddSucc(next_block);
             return next_block;
         }
+
         CodeBlock getList(Instruction start, Instruction end)
         {
             CodeBlock block;
@@ -666,7 +668,68 @@ namespace betteribttest
             CodeBlocks.Add(key, block);
             return block;
         }
-      
+        void CreateBasicBlocks2()
+        {
+            List<Block> blocklist = new List<Block>();
+            for (int i = 0, n = code.Values.Count; i < n; i++)
+            {
+                Instruction blockStart = code.Values[i];
+
+                //
+                // See how big we can make that block...
+                //
+                for (; i + 1 < n; i++)
+                {
+                    Instruction instruction = code.Values[i];
+                    if (instruction.isBranch || (instruction.Next != null && instruction.Next.Label != null)) break;///*|| opCode.canThrow()*/ || _hasIncomingJumps[i + 1]) break;
+
+
+                    //    Instruction next = instruction.Next;
+                }
+                Block b = new Block(blockStart.Address);
+                b.Id = blocklist.Count;
+                blocklist.Add(b.Id,b);
+                b.Code = getList(blockStart, code.Values[i]);
+              //  _nodes.Add(new ControlFlowNode(_nodes.Count, blockStart, instructions[i]));
+            }
+           
+            
+            foreach (Block node in blocklist)
+            {
+                Instruction end = node.Code.Last();
+
+                if (end == null || end.Address >= _last_pc) continue;
+
+                //
+                // Create normal edges from one instruction to the next.
+                //
+                if (end.GMCode != GMCode.B)
+                {
+                    Instruction next = end.Next;
+                    if (next != null) LinkBlock(node, next);
+                }
+
+                //
+                // Create edges for branch instructions.
+                //
+                foreach(var instruction in node.Code)
+                {
+                    if (!instruction.isBranch) continue;
+                    Label l = instruction.Operand as Label;
+                    if (l.Address > _last_pc)
+                        LinkBlock(node, instruction);
+                    else
+                        LinkBlock(node, l.InstructionOrigin);
+                }
+
+                //
+                // Create edges for return and leave instructions.
+                //
+                Label end_label = end.Operand as Label;
+                if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || (end_label != null && end_label.Address > _last_pc)) LinkBlock(node, end);
+            }
+            DebugWrite(blocklist, "1_tree.txt");
+        }
       
        void CreateBasicBlocks()
         {
@@ -690,7 +753,7 @@ namespace betteribttest
                 Branch branch = FindBranchAfter(current_address);
                 if (label != null  && label.Address < (branch.Address+1))
                 {
-                    Debug.Assert(label == null || label.Address != 125);
+                   // Debug.Assert(label != null && label.Address != 125);
                     if (block.Code != null)
                     {
                         block.Code = getList(label.Address, branch.Address);

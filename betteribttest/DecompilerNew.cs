@@ -289,8 +289,16 @@ namespace betteribttest
             SaveOutput(instructions, scriptName + "_original.txt");
             //  DFS dfs = new DFS(instructions);
             //  dfs.CreateDFS();
-
-            BasicBlocks basic = new BasicBlocks(instructions,this);
+            List<Instruction> ilist = instructions.ToList();
+            ControlFlowGraph graph = ControlFlowGraphBuilder.Build(ilist);
+            using(StreamWriter wr=new StreamWriter("nodeDump.Txt"))
+            {
+                graph.WriteTextLine(wr);
+            }
+            BasicBlocks basic = new BasicBlocks(instructions, this);
+            graph.ComputeDomiance();
+            //  graph.computeDominanceFrontier();
+            
 
             // var testi=  AstInstruction.DoThisBackwards(instructions.First);
    
