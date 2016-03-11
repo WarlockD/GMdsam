@@ -301,13 +301,15 @@ namespace betteribttest
             _refrences = l._refrences;
             InstructionOrigin = l.InstructionOrigin;
         }
-        internal Label(int target)
+        bool _exitJump;
+        internal Label(int target,bool exitJump=false)
         {
             Address = target;
             _forwardRefrences = null;
             _backardRefrences = null;
             _refrences = null;
             InstructionOrigin = null;
+            _exitJump = exitJump;
         }
         public Label Copy()
         {
@@ -369,6 +371,8 @@ namespace betteribttest
         {
             if (Address == 0)
                 return "LStart";
+            else if(_exitJump)
+                return "LExit";
             else
                 return String.Format("L{0}", Address);
         }
@@ -775,14 +779,16 @@ namespace betteribttest
                     Label l;
                     if (!instructions.labels.TryGetValue(target, out l))
                     {
+                        //  l = new Label(target, target >= lastpc);
                         l = new Label(target);
                         instructions.labels.Add(target, l);
-                        if (target >= lastpc) LabelsOutsideOfFuntion.Add(l);
+                    //    if (target >= lastpc) LabelsOutsideOfFuntion.Add(l);
                     }
                     inst.Operand = l;
                 }
                 pc += inst.Size;
             }
+            /*
             LabelsOutsideOfFuntion.Sort();
             foreach (var l in LabelsOutsideOfFuntion)
             {
@@ -790,6 +796,7 @@ namespace betteribttest
                 i.Label = l; // give it the label
                 instructions.AddLast(i);
             }
+            */
             // Link all the instructions together, mabye I should just include linkList
             var node = instructions.First;
             while(node != null)

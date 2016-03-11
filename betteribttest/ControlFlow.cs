@@ -197,6 +197,7 @@ namespace betteribttest
 
     public class ControlFlowGraph : ITextOut
     {
+       
         List<ControlFlowNode> _nodes;
         public ControlFlowNode EntryPoint { get { return _nodes[0]; } }
         public ControlFlowNode RegularExit { get { return _nodes.Last(); } }
@@ -214,7 +215,7 @@ namespace betteribttest
         public void ResetVisited() { foreach (var node in _nodes) node.Visited = false; }
         // I canno't get the old domintor to work.  I think its because I am missing bits of code, but I KNOW this works
         // even if it is a bit ineffecent
-        void ComputeDominators2()
+        public void ComputeDominators2()
         {
             int size = _nodes.Count;
             foreach (var node in _nodes)
@@ -247,7 +248,6 @@ namespace betteribttest
                 }
             } while (changed);
 
-            entryPoint.ImmediateDominator = null;
             foreach (var node in _nodes)
             {
                 for(int i =0;i< node.BadDominatorArray.Count; i++)
@@ -405,6 +405,52 @@ namespace betteribttest
 
             output.WriteLine("}");
             return 40;
+        }
+        public ControlFlowNode FindNode(Instruction instruction)
+        {
+            int address = instruction.Address;
+            foreach(var node in _nodes)
+            {
+                if (address >= node.Start.Address && address < node.End.Address) return node;
+            }
+            return null;
+        }
+        public ISet<ControlFlowNode> findDominatedNodes(ControlFlowNode head, ISet<ControlFlowNode> terminals)
+        {
+            LinkedHashSet< ControlFlowNode > visited = new LinkedHashSet<ControlFlowNode>();
+            Queue< ControlFlowNode > agenda = new Queue<ControlFlowNode>();
+            LinkedHashSet< ControlFlowNode > result = new LinkedHashSet<ControlFlowNode>();
+            agenda.Enqueue(head);
+            visited.Add(head);
+            while (agenda.Count >0)
+            {
+                ControlFlowNode addNode = agenda.Dequeue();
+
+                if (terminals.Contains(addNode)) continue;
+
+                // worry about entry point?   if (addNode == null || addNode.getNodeType() != ControlFlowNodeType.Normal) continue;
+
+
+                if (!head.Dominates(addNode)) continue; // && !shouldIncludeExceptionalExit(cfg, head, addNode)) continue;
+
+                if (!result.Add(addNode)) continue;
+
+
+                foreach (ControlFlowNode successor in addNode.Successors)
+                {
+                    if (visited.Add(successor)) agenda.Enqueue(successor);
+                }
+            }
+            return result;
+        }
+        public Dictionary<Instruction,ControlFlowNode> CreateNodeMap()
+        {
+            Dictionary<Instruction, ControlFlowNode> map = new Dictionary<Instruction, ControlFlowNode>();
+            foreach(var node in _nodes)
+            {
+                for (Instruction p = node.Start; p != null && p.Address < node.End.Address; p = p.Next) map.Add(p, node);
+            }
+            return map;
         }
     }
 }

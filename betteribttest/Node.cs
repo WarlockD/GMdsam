@@ -220,6 +220,7 @@ namespace betteribttest
     /// </summary>
     public class Block : IEquatable<Block>, IComparable<Block>
     {
+        public bool ExitLabel = false;
         public Label LabelEntry { get; set; }
         public StatementBlock AstBlock { get; set; }
         public int Id { get; set; }
@@ -230,21 +231,38 @@ namespace betteribttest
         public LinkedHashSet<Block> succs { get; private set; }
         public void AddPre(Block pre)
         {
-            if (!preds.Contains(pre)) preds.Add(pre);
+             preds.Add(pre);
 
         }
         public void AddSucc(Block succ)
         {
-            if (!succs.Contains(succ)) succs.Add(succ);
+             succs.Add(succ);
         }
-        public CodeBlock Code { get; set; }
-        public int Length { get { return Code == null ? 0 : Code.Count; } }
+        public IEnumerable<Instruction> Code
+        {
+            get
+            {
+                var start = First;
+                while(start != null)
+                {
+                    yield return start;
+                    if (start == Last) break;
+                    start = start.Next;
+                }
+
+            }
+        }
+        public Instruction First;
+        public Instruction Last;
+     //   public int Length { get { return Code == null ? 0 : Code.Count; } }
         public Block(int address)
         {
             Address = address;
             preds = new LinkedHashSet<Block>();
             succs = new LinkedHashSet<Block>();
-            Code = null;
+            First = null;
+            Last = null;
+           // Code = null;
             Visited = false;
             Id = -1;
             dominators = null;
@@ -273,7 +291,7 @@ namespace betteribttest
         }
         public override int GetHashCode()
         {
-            return Address << 16 | Length;
+            return Address ;
         }
         public bool Equals(Block b)
         {
@@ -314,7 +332,15 @@ namespace betteribttest
         {
             tw.Write("----- ");
             tw.WriteLine(ToString());
-            if (Code != null) Code.WriteTextLine(tw);
+            if (First != null)
+            {
+                for (Instruction i = First; i != Last.Next; i = i.Next)
+                {
+                    
+                    i.WriteTextLine(tw);
+                    tw.WriteLine();
+                }
+            }
         }
 
         public int CompareTo(Block other)
@@ -325,7 +351,7 @@ namespace betteribttest
 
     class BasicBlocks
     {
-        public SortedList<int, Block> BlockList = new SortedList<int, Block>();
+        public List<Block> BlockList = new List<Block>();
         public Dictionary<int,CodeBlock> CodeBlocks = new Dictionary<int, CodeBlock>();
         public Instruction First;
         public Instruction Last;
@@ -346,14 +372,14 @@ namespace betteribttest
             Block block;
             foreach(var kv in BlockList)
             {
-                block = kv.Value;
+                block = kv;
                 block.Id = id++;
                 if (block.dominators == null) block.dominators = new BitArray(size);
                 else block.dominators.Length = size;
                 block.dominators.SetAll(true);
             }
             
-            block = BlockList.First().Value; // aways the first entry point anyway
+            block = BlockList[0]; // aways the first entry point anyway
             block.dominators.SetAll(false);
             block.dominators.Set(block.Id,true);
             
@@ -364,7 +390,7 @@ namespace betteribttest
                 changed = false;
                 foreach (var kv in BlockList)
                 {
-                    block = kv.Value;
+                    block = kv;
                     if (block == EntryBlock) continue;
                     foreach (var pred in block.preds)
                     {
@@ -436,20 +462,92 @@ namespace betteribttest
             loopList = new HashSet<Loop>();
             foreach(var kv in BlockList)
             {
-                Block block = kv.Value;
+                Block block = kv;
                 if (block == EntryBlock) continue;
                 foreach(var succ in block.succs)
                 {
                     // Every successor that dominates its predecessor
                     // must be the header of a loop.
                     // That is, block -> succ is a back edge.
-                   // if(block.ContainsDominator(succ))
-                    if (block.dominators.Get(succ.Id))
+                    // if(block.ContainsDominator(succ))
+                    bool test = block.dominators.Get(succ.Id);
+                    if (test)
                         loopList.Add(NatrualLoopForEdge(succ, block));
                 }
             }
         }
-        
+        class Loop2 : IEquatable<Loop2>
+        {
+            public ControlFlowNode Header { get; private set; }
+            public List<ControlFlowNode> Blocks { get; private set; }
+            public Loop2(ControlFlowNode header)
+            {
+                Header = header;
+                Blocks = new List<ControlFlowNode>();
+                Blocks.Add(header);
+            }
+            public override int GetHashCode()
+            {
+                int hash = Header.GetHashCode();
+                foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
+                return hash;
+            }
+            public bool Equals(Loop2 other)
+            {
+                if (other.Header != this.Header) return false;
+                if (Blocks.SequenceEqual(other.Blocks)) return true;
+                return false;
+            }
+            public override bool Equals(object obj)
+            {
+                if (object.ReferenceEquals(obj, null)) return false;
+                if (object.ReferenceEquals(obj, this)) return true;
+                Loop test = obj as Loop;
+                return test == null ? Equals(test) : false;
+            }
+        }
+        HashSet<Loop2> LoopList2 = new HashSet<Loop2>();
+        Loop2 NatrualLoopForEdge2(ControlFlowNode header, ControlFlowNode tail)
+        {
+            Stack<ControlFlowNode> workList = new Stack<ControlFlowNode>();
+            Loop2 loop = new Loop2(header);
+            if (header != tail)
+            {
+                loop.Blocks.Add(tail);
+                workList.Push(tail);
+            }
+            while (workList.Count > 0)
+            {
+                ControlFlowNode node = workList.Pop();
+                foreach (var pred in node.Predecessors)
+                {
+                    if (!loop.Blocks.Contains(pred))
+                    {
+                        loop.Blocks.Add(pred);
+                        workList.Push(pred);
+                    }
+                }
+            }
+            return loop;
+        }
+        void ComputeNatrualLoops2()
+        {
+            LoopList2 = new HashSet<Loop2>();
+            ControlFlowNode entryPoint = graph.EntryPoint;
+            foreach(var node in graph.Nodes)
+            {
+                if (node == entryPoint) continue;
+                foreach (var succ in node.Successors)
+                {
+                    // Every successor that dominates its predecessor
+                    // must be the header of a loop.
+                    // That is, block -> succ is a back edge.
+                    // if(block.ContainsDominator(succ))
+                    if(node.Dominates(succ))
+                        LoopList2.Add(NatrualLoopForEdge2(succ, node));
+                }
+            }
+        }
         void StructureBreakContinue(BlockStatement stmt, Block contBlock, Block breakBlock)
         {
             switch (stmt.Type)
@@ -529,17 +627,22 @@ namespace betteribttest
         }
         int[] _offsets;
         bool[] _hasIncomingJumps;
+        ControlFlowGraph graph;
         public BasicBlocks(IEnumerable<Instruction> list, DecompilerNew dn)
         {
             this.dn = dn;
             code = new SortedList<int, Instruction>(200);
+            List<Instruction> ilist = list.ToList();
+            graph = ControlFlowGraphBuilder.Build(ilist);
+            graph.ComputeDominators2();
+            graph.computeDominanceFrontier();
+            ComputeNatrualLoops2();
             
             foreach (var l in list) code.Add(l.Address, l);
             First = code.Values.First().First;
             Last = code.Values.First().Last;
             Instruction lasti = code.Values.Last();
             _last_pc = lasti.Address;
-
             EntryBlock = null;
             CodeBlocks = new Dictionary<int, CodeBlock>();
             _offsets = new int[code.Count];
@@ -554,9 +657,10 @@ namespace betteribttest
             createNodes();
 
         //    CreateBasicBlocks();
-            DebugWrite(BlockList.Values,"0_tree.txt");
+            
             CreateBasicBlocks2();
             ComputeDominators();
+            DebugWrite(BlockList, "0_tree.txt");
             ComputeNatrualLoops();
             Stack<Ast> stack = new Stack<Ast>();
             EntryBlock.ClearVisits();
@@ -577,20 +681,29 @@ namespace betteribttest
                 
             }
         }
-        Block GetBlockAt(Instruction i) { return GetBlockAt(i.Address); }
-        Block GetBlockAt(int start)
-        {
-            Block block;
-            if (!BlockList.TryGetValue(start, out block))
+        Block exitBlock;
+        Block GetBlockAt(Instruction i) {
+            // only time we are null is if we are trying to go to he last instruction
+            if(i == null)
             {
-                block = new Block(start);
-                BlockList.Add(start, block);
+                if (exitBlock == null)
+                {
+                    exitBlock = new Block(_last_pc + 1);
+                    exitBlock.Id = BlockList.Count;
+                    BlockList.Add(exitBlock);
+                }
+                return exitBlock;
             }
-            return block;
+            foreach (Block block in BlockList) if (block.Address == i.Address) return block;
+            Block b = new Block(i.Address);
+            b.First = i;
+            b.Id = BlockList.Count;
+            BlockList.Add(b);
+            return b;
         }
-        Label FindLAabelAfter(int address)
+
+        Label FindLAabelAfter(Instruction i)
         {
-            Instruction i = code[address];
             i = i.Next;
             while(i!= null)
             {
@@ -624,9 +737,8 @@ namespace betteribttest
             public Branch(Instruction i) { this.Instruction = i; this.Address = i.Address; }
             public Branch(int address) { this.Instruction = null; this.Address = address; }
         }
-        Branch FindBranchAfter(int address)
+        Branch FindBranchAfter(Instruction i)
         {
-            Instruction i = code[address];
             i = i.Next;
             while (i != null)
             {
@@ -635,42 +747,19 @@ namespace betteribttest
             }
             return new Branch(_last_pc); //  new Label(_last_pc);
         }
-        Block LinkBlock(Block block, Instruction i) { return LinkBlock(block, i.Address); }
-        Block LinkBlock(Block block, int address)
+        Block LinkBlock(Block block, Instruction i)
         {
-            Block next_block = GetBlockAt(address);
+            Block next_block = GetBlockAt(i);
             next_block.AddPre(block);
             block.AddSucc(next_block);
             return next_block;
         }
 
-        CodeBlock getList(Instruction start, Instruction end)
-        {
-            CodeBlock block;
-            int key = CodeBlock.MakeHash(start.Address, end.Address);
-            if (CodeBlocks.TryGetValue(key, out block)) return block;
-            block = new CodeBlock(start.RangeFrom(end));
-            CodeBlocks.Add(key, block);
-            return block;
-        }
-        CodeBlock getList(int start, int end)
-        {
-            CodeBlock block;
-            int key = CodeBlock.MakeHash(start, end);
-            if (CodeBlocks.TryGetValue(key, out block)) return block;
-            // else lets make a new one
-            List<Instruction> list = new List<Instruction>();
-            int index_start = code.IndexOfKey(start);
-            int index_end = code.IndexOfKey(end);
-            for (int i = index_start; i <= index_end; i++) // can't use GetRange with a sorted list
-                list.Add(code.Values[i]);
-            block = new CodeBlock(list);
-            CodeBlocks.Add(key, block);
-            return block;
-        }
+ 
         void CreateBasicBlocks2()
         {
             List<Block> blocklist = new List<Block>();
+            
             for (int i = 0, n = code.Values.Count; i < n; i++)
             {
                 Instruction blockStart = code.Values[i];
@@ -688,92 +777,123 @@ namespace betteribttest
                 }
                 Block b = new Block(blockStart.Address);
                 b.Id = blocklist.Count;
-                blocklist.Add(b.Id,b);
-                b.Code = getList(blockStart, code.Values[i]);
+                blocklist.Add(b);
+                b.First = blockStart;
+                b.Last = code.Values[i];
               //  _nodes.Add(new ControlFlowNode(_nodes.Count, blockStart, instructions[i]));
             }
-           
-            
+            Dictionary<Label, Block> labelLookup = new Dictionary<Label, Block>();
+            Dictionary<Instruction, Block> instructionLookup = new Dictionary<Instruction, Block>();
+            foreach (var b in blocklist) 
+            {
+                if (b.First.Label != null) labelLookup.Add(b.First.Label, b);
+                instructionLookup.Add(b.First, b);
+            }
+            var search = First;
+            while(search != null)
+            {
+                Label l = search.Operand as Label;
+                if (l != null && !labelLookup.ContainsKey(l)) // out of scope label
+                {
+                    if(l.Address > _last_pc)
+                    {
+                        // We will make a new block for exit node
+                        Block block = new Block(l.Address);
+                        block.Id = blocklist.Count;
+                        block.ExitLabel = true;
+                        blocklist.Add(block);
+                        block.LabelEntry = l;
+
+                        labelLookup.Add(l, block);
+                    }
+                }
+                search = search.Next;
+            }
+
             foreach (Block node in blocklist)
             {
-                Instruction end = node.Code.Last();
-
+                if (node.ExitLabel) continue; // skip exit labels, no code
+                Instruction end = node.Last;
+                Label label = end.Operand as Label;
                 if (end == null || end.Address >= _last_pc) continue;
 
                 //
                 // Create normal edges from one instruction to the next.
                 //
-                if (end.GMCode != GMCode.B)
+                if(!end.isBranch) // falls though
                 {
-                    Instruction next = end.Next;
-                    if (next != null) LinkBlock(node, next);
-                }
-
-                //
-                // Create edges for branch instructions.
-                //
-                foreach(var instruction in node.Code)
+                    Block lookup = instructionLookup[end.Next];
+                    node.AddSucc(lookup);
+                    lookup.AddPre(node);
+                } else if (end.GMCode == GMCode.B) // unconditional branch
                 {
-                    if (!instruction.isBranch) continue;
-                    Label l = instruction.Operand as Label;
-                    if (l.Address > _last_pc)
-                        LinkBlock(node, instruction);
-                    else
-                        LinkBlock(node, l.InstructionOrigin);
-                }
+                    Block lookup = labelLookup[label];
+                    node.AddSucc(lookup);
+                    lookup.AddPre(node);
+                } else // conditional branch
+                {    // Create edges for branch instructions.
+                    Block lookup = labelLookup[label];
+                    node.AddSucc(lookup);
+                    lookup.AddPre(node);
 
-                //
-                // Create edges for return and leave instructions.
-                //
-                Label end_label = end.Operand as Label;
-                if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || (end_label != null && end_label.Address > _last_pc)) LinkBlock(node, end);
+                    lookup = instructionLookup[end.Next];
+                    node.AddSucc(lookup);
+                    lookup.AddPre(node);
+                }
+             //   Label end_label = end.Operand as Label;
+            //    if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || (end_label != null && end_label.Address > _last_pc)) LinkBlock(node, end);
             }
             DebugWrite(blocklist, "1_tree.txt");
+            BlockList = blocklist;
+            EntryBlock = blocklist[0];
         }
-      
+      Instruction BlockPump(Instruction current)
+        {
+            HashSet<Instruction> toProcess = new HashSet<Instruction>();
+            while (true)
+            {
+                Block block = GetBlockAt(current);
+                label_next:
+                Label label = FindLAabelAfter(current);
+                Branch branch = FindBranchAfter(current);
+                if (label != null && label.Address < (branch.Address + 1))
+                {
+                    block.Last = label.InstructionOrigin.Prev;
+                    block.LabelEntry = label;
+                    block = LinkBlock(block, label.InstructionOrigin);
+                    current = label.InstructionOrigin;
+                    goto label_next;
+                }
+                block.Last = branch.Instruction;
+
+                if (branch.isReturn) continue;
+
+                LinkBlock(block, branch.BranchDesitationInstruction);
+
+                toProcess.Add(branch.BranchDesitationInstruction);
+
+                if (!branch.isConditional) continue;  // will resume from branch 
+                Instruction next = branch.Instruction.Next;
+                Debug.Assert(next != null);
+                block = LinkBlock(block, next);
+                Debug.Assert(block.Address < 92);
+                current = block.First;
+            }
+        }
        void CreateBasicBlocks()
         {
             //    BlockList = new SortedDictionary<int, Block>();
 
             _last_pc =code.Values.Last().Address + 1;
-            int current_address = First.Address;
-            Block block = GetBlockAt(current_address);
+            Instruction current = First;
+            Block block = GetBlockAt(current);
             EntryBlock = block;
-            Stack<int> workList = new Stack<int>();
-            workList.Push(current_address);
+            Stack<Instruction> workList = new Stack<Instruction>();
+            workList.Push(current);
             while (workList.Count != 0)
             {
-                current_address = workList.Pop();
-                block = GetBlockAt(current_address);
-                label_next:
-                Debug.Assert(workList.Count < 10000); // sanity check
-                //Debug.Assert(current_address != 125);
-                Label label = FindLAabelAfter(current_address);
-                //   Debug.Assert(label == null || label.Address != 125);
-                Branch branch = FindBranchAfter(current_address);
-                if (label != null  && label.Address < (branch.Address+1))
-                {
-                   // Debug.Assert(label != null && label.Address != 125);
-                    if (block.Code != null)
-                    {
-                        block.Code = getList(label.Address, branch.Address);
-                        block.LabelEntry = label;
-                    }
-                    current_address = label.Address;
-                    block = LinkBlock(block, current_address);
-                    goto label_next;
-                }
-                if(block.Code != null) block.Code = getList(block.Address,branch.Address );
-                if (branch.isReturn) continue; 
-
-                LinkBlock(block, branch.BranchDesitation);
-
-                workList.Push(branch.BranchDesitation);
-      
-                if (!branch.isConditional) continue;  // will resume from branch 
-                block = LinkBlock(block, branch.Address+1);
-                current_address = block.Address;
-                goto label_next;
+                current = workList.Pop();
+               
             }
             // ok lets see about adding code
         }
