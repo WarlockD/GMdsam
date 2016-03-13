@@ -20,11 +20,15 @@ namespace betteribttest
         public static ControlFlowGraph Build(List<Instruction> instructions)
         {
             ControlFlowGraphBuilder builder = new ControlFlowGraphBuilder(instructions);
+            
             return builder.build();
         }
 
         public ControlFlowGraph build()
         {
+            _nextBlockId = 0;
+         
+            
             createNodes();
             createRegularControlFlow();
             return new ControlFlowGraph(_nodes.ToArray());
@@ -34,6 +38,10 @@ namespace betteribttest
             Debug.Assert(instructions != null);
             _instructions = instructions;
             _nextBlockId = 0;
+            EntryPoint = new ControlFlowNode(_nextBlockId++, -1);
+            RegularExit = new ControlFlowNode(_nextBlockId++, -1);
+            _nodes.Add(EntryPoint);
+            _nodes.Add(RegularExit);
         }
         private ControlFlowEdge createEdge(ControlFlowNode fromNode, Instruction toInstruction)
         {
@@ -61,12 +69,14 @@ namespace betteribttest
 
         private ControlFlowEdge createEdge(ControlFlowNode fromNode, ControlFlowNode toNode)
         {
-            ControlFlowEdge edge = new ControlFlowEdge(fromNode, toNode);
 
+            ControlFlowEdge edge = fromNode.Outgoing.Find(o => o.Source == fromNode && o.Target == toNode);
+            if (edge != null) return edge;
             foreach (ControlFlowEdge existingEdge in fromNode.Outgoing)
             {
                 if (existingEdge.Source == fromNode && existingEdge.Target == toNode) return existingEdge;
             }
+            edge = new ControlFlowEdge(fromNode, toNode);
             fromNode.Outgoing.Add(edge);
             toNode.Incomming.Add(edge);
 
@@ -106,10 +116,6 @@ namespace betteribttest
                 }
                 _nodes.Add(new ControlFlowNode(_nodes.Count, blockStart, instructions[i]));
             }
-            // first node should be the entry point
-            EntryPoint = _nodes[0];
-            // last node is the exit, hopefuly
-            RegularExit = _nodes.Last();
         }
         private void createRegularControlFlow()
         {
@@ -124,18 +130,17 @@ namespace betteribttest
             foreach (ControlFlowNode node in _nodes)
             {
                 Instruction end = node.End;
-               
-                if (end == null || end.Address >= _instructions.Last().Address) continue;
 
+                if (end == null) continue; //  || end.Address >= last_pc) continue;
+                Instruction next = end.Next;
                 //
                 // Create normal edges from one instruction to the next.
                 //
                 if (end.GMCode != GMCode.B)
-                {
-                    Instruction next = end.Next;
-                    if (next != null) createEdge(node, next);
-
-                }
+                    if (next != null)
+                        createEdge(node, next);
+                    else
+                        createEdge(node, RegularExit); // no more instructions means we are exiting
 
                 //
                 // Create edges for branch instructions.
@@ -145,7 +150,7 @@ namespace betteribttest
                     if (!instruction.isBranch) continue;
                     Label l = instruction.Operand as Label;
                     if (l.Address > last_pc)
-                        createReturnControlFlow(node, instruction);
+                        createEdge(node, RegularExit);
                     else
                         createBranchControlFlow(node, instruction, l.InstructionOrigin);
                 }
@@ -155,7 +160,7 @@ namespace betteribttest
                 // Create edges for return and leave instructions.
                 //
                 Label end_label = end.Operand as Label;
-                if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || (end_label != null && end_label.Address > last_pc)) createReturnControlFlow(node, end);
+                if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || end.Next == null || (end_label != null && end_label.Address > last_pc)) createReturnControlFlow(node, end);
             }
         }
     }

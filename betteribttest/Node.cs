@@ -489,13 +489,13 @@ namespace betteribttest
             public override int GetHashCode()
             {
                 int hash = Header.GetHashCode();
-                foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
+               // foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
                 return hash;
             }
             public bool Equals(Loop2 other)
             {
-                if (other.Header != this.Header) return false;
-                if (Blocks.SequenceEqual(other.Blocks)) return true;
+                if (other.Header == this.Header) return true;
+              //  if (Blocks.SequenceEqual(other.Blocks)) return true;
                 return false;
             }
             public override bool Equals(object obj)
@@ -503,14 +503,21 @@ namespace betteribttest
                 if (object.ReferenceEquals(obj, null)) return false;
                 if (object.ReferenceEquals(obj, this)) return true;
                 Loop test = obj as Loop;
-                return test == null ? Equals(test) : false;
+                return test != null ? Equals(test) : false;
             }
         }
         HashSet<Loop2> LoopList2 = new HashSet<Loop2>();
         Loop2 NatrualLoopForEdge2(ControlFlowNode header, ControlFlowNode tail)
         {
+         
+            Loop2 loop = null;
+            foreach(var t in LoopList2) if(t.Header == header) { loop = t; break; }
+            if(loop == null)
+            {
+                loop = new Loop2(header);
+                LoopList2.Add(loop);
+            }
             Stack<ControlFlowNode> workList = new Stack<ControlFlowNode>();
-            Loop2 loop = new Loop2(header);
             if (header != tail)
             {
                 loop.Blocks.Add(tail);
@@ -634,8 +641,9 @@ namespace betteribttest
             code = new SortedList<int, Instruction>(200);
             List<Instruction> ilist = list.ToList();
             graph = ControlFlowGraphBuilder.Build(ilist);
-            graph.ComputeDominators2();
+            graph.ComputeDomiance();
             graph.computeDominanceFrontier();
+            graph.ExportGraph("Testdot.txt");
             ComputeNatrualLoops2();
             
             foreach (var l in list) code.Add(l.Address, l);

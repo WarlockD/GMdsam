@@ -50,7 +50,7 @@ namespace betteribttest
     }
     public class ControlFlowNode : IComparable<ControlFlowNode>, IEquatable<ControlFlowNode> , ITextOut
     {
-        public BitArray BadDominatorArray;
+        public BitArray DebugDominators;
         public override int GetHashCode()
         {
             return BlockIndex << 16 | Address;
@@ -109,7 +109,7 @@ namespace betteribttest
             foreach (var i in _outgoing) if (i.Source == other) return true;
             return false;
         }
-        public IEnumerable<ControlFlowNode> Predecessors { get { foreach (var i in _incoming) yield return i.Target; }  }
+        public IEnumerable<ControlFlowNode> Predecessors { get { foreach (var i in _incoming) yield return i.Source; }  }
         public IEnumerable<ControlFlowNode> Successors { get { foreach (var i in _outgoing) yield return i.Target; } }
         public IEnumerable<Instruction> Instructions
         {
@@ -140,17 +140,18 @@ namespace betteribttest
         }
         public bool Dominates(ControlFlowNode node)
         {
+            return DebugDominators.Get(node.BlockIndex);
             ControlFlowNode current = node;
-#if USE_BADDOM
-            return BadDominatorArray[node.BlockIndex];
-#else
             while (current != null)
             {
-                if (current == this) return true;
+                if (current == this)
+                {
+                    Debug.Assert(DebugDominators.Get(node.BlockIndex));
+                    return true;
+                }
                 current = current.ImmediateDominator;
             }
             return false;
-#endif
         }
 
         public int CompareTo(ControlFlowNode other)
@@ -178,6 +179,7 @@ namespace betteribttest
                 foreach (var node in _dominanceFrontier) blockIndexes[i++] = node.BlockIndex;
                 Array.Sort(blockIndexes);
                 sw.Write(string.Join(",", blockIndexes));
+
             }
             foreach (var instruction in Instructions)
             {
@@ -197,10 +199,10 @@ namespace betteribttest
 
     public class ControlFlowGraph : ITextOut
     {
-       
+
         List<ControlFlowNode> _nodes;
         public ControlFlowNode EntryPoint { get { return _nodes[0]; } }
-        public ControlFlowNode RegularExit { get { return _nodes.Last(); } }
+        public ControlFlowNode RegularExit { get { return _nodes[1]; } }
         public List<ControlFlowNode> Nodes { get { return _nodes; } }
         public ControlFlowGraph(params ControlFlowNode[] nodes)
         {
@@ -215,56 +217,50 @@ namespace betteribttest
         public void ResetVisited() { foreach (var node in _nodes) node.Visited = false; }
         // I canno't get the old domintor to work.  I think its because I am missing bits of code, but I KNOW this works
         // even if it is a bit ineffecent
-        public void ComputeDominators2()
-        {
-            int size = _nodes.Count;
-            foreach (var node in _nodes)
-            {
-                if (node.BadDominatorArray == null) node.BadDominatorArray = new BitArray(size);
-                else node.BadDominatorArray.Length = size;
-                node.BadDominatorArray.SetAll(true);
 
-            }
-            ControlFlowNode entryPoint = EntryPoint;
-
-            entryPoint.BadDominatorArray.SetAll(false);
-            entryPoint.BadDominatorArray.Set(entryPoint.BlockIndex, true);
-            BitArray T = new BitArray(size);
-            bool changed = false;
-            do
-            {
-                changed = false;
-                foreach (var node in _nodes)
-                {
-                    if (node == EntryPoint) continue;
-                    foreach (var pred in node.Predecessors)
-                    {
-                        T.SetAll(false);
-                        T.Or(node.BadDominatorArray);
-                        node.BadDominatorArray.And(pred.BadDominatorArray);
-                        node.BadDominatorArray.Set(node.BlockIndex, true);
-                        if (!Enumerable.SequenceEqual(node.BadDominatorArray.Cast<bool>(), T.Cast<bool>())) changed = true;
-                    }
-                }
-            } while (changed);
-
-            foreach (var node in _nodes)
-            {
-                for(int i =0;i< node.BadDominatorArray.Count; i++)
-                {
-                    bool b = node.BadDominatorArray[i];
-                    if (b) node.DominatorTreeChildren.Add(_nodes[i]);
-                }
-            }
-        }
         public void ComputeDomiance()
         {
             bool cancelled = false;
             ComputeDomiance(ref cancelled);
         }
+        public void DebugDominance()
+        {
+            ControlFlowNode entryPoint = EntryPoint;
+
+            foreach (var node in _nodes)
+            {
+                node.DebugDominators = new BitArray(_nodes.Count);
+                node.DebugDominators.SetAll(true);
+            }
+            entryPoint.DebugDominators.SetAll(false);
+            entryPoint.DebugDominators.Set(entryPoint.BlockIndex,true);
+            bool changed = true;
+
+            while (changed)
+            {
+                changed = false;
+                ResetVisited();
+                BitArray T = new BitArray(_nodes.Count);
+                foreach (var node in _nodes)
+                {
+                    if (node == entryPoint) continue;
+                    foreach (var pred in node.Predecessors)
+                    {
+                        T.SetAll(false);
+                        T.Or(node.DebugDominators);
+                        node.DebugDominators.And(pred.DebugDominators);
+                        node.DebugDominators.Set(node.BlockIndex,true);
+                        if(!T.Cast<bool>().SequenceEqual(node.DebugDominators.Cast<bool>())) changed = true;
+                    }
+                }
+            }
+        }
+    
  
         public void ComputeDomiance(ref bool cancelled)
         {
+            DebugDominance();
+
             ControlFlowNode entryPoint = EntryPoint;
             entryPoint.ImmediateDominator = entryPoint;
             bool changed = true;
@@ -300,10 +296,26 @@ namespace betteribttest
                     }
                 }); 
             }
-          
+            entryPoint.ImmediateDominator = null;
+
+            foreach (ControlFlowNode node in _nodes)
+            {
+                ControlFlowNode immediateDominator = node.ImmediateDominator;
+
+                if (immediateDominator != null) immediateDominator.DominatorTreeChildren.Add(node);
+            }
+
         }
         public void computeDominanceFrontier()
         {
+        /*
+        for all nodes, b
+            if the number of predecessors of b ≥ 2
+                for all predecessors, p, of b
+                runner ← p
+                while runner 6 = doms[b]
+                    add b to runner’s dominance frontier set
+                    runner = doms[runner]*/
             ResetVisited();
             EntryPoint.TraversePostOrder(o => o.DominatorTreeChildren, delegate (ControlFlowNode n)
              {
@@ -317,6 +329,55 @@ namespace betteribttest
                  }
              }
              );
+        }
+
+        public void ExportGraph(string name)
+        {
+            StreamWriter fwriter = new StreamWriter(name);
+            System.CodeDom.Compiler.IndentedTextWriter output = new System.CodeDom.Compiler.IndentedTextWriter(fwriter);
+
+            output.WriteLine("digraph g {");
+            output.Indent++;
+
+
+            LinkedHashSet<ControlFlowEdge> edges = new LinkedHashSet<ControlFlowEdge>();
+            foreach (ControlFlowNode node in _nodes)
+            {
+                output.WriteLine("\"{0}\" [", nodeName(node));
+                output.Indent++;
+
+                output.WriteLine(
+                    "label = \"{0}\\l\"",
+                    escapeGraphViz(node.ToString())
+                );
+
+                output.WriteLine(", shape = \"box\"");
+
+                output.Indent--;
+                output.WriteLine("];");
+                edges.UnionWith(node.Incomming);
+                edges.UnionWith(node.Outgoing);
+             
+
+            }
+        //    output.Indent;
+
+            foreach (ControlFlowEdge edge in edges)
+            {
+                ControlFlowNode from = edge.Source;
+                ControlFlowNode to = edge.Target;
+
+                output.WriteLine("\"{0}\" -> \"{1}\" []", nodeName(from), nodeName(to));
+                //      output.Indent++;
+
+                //  output.unindent();
+              //  output.WriteLine("];");
+            }
+
+            output.Indent--;
+            output.WriteLine("}");
+            output.Flush();
+            output.Close();
         }
 
         public static ControlFlowNode findCommonDominator(ControlFlowNode a, ControlFlowNode b)
@@ -335,8 +396,10 @@ namespace betteribttest
             }
             throw new Exception("No common dominator found!");
         }
-        private static string nodeName(ControlFlowNode node)
+        private string nodeName(ControlFlowNode node)
         {
+            if (node == EntryPoint) return "init";
+            else if (node == RegularExit) return "exit";
             String name = "node" + node.BlockIndex;
             return name;
         }
@@ -364,13 +427,14 @@ namespace betteribttest
             System.CodeDom.Compiler.IndentedTextWriter output = new System.CodeDom.Compiler.IndentedTextWriter(wr);
             output.WriteLine("digraph g {");
             output.Indent++;
+            HashSet<ControlFlowNode> children = new HashSet<ControlFlowNode>();
             foreach (var node in _nodes)
             {
                 output.WriteLine("\"{0}\"", nodeName(node));
                 output.Indent++;
-                output.WriteLine("label=\"{");
-                if (node.WriteTextLine(output) > 0) output.WriteLine();
-                //  output.WriteLine("label = \"{0}\\l\"", escapeGraphViz(node.ToString()));
+                output.WriteLine("label=\"");
+                //if (node.WriteTextLine(output) > 0) output.WriteLine();
+                output.WriteLine("label = \"{0}\\l\"", escapeGraphViz(node.ToString()));
                 output.WriteLine(", shape = \"box\"");
                 output.Indent--;
                 output.WriteLine("];");

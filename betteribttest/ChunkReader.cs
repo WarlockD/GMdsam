@@ -1,4 +1,6 @@
-﻿using System;
+﻿//#define CAB_DECOMPRESS
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,8 +8,10 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Drawing;
 using System.IO.Compression;
+#if CAB_DECOMPRESS
 using Microsoft.Deployment.Compression;
 using Microsoft.Deployment.Compression.Cab;
+#endif
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Xml;
@@ -1336,12 +1340,14 @@ namespace betteribttest
             // this.debugOn = debugOn;
             this.debugOn = true;
             Stream s = null;
+#if CAB_DECOMPRESS
             if (filename != "data.win" && filename.ToLower().IndexOf(".exe") !=-1){
                 CabInfo cab = new CabInfo(filename);
                 if (File.Exists("data.win")) File.Delete("data.win");
                 cab.UnpackFile("data.win","data.win");  // cab.OpenRead("data.win"); doesn't work for some reason
                 filename = "data.win";
             } 
+#endif
             s = System.IO.File.Open(filename, FileMode.Open, FileAccess.Read);
             file_data = new byte[s.Length];
             s.Read(file_data, 0, (int)s.Length);

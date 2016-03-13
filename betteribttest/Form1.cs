@@ -169,7 +169,8 @@ namespace betteribttest
             InitializeComponent();
            // cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
             //  cr.DumpAllObjects("objects.txt");
-             cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
+            // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
+            cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win",false);
             //Decompiler dism = new Decompiler(cr);
             
             DecompilerNew newDecompiler = new DecompilerNew();
@@ -177,11 +178,11 @@ namespace betteribttest
             List<string> InstanceList=newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
             // we assume all the patches were done to calls and pushes
             // string filename_to_test = "obj_face_alphys_Step";
-            //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
+            // string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
-            //   string filename_to_test = "gml_Object_obj_emptyborder_s"; // slighty harder now
-            string filename_to_test = "SCR_DIRECT"; // simple loop
-          //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
+            //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now
+                string filename_to_test = "SCR_DIRECT"; // simple loop
+            //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
                 newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
