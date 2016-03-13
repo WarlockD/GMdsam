@@ -51,6 +51,8 @@ namespace betteribttest
     public class ControlFlowNode : IComparable<ControlFlowNode>, IEquatable<ControlFlowNode> , ITextOut
     {
         public BitArray DebugDominators;
+        public StatementBlock block;
+        public Stack<Ast> stack;
         public override int GetHashCode()
         {
             return BlockIndex << 16 | Address;
@@ -315,7 +317,9 @@ namespace betteribttest
                 runner ← p
                 while runner 6 = doms[b]
                     add b to runner’s dominance frontier set
-                    runner = doms[runner]*/
+                    runner = doms[runner]
+*/
+
             ResetVisited();
             EntryPoint.TraversePostOrder(o => o.DominatorTreeChildren, delegate (ControlFlowNode n)
              {
@@ -348,7 +352,8 @@ namespace betteribttest
 
                 output.WriteLine(
                     "label = \"{0}\\l\"",
-                    escapeGraphViz(node.ToString())
+                    node.block !=null ? escapeGraphViz(node.block.ToString()) : escapeGraphViz(node.ToString())
+
                 );
 
                 output.WriteLine(", shape = \"box\"");

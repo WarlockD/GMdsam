@@ -403,84 +403,12 @@ namespace betteribttest
                 }
             } while (changed);
         }
+    
         class Loop : IEquatable<Loop>
-        {
-            public Block Header { get; private set; }
-            public List<Block> Blocks { get; private set; }
-            public Loop(Block header)
-            {
-                Header = header;
-                Blocks = new List<Block>();
-                Blocks.Add(header);
-            }
-            public override int GetHashCode()
-            {
-                int hash = Header.GetHashCode();
-                foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
-                return hash;
-            }
-            public bool Equals(Loop other)
-            {
-                if (other.Header != this.Header) return false;
-                if (Blocks.SequenceEqual(other.Blocks)) return true;
-                return false;
-            }
-            public override bool Equals(object obj)
-            {
-                if (object.ReferenceEquals(obj, null)) return false;
-                if (object.ReferenceEquals(obj, this)) return true;
-                Loop test = obj as Loop;
-                return test == null ? Equals(test) : false;
-            }
-        }
-        HashSet<Loop> loopList; // should be a set?
-        Loop NatrualLoopForEdge(Block header, Block tail)
-        {
-            Stack<Block> workList = new Stack<Block>();
-            Loop loop = new Loop(header);
-            if(header != tail)
-            {
-                loop.Blocks.Add(tail);
-                workList.Push(tail);
-            }
-            while(workList.Count > 0)
-            {
-                Block block = workList.Pop();
-                foreach(var pred in block.preds)
-                {
-                    if(!loop.Blocks.Contains(pred))
-                    {
-                        loop.Blocks.Add(pred);
-                        workList.Push(pred);
-                    }
-                }
-            }
-            return loop;
-        }
-        void ComputeNatrualLoops()
-        {
-            loopList = new HashSet<Loop>();
-            foreach(var kv in BlockList)
-            {
-                Block block = kv;
-                if (block == EntryBlock) continue;
-                foreach(var succ in block.succs)
-                {
-                    // Every successor that dominates its predecessor
-                    // must be the header of a loop.
-                    // That is, block -> succ is a back edge.
-                    // if(block.ContainsDominator(succ))
-                    bool test = block.dominators.Get(succ.Id);
-                    if (test)
-                        loopList.Add(NatrualLoopForEdge(succ, block));
-                }
-            }
-        }
-        class Loop2 : IEquatable<Loop2>
         {
             public ControlFlowNode Header { get; private set; }
             public List<ControlFlowNode> Blocks { get; private set; }
-            public Loop2(ControlFlowNode header)
+            public Loop(ControlFlowNode header)
             {
                 Header = header;
                 Blocks = new List<ControlFlowNode>();
@@ -492,7 +420,7 @@ namespace betteribttest
                // foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
                 return hash;
             }
-            public bool Equals(Loop2 other)
+            public bool Equals(Loop other)
             {
                 if (other.Header == this.Header) return true;
               //  if (Blocks.SequenceEqual(other.Blocks)) return true;
@@ -506,16 +434,16 @@ namespace betteribttest
                 return test != null ? Equals(test) : false;
             }
         }
-        HashSet<Loop2> LoopList2 = new HashSet<Loop2>();
-        Loop2 NatrualLoopForEdge2(ControlFlowNode header, ControlFlowNode tail)
+        HashSet<Loop> loopList = new HashSet<Loop>();
+        Loop NatrualLoopForEdge(ControlFlowNode header, ControlFlowNode tail)
         {
          
-            Loop2 loop = null;
-            foreach(var t in LoopList2) if(t.Header == header) { loop = t; break; }
+            Loop loop = null;
+            foreach(var t in loopList) if(t.Header == header) { loop = t; break; }
             if(loop == null)
             {
-                loop = new Loop2(header);
-                LoopList2.Add(loop);
+                loop = new Loop(header);
+                loopList.Add(loop);
             }
             Stack<ControlFlowNode> workList = new Stack<ControlFlowNode>();
             if (header != tail)
@@ -537,9 +465,9 @@ namespace betteribttest
             }
             return loop;
         }
-        void ComputeNatrualLoops2()
+        void ComputeNatrualLoops()
         {
-            LoopList2 = new HashSet<Loop2>();
+            loopList = new HashSet<Loop>();
             ControlFlowNode entryPoint = graph.EntryPoint;
             foreach(var node in graph.Nodes)
             {
@@ -551,7 +479,7 @@ namespace betteribttest
                     // That is, block -> succ is a back edge.
                     // if(block.ContainsDominator(succ))
                     if(node.Dominates(succ))
-                        LoopList2.Add(NatrualLoopForEdge2(succ, node));
+                        loopList.Add(NatrualLoopForEdge(succ, node));
                 }
             }
         }
@@ -609,7 +537,40 @@ namespace betteribttest
             }
             return null;
         }
-        AstStatement root;
+        StatementBlock ConvertIfStatements(ControlFlowNode node)
+        {
+            if(node.block == null)
+            {
+                Stack<Ast> stack = new Stack<Ast>();
+                node.block=dn.DoStatements(stack, node.Start, node.End);
+            }
+            if (node.Outgoing.Count != 2) return node.block; // not an iff statment
+            var trueBlock = node.Outgoing[0].Target;
+            var falseBlock = node.Outgoing[1].Target; // or continue
+            if(trueBlock.block== null) trueBlock.block = ConvertIfStatements(trueBlock);
+            if (falseBlock.block == null) falseBlock.block = ConvertIfStatements(falseBlock);
+            if (trueBlock.Outgoing.Count == 2)
+            {
+                trueBlock.block = ConvertIfStatements(trueBlock);
+            }
+            if (trueBlock.Outgoing.Count != 1) throw new Exception("We couldn't reduce it");
+            if (falseBlock.Outgoing.Count == 2)
+            {
+                falseBlock.block = ConvertIfStatements(falseBlock);
+            }
+            if (falseBlock.Outgoing.Count != 1) throw new Exception("We couldn't reduce it");
+            if (falseBlock.Outgoing[0].Target != trueBlock.Outgoing[0].Target) throw new Exception("this should equal unless its a loop, we check for that before");
+            IfStatement ifs = node.block.Last() as IfStatement;
+            if (ifs == null) throw new Exception("This should of been a branch");
+            if (trueBlock.block.Last() is GotoStatement) trueBlock.block.Remove(trueBlock.block.Last());
+            if (falseBlock.block.Last() is GotoStatement) falseBlock.block.Remove(falseBlock.block.Last());
+            IfStatement newIF = new IfStatement(ifs.Instruction, ifs.Condition.Copy(), trueBlock.block.Copy() as AstStatement, falseBlock.block.Copy() as AstStatement);
+            node.block.Remove(ifs);
+            node.block.Add(newIF);
+            StatementBlock ret = node.block.Copy() as StatementBlock;
+            Debug.WriteLine(ret.ToString());
+            return ret;
+        }
         DecompilerNew dn;
         StatementBlock TryToMakeStatements(Block block, Stack<Ast> stack)
         {
@@ -632,8 +593,7 @@ namespace betteribttest
 #endif
             return block.AstBlock;
         }
-        int[] _offsets;
-        bool[] _hasIncomingJumps;
+
         ControlFlowGraph graph;
         public BasicBlocks(IEnumerable<Instruction> list, DecompilerNew dn)
         {
@@ -643,52 +603,21 @@ namespace betteribttest
             graph = ControlFlowGraphBuilder.Build(ilist);
             graph.ComputeDomiance();
             graph.computeDominanceFrontier();
-            graph.ExportGraph("Testdot.txt");
-            ComputeNatrualLoops2();
-            
-            foreach (var l in list) code.Add(l.Address, l);
-            First = code.Values.First().First;
-            Last = code.Values.First().Last;
-            Instruction lasti = code.Values.Last();
-            _last_pc = lasti.Address;
-            EntryBlock = null;
-            CodeBlocks = new Dictionary<int, CodeBlock>();
-            _offsets = new int[code.Count];
-            _hasIncomingJumps = new bool[code.Count];
-
-            for (int i = 0; i < code.Count; i++)
-            {
-                Instruction inst = code.Values[i];
-                _offsets[i] = inst.Address;
-                _hasIncomingJumps[i] = inst.Label != null;
-            }
-            createNodes();
-
-        //    CreateBasicBlocks();
-            
-            CreateBasicBlocks2();
-            ComputeDominators();
-            DebugWrite(BlockList, "0_tree.txt");
+            var testBlock = ConvertIfStatements(graph.EntryPoint.Outgoing[0].Target);
             ComputeNatrualLoops();
             Stack<Ast> stack = new Stack<Ast>();
-            EntryBlock.ClearVisits();
-            root = TryToMakeStatements(EntryBlock,stack);
-        }
-        void createNodes()
-        {
-            for (int i = 0, n = code.Values.Count; i < n; i++)
+            graph.ResetVisited();
+            foreach(var node in graph.Nodes)
             {
-                Instruction blockStart = code.Values[i];
-                for (; i + 1 < n; i++)// See how big we can make that block...
-                {
-                    Instruction instruction = code.Values[i];
-                    if (instruction.isBranch || _hasIncomingJumps[i + 1]) break;
-                    //Instruction next = instruction.Next;
-
-                }
-                
+                if (node.Visited) continue;
+                node.Visited = true;
+                if (node.Start == null) continue;
+                node.block = dn.DoStatements(stack, node.Start, node.End);
+                if (stack.Count > 0) node.stack = stack; else node.stack = null;
             }
+            graph.ExportGraph("Testdot.txt");
         }
+
         Block exitBlock;
         Block GetBlockAt(Instruction i) {
             // only time we are null is if we are trying to go to he last instruction

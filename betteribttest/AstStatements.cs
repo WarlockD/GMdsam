@@ -302,6 +302,8 @@ namespace betteribttest
         {
             this.Condition = Condition;
             this.Then = new GotoStatement(target);
+            ParentSet(this.Then);
+            ParentSet(this.Condition);
             Else = null;
         }
         public override int DecompileToText(TextWriter wr)

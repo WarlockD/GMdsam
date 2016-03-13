@@ -126,44 +126,7 @@ namespace betteribttest
 
             image = bmp;
         }
-        public List<int> itsAllInts(string filename)
-        {
-            List<int> data = new List<int>();
-            Stream f = File.Open(filename, FileMode.Open);
-            BinaryReader r = new BinaryReader(f);
-            int len = (int)f.Length / 4;
-            while(f.Position != f.Length)
-            {
-                data.Add(r.ReadInt32());
-            }
-            string v = "";
-            int col = 0;
-            foreach (int a in data)
-            {
-                v += a.ToString() + " ";
-                if (++col > 32)
-                {
-                    v += "\n";
-                    col = 0;
-                }
-
-            }
-            v += "\n";
-            int t = data[data.Count - 4];
-
-            v += String.Format("{0,5:X} {1,5:X}\n", (t & 0xFFFF), (t >> 16) & 0xFFFF);
-            t = data[data.Count - 3];
-            v += String.Format("{0,5:X} {1,5:X}\n", (t & 0xFFFF), (t >> 16) & 0xFFFF);
-            t = data[data.Count - 2];
-            v += String.Format("{0,5:X} {1,5:X}\n", (t & 0xFFFF), (t >> 16) & 0xFFFF);
-            t = data[data.Count - 1];
-            v += String.Format("{0,5:X} {1,5:X}\n", (t & 0xFFFF), (t >> 16) & 0xFFFF);
-            System.Diagnostics.Debug.Write(v);
-            System.Diagnostics.Debug.Write(cr.stringList[(int)((uint)(data[data.Count - 1]))].str);
-            
-            return data;
-        }
-
+       
         public Form1()
         {
             InitializeComponent();
@@ -180,8 +143,9 @@ namespace betteribttest
             // string filename_to_test = "obj_face_alphys_Step";
             // string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
-            //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now
-                string filename_to_test = "SCR_DIRECT"; // simple loop
+              string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now
+        //        string filename_to_test = "SCR_DIRECT"; // simple loop
+          //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo!
             //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {

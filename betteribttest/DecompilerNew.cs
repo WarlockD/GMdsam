@@ -40,8 +40,9 @@ namespace betteribttest
             int value;
             if (objectInstance.TryParse(out value))
                 ret = new AstVar(i, value, GMCodeUtil.lookupInstance(value, InstanceList), var_name);
-            else
-                throw new Exception("Have some instance issue");
+            else // in that case the instance could be in a variable
+                ret = new AstVar(i, value, objectInstance.ToString(), var_name); //  throw new Exception("Have some instance issue");
+
             if (index != null)
                 return new AstArrayAccess(ret, index);
             else
@@ -186,6 +187,12 @@ namespace betteribttest
                             break;
                         case GMCode.Call:
                             stack.Push(DoCallRValue(stack, ref i));
+                            break;
+                        case GMCode.Dup:
+                            Debug.Assert((i.OpCode & 0xFFFF) == 0);
+                            stack.Push(stack.Peek().Copy());
+                            i = i.Next;
+                            // stack.Push(DoCallRValue(stack, ref i));
                             break;
                         case GMCode.Popz:   // the call is now a statlemtn
                             i = i.Next;
