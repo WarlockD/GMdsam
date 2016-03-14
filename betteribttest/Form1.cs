@@ -130,10 +130,10 @@ namespace betteribttest
         public Form1()
         {
             InitializeComponent();
-           // cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
+            cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-            cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win",false);
+        //    cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win",false);
             //Decompiler dism = new Decompiler(cr);
             
             DecompilerNew newDecompiler = new DecompilerNew();

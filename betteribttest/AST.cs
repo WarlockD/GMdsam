@@ -288,7 +288,7 @@ namespace betteribttest
         }
         public override Ast Copy()
         {
-            return new LogicalAnd(Left.Copy(), Right.Copy());
+            return new AstTree(this.Instruction, this.Op, Left.Copy(), Right.Copy());
         }
         public override Ast Invert() // Never call base.Invert as it will recursive loop for resons
         {
@@ -436,8 +436,8 @@ namespace betteribttest
         public string Name { get; protected set; }
         public GM_Type Type { get { return GM_Type.Var; } }
         public string Instance { get; protected set;  }
-        public int InstanceValue { get; protected set; }
-        public AstVar(Instruction i,  int instanceValue, string instance,  string name) : base(i)
+        public Ast InstanceValue { get; protected set; }
+        public AstVar(Instruction i,  Ast instanceValue, string instance,  string name) : base(i)
         {
             Name = name;
             Instance = instance;
@@ -449,7 +449,7 @@ namespace betteribttest
             Name = name;
             Instance = instance;
             ExtraData = i.OperandInt;
-            InstanceValue = i.Instance;
+            InstanceValue = null;
         }
         public override Ast Copy()
         {

@@ -171,7 +171,7 @@ namespace betteribttest
 
         public bool Remove(AstStatement item)
         {
-            if (this.Parent != this) return false;
+            if (item.Parent != this) return false;
             ParentClear(item);
             return _statements.Remove(item);
         }

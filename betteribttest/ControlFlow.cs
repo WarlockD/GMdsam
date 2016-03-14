@@ -52,7 +52,6 @@ namespace betteribttest
     {
         public BitArray DebugDominators;
         public StatementBlock block;
-        public Stack<Ast> stack;
         public override int GetHashCode()
         {
             return BlockIndex << 16 | Address;

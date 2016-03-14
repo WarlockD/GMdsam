@@ -105,28 +105,7 @@ namespace betteribttest
         Break,
         If
     }
-    class BlockStatement
-    {
-        public Block Destination;
-        public BlockStatementType Type;
-        public List<Block> elseBlocks;
-        public List<Block> trueBlocks;
-        public List<Block> falseBlocks;
-        public bool NegateStatement;
-        public bool RemoveLastGotoInTrueBlock;
-        public bool RemoveLastGotoInFalseBlock;
-        public BlockStatement(BlockStatementType t)
-        {
-            NegateStatement = false;
-            RemoveLastGotoInTrueBlock = false;
-            RemoveLastGotoInFalseBlock = false;
-            this.Type = t;
-            elseBlocks = new List<Block>();
-            trueBlocks = new List<Block>();
-            falseBlocks = new List<Block>();
-            Destination = null;
-        }
-    }
+    
     /// <summary>
     /// Created this block to make finding equality between code blocks easyer when they have diffrent target 
     /// Address
@@ -483,66 +462,22 @@ namespace betteribttest
                 }
             }
         }
-        void StructureBreakContinue(BlockStatement stmt, Block contBlock, Block breakBlock)
-        {
-            switch (stmt.Type)
-            {
-                case BlockStatementType.Goto:
-                    if (stmt.Destination == contBlock) stmt.Type = BlockStatementType.Continue;
-                    else if (stmt.Destination == breakBlock) stmt.Type = BlockStatementType.Break;
-                    break;
-                case BlockStatementType.If:
-            //        if (stmt.elseBlocks != null) stmt.elseBlocks.ForEach(s => StructureBreakContinue(s, contBlock, breakBlock));
-           //         if (stmt.trueBlocks != null) stmt.trueBlocks.ForEach(s => StructureBreakContinue(s, contBlock, breakBlock));
-                    break;
 
-            }
-        }
         void WorkOnLoopSet()
         {
             // http://www.backerstreet.com/decompiler/creating_statements.php
             foreach (var loop in loopList)
             {
-                var doWhile = new BlockStatement(BlockStatementType.DoWhile);
+               // var doWhile = new BlockStatement(BlockStatementType.DoWhile);
 
             }
-        }
-        IfStatement StructureIfElse(Block block, Stack<Ast> stack)
-        {
-            if (block.succs.Count != 2) return null;
-            var trueBlock = block.succs[0];
-            var falseBlock = block.succs[1];
-            if (trueBlock.succs.Count != 1 || falseBlock.succs.Count != 1) return null;
-            if (falseBlock.succs[0] != trueBlock.succs[0]) return null;
-
-            Ast condition = stack.Pop();
-            var trueAst = TryToMakeStatements(trueBlock, new Stack<Ast>(stack));
-            var falseAst = TryToMakeStatements(trueBlock, new Stack<Ast>(stack));
-            Instruction i = block.Code.Last();
-            Debug.Assert(i.isBranch);
-            return new IfStatement(i, i.GMCode == GMCode.Bf ? condition.Invert() : condition, trueAst, falseAst);
-        }
-        IfStatement StructureIfs(Block block, Stack<Ast> stack)
-        {
-            if (block.succs.Count != 2) return null;
-            var trueBlock = block.succs[0];
-            var falseBlock = block.succs[1];
-            if (trueBlock.succs.Count == 1 && trueBlock.succs[0] == falseBlock)
-            {
-                Ast condition = stack.Pop();
-                var trueAst = TryToMakeStatements(trueBlock, new Stack<Ast>(stack));
-                Instruction i = block.Code.Last();
-                Debug.Assert(i.isBranch);
-                return new IfStatement(i, i.GMCode == GMCode.Bf ? condition.Invert() : condition, trueAst);
-            }
-            return null;
         }
         StatementBlock ConvertIfStatements(ControlFlowNode node)
         {
             if(node.block == null)
             {
                 Stack<Ast> stack = new Stack<Ast>();
-                node.block=dn.DoStatements(stack, node.Start, node.End);
+                node.block=new StatementBlock(dn.ConvertManyStatements(node.Start, node.End,stack));
             }
             if (node.Outgoing.Count != 2) return node.block; // not an iff statment
             var trueBlock = node.Outgoing[0].Target;
@@ -571,31 +506,10 @@ namespace betteribttest
             Debug.WriteLine(ret.ToString());
             return ret;
         }
-        DecompilerNew dn;
-        StatementBlock TryToMakeStatements(Block block, Stack<Ast> stack)
-        {
-            if (block.AstBlock != null) return block.AstBlock;
-          //  StatementBlock astBlock = new StatementBlock();
-            block.AstBlock = dn.DoStatements(stack, block.Code.First(), block.Code.Last());
-            if (block.succs.Count == 2)
-            {
-                IfStatement oldIf = block.AstBlock.Last() as IfStatement;
-                StatementBlock then = TryToMakeStatements(block.succs[0], new Stack<Ast>(stack));
-                block.AstBlock.Remove(oldIf);
-                IfStatement ifs = new IfStatement(oldIf.Instruction, oldIf.Condition, then, new GotoStatement(new Label(block.succs[1].Address)));
-                block.AstBlock.Add(ifs);
-            } else if(block.succs.Count == 1) { 
-                // the goto should already be in there
-
-            }
-#if DEBUG
-            block.AstBlock.SaveToFile("temp_statement.txt");
-#endif
-            return block.AstBlock;
-        }
+        Decompile dn;
 
         ControlFlowGraph graph;
-        public BasicBlocks(IEnumerable<Instruction> list, DecompilerNew dn)
+        public BasicBlocks(IEnumerable<Instruction> list, Decompile dn)
         {
             this.dn = dn;
             code = new SortedList<int, Instruction>(200);
@@ -612,8 +526,7 @@ namespace betteribttest
                 if (node.Visited) continue;
                 node.Visited = true;
                 if (node.Start == null) continue;
-                node.block = dn.DoStatements(stack, node.Start, node.End);
-                if (stack.Count > 0) node.stack = stack; else node.stack = null;
+                node.block = new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack));
             }
             graph.ExportGraph("Testdot.txt");
         }
