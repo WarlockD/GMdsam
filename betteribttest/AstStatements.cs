@@ -38,6 +38,142 @@ namespace betteribttest
             return GetEnumerator();
         }
     }
+    // OH MY GOD WE ARE HERE! AFTER FUCKING MONTHS!!  MONNNTHS!!!!
+    public class WhileLoop : AstStatement
+    {
+        public override IEnumerator<AstStatement> GetEnumerator()
+        {
+            return Block.GetEnumerator();
+        }
+        public override bool ContainsType<T>()
+        {
+            if (this is T) return true;
+            return Block.ContainsType<T>();
+        }
+        public override void FindType<T>(List<T> types)
+        {
+            base.FindType(types); // check self
+            Block.FindType<T>(types);
+        }
+        public Ast Condition { get; private set; }
+        public StatementBlock Block { get; private set; }
+        public WhileLoop(Ast condition, StatementBlock block) : base(null) {
+            ParentSet(Condition=condition);
+            ParentSet(Block=block);
+        }
+        ~WhileLoop()
+        {
+            ParentClear(Condition);
+            ParentClear(Block);
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            int count = 0;
+            wr.Write("while( ");
+            wr.Write(Condition);
+            wr.Write(") ");
+            count += Block.DecompileToText(wr);
+            if (count == 0) { count++; wr.WriteLine(); }
+            return count;
+        }
+        public override Ast Copy()
+        {
+            WhileLoop copy = new WhileLoop(this.Condition.Copy(), this.Block.Copy() as StatementBlock);
+            return copy;
+        }
+    }
+    public class PushEnviroment : AstStatement
+    {
+        public override IEnumerator<AstStatement> GetEnumerator()
+        {
+            var result = Enumerable.Empty<AstStatement>();
+            if(_block != null) result = result.Concat(_block);
+            return result.GetEnumerator();
+        }
+        public override bool ContainsType<T>()
+        {
+            if (_block != null)
+            {
+                if (_block is T) return true;
+                return _block.ContainsType<T>();
+            }
+            return false;
+        }
+        public override void FindType<T>(List<T> types)
+        {
+            base.FindType(types); // check self
+            if (_block != null)
+            {
+                if (_block is T) types.Add(_block as T);
+                _block.FindType<T>(types);
+            }
+        }
+        public Ast Enviroment { get; protected set; }
+        public string EnviromentText { get; protected set; }
+        StatementBlock _block = null;
+        public StatementBlock block {
+            get { return _block; }
+            set
+            {
+                if(value != _block)
+                {
+                    ParentClear(_block);
+                    ParentSet(value);
+                    _block = value;
+                }
+            }
+        }
+        public PushEnviroment(Instruction i, Ast ast, string envString) : base(i) {
+            EnviromentText = envString;
+            ParentSet(ast);
+            Enviroment = ast;
+        }
+        ~PushEnviroment()
+        {
+            ParentClear(Enviroment);
+            ParentClear(_block);
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            int count = 0;
+            wr.Write("with(");
+            wr.Write(EnviromentText);
+            wr.Write(") ");
+            if (_block != null) count = _block.DecompileToText(wr);
+            if (count == 0) { count++; wr.WriteLine(); }
+            return count;
+        }
+        public override Ast Copy()
+        {
+            PushEnviroment copy = new PushEnviroment(this.Instruction,this.Enviroment.Copy(),this.EnviromentText);
+            return copy;
+        }
+    }
+    // this is basicly a break inside of a with statement
+    public class PopEnviroment : AstStatement
+    {
+        public string EnviromentText { get; protected set; }
+        public PopEnviroment(Instruction i, string envString) : base(i)
+        {
+            EnviromentText = envString;
+        }
+        public override int DecompileToText(TextWriter wr)
+        {
+            wr.Write("break;");
+            if (!string.IsNullOrEmpty(EnviromentText))
+            {
+                wr.Write("  // env: ");
+                wr.Write(EnviromentText);
+            }
+            wr.WriteLine();
+            return 1;
+        }
+        public override Ast Copy()
+        {
+            PopEnviroment copy = new PopEnviroment(this.Instruction, this.EnviromentText);
+            return copy;
+        }
+    }
     // This class is used in filler when the stack is an odd shape between labels
     public class PushStatement : AstStatement
     {
@@ -53,8 +189,8 @@ namespace betteribttest
         {
             wr.Write("Push(");
             if (_value != null) _value.DecompileToText(wr); else wr.Write("NullPush");
-            wr.Write(")");
-            return 0;
+            wr.WriteLine(")");
+            return 1;
         }
         public override Ast Copy()
         {
@@ -62,6 +198,7 @@ namespace betteribttest
             return copy;
         }
     }
+
     public class AssignStatment : AstStatement
     {
         public Ast Variable { get; protected set; }
@@ -243,32 +380,11 @@ namespace betteribttest
     // Used for decoding other statements
     public class IfStatement : AstStatement
     {
-        public override IEnumerator<AstStatement> GetEnumerator() {
-            var result = Enumerable.Empty<AstStatement>();
-            result = result.Concat(Then);
-            if (Else != null) result = result.Concat(Else);
-            return result.GetEnumerator();
-        }
+       
         public Ast Condition { get; protected set; }
         public AstStatement Then { get; protected set; }
         public AstStatement Else { get; protected set; }
-        public override bool ContainsType<T>()
-        {
-            if (Then is T || Else is T) return true;
-            if (Then.ContainsType<T>()) return true;
-            if(Else != null && Else.ContainsType<T>()) return true;
-            return false;
-        }
-        public override void FindType<T>(List<T> types)  {
-            base.FindType(types); // check self
-            T test = Then as T;
-            if (test != null) types.Add(test);
-            if(Else != null)
-            {
-                test = Else as T;
-                if (test != null) types.Add(test);
-            }
-        }
+    
         public override Ast Copy()
         {
             IfStatement copy;
@@ -308,7 +424,7 @@ namespace betteribttest
         }
         public override int DecompileToText(TextWriter wr)
         {
-            int count = 1;
+            int count = 0;
             wr.Write("if ");
             this.Condition.DecompileToText(wr);
             wr.Write(" then ");
@@ -318,7 +434,7 @@ namespace betteribttest
                 wr.Write(" else ");
                 count += Else.DecompileToText(wr);
             }
-            wr.WriteLine();
+            if(count == 0) { count++; wr.WriteLine(); }
             return count;
         }
 

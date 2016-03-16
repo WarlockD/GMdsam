@@ -114,26 +114,43 @@ namespace betteribttest
         public List<AstStatement> ConvertManyStatements(Instruction start, Instruction end, Stack<Ast> stack)
         {
             List<AstStatement> ret = new List<AstStatement>();
+            Stack<List<AstStatement>> envStack = new Stack<List<AstStatement>>();
             Instruction next = end.Next;
             while (start != null && start != next)
             {
-                var block = ConvertOneStatement(ref start, stack, false);
-                if (block.Count == 0) break; // we done?  No statements?
-                ret.AddRange(block);
+                AstStatement stmt = ConvertOneStatement(ref start, stack);
+                if (stmt == null) break; // we done?  No statements?
+                if(stmt is PushEnviroment)
+                {
+                    ret.Add(stmt);
+                    envStack.Push(ret);
+                    ret = new List<AstStatement>();
+                } else if(stmt is PopEnviroment)
+                {
+                    var last = envStack.Peek().Last();
+                    var push = last as PushEnviroment;
+                    if (push == null) throw new Exception("Last instruction should of been a push");
+                    push.block = new StatementBlock(ret);
+                    ret = envStack.Pop();
+                    // we don't need the pop in here now so don't add it ret.Add(stmt)
+                }
+                else ret.Add(stmt);
             }
+            if (envStack.Count > 0) throw new Exception("We are still in an enviroment stack");
             return ret;
         }
-        public List<AstStatement> ConvertOneStatement(ref Instruction i,Stack<Ast> stack, bool dontCodeLabelStatements)
+        public AstStatement ConvertOneStatement(ref Instruction i,Stack<Ast> stack)
         {
-            List<AstStatement> ret = new List<AstStatement>();
-            while (i != null)
+            AstStatement ret = null;
+            while (i != null && ret == null)
             {
-                if (!dontCodeLabelStatements &&i.Label != null) ret.Add(new LabelStatement(i.Label)); // we add this so we know where they are, if that makes sense
-                int count = i.GMCode.getOpTreeCount(); // not a leaf
+                 int count = i.GMCode.getOpTreeCount(); // not a leaf
                 if (count == 2)
                 {
-                    if (count > stack.Count) throw new StackException(i, "Needed " + count + " on stack", ret);
-                    AstTree ast = new AstTree(i, i.GMCode, stack.Pop(), stack.Pop());
+                    if (count > stack.Count) throw new StackException(i, "Needed " + count + " on stack", null);
+                    Ast left = stack.Pop();
+                    Ast right = stack.Pop();
+                    AstTree ast = new AstTree(i, i.GMCode, left, right);
                     stack.Push(ast);
                     i = i.Next;
                 }
@@ -145,12 +162,12 @@ namespace betteribttest
                             i = i.Next; // ignore
                             break;
                         case GMCode.Not:
-                            if (stack.Count==0) throw new StackException(i, "Needed 1 on stack", ret);
+                            if (stack.Count==0) throw new StackException(i, "Needed 1 on stack",null);
                             stack.Push(new AstNot(i, stack.Pop()));
                             i = i.Next;
                             break;
                         case GMCode.Neg:
-                            if (stack.Count == 0) throw new StackException(i, "Needed 1 on stack", ret);
+                            if (stack.Count == 0) throw new StackException(i, "Needed 1 on stack",null);
                             stack.Push(new AstNegate(i, stack.Pop()));
                             i = i.Next;
                             break;
@@ -166,31 +183,43 @@ namespace betteribttest
                             i = i.Next;
                             break;
                         case GMCode.Popz:   // the call is now a statlemtn
-                            ret.Add(new CallStatement(i, stack.Pop() as AstCall));
+                            ret = new CallStatement(i, stack.Pop() as AstCall);
                             i = i.Next;
-                            return ret;
+                            break;
                         case GMCode.Pop:
-                            ret.Add(DoAssignStatment(stack, ref i));// assign statment
-                            return ret; // it handles the next instruction
+                            ret =  DoAssignStatment(stack, ref i);// assign statment
+                            break; // it handles the next instruction
                         case GMCode.B: // this is where the magic happens...woooooooooo
-                            ret.Add(new GotoStatement(i));
+                            ret = new GotoStatement(i);
                             i = i.Next;
-                            return ret;
+                            break;
                         case GMCode.Bf:
                         case GMCode.Bt:
                             {
                                 Ast condition = stack.Pop();
-                                ret.Add(new IfStatement(i, i.GMCode == GMCode.Bf ? condition.Invert() : condition, i.Operand as Label));
+                                ret = new IfStatement(i, i.GMCode == GMCode.Bf ? condition.Invert() : condition, i.Operand as Label);
                             }
                             i = i.Next;
-                            return ret;
+                            break;
                         case GMCode.BadOp:
                             i = i.Next; // skip
                             break; // skip those
-                        case GMCode.Exit:
-                            ret.Add(new ExitStatement(i));
+                        case GMCode.Pushenv:
+                            {
+                                Ast env = stack.Pop();
+                                ret = new PushEnviroment(i, env, LookupInstance(env));
+                                
+                            }
                             i = i.Next;
-                            return ret;
+                            break;
+                        case GMCode.Popenv:
+                            ret = new PopEnviroment(i,null);
+                            i = i.Next;
+                            break;
+                        case GMCode.Exit:
+                            ret = new ExitStatement(i);
+                            i = i.Next;
+                            break;
                         default:
                             throw new Exception("Not Implmented! ugh");
                     }
@@ -269,24 +298,12 @@ namespace betteribttest
             this.StringIndex = StringIndex;
 
             var instructions = Instruction.Create(r, StringIndex,InstanceList);
-            ignoreLabels = new HashSet<Label>();
+            if(instructions.Count == 0)
+            {
+                Debug.WriteLine("No instructions in script '" + scriptName + "'");
+                return;
+            }
             //    RemoveAllConv(instructions); // mabye keep if we want to find types of globals and selfs but you can guess alot from context
-            // foreach (var i in instructions) statements.Add(i);
-
-
-
-            //   SaveOutput(instructions, scriptName + "_original.txt");
-            //  DFS dfs = new DFS(instructions);
-            //  dfs.CreateDFS();
-            //    List<Instruction> ilist = instructions.ToList();
-            // ControlFlowGraph graph = ControlFlowGraphBuilder.Build(ilist);
-
-
-            // graph.ComputeDominators2();
-            //   graph.computeDominanceFrontier();
-
-            // graph.ComputeDomiance();
-            //   graph.computeDominanceFrontier();
             Decompile decompile = new Decompile(StringIndex, InstanceList);
             BasicBlocks basic = new BasicBlocks(instructions, decompile);
 

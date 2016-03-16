@@ -456,6 +456,14 @@ namespace betteribttest
             if (need_label) ni.Label = new Label(ni.Address);
             return ni;
         }
+        // this is used for the peep changing, don't need this really outside of it
+        internal void ChangeInstruction(GMCode code, Label l)
+        {
+            Debug.Assert(this.GMCode.isBranch());
+            OpCode = (uint)(((byte)code) << 24);
+            OpCode &= (uint)(this.Address-l.Address);
+            Debug.Assert(this.GMCode.isBranch());
+        }
         internal Instruction(int offset, uint opCode) 
         {
             this.Address = offset;
@@ -755,9 +763,65 @@ namespace betteribttest
                 }
                 return count;
             }
+            public void SaveInstructions(string filename)
+            {
+                StreamWriter sw = new StreamWriter(filename);
+                WriteTextLine(sw);
+                sw.Flush();
+                sw.Close();
+            }
+        }
+        static void ResolveLabels(Instructions instructions)
+        {
+            HashSet<Label> labels = new HashSet<Label>();
+            foreach(var i in instructions)
+            {
+                if (i.Label != null) labels.Add(i.Label);
+                if (i.Operand is Label) labels.Add(i.Operand as Label);
+            }
+            if (labels.Count > 0) foreach (var l in labels) Label.ResolveCalls(l, instructions);
         }
         // first pass simple create form a stream
-        
+        public static void ReplaceShortCircuitInstructions(Instructions input)
+        {
+            if (input.First == null) return;
+            var node = input.First;
+            do
+            {
+                Instruction i = node.Value;
+                Label label = i.Label;
+                Label target = i.Operand as Label;
+                if (i.GMCode == GMCode.Push && (i.OpCode & 0xFFFF) == 0)
+                {
+                    // We MIGHT have a short, check the statment before and after
+                    Instruction before = i.Prev;
+                    Instruction after = i.Next;
+                    if(before.GMCode == GMCode.B && before.Operand == after.Label && after.GMCode == GMCode.Bf) // If it skips the 0 push and goes to the branch
+                    { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
+                        foreach(var iref in i.Label.AllRefrencess) { // these are branches that don't need a stack, just change the operand
+                            if (!iref.isBranch) throw new Exception("Something wrong boy");
+                            iref.Operand = after.Operand;
+                        }
+                        if (!(after.Label.AllRefrencess.Count == 1 && after.Label.AllRefrencess[0] == before.Operand))
+                        {
+                            foreach (var iref in after.Label.AllRefrencess)  // these are branches HAVE to be Bf or Bt, change the op from after don't need a stack, just change the operand
+                            {
+                                if (!iref.isBranch) throw new Exception("Something wrong boy");
+                                iref.ChangeInstruction(after.GMCode, after.Operand as Label);
+                            }
+                        }
+                    //    input.Remove(after);
+                        input.Remove(i);
+                        input.Remove(before);
+                        after.Label = null;
+                        node = input.First;
+                        ResolveLabels(input); // fix this
+                        continue;
+                    }
+                }
+                node = node.Next;
+            } while (node != null);
+        }
         public static Instructions Create(System.IO.BinaryReader r, List<string> StringIndex, List<string> InstanceList=null)
         {
             r.BaseStream.Position = 0;
@@ -772,7 +836,7 @@ namespace betteribttest
                 inst.StringLookup = StringIndex; 
                 instructions.AddLast(inst);
                 System.Diagnostics.Debug.Assert(inst.Address == pc);
-                if (inst.GMCode.isBranch() || inst.GMCode == GMCode.Pushenv || (inst.GMCode == GMCode.Popenv && inst.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
+                if (inst.GMCode.isBranch() )// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
                 { 
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
                     target += pc;
@@ -788,6 +852,7 @@ namespace betteribttest
                 }
                 pc += inst.Size;
             }
+            
             /*
             LabelsOutsideOfFuntion.Sort();
             foreach (var l in LabelsOutsideOfFuntion)
@@ -808,7 +873,7 @@ namespace betteribttest
             if (instructions.labels.Count > 0) foreach (var l in instructions.labels) Label.ResolveCalls(l.Value, instructions);
            
             // now fix string indexes 
-            foreach(var i in instructions)
+            foreach (var i in instructions)
             {
                 if(i.Operand != null)
                 {
@@ -834,8 +899,12 @@ namespace betteribttest
                     }
                 }
             }
+            instructions.SaveInstructions("before_pre.txt");
+            ReplaceShortCircuitInstructions(instructions);
+            instructions.SaveInstructions("after_pre.txt");
             return instructions;
         }
+    
         public override bool Equals(object obj)
         {
             if (Object.ReferenceEquals(obj, this)) return true;

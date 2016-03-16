@@ -14,7 +14,7 @@ namespace betteribttest
     {
         T Copy();
     }
-  
+   
     public class Ast : IEquatable<Ast>
     {
         public virtual IEnumerable<Ast> AstEnumerator(bool includeSelf=true) { if (includeSelf) yield return this; }
@@ -144,7 +144,7 @@ namespace betteribttest
             {
                 if (object.ReferenceEquals(child, this)) throw new ArgumentNullException("Child cannot be own Parent", "child");
                 if (!object.ReferenceEquals(child.Parent, this)) throw new ArgumentNullException("Child parrent is not this", "child");
-                if (child.Parent == null) throw new ArgumentNullException("Child parrent is already", "child");
+                if (child.Parent == null) throw new ArgumentNullException("Child parrent is already cleared", "child");
                 child.Parent = null;
             }
         }
@@ -282,7 +282,7 @@ namespace betteribttest
         public GMCode Op { get; protected set; }
         string _opString;
         public override string Operation { get { return _opString; } }
-        public AstTree(Instruction i, GMCode op, Ast left, Ast right) : base(i,left,right) {
+        public AstTree(Instruction i, GMCode op, Ast left, Ast right) : base(i, left, right) {
             _opString = " "+ op.getOpTreeString()+ " ";
             this.Op = op;
         }

@@ -330,6 +330,9 @@ namespace betteribttest
 
     class BasicBlocks
     {
+        Decompile dn;
+
+        ControlFlowGraph graph;
         public List<Block> BlockList = new List<Block>();
         public Dictionary<int,CodeBlock> CodeBlocks = new Dictionary<int, CodeBlock>();
         public Instruction First;
@@ -462,53 +465,196 @@ namespace betteribttest
                 }
             }
         }
-
-        void WorkOnLoopSet()
+        // http://www.backerstreet.com/decompiler/creating_statements.php
+        void RemoveGotos(StatementBlock block,bool RemoveLabelsToo=false)
         {
-            // http://www.backerstreet.com/decompiler/creating_statements.php
-            foreach (var loop in loopList)
-            {
-               // var doWhile = new BlockStatement(BlockStatementType.DoWhile);
-
-            }
+            if (block.Count > 0 && block.Last() is GotoStatement) block.Remove(block.Last());
+            if (block.Count > 0 && block.First() is LabelStatement) block.Remove(block.First());
         }
-        StatementBlock ConvertIfStatements(ControlFlowNode node)
+        void ReLinkNodes(ControlFlowNode from, ControlFlowNode to, bool clearNodes = false)
         {
-            if(node.block == null)
+            if(clearNodes)
             {
-                Stack<Ast> stack = new Stack<Ast>();
-                node.block=new StatementBlock(dn.ConvertManyStatements(node.Start, node.End,stack));
+                from.Outgoing.Clear();
+                to.Incomming.Clear();
             }
-            if (node.Outgoing.Count != 2) return node.block; // not an iff statment
-            var trueBlock = node.Outgoing[0].Target;
-            var falseBlock = node.Outgoing[1].Target; // or continue
-            if(trueBlock.block== null) trueBlock.block = ConvertIfStatements(trueBlock);
-            if (falseBlock.block == null) falseBlock.block = ConvertIfStatements(falseBlock);
-            if (trueBlock.Outgoing.Count == 2)
+            var edge = new ControlFlowEdge(from, to);
+            from.Outgoing.Add(edge);
+            to.Incomming.Add(edge);
+        }
+        void RemoveStatementsAndEndingGotos(StatementBlock block)
+        {
+            if (block.Count == 0) return;
+            if (block.Last() is GotoStatement) block.Remove(block.Last());
+            for (int i = 0; i < block.Count; i++) if (block[i] is LabelStatement) block.RemoveAt(i);
+        }
+        StatementBlock NodeToBlock(ControlFlowNode node, Stack<Ast> stack) {  return new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack)); }
+        int NodeToAst(ControlFlowNode node,Stack<Ast> stack,bool removeStatementsAndGotos)
+        {
+            StatementBlock block = new StatementBlock();
+            if (node.block == null && node.Address != -1)
             {
-                trueBlock.block = ConvertIfStatements(trueBlock);
+                if (node.Address == -1) block.Add(new ExitStatement(null)); // fake exit
+                else block = NodeToBlock(node, stack);
             }
-            if (trueBlock.Outgoing.Count != 1) throw new Exception("We couldn't reduce it");
-            if (falseBlock.Outgoing.Count == 2)
-            {
-                falseBlock.block = ConvertIfStatements(falseBlock);
-            }
-            if (falseBlock.Outgoing.Count != 1) throw new Exception("We couldn't reduce it");
-            if (falseBlock.Outgoing[0].Target != trueBlock.Outgoing[0].Target) throw new Exception("this should equal unless its a loop, we check for that before");
+            if (removeStatementsAndGotos) RemoveStatementsAndEndingGotos(block);
+            node.block = block;
+            return block.Count;
+        }
+        bool CombineNodes(ControlFlowNode node) // reduces redundent nodes
+        {
+            if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
+            if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
+            if (node.Outgoing.Count != 1) return false;  // Not an iff statement
+
+            var nextNode = node.Outgoing[0].Target;
+            if (nextNode == graph.EntryPoint || nextNode == graph.RegularExit) return false;
+            if (nextNode.Incomming.Count != 1) return false;  // not a simple connection
+            Debug.Assert(node.BlockIndex == 90);
+            RemoveStatementsAndEndingGotos(node.block);
+            foreach (var statement in nextNode.block) node.block.Add(statement.Copy() as AstStatement);
+            RemoveStatementsAndEndingGotos(node.block); // run it again to check for label statments
+            node.Outgoing = nextNode.Outgoing;
+            foreach (var target in node.Outgoing) target.Source = node; // NOW I get why we have a seperate class for edges
+            graph.Nodes.Remove(nextNode);
+            graph.ExportGraph("export.txt");
+            return true; // we found one
+        }
+        bool ConvertAllSimpleIfStatements(ControlFlowNode node)
+        {
+            if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
+            if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
+            if (node.Outgoing.Count != 2) return false; // Not an iff statement
+            var trueNode = node.Outgoing[0].Target;
+            var falseNode = node.Outgoing[1].Target;
+            if (trueNode.Outgoing.Count != 1 || trueNode.Outgoing[0].Target != falseNode) return false; // not a simple if statment, but we still got stuff after
+            var continueNode = falseNode;
+
             IfStatement ifs = node.block.Last() as IfStatement;
-            if (ifs == null) throw new Exception("This should of been a branch");
-            if (trueBlock.block.Last() is GotoStatement) trueBlock.block.Remove(trueBlock.block.Last());
-            if (falseBlock.block.Last() is GotoStatement) falseBlock.block.Remove(falseBlock.block.Last());
-            IfStatement newIF = new IfStatement(ifs.Instruction, ifs.Condition.Copy(), trueBlock.block.Copy() as AstStatement, falseBlock.block.Copy() as AstStatement);
             node.block.Remove(ifs);
-            node.block.Add(newIF);
-            StatementBlock ret = node.block.Copy() as StatementBlock;
-            Debug.WriteLine(ret.ToString());
-            return ret;
+            RemoveStatementsAndEndingGotos(trueNode.block); // run it again to check for label statments
+            RemoveStatementsAndEndingGotos(node.block); // run it again to check for label statments
+            node.block.Add(new IfStatement(ifs.Instruction, ifs.Condition.Invert(), trueNode.block));
+            ReLinkNodes(node, continueNode, true);
+            graph.Nodes.Remove(trueNode);
+            graph.ExportGraph("export.txt");
+            return true; // we found one
         }
-        Decompile dn;
+        bool ConvertIfElseStatements(ControlFlowNode node)
+        {
+            if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
+            if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
+            if (node.Outgoing.Count != 2) return false; // Not an iff statement
+            var trueNode = node.Outgoing[0].Target;
+            var falseNode = node.Outgoing[1].Target;
+            if (trueNode.Outgoing.Count != 1 || falseNode.Outgoing.Count != 1 || trueNode.Outgoing[0].Target != falseNode.Outgoing[0].Target) return false; ; // both don't end up at the same place
+            var continueNode = trueNode.Outgoing[0].Target;
 
-        ControlFlowGraph graph;
+            IfStatement ifs = node.block.Last() as IfStatement;
+            node.block.Remove(ifs);
+            RemoveStatementsAndEndingGotos(trueNode.block);
+            RemoveStatementsAndEndingGotos(node.block);
+            RemoveStatementsAndEndingGotos(falseNode.block);
+            node.block.Add(new IfStatement(ifs.Instruction, ifs.Condition.Invert(), trueNode.block, falseNode.block));
+            ReLinkNodes(node, continueNode, true);
+            graph.Nodes.Remove(trueNode);
+            graph.Nodes.Remove(falseNode);
+            graph.ExportGraph("export.txt");
+            return true; // we found one
+        }
+        bool ConvertWhileLoops(ControlFlowNode node)
+        {
+            if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
+            if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
+            if (node.Outgoing.Count != 2) return false; // Not a while statement
+            var falseNode = node.Outgoing[0].Target;
+            var nextNode = node.Outgoing[1].Target;
+            // here is the trick.  The trueNode dosn't matter how many outgoing it is
+            // the only one that does matter is if the falseNood (loop body) outgoing ONLY goes back to node
+            // I need to be able to handle breaks so I will figure that out latter
+            if (!node.Successors.Contains(falseNode) || !node.Predecessors.Contains(falseNode)) return false;
+            if (falseNode.Outgoing.Count != 1 || falseNode.Incomming.Count != 1) throw new Exception("We need to handle breaks and continues");
+            // We have a loop.  Could it contain true? humm mabye.  The dissasembler "fixes" the branchTrue/branchFalse so
+            // does that mean it automaticly converts it to a while loop? humm
+            node.Outgoing.Remove(falseNode.Incomming[0]);
+            node.Incomming.Remove(falseNode.Incomming[0]);
+            node.Outgoing.Remove(falseNode.Outgoing[0]);
+            node.Incomming.Remove(falseNode.Outgoing[0]);
+            falseNode.Outgoing.Clear();
+            falseNode.Incomming.Clear();
+            graph.Nodes.Remove(falseNode);
+            IfStatement ifs = node.block.Last() as IfStatement;
+            if (ifs == null) throw new Exception("We NEED there to be an if statement here");
+            node.block.Remove(ifs);
+            if(!(ifs.Then is GotoStatement)) throw new Exception("The if statment is screwy here");
+            var whileLoop = new WhileLoop(ifs.Condition.Invert(), falseNode.block.Copy() as StatementBlock);
+            node.block.Add(whileLoop);
+            return true; // we found one
+        }
+
+
+        void BuildTheWorld()
+        {
+            graph.BuildAllAst(dn);
+            graph.ExportGraph("start.txt");
+          //  var node = graph.EntryPoint.Outgoing[0].Target; // start
+            for(int i=0;i < graph.Nodes.Count;i++)
+            {
+                var node = graph.Nodes[i];
+                //   graph.ExportGraph("export.txt");
+                if (CombineNodes(node))
+                {
+                    graph.ExportGraph("export.txt");
+                    i = 0;
+                    continue;
+                }
+                if (ConvertWhileLoops(node))
+                {
+                    graph.ExportGraph("export.txt");
+                    i = 0;
+                    continue;
+                }
+                if (ConvertAllSimpleIfStatements(node)) {
+                    graph.ExportGraph("export.txt");
+                    i = 0;
+                    continue;
+                }
+                if (ConvertIfElseStatements(node)) {
+                    graph.ExportGraph("export.txt");
+                    i = 0;
+                    continue;
+                }
+               
+              
+            }
+            // regraph to mabye use DominaceFrontier...sigh I really need to figure it out more
+            graph.ComputeDomiance();
+            graph.computeDominanceFrontier();
+            /*
+            for (int i = 0; i < graph.Nodes.Count; i++)
+            {
+                var node = graph.Nodes[i];
+                //   graph.ExportGraph("export.txt");
+              
+                if (CombineNodes(node))
+                {
+                    graph.ExportGraph("export.txt");
+                    i = 0;
+                    continue;
+                }
+            }
+            */
+                // be cause of the idiotic way I am rebuilding these trees, we have to make sure
+                // the if statments are all processed first
+                // If anyone is reading this, this is the WRONG way to rebuild basic blocks, seriously, this is 
+                // retarded.  But since the bytecode is very simple and the compiler dosn't do a lot of wierd things
+                // we can kind of get away with it...mostly
+                // as a side note, I should use ComputeNatrualLoops() and do some better recursive stuff
+                // however.. screw it.
+
+                graph.ExportGraph("final.txt");
+            //var testBlock = ConvertIfStatements(node);
+        }
         public BasicBlocks(IEnumerable<Instruction> list, Decompile dn)
         {
             this.dn = dn;
@@ -517,7 +663,9 @@ namespace betteribttest
             graph = ControlFlowGraphBuilder.Build(ilist);
             graph.ComputeDomiance();
             graph.computeDominanceFrontier();
-            var testBlock = ConvertIfStatements(graph.EntryPoint.Outgoing[0].Target);
+            BuildTheWorld();
+            return;
+
             ComputeNatrualLoops();
             Stack<Ast> stack = new Stack<Ast>();
             graph.ResetVisited();

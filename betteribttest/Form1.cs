@@ -139,20 +139,37 @@ namespace betteribttest
             DecompilerNew newDecompiler = new DecompilerNew();
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
             List<string> InstanceList=newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
+            string filename_to_test = "gasterblaster"; // lots of stuff no loops though
+          // string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
             // we assume all the patches were done to calls and pushes
-            // string filename_to_test = "obj_face_alphys_Step";
-            // string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
+            // string filename_to_test = "obj_face_alphys_Step"; // this one is good but no shorts
+            //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
-              string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now
-        //        string filename_to_test = "SCR_DIRECT"; // simple loop
-          //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo!
+          //      string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+            //        string filename_to_test = "SCR_DIRECT"; // simple loop
+            //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo!
             //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
+            foreach (var files in cr.GetCodeStreams(filename_to_test))
+            {
+                var instructions = Instruction.Create(files.stream, stringList, InstanceList);
+                if(instructions.Count ==0)
+                {
+                    System.Diagnostics.Debug.WriteLine("No instructions on script '" + files.ScriptName+"'");
+                    continue;
+                }
+                ControlFlowGraph graph = ControlFlowGraphBuilder.Build(instructions.ToList());
+                graph.ComputeDomiance();
+                graph.computeDominanceFrontier();
+                graph.BuildAllAst(new Decompile(stringList, InstanceList));
+                graph.ExportGraph(files.ScriptName + "_graph.txt");
+            }
+            System.Diagnostics.Debug.WriteLine("Ok");
+
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
                 newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
             }
 
-            
             foreach (var files in cr.GetCodeStreams())
             {
                 newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
@@ -162,7 +179,7 @@ namespace betteribttest
             //   dism.DissasembleEveything();
             //     dism.writeFile("frog");
             //dism.TestStreamOutput("frog");
-            // dism.TestStreamOutput("gasterblaster");
+    
             //    dism.TestStreamOutput("obj_shaker_Alarm");
             //   dism.TestStreamOutput("gasterblaster_Draw");
             //  dism.TestStreamOutput("sansbullet");

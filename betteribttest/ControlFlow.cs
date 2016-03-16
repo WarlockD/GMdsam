@@ -20,8 +20,8 @@ namespace betteribttest
   
     public class ControlFlowEdge :IEquatable<ControlFlowEdge>
     {
-        public ControlFlowNode Source { get; private set; }
-        public ControlFlowNode Target { get; private set; }
+        public ControlFlowNode Source { get;  set; }
+        public ControlFlowNode Target { get;  set; }
         public ControlFlowEdge(ControlFlowNode source, ControlFlowNode target)
         {
             Debug.Assert(source != null && target != null);
@@ -72,12 +72,12 @@ namespace betteribttest
         public LinkedHashSet<ControlFlowNode> DomianceFrontier {  get { return _dominanceFrontier; } }
         private List<ControlFlowEdge> _incoming = new List<ControlFlowEdge>();
         private List<ControlFlowEdge> _outgoing = new List<ControlFlowEdge>();
-        public List<ControlFlowEdge> Incomming { get { return _incoming; } }
-        public List<ControlFlowEdge> Outgoing { get { return _outgoing; } }
+        public List<ControlFlowEdge> Incomming { get { return _incoming; } set { _incoming = value; } }
+        public List<ControlFlowEdge> Outgoing { get { return _outgoing; } set { _outgoing = value; } }
         public ControlFlowNode ImmediateDominator { get; set; }
         public Instruction Start { get; set; }
         public Instruction End { get; set; }
-        public int BlockIndex { get; private set; }
+        public int BlockIndex { get; internal set; }
         public int Address { get; private set; }
         public ControlFlowNode CopyFrom { get; set; }
         public bool Visited { get; set; }
@@ -182,10 +182,30 @@ namespace betteribttest
                 sw.Write(string.Join(",", blockIndexes));
 
             }
-            foreach (var instruction in Instructions)
+#if false
+            if(DebugDominators != null)
+            {
+                List<int> doms = new List<int>();
+                for (int i = 0; i < DebugDominators.Count; i++) if (DebugDominators[i]) doms.Add(i);
+                if(doms.Count > 0)
+                {
+                    sw.WriteLine(); count++;
+                    sw.Write("Dominates: ");
+                    sw.Write(string.Join(",", doms));
+                }
+            }
+#endif
+            if (block != null)
             {
                 sw.WriteLine(); count++;
-                sw.Write(instruction.ToString());
+                count+= block.DecompileToText(sw);
+            }
+            else {
+                foreach (var instruction in Instructions)
+                {
+                    sw.WriteLine(); count++;
+                    sw.Write(instruction.ToString());
+                }
             }
             sw.Indent--;
             return count;
@@ -227,7 +247,8 @@ namespace betteribttest
         public void DebugDominance()
         {
             ControlFlowNode entryPoint = EntryPoint;
-
+            int size = _nodes.Count;
+            for (int i = 0; i < size; i++) _nodes[i].BlockIndex = i; // Re index
             foreach (var node in _nodes)
             {
                 node.DebugDominators = new BitArray(_nodes.Count);
@@ -307,6 +328,35 @@ namespace betteribttest
             }
 
         }
+        void RemoveStatementsAndEndingGotos(StatementBlock block)
+        {
+            if (block.Last() is GotoStatement) block.Remove(block.Last());
+            for (int i = 0; i < block.Count; i++) if (block[i] is LabelStatement) block.RemoveAt(i);
+        }
+        StatementBlock NodeToBlock(Decompile dn, ControlFlowNode node, Stack<Ast> stack) { return new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack)); }
+        int NodeToAst(Decompile dn, ControlFlowNode node, Stack<Ast> stack, bool removeStatementsAndGotos)
+        {
+            StatementBlock block = new StatementBlock();
+            if (node.block == null && node.Address != -1)
+            {
+                if (node.Address == -1) block.Add(new ExitStatement(null)); // fake exit
+                else block = NodeToBlock(dn,node, stack);
+            }
+            if (removeStatementsAndGotos) RemoveStatementsAndEndingGotos(block);
+            node.block = block;
+            return block.Count;
+        }
+        public void BuildAllAst(Decompile dn)
+        {
+            foreach(var node in _nodes)
+            {
+                if (node == EntryPoint || node == RegularExit) continue;
+                if (node == null && node.Address != -1) continue;
+               Stack<Ast> stack = new Stack<Ast>();
+                node.block = NodeToBlock(dn, node, stack);
+                if (stack.Count > 0) throw new Exception("Node stack error");
+            }
+        }
         public void computeDominanceFrontier()
         {
         /*
@@ -336,7 +386,7 @@ namespace betteribttest
 
         public void ExportGraph(string name)
         {
-            StreamWriter fwriter = new StreamWriter(name);
+            StringWriter fwriter = new StringWriter();
             System.CodeDom.Compiler.IndentedTextWriter output = new System.CodeDom.Compiler.IndentedTextWriter(fwriter);
 
             output.WriteLine("digraph g {");
@@ -351,7 +401,7 @@ namespace betteribttest
 
                 output.WriteLine(
                     "label = \"{0}\\l\"",
-                    node.block !=null ? escapeGraphViz(node.block.ToString()) : escapeGraphViz(node.ToString())
+                    node.block !=null ? escapeGraphViz(node.ToString()) : escapeGraphViz(node.ToString())
 
                 );
 
@@ -381,7 +431,12 @@ namespace betteribttest
             output.Indent--;
             output.WriteLine("}");
             output.Flush();
-            output.Close();
+            
+            using (StreamWriter file = new StreamWriter(name))
+            {
+                file.Write(fwriter.ToString());
+            }
+                
         }
 
         public static ControlFlowNode findCommonDominator(ControlFlowNode a, ControlFlowNode b)
