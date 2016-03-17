@@ -96,8 +96,8 @@ namespace betteribttest
         AstCall DoCallRValue(Stack<Ast> stack, ref Instruction i)
         {
             int arguments = i.Instance;
-            List<Ast> args = new List<Ast>();
-            for (int a = 0; a < arguments; a++) args.Add(stack.Pop());
+           Stack<Ast> args = new Stack<Ast>();
+           for (int a = 0; a < arguments; a++) args.Push(stack.Pop());
             AstCall call = new AstCall(i, i.Operand as string, args);
             i = i.Next;
             return call;
@@ -148,8 +148,8 @@ namespace betteribttest
                 if (count == 2)
                 {
                     if (count > stack.Count) throw new StackException(i, "Needed " + count + " on stack", null);
-                    Ast left = stack.Pop();
-                    Ast right = stack.Pop();
+                    Ast right = stack.Pop().Copy();
+                    Ast left = stack.Pop().Copy();
                     AstTree ast = new AstTree(i, i.GMCode, left, right);
                     stack.Push(ast);
                     i = i.Next;
@@ -305,7 +305,7 @@ namespace betteribttest
             }
             //    RemoveAllConv(instructions); // mabye keep if we want to find types of globals and selfs but you can guess alot from context
             Decompile decompile = new Decompile(StringIndex, InstanceList);
-            BasicBlocks basic = new BasicBlocks(instructions, decompile);
+            BasicBlocks basic = new BasicBlocks(instructions, decompile,scriptName);
 
 
         }

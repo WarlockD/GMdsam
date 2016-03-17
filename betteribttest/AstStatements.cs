@@ -61,11 +61,6 @@ namespace betteribttest
             ParentSet(Condition=condition);
             ParentSet(Block=block);
         }
-        ~WhileLoop()
-        {
-            ParentClear(Condition);
-            ParentClear(Block);
-        }
         public override int DecompileToText(TextWriter wr)
         {
             int count = 0;
@@ -73,7 +68,7 @@ namespace betteribttest
             wr.Write(Condition);
             wr.Write(") ");
             count += Block.DecompileToText(wr);
-            if (count == 0) { count++; wr.WriteLine(); }
+            if (count == 0) { count++; wr.WriteLine(";"); }
             return count;
         }
         public override Ast Copy()
@@ -128,11 +123,6 @@ namespace betteribttest
             ParentSet(ast);
             Enviroment = ast;
         }
-        ~PushEnviroment()
-        {
-            ParentClear(Enviroment);
-            ParentClear(_block);
-        }
         public override int DecompileToText(TextWriter wr)
         {
             int count = 0;
@@ -140,7 +130,7 @@ namespace betteribttest
             wr.Write(EnviromentText);
             wr.Write(") ");
             if (_block != null) count = _block.DecompileToText(wr);
-            if (count == 0) { count++; wr.WriteLine(); }
+            if (count == 0) { count++; wr.WriteLine(";"); }
             return count;
         }
         public override Ast Copy()
@@ -179,10 +169,6 @@ namespace betteribttest
     {
         Ast _value = null;
         public Ast Value { get; protected set; }
-        ~PushStatement()
-        {
-            ParentClear(_value);
-        }
         public PushStatement(Ast ast) : base(ast.Instruction) { Value = ast; ParentSet(ast); }
         PushStatement(Instruction i) : base(i) { Value = null; }
         public override int DecompileToText(TextWriter wr)
@@ -211,22 +197,17 @@ namespace betteribttest
             ParentSet(Variable);
             ParentSet(Value);
         }
-        ~AssignStatment()
-        {
-            ParentClear(Variable);
-            ParentClear(Value);
-        }
         public override int DecompileToText(TextWriter wr)
         {
             Variable.DecompileToText(wr);
             wr.Write(" = ");
             Value.DecompileToText(wr);
-            wr.WriteLine();
+            wr.WriteLine(";");
             return 1;
         }
         public override Ast Copy()
         {
-            AssignStatment n = new AssignStatment(this.Instruction, this.Variable.Copy() as AstVar, this.Value.Copy());
+            AssignStatment n = new AssignStatment(this.Instruction, this.Variable.Copy(), this.Value.Copy());
             return n;
         }
     }
@@ -239,15 +220,11 @@ namespace betteribttest
             ParentSet(call);
             Call = call;
         }
-        ~CallStatement()
-        {
-            ParentClear(Call);
-        }
         public override int DecompileToText(TextWriter wr)
         {
             wr.Write("void ");
             Call.DecompileToText(wr);
-            wr.WriteLine();
+            wr.WriteLine(";");
             return 1;
         }
         public override Ast Copy()
@@ -313,7 +290,7 @@ namespace betteribttest
         public ExitStatement(Instruction i) : base(i) { }
         public override int DecompileToText(TextWriter wr)
         {
-            wr.WriteLine("return // Exit Statement ");
+            wr.WriteLine("return; // Exit Statement ");
             return 1;
         }
     }
@@ -373,18 +350,76 @@ namespace betteribttest
             wr.Write("goto ");
             wr.Write(Target);
             if (LabelLinkTo != null) wr.WriteLine("/* Linked */");
-            else wr.WriteLine();
+            else wr.WriteLine(";");
             return 1;
         }
     }
     // Used for decoding other statements
     public class IfStatement : AstStatement
     {
-       
-        public Ast Condition { get; protected set; }
-        public AstStatement Then { get; protected set; }
-        public AstStatement Else { get; protected set; }
-    
+        Ast _condition=null;
+        AstStatement _then= null;
+        AstStatement _else= null;
+        public override IEnumerator<AstStatement> GetEnumerator()
+        {
+            var result = Enumerable.Empty<AstStatement>();
+            if (Then != null) result = result.Concat(Then);
+            if (Else != null) result = result.Concat(Else);
+            return result.GetEnumerator();
+        }
+        public override bool ContainsType<T>()
+        {
+            if (this is T) return true;
+            if (Then != null && Then.ContainsType<T>()) return true;
+            if (Else != null && Else.ContainsType<T>()) return true;
+            return false;
+        }
+        public override void FindType<T>(List<T> types)
+        {
+            base.FindType(types); // check self
+            if (Then != null) Then.FindType<T>(types);
+            if (Else != null) Else.FindType<T>(types) ;
+        }
+      
+        public Ast Condition {
+            get { return _condition; }
+            set
+            {
+                ParentSet(value);
+                ParentClear(_condition);
+                _condition = value;
+            }
+        }
+        AstStatement BlockOrSingle(AstStatement s)
+        {
+            // If its a block statement with ONE statment in it, lets get rid of the block
+            StatementBlock block = s as StatementBlock;
+            if (block != null && block.Count == 1)
+            {
+                s = block.First();
+                block.Remove(s); // clears the parrent
+            }
+            ParentSet(s);
+            return s;
+        }
+
+        public AstStatement Then {
+            get { return _then; }
+            set
+            {
+                ParentClear(_then);
+                _then = BlockOrSingle(value);
+            }
+        }
+        public AstStatement Else
+        {
+            get { return _else; }
+            set
+            {
+                ParentSet(value);
+                _else = BlockOrSingle(value);
+            }
+        }
         public override Ast Copy()
         {
             IfStatement copy;
@@ -394,47 +429,36 @@ namespace betteribttest
                 copy = new IfStatement(this.Instruction, Condition.Copy(), Then.Copy() as AstStatement, Else.Copy() as AstStatement);
             return copy;
         }
-
+      
         public IfStatement(Instruction info, Ast Condition, AstStatement Then) : base(info)
         {
             this.Condition = Condition;
             this.Then = Then;
-            ParentSet(this.Condition);
-            ParentSet(this.Then);
             Else = null;
-        }
-        ~IfStatement()
-        {
-            ParentClear(this.Else);
-            ParentClear(this.Then);
-            ParentClear(this.Condition);
         }
         public IfStatement(Instruction info, Ast Condition, AstStatement Then, AstStatement Else) : this(info, Condition, Then)
         {
             this.Else = Else;
-            ParentSet(this.Else);
         }
         public IfStatement(Instruction info, Ast Condition, Label target) : base(info)
         {
             this.Condition = Condition;
             this.Then = new GotoStatement(target);
-            ParentSet(this.Then);
-            ParentSet(this.Condition);
             Else = null;
         }
         public override int DecompileToText(TextWriter wr)
         {
             int count = 0;
-            wr.Write("if ");
+            wr.Write("if( ");
             this.Condition.DecompileToText(wr);
-            wr.Write(" then ");
+            wr.Write(" ) ");
             count += this.Then.DecompileToText(wr);
             if (this.Else != null)
             {
                 wr.Write(" else ");
                 count += Else.DecompileToText(wr);
             }
-            if(count == 0) { count++; wr.WriteLine(); }
+            if(count == 0) { count++; wr.WriteLine(";"); }
             return count;
         }
 

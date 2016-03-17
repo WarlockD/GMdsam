@@ -14,7 +14,55 @@ namespace betteribttest
     {
         T Copy();
     }
-   
+    public class CallFunctionLookup
+    {
+        public delegate IEnumerable<string> FunctionToText(string funcname, IReadOnlyList<Ast> arguments);
+        Dictionary<string, FunctionToText> _lookup = new Dictionary<string, FunctionToText>();
+        public CallFunctionLookup() { }
+        public  void Add(string funcname, FunctionToText func) { _lookup.Add(funcname, func); }
+        public string GenericToString(AstCall call)
+        {
+            StringWriter wr = new StringWriter();
+            wr.Write(call.Name);
+            wr.Write("( ");
+            if (call.Arguments.Count > 0)
+            {
+
+                if (call.Arguments.Count == 1) call.Arguments[0].DecompileToText(wr);
+                else
+                {
+                    call.Arguments[0].DecompileToText(wr);
+                    for (int i = 1; i < call.Arguments.Count; i++)
+                    {
+                        wr.Write(", ");
+                        call.Arguments[i].DecompileToText(wr);
+                    }
+                }
+            }
+            wr.Write(" ) ");
+            return wr.ToString();
+        }
+        public string Lookup(AstCall call)
+        {
+            FunctionToText func;
+            if (_lookup.TryGetValue(call.Name, out func))
+            {
+                StringWriter wr = new StringWriter();
+                wr.Write(call.Name);
+                wr.Write("( ");
+                bool need_comma = false;
+                foreach (var s in func(call.Name, call.Arguments))
+                {
+                    if (need_comma) wr.Write(',');
+                    wr.Write(s);
+                    need_comma = true;
+                }
+                wr.Write(" )");
+                return wr.ToString();
+            }
+            else return GenericToString(call);
+        }
+    }
     public class Ast : IEquatable<Ast>
     {
         public virtual IEnumerable<Ast> AstEnumerator(bool includeSelf=true) { if (includeSelf) yield return this; }
@@ -193,11 +241,6 @@ namespace betteribttest
             ParentSet(Left);
             ParentSet(Right);
         }
-        ~AstBinary()
-        {
-            ParentClear(Left);
-            ParentClear(Right);
-        }
 
         public override int DecompileToText(TextWriter wr)
         {
@@ -212,10 +255,6 @@ namespace betteribttest
         public Ast Right { get; protected set; }
         protected AstUinary(Instruction i, Ast right) : base(i) { Debug.Assert(right != null);  Right = right; ParentSet(Right); }
         protected AstUinary(Ast right) : base() { Debug.Assert(right != null); Right = right;ParentSet(Right); }
-        ~AstUinary()
-        {
-            ParentClear(Right);
-        }
         public override int DecompileToText(TextWriter wr)
         {
             wr.Write(Operation);
@@ -299,28 +338,17 @@ namespace betteribttest
     }
     public class AstCall : Ast, ICopy<Ast>
     {
+        static CallFunctionLookup _lookup = new CallFunctionLookup();
+        static public void AddFunctionLookup(string name, CallFunctionLookup.FunctionToText func) { _lookup.Add(name, func); }
         List<Ast> _arguments;
         public string Name { get; protected set; }
         public IReadOnlyList<Ast> Arguments {  get { return _arguments; } }
         public override int DecompileToText(TextWriter wr)
         {
-            wr.Write(Name);
-            wr.Write('(');
-            if (_arguments.Count == 1) _arguments[0].DecompileToText(wr);
-            else
-            {
-                foreach (var child in _arguments)
-                {
-                    wr.Write(',');
-                    child.DecompileToText(wr);
-                }
-            }
-            wr.Write(')');
+            string str = _lookup.Lookup(this);
+            if (str == null) str = _lookup.GenericToString(this);
+            wr.Write(str);
             return 0;
-        }
-        ~AstCall()
-        {
-            _arguments.ForEach(o => ParentClear(o));
         }
         IEnumerable<Ast> CopyArguments()
         {
@@ -411,11 +439,6 @@ namespace betteribttest
             ArrayIndex = index;
             ParentSet(Variable);
             ParentSet(ArrayIndex);
-        }
-        ~AstArrayAccess()
-        {
-            ParentClear(Variable);
-            ParentClear(ArrayIndex);
         }
         public override Ast Copy()
         {

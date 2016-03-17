@@ -334,10 +334,8 @@ namespace betteribttest
 
         ControlFlowGraph graph;
         public List<Block> BlockList = new List<Block>();
-        public Dictionary<int,CodeBlock> CodeBlocks = new Dictionary<int, CodeBlock>();
-        public Instruction First;
-        public Instruction Last;
-        public static void DebugWrite(IEnumerable<Block> blocks,  string filename)
+        public Dictionary<int, CodeBlock> CodeBlocks = new Dictionary<int, CodeBlock>();
+        public static void DebugWrite(IEnumerable<Block> blocks, string filename)
         {
             StreamWriter tw = new StreamWriter(filename);
             foreach (var b in blocks) b.WriteIT(tw);
@@ -352,7 +350,7 @@ namespace betteribttest
             int id = 0;
             int size = BlockList.Count;
             Block block;
-            foreach(var kv in BlockList)
+            foreach (var kv in BlockList)
             {
                 block = kv;
                 block.Id = id++;
@@ -360,11 +358,11 @@ namespace betteribttest
                 else block.dominators.Length = size;
                 block.dominators.SetAll(true);
             }
-            
+
             block = BlockList[0]; // aways the first entry point anyway
             block.dominators.SetAll(false);
-            block.dominators.Set(block.Id,true);
-            
+            block.dominators.Set(block.Id, true);
+
             BitArray T = new BitArray(size);
             bool changed = false;
             do
@@ -385,7 +383,7 @@ namespace betteribttest
                 }
             } while (changed);
         }
-    
+
         class Loop : IEquatable<Loop>
         {
             public ControlFlowNode Header { get; private set; }
@@ -399,13 +397,13 @@ namespace betteribttest
             public override int GetHashCode()
             {
                 int hash = Header.GetHashCode();
-               // foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
+                // foreach (var i in Blocks) hash = hash * 31 + i.GetHashCode();
                 return hash;
             }
             public bool Equals(Loop other)
             {
                 if (other.Header == this.Header) return true;
-              //  if (Blocks.SequenceEqual(other.Blocks)) return true;
+                //  if (Blocks.SequenceEqual(other.Blocks)) return true;
                 return false;
             }
             public override bool Equals(object obj)
@@ -419,10 +417,10 @@ namespace betteribttest
         HashSet<Loop> loopList = new HashSet<Loop>();
         Loop NatrualLoopForEdge(ControlFlowNode header, ControlFlowNode tail)
         {
-         
+
             Loop loop = null;
-            foreach(var t in loopList) if(t.Header == header) { loop = t; break; }
-            if(loop == null)
+            foreach (var t in loopList) if (t.Header == header) { loop = t; break; }
+            if (loop == null)
             {
                 loop = new Loop(header);
                 loopList.Add(loop);
@@ -451,7 +449,7 @@ namespace betteribttest
         {
             loopList = new HashSet<Loop>();
             ControlFlowNode entryPoint = graph.EntryPoint;
-            foreach(var node in graph.Nodes)
+            foreach (var node in graph.Nodes)
             {
                 if (node == entryPoint) continue;
                 foreach (var succ in node.Successors)
@@ -460,20 +458,20 @@ namespace betteribttest
                     // must be the header of a loop.
                     // That is, block -> succ is a back edge.
                     // if(block.ContainsDominator(succ))
-                    if(node.Dominates(succ))
+                    if (node.Dominates(succ))
                         loopList.Add(NatrualLoopForEdge(succ, node));
                 }
             }
         }
         // http://www.backerstreet.com/decompiler/creating_statements.php
-        void RemoveGotos(StatementBlock block,bool RemoveLabelsToo=false)
+        void RemoveGotos(StatementBlock block, bool RemoveLabelsToo = false)
         {
             if (block.Count > 0 && block.Last() is GotoStatement) block.Remove(block.Last());
             if (block.Count > 0 && block.First() is LabelStatement) block.Remove(block.First());
         }
         void ReLinkNodes(ControlFlowNode from, ControlFlowNode to, bool clearNodes = false)
         {
-            if(clearNodes)
+            if (clearNodes)
             {
                 from.Outgoing.Clear();
                 to.Incomming.Clear();
@@ -482,14 +480,44 @@ namespace betteribttest
             from.Outgoing.Add(edge);
             to.Incomming.Add(edge);
         }
+        IfStatement GetBranchNodes(ControlFlowNode node, ref ControlFlowNode trueNode, ref ControlFlowNode falseNode)
+        {
+            if (node.Outgoing.Count != 2) return null;
+            trueNode = node.Outgoing[0].Target;
+            falseNode = node.Outgoing[1].Target;
+            IfStatement ifs = node.block.Last() as IfStatement;
+            if (ifs == null) throw new Exception("Really expected an ifstatement");
+            GotoStatement gotos = ifs.Then as GotoStatement;
+            if (gotos == null) throw new Exception("REALLY needed a goto here");
+            int target = gotos.Target.Address;
+            if(target > _last_pc)
+            {
+                if (falseNode.Address != -1)
+                {
+                    trueNode = node.Outgoing[1].Target;
+                    falseNode = node.Outgoing[0].Target;
+                }
+                if (falseNode.Address != -1) throw new Exception("So the labels don't match? exit node ugh");
+            } else
+            {
+                if (falseNode.Address != gotos.Target.Address)
+                {
+                    trueNode = node.Outgoing[1].Target;
+                    falseNode = node.Outgoing[0].Target;
+                }
+                if (falseNode.Address != gotos.Target.Address) throw new Exception("So the labels don't match? ugh");
+            }
+         
+            return ifs;
+        }
         void RemoveStatementsAndEndingGotos(StatementBlock block)
         {
             if (block.Count == 0) return;
             if (block.Last() is GotoStatement) block.Remove(block.Last());
             for (int i = 0; i < block.Count; i++) if (block[i] is LabelStatement) block.RemoveAt(i);
         }
-        StatementBlock NodeToBlock(ControlFlowNode node, Stack<Ast> stack) {  return new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack)); }
-        int NodeToAst(ControlFlowNode node,Stack<Ast> stack,bool removeStatementsAndGotos)
+        StatementBlock NodeToBlock(ControlFlowNode node, Stack<Ast> stack) { return new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack)); }
+        int NodeToAst(ControlFlowNode node, Stack<Ast> stack, bool removeStatementsAndGotos)
         {
             StatementBlock block = new StatementBlock();
             if (node.block == null && node.Address != -1)
@@ -510,7 +538,8 @@ namespace betteribttest
             var nextNode = node.Outgoing[0].Target;
             if (nextNode == graph.EntryPoint || nextNode == graph.RegularExit) return false;
             if (nextNode.Incomming.Count != 1) return false;  // not a simple connection
-            Debug.Assert(node.BlockIndex == 90);
+            Debug.Assert(node.BlockIndex != 85 && node.BlockIndex != 90);
+            //     Debug.Assert(node.BlockIndex == 90);
             RemoveStatementsAndEndingGotos(node.block);
             foreach (var statement in nextNode.block) node.block.Add(statement.Copy() as AstStatement);
             RemoveStatementsAndEndingGotos(node.block); // run it again to check for label statments
@@ -525,12 +554,11 @@ namespace betteribttest
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
             if (node.Outgoing.Count != 2) return false; // Not an iff statement
-            var trueNode = node.Outgoing[0].Target;
-            var falseNode = node.Outgoing[1].Target;
+            ControlFlowNode trueNode = null;
+            ControlFlowNode falseNode = null;
+            IfStatement ifs = GetBranchNodes(node, ref trueNode, ref falseNode);
             if (trueNode.Outgoing.Count != 1 || trueNode.Outgoing[0].Target != falseNode) return false; // not a simple if statment, but we still got stuff after
             var continueNode = falseNode;
-
-            IfStatement ifs = node.block.Last() as IfStatement;
             node.block.Remove(ifs);
             RemoveStatementsAndEndingGotos(trueNode.block); // run it again to check for label statments
             RemoveStatementsAndEndingGotos(node.block); // run it again to check for label statments
@@ -545,17 +573,17 @@ namespace betteribttest
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
             if (node.Outgoing.Count != 2) return false; // Not an iff statement
-            var trueNode = node.Outgoing[0].Target;
-            var falseNode = node.Outgoing[1].Target;
+            ControlFlowNode trueNode = null;
+            ControlFlowNode falseNode = null;
+            IfStatement ifs = GetBranchNodes(node, ref trueNode, ref falseNode);
             if (trueNode.Outgoing.Count != 1 || falseNode.Outgoing.Count != 1 || trueNode.Outgoing[0].Target != falseNode.Outgoing[0].Target) return false; ; // both don't end up at the same place
             var continueNode = trueNode.Outgoing[0].Target;
-
-            IfStatement ifs = node.block.Last() as IfStatement;
             node.block.Remove(ifs);
             RemoveStatementsAndEndingGotos(trueNode.block);
             RemoveStatementsAndEndingGotos(node.block);
             RemoveStatementsAndEndingGotos(falseNode.block);
             node.block.Add(new IfStatement(ifs.Instruction, ifs.Condition.Invert(), trueNode.block, falseNode.block));
+
             ReLinkNodes(node, continueNode, true);
             graph.Nodes.Remove(trueNode);
             graph.Nodes.Remove(falseNode);
@@ -567,8 +595,9 @@ namespace betteribttest
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
             if (node.Outgoing.Count != 2) return false; // Not a while statement
-            var falseNode = node.Outgoing[0].Target;
-            var nextNode = node.Outgoing[1].Target;
+            ControlFlowNode trueNode = null;
+            ControlFlowNode falseNode = null;
+            IfStatement ifs = GetBranchNodes(node, ref falseNode, ref trueNode);
             // here is the trick.  The trueNode dosn't matter how many outgoing it is
             // the only one that does matter is if the falseNood (loop body) outgoing ONLY goes back to node
             // I need to be able to handle breaks so I will figure that out latter
@@ -576,6 +605,7 @@ namespace betteribttest
             if (falseNode.Outgoing.Count != 1 || falseNode.Incomming.Count != 1) throw new Exception("We need to handle breaks and continues");
             // We have a loop.  Could it contain true? humm mabye.  The dissasembler "fixes" the branchTrue/branchFalse so
             // does that mean it automaticly converts it to a while loop? humm
+        
             node.Outgoing.Remove(falseNode.Incomming[0]);
             node.Incomming.Remove(falseNode.Incomming[0]);
             node.Outgoing.Remove(falseNode.Outgoing[0]);
@@ -583,93 +613,113 @@ namespace betteribttest
             falseNode.Outgoing.Clear();
             falseNode.Incomming.Clear();
             graph.Nodes.Remove(falseNode);
-            IfStatement ifs = node.block.Last() as IfStatement;
             if (ifs == null) throw new Exception("We NEED there to be an if statement here");
             node.block.Remove(ifs);
-            if(!(ifs.Then is GotoStatement)) throw new Exception("The if statment is screwy here");
+            if (!(ifs.Then is GotoStatement)) throw new Exception("The if statment is screwy here");
             var whileLoop = new WhileLoop(ifs.Condition.Invert(), falseNode.block.Copy() as StatementBlock);
             node.block.Add(whileLoop);
             return true; // we found one
         }
-
-
+        void DoJustIfs()
+        {
+            bool changed = false;
+            int count = 0;
+            int i = 0;
+            do
+            {
+                changed = false;
+                var node = graph.Nodes[i];
+                if (node != graph.EntryPoint && node != graph.RegularExit)
+                {
+                    if (CombineNodes(node)) changed = true;
+                    if (ConvertAllSimpleIfStatements(node)) changed = true;
+                    if (ConvertIfElseStatements(node)) changed = true;
+                    if (ConvertWhileLoops(node)) changed = true;
+                }
+                if (changed) { i = 0; count++; } else i++;
+            } while (i < graph.Nodes.Count);
+            graph.ExportGraph("export.txt");
+        }
+        void FixStatementBlockWithAnds(StatementBlock block)
+        {
+            bool changed; // We loop because we might have more than 1 and
+            do
+            {
+                changed = false;
+                List<IfStatement> all = new List<IfStatement>();
+                block.FindType(all);
+                foreach (var ifs in all)
+                {
+                    IfStatement then = ifs.Then as IfStatement;
+                    if (then != null && then.Else == null)
+                    {
+                        ifs.Condition = new LogicalAnd(ifs.Condition.Copy(), then.Condition.Copy());
+                        ifs.Then = then.Then.Copy() as AstStatement;
+                        changed = true;
+                    }
+                }
+            } while (changed);
+        }
+        void FixIfsWithAnds()
+        {
+            for(int i=0;i < graph.Nodes.Count; i++)
+            {
+                var node = graph.Nodes[i];
+                if (node == graph.EntryPoint || node == graph.RegularExit) continue;
+                FixStatementBlockWithAnds(node.block);
+            }
+        }
         void BuildTheWorld()
         {
             graph.BuildAllAst(dn);
             graph.ExportGraph("start.txt");
-          //  var node = graph.EntryPoint.Outgoing[0].Target; // start
-            for(int i=0;i < graph.Nodes.Count;i++)
-            {
-                var node = graph.Nodes[i];
-                //   graph.ExportGraph("export.txt");
-                if (CombineNodes(node))
-                {
-                    graph.ExportGraph("export.txt");
-                    i = 0;
-                    continue;
-                }
-                if (ConvertWhileLoops(node))
-                {
-                    graph.ExportGraph("export.txt");
-                    i = 0;
-                    continue;
-                }
-                if (ConvertAllSimpleIfStatements(node)) {
-                    graph.ExportGraph("export.txt");
-                    i = 0;
-                    continue;
-                }
-                if (ConvertIfElseStatements(node)) {
-                    graph.ExportGraph("export.txt");
-                    i = 0;
-                    continue;
-                }
-               
-              
-            }
+            //  var node = graph.EntryPoint.Outgoing[0].Target; // start
+            DoJustIfs();
+            graph.ExportGraph("beforeands.txt");
+            FixIfsWithAnds();
             // regraph to mabye use DominaceFrontier...sigh I really need to figure it out more
-            graph.ComputeDomiance();
-            graph.computeDominanceFrontier();
-            /*
-            for (int i = 0; i < graph.Nodes.Count; i++)
-            {
-                var node = graph.Nodes[i];
-                //   graph.ExportGraph("export.txt");
-              
-                if (CombineNodes(node))
-                {
-                    graph.ExportGraph("export.txt");
-                    i = 0;
-                    continue;
-                }
-            }
-            */
-                // be cause of the idiotic way I am rebuilding these trees, we have to make sure
-                // the if statments are all processed first
-                // If anyone is reading this, this is the WRONG way to rebuild basic blocks, seriously, this is 
-                // retarded.  But since the bytecode is very simple and the compiler dosn't do a lot of wierd things
-                // we can kind of get away with it...mostly
-                // as a side note, I should use ComputeNatrualLoops() and do some better recursive stuff
-                // however.. screw it.
+            // be cause of the idiotic way I am rebuilding these trees, we have to make sure
+            // the if statments are all processed first
+            // If anyone is reading this, this is the WRONG way to rebuild basic blocks, seriously, this is 
+            // retarded.  But since the bytecode is very simple and the compiler dosn't do a lot of wierd things
+            // we can kind of get away with it...mostly
+            // as a side note, I should use ComputeNatrualLoops() and do some better recursive stuff
+            // however.. screw it.
 
-                graph.ExportGraph("final.txt");
+            graph.ExportGraph("final.txt");
             //var testBlock = ConvertIfStatements(node);
         }
-        public BasicBlocks(IEnumerable<Instruction> list, Decompile dn)
+        void SaveTheWorld(string script_name)
+        {
+            if (graph.Nodes.Count == 3) // should only have 3 nodes, entry, body, exit
+            {
+                using (StreamWriter wr = new StreamWriter(script_name + "_decompiled.txt")) graph.Nodes[2].block.DecompileToText(wr);
+
+            }
+            else throw new Exception("Something went nutty");
+        }
+     
+        public BasicBlocks(IEnumerable<Instruction> list, Decompile dn,string script_name)
         {
             this.dn = dn;
+           
+    
             code = new SortedList<int, Instruction>(200);
             List<Instruction> ilist = list.ToList();
+            _last_pc = ilist.Last().Address;
             graph = ControlFlowGraphBuilder.Build(ilist);
             graph.ComputeDomiance();
             graph.computeDominanceFrontier();
             BuildTheWorld();
+            SaveTheWorld(script_name);
+
+
             return;
 
             ComputeNatrualLoops();
             Stack<Ast> stack = new Stack<Ast>();
             graph.ResetVisited();
-            foreach(var node in graph.Nodes)
+            foreach (var node in graph.Nodes)
             {
                 if (node.Visited) continue;
                 node.Visited = true;
@@ -680,9 +730,10 @@ namespace betteribttest
         }
 
         Block exitBlock;
-        Block GetBlockAt(Instruction i) {
+        Block GetBlockAt(Instruction i)
+        {
             // only time we are null is if we are trying to go to he last instruction
-            if(i == null)
+            if (i == null)
             {
                 if (exitBlock == null)
                 {
@@ -703,7 +754,7 @@ namespace betteribttest
         Label FindLAabelAfter(Instruction i)
         {
             i = i.Next;
-            while(i!= null)
+            while (i != null)
             {
                 if (i.Label != null) return i.Label;
                 i = i.Next;
@@ -751,149 +802,6 @@ namespace betteribttest
             next_block.AddPre(block);
             block.AddSucc(next_block);
             return next_block;
-        }
-
- 
-        void CreateBasicBlocks2()
-        {
-            List<Block> blocklist = new List<Block>();
-            
-            for (int i = 0, n = code.Values.Count; i < n; i++)
-            {
-                Instruction blockStart = code.Values[i];
-
-                //
-                // See how big we can make that block...
-                //
-                for (; i + 1 < n; i++)
-                {
-                    Instruction instruction = code.Values[i];
-                    if (instruction.isBranch || (instruction.Next != null && instruction.Next.Label != null)) break;///*|| opCode.canThrow()*/ || _hasIncomingJumps[i + 1]) break;
-
-
-                    //    Instruction next = instruction.Next;
-                }
-                Block b = new Block(blockStart.Address);
-                b.Id = blocklist.Count;
-                blocklist.Add(b);
-                b.First = blockStart;
-                b.Last = code.Values[i];
-              //  _nodes.Add(new ControlFlowNode(_nodes.Count, blockStart, instructions[i]));
-            }
-            Dictionary<Label, Block> labelLookup = new Dictionary<Label, Block>();
-            Dictionary<Instruction, Block> instructionLookup = new Dictionary<Instruction, Block>();
-            foreach (var b in blocklist) 
-            {
-                if (b.First.Label != null) labelLookup.Add(b.First.Label, b);
-                instructionLookup.Add(b.First, b);
-            }
-            var search = First;
-            while(search != null)
-            {
-                Label l = search.Operand as Label;
-                if (l != null && !labelLookup.ContainsKey(l)) // out of scope label
-                {
-                    if(l.Address > _last_pc)
-                    {
-                        // We will make a new block for exit node
-                        Block block = new Block(l.Address);
-                        block.Id = blocklist.Count;
-                        block.ExitLabel = true;
-                        blocklist.Add(block);
-                        block.LabelEntry = l;
-
-                        labelLookup.Add(l, block);
-                    }
-                }
-                search = search.Next;
-            }
-
-            foreach (Block node in blocklist)
-            {
-                if (node.ExitLabel) continue; // skip exit labels, no code
-                Instruction end = node.Last;
-                Label label = end.Operand as Label;
-                if (end == null || end.Address >= _last_pc) continue;
-
-                //
-                // Create normal edges from one instruction to the next.
-                //
-                if(!end.isBranch) // falls though
-                {
-                    Block lookup = instructionLookup[end.Next];
-                    node.AddSucc(lookup);
-                    lookup.AddPre(node);
-                } else if (end.GMCode == GMCode.B) // unconditional branch
-                {
-                    Block lookup = labelLookup[label];
-                    node.AddSucc(lookup);
-                    lookup.AddPre(node);
-                } else // conditional branch
-                {    // Create edges for branch instructions.
-                    Block lookup = labelLookup[label];
-                    node.AddSucc(lookup);
-                    lookup.AddPre(node);
-
-                    lookup = instructionLookup[end.Next];
-                    node.AddSucc(lookup);
-                    lookup.AddPre(node);
-                }
-             //   Label end_label = end.Operand as Label;
-            //    if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || (end_label != null && end_label.Address > _last_pc)) LinkBlock(node, end);
-            }
-            DebugWrite(blocklist, "1_tree.txt");
-            BlockList = blocklist;
-            EntryBlock = blocklist[0];
-        }
-      Instruction BlockPump(Instruction current)
-        {
-            HashSet<Instruction> toProcess = new HashSet<Instruction>();
-            while (true)
-            {
-                Block block = GetBlockAt(current);
-                label_next:
-                Label label = FindLAabelAfter(current);
-                Branch branch = FindBranchAfter(current);
-                if (label != null && label.Address < (branch.Address + 1))
-                {
-                    block.Last = label.InstructionOrigin.Prev;
-                    block.LabelEntry = label;
-                    block = LinkBlock(block, label.InstructionOrigin);
-                    current = label.InstructionOrigin;
-                    goto label_next;
-                }
-                block.Last = branch.Instruction;
-
-                if (branch.isReturn) continue;
-
-                LinkBlock(block, branch.BranchDesitationInstruction);
-
-                toProcess.Add(branch.BranchDesitationInstruction);
-
-                if (!branch.isConditional) continue;  // will resume from branch 
-                Instruction next = branch.Instruction.Next;
-                Debug.Assert(next != null);
-                block = LinkBlock(block, next);
-                Debug.Assert(block.Address < 92);
-                current = block.First;
-            }
-        }
-       void CreateBasicBlocks()
-        {
-            //    BlockList = new SortedDictionary<int, Block>();
-
-            _last_pc =code.Values.Last().Address + 1;
-            Instruction current = First;
-            Block block = GetBlockAt(current);
-            EntryBlock = block;
-            Stack<Instruction> workList = new Stack<Instruction>();
-            workList.Push(current);
-            while (workList.Count != 0)
-            {
-                current = workList.Pop();
-               
-            }
-            // ok lets see about adding code
         }
     }
 }

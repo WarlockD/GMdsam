@@ -65,14 +65,11 @@ namespace betteribttest
             _statements = list;
             _statements.ForEach(o => ParentSet(o));
         }
-        ~StatementBlock()
-        {
-            Clear();
-        }
         public int DecompileToText(System.CodeDom.Compiler.IndentedTextWriter wr)
         {
-            int count = 2; // the two {}
-            wr.WriteLine('{');
+            int count = 0; // the two {}
+            if (this.Parent != null){count++; wr.WriteLine('{');}
+
             wr.Indent++;
             foreach (var statement in _statements)
             {
@@ -85,7 +82,7 @@ namespace betteribttest
 #endif
             }
             wr.Indent--;
-            wr.WriteLine('}');
+            if (this.Parent != null){count++; wr.WriteLine('}'); }
             wr.Flush();
             return count;
         }
@@ -108,7 +105,9 @@ namespace betteribttest
 
         public override Ast Copy()
         {
-            StatementBlock copy = new StatementBlock(this);
+
+            StatementBlock copy = new StatementBlock();
+            foreach (var s in _statements) copy.Add(s.Copy() as AstStatement);
             return copy;
         }
 #region IList Interface
@@ -171,7 +170,7 @@ namespace betteribttest
 
         public bool Remove(AstStatement item)
         {
-            if (item.Parent != this) return false;
+            if (item.Parent != this) throw new Exception("Item not in this thing");
             ParentClear(item);
             return _statements.Remove(item);
         }

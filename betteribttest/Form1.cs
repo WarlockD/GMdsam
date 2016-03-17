@@ -126,7 +126,25 @@ namespace betteribttest
 
             image = bmp;
         }
-       
+        List<string> InstanceList;
+        IEnumerable<string> instanceCreateFunction(string n, IReadOnlyList<Ast> l)
+        {
+            for (int i = 0; i < l.Count; i++)
+            {
+                Ast arg = l[i];
+                string ret = null;
+                if (i == 0)
+                {
+                    int instance;
+                    if (arg.TryParse(out instance) && (instance > 0 && instance < InstanceList.Count))
+                    {
+                        ret = InstanceList[instance];
+                    }
+                }
+                if (ret == null) ret = arg.ToString();
+                yield return ret;
+            }
+        }
         public Form1()
         {
             InitializeComponent();
@@ -138,8 +156,14 @@ namespace betteribttest
             
             DecompilerNew newDecompiler = new DecompilerNew();
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
-            List<string> InstanceList=newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
-            string filename_to_test = "gasterblaster"; // lots of stuff no loops though
+            InstanceList=newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
+
+      
+
+        AstCall.AddFunctionLookup("instance_create", instanceCreateFunction);
+
+
+            string filename_to_test = "gasterblaster"; // lots of stuff  loops though THIS WORKS THIS WORKS!
           // string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
             // we assume all the patches were done to calls and pushes
             // string filename_to_test = "obj_face_alphys_Step"; // this one is good but no shorts

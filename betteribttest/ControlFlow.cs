@@ -251,7 +251,7 @@ namespace betteribttest
             for (int i = 0; i < size; i++) _nodes[i].BlockIndex = i; // Re index
             foreach (var node in _nodes)
             {
-                node.DebugDominators = new BitArray(_nodes.Count);
+                node.DebugDominators = new BitArray(size);
                 node.DebugDominators.SetAll(true);
             }
             entryPoint.DebugDominators.SetAll(false);
@@ -262,7 +262,7 @@ namespace betteribttest
             {
                 changed = false;
                 ResetVisited();
-                BitArray T = new BitArray(_nodes.Count);
+                BitArray T = new BitArray(size);
                 foreach (var node in _nodes)
                 {
                     if (node == entryPoint) continue;
