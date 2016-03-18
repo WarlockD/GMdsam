@@ -103,7 +103,7 @@ namespace betteribttest
             return base.ToString() + " String: " + escapedString;
         }
     }
-    class GMK_ScriptIndex : GMK_Data
+    class GMK_ScriptIndex : GMK_Data, IComparable<GMK_ScriptIndex>
     {
         public string script_name="";
         public int script_index=-1;
@@ -111,6 +111,15 @@ namespace betteribttest
         public override string ToString()
         {
             return "{ script_name = " + script_name + ", scrpit_index = " + script_index + " }" + base.ToString() ;
+        }
+
+        public int CompareTo(GMK_ScriptIndex other)
+        {
+            return script_index.CompareTo(other.script_index);
+        }
+        public override int GetHashCode()
+        {
+            return script_index;
         }
     }
     class GMK_FuncOffset : GMK_Data
@@ -915,7 +924,7 @@ namespace betteribttest
                 AddData(scpt);
                 scriptIndex.Add(scpt);
             }
-
+            scriptIndex.Sort();
         }
         void doGEN8(long chunkStart, long chunkLimit)
         {

@@ -346,15 +346,21 @@ namespace betteribttest
             node.block = block;
             return block.Count;
         }
-        public void BuildAllAst(Decompile dn)
+        public void BuildAllAst(Decompile dn, Dictionary<ControlFlowNode, Stack<Ast>> stackMap)
         {
             foreach(var node in _nodes)
             {
                 if (node == EntryPoint || node == RegularExit) continue;
                 if (node == null && node.Address != -1) continue;
-               Stack<Ast> stack = new Stack<Ast>();
+                Stack<Ast> stack; // = new Stack<Ast>();
+                if(!stackMap.TryGetValue(node,out stack)) {
+                    stack = new Stack<Ast>();
+                    stackMap.Add(node, stack);
+                    
+                }
                 node.block = NodeToBlock(dn, node, stack);
-                if (stack.Count > 0) throw new Exception("Node stack error");
+                foreach (var succ in node.Successors) stackMap[succ]= new Stack<Ast>(stack);
+                // if (stack.Count > 0) throw new Exception("Node stack error");
             }
         }
         public void computeDominanceFrontier()

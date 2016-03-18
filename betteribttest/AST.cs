@@ -20,47 +20,26 @@ namespace betteribttest
         Dictionary<string, FunctionToText> _lookup = new Dictionary<string, FunctionToText>();
         public CallFunctionLookup() { }
         public  void Add(string funcname, FunctionToText func) { _lookup.Add(funcname, func); }
-        public string GenericToString(AstCall call)
+        public IEnumerable<string> GenericToString(string funcname, IReadOnlyList<Ast> arguments)//  AstCall call)
         {
-            StringWriter wr = new StringWriter();
-            wr.Write(call.Name);
-            wr.Write("( ");
-            if (call.Arguments.Count > 0)
-            {
-
-                if (call.Arguments.Count == 1) call.Arguments[0].DecompileToText(wr);
-                else
-                {
-                    call.Arguments[0].DecompileToText(wr);
-                    for (int i = 1; i < call.Arguments.Count; i++)
-                    {
-                        wr.Write(", ");
-                        call.Arguments[i].DecompileToText(wr);
-                    }
-                }
-            }
-            wr.Write(" ) ");
-            return wr.ToString();
+            for (int i = 0; i < arguments.Count; i++) yield return arguments[i].ToString();
         }
         public string Lookup(AstCall call)
         {
             FunctionToText func;
-            if (_lookup.TryGetValue(call.Name, out func))
+            if (!_lookup.TryGetValue(call.Name, out func)) func = GenericToString;
+            StringWriter wr = new StringWriter();
+            wr.Write(call.Name);
+            wr.Write("( ");
+            bool need_comma = false;
+            foreach (var s in func(call.Name, call.Arguments))
             {
-                StringWriter wr = new StringWriter();
-                wr.Write(call.Name);
-                wr.Write("( ");
-                bool need_comma = false;
-                foreach (var s in func(call.Name, call.Arguments))
-                {
-                    if (need_comma) wr.Write(',');
-                    wr.Write(s);
-                    need_comma = true;
-                }
-                wr.Write(" )");
-                return wr.ToString();
+                if (need_comma) wr.Write(", ");
+                wr.Write(s);
+                need_comma = true;
             }
-            else return GenericToString(call);
+            wr.Write(" )");
+            return wr.ToString();
         }
     }
     public class Ast : IEquatable<Ast>
@@ -346,7 +325,6 @@ namespace betteribttest
         public override int DecompileToText(TextWriter wr)
         {
             string str = _lookup.Lookup(this);
-            if (str == null) str = _lookup.GenericToString(this);
             wr.Write(str);
             return 0;
         }
@@ -367,14 +345,14 @@ namespace betteribttest
     }
     public class AstConstant : Ast
     {
-        int _parsedValue;
+        long _parsedValue;
         public string Value { get; private set; }
         public GM_Type Type { get; private set; }
         public override bool TryParse(out int value)
         {
             if(Type ==  GM_Type.Int || Type == GM_Type.Short || Type == GM_Type.Long || Type == GM_Type.Bool)
             {
-                value = _parsedValue;
+                value = (int)_parsedValue;
                 return true;
             }
             else
@@ -383,7 +361,7 @@ namespace betteribttest
                 return false;
             }
         }
-        private AstConstant(Instruction i, string value, GM_Type type, int parsedValue) :base(i)
+        private AstConstant(Instruction i, string value, GM_Type type, long parsedValue) :base(i)
         {
             Value = value;
             Type = type;
@@ -400,7 +378,7 @@ namespace betteribttest
         private AstConstant(Instruction i, object v, GM_Type type) : base(i) {
             Value = v.ToString();
             Type = type;
-            if (Type == GM_Type.Int || Type == GM_Type.Short || Type == GM_Type.Long) _parsedValue = int.Parse(Value);
+            if (Type == GM_Type.Int || Type == GM_Type.Short || Type == GM_Type.Long) _parsedValue = long.Parse(Value);
             else if (Type == GM_Type.Bool) _parsedValue = (bool)(v) ? 1 : 0;
             else _parsedValue = 0;
         }

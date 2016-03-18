@@ -10,14 +10,14 @@ namespace betteribttest
 {
     class ControlFlowGraphBuilder
     {
-        private List<Instruction> _instructions;
+        private IList<Instruction> _instructions;
         private List<ControlFlowNode> _nodes = new List<ControlFlowNode>();
         public ControlFlowNode EntryPoint { get; private set; }
         public ControlFlowNode RegularExit { get; private set; }
 
         private int _nextBlockId;
 
-        public static ControlFlowGraph Build(List<Instruction> instructions)
+        public static ControlFlowGraph Build(IList<Instruction> instructions)
         {
             ControlFlowGraphBuilder builder = new ControlFlowGraphBuilder(instructions);
             
@@ -33,7 +33,7 @@ namespace betteribttest
             createRegularControlFlow();
             return new ControlFlowGraph(_nodes.ToArray());
         }
-        private ControlFlowGraphBuilder(List<Instruction> instructions)
+        private ControlFlowGraphBuilder(IList<Instruction> instructions)
         {
             Debug.Assert(instructions != null);
             _instructions = instructions;
@@ -97,7 +97,7 @@ namespace betteribttest
             // Step 2a: Find basic blocks and create nodes for them.
             //
 
-            List<Instruction> instructions = _instructions;
+            IList<Instruction> instructions = _instructions;
 
             for (int i = 0, n = instructions.Count; i < n; i++)
             {
@@ -123,7 +123,7 @@ namespace betteribttest
             // Step 3: Create edges for the normal control flow (assuming no exceptions thrown).
             //
 
-            List<Instruction> instructions = _instructions;
+            IList<Instruction> instructions = _instructions;
             int last_pc = instructions.Last().Address;
             createEdge(EntryPoint, instructions[0]);
 
@@ -133,6 +133,7 @@ namespace betteribttest
 
                 if (end == null) continue; //  || end.Address >= last_pc) continue;
                 Instruction next = end.Next;
+              
                 //
                 // Create normal edges from one instruction to the next.
                 //
@@ -160,7 +161,11 @@ namespace betteribttest
                 // Create edges for return and leave instructions.
                 //
                 Label end_label = end.Operand as Label;
-                if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || end.Next == null || (end_label != null && end_label.Address > last_pc)) createReturnControlFlow(node, end);
+                // Documenting the conditions here cause it caused a few node errors
+                // first end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret  is ovious
+                // second (end.Next == null && end.GMCode != GMCode.B)  If the next op is null (no more opcodes) but NOT a Branch (like a loop) be sure NOT to link it to the return
+                //  (end_label != null && end_label.Address > last_pc) If the operand is a label and goes beyond the function, thats an exit right there
+                if (end.GMCode == GMCode.Exit || end.GMCode == GMCode.Ret || (end.Next == null && end.GMCode != GMCode.B) || (end_label != null && end_label.Address > last_pc)) createReturnControlFlow(node, end);
             }
         }
     }

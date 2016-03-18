@@ -344,7 +344,7 @@ namespace betteribttest
                     l.InstructionOrigin = node.Value;     // Link the instruction its attached too
                     behind = false;                 // tell the system to start to ad to the forward list
                 } else {
-                    if (i.GMCode.isBranch() || i.GMCode == GMCode.Pushenv || (i.GMCode == GMCode.Popenv && i.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
+                    if (i.GMCode.isBranch())// || i.GMCode == GMCode.Pushenv || (i.GMCode == GMCode.Popenv && i.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
                     {
                         int target = GMCodeUtil.getBranchOffset(i.OpCode);
                         target += i.Address;
@@ -782,7 +782,7 @@ namespace betteribttest
             if (labels.Count > 0) foreach (var l in labels) Label.ResolveCalls(l, instructions);
         }
         // first pass simple create form a stream
-        public static void ReplaceShortCircuitInstructions(Instructions input)
+        public static void ReplaceShortCircuitInstructionsAnds(Instructions input)
         {
             if (input.First == null) return;
             var node = input.First;
@@ -796,7 +796,7 @@ namespace betteribttest
                     // We MIGHT have a short, check the statment before and after
                     Instruction before = i.Prev;
                     Instruction after = i.Next;
-                    if(before.GMCode == GMCode.B && before.Operand == after.Label && after.GMCode == GMCode.Bf) // If it skips the 0 push and goes to the branch
+                    if(before != null && before.GMCode == GMCode.B && before.Operand == after.Label && after.GMCode == GMCode.Bf) // If it skips the 0 push and goes to the branch
                     { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
                         foreach(var iref in i.Label.AllRefrencess) { // these are branches that don't need a stack, just change the operand
                             if (!iref.isBranch) throw new Exception("Something wrong boy");
@@ -811,6 +811,47 @@ namespace betteribttest
                             }
                         }
                     //    input.Remove(after);
+                        input.Remove(i);
+                        input.Remove(before);
+                        after.Label = null;
+                        node = input.First;
+                        ResolveLabels(input); // fix this
+                        continue;
+                    }
+                }
+                node = node.Next;
+            } while (node != null);
+        }
+        public static void ReplaceShortCircuitInstructionsOrs(Instructions input)
+        {
+            if (input.First == null) return;
+            var node = input.First;
+            do
+            {
+                Instruction i = node.Value;
+                Label label = i.Label;
+                Label target = i.Operand as Label;
+                if (i.GMCode == GMCode.Push && (i.OpCode & 0xFFFF) == 1) // push.e 1
+                {
+                    // We MIGHT have a short, check the statment before and after
+                    Instruction before = i.Prev;
+                    Instruction after = i.Next;
+                    if (before != null && before.GMCode == GMCode.B && before.Operand == after.Label && after.GMCode == GMCode.Bf) // This is still the same for ors
+                    { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
+                        foreach (var iref in i.Label.AllRefrencess)
+                        { // these are branches that don't need a stack, just change the operand
+                            if (!iref.isBranch) throw new Exception("Something wrong boy");
+                            iref.Operand = after.Operand;
+                        }
+                        if (!(after.Label.AllRefrencess.Count == 1 && after.Label.AllRefrencess[0] == before.Operand))
+                        {
+                            foreach (var iref in after.Label.AllRefrencess)  // these are branches HAVE to be Bf or Bt, change the op from after don't need a stack, just change the operand
+                            {
+                                if (!iref.isBranch) throw new Exception("Something wrong boy");
+                                iref.ChangeInstruction(after.GMCode, after.Operand as Label);
+                            }
+                        }
+                        //    input.Remove(after);
                         input.Remove(i);
                         input.Remove(before);
                         after.Label = null;
@@ -900,7 +941,8 @@ namespace betteribttest
                 }
             }
             instructions.SaveInstructions("before_pre.txt");
-            ReplaceShortCircuitInstructions(instructions);
+            ReplaceShortCircuitInstructionsOrs(instructions);
+            ReplaceShortCircuitInstructionsAnds(instructions);
             instructions.SaveInstructions("after_pre.txt");
             return instructions;
         }

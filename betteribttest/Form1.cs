@@ -127,7 +127,64 @@ namespace betteribttest
             image = bmp;
         }
         List<string> InstanceList;
+        List<string> scriptList;
+        IEnumerable<string> scriptExecuteFunction(string n, IReadOnlyList<Ast> l)
+        {
+            for (int i = 0; i < l.Count; i++)
+            {
+                Ast arg = l[i];
+                string ret = null;
+                if (i == 0)
+                {
+                    int instance;
+                    if (arg.TryParse(out instance) && (instance > 0 && instance < scriptList.Count))
+                    {
+                   //     var script = cr.scriptIndex.Find(x => x.script_index == instance);
+                        ret = "\"" + cr.scriptIndex[instance].script_name + "\"";
+                    }
+                }
+                if (ret == null) ret = arg.ToString();
+                yield return ret;
+            }
+        }
         IEnumerable<string> instanceCreateFunction(string n, IReadOnlyList<Ast> l)
+        {
+            for (int i = 0; i < l.Count; i++)
+            {
+                Ast arg = l[i];
+                string ret = null;
+                if (i == 2)
+                {
+                    int instance;
+                    if (arg.TryParse(out instance) && (instance > 0 && instance < InstanceList.Count))
+                    {
+                        ret = "\"" + InstanceList[instance] + "\"";
+                    }
+                }
+                if (ret == null) ret = arg.ToString();
+                yield return ret;
+            }
+        }
+        IEnumerable<string> draw_spriteExisits(string n, IReadOnlyList<Ast> l)
+        {
+            for (int i = 0; i < l.Count; i++)
+            {
+                Ast arg = l[i];
+                string ret = null;
+                if (i == 0)
+                {
+                    int instance;
+                    if (arg.TryParse(out instance) && (instance > 0 && instance < cr.spriteList.Count))
+                    {
+                        ret = "\"" + cr.spriteList[instance].Name + "\"";
+                    }
+                }
+                if (ret == null) ret = arg.ToString();
+                yield return ret;
+            }
+        }
+        
+        IEnumerable<string> instanceExisits(string n, IReadOnlyList<Ast> l)
         {
             for (int i = 0; i < l.Count; i++)
             {
@@ -138,7 +195,25 @@ namespace betteribttest
                     int instance;
                     if (arg.TryParse(out instance) && (instance > 0 && instance < InstanceList.Count))
                     {
-                        ret = InstanceList[instance];
+                        ret = "\"" + InstanceList[instance] + "\"";
+                    }
+                }
+                if (ret == null) ret = arg.ToString();
+                yield return ret;
+            }
+        }
+        IEnumerable<string> instanceCollision_line(string n, IReadOnlyList<Ast> l)
+        {
+            for (int i = 0; i < l.Count; i++)
+            {
+                Ast arg = l[i];
+                string ret = null;
+                if (i == 3)
+                {
+                    int instance;
+                    if (arg.TryParse(out instance) && (instance > 0 && instance < InstanceList.Count))
+                    {
+                        ret = "\""+ InstanceList[instance] + "\"" ;
                     }
                 }
                 if (ret == null) ret = arg.ToString();
@@ -147,32 +222,53 @@ namespace betteribttest
         }
         public Form1()
         {
-            InitializeComponent();
+            
+               InitializeComponent();
             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false);
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
         //    cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win",false);
             //Decompiler dism = new Decompiler(cr);
             
-            DecompilerNew newDecompiler = new DecompilerNew();
+  
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
-            InstanceList=newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
+            Decompile newDecompiler = new Decompile(stringList, InstanceList);
+            InstanceList =newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
+            scriptList = cr.scriptIndex.Select(x => x.script_name).ToList(); 
 
-      
+
 
         AstCall.AddFunctionLookup("instance_create", instanceCreateFunction);
+            AstCall.AddFunctionLookup("collision_line", instanceCollision_line);
+            AstCall.AddFunctionLookup("instance_exists", instanceExisits);
+            AstCall.AddFunctionLookup("script_execute", scriptExecuteFunction);
+            AstCall.AddFunctionLookup("draw_sprite", draw_spriteExisits);
+            AstCall.AddFunctionLookup("draw_sprite_ext", draw_spriteExisits);
 
 
-            string filename_to_test = "gasterblaster"; // lots of stuff  loops though THIS WORKS THIS WORKS!
-          // string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
+            string filename_to_test = "undyne";
+            //    string filename_to_test = "gasterblaster"; // lots of stuff  loops though THIS WORKS THIS WORKS!
+            // string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
             // we assume all the patches were done to calls and pushes
+
+       //     string filename_to_test = "gml_Object_OBJ_WRITER_Draw_0";// reall loop test as we got a break in it
             // string filename_to_test = "obj_face_alphys_Step"; // this one is good but no shorts
-            //  string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
+            // string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
+            //   string filename_to_test = "SCR_TEXT"; // start with something even simpler
+            //  string filename_to_test = "gml_Object_obj_dmgwriter_old_Draw_0"; // intrsting code, a bt?
+            // string filename_to_test = "write"; // lots of stuff
+          //  string filename_to_test = "OBJ_WRITER";
+
+
+
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
-          //      string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
-            //        string filename_to_test = "SCR_DIRECT"; // simple loop
-            //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo!
-            //  string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
+            //      string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+            //         string filename_to_test = "SCR_DIRECT"; // simple loop works!
+            //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
+            //   string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
+
+            Dictionary<ControlFlowNode, Stack<Ast>> stackMap = new Dictionary<ControlFlowNode, Stack<Ast>>();
+#if false
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
                 var instructions = Instruction.Create(files.stream, stringList, InstanceList);
@@ -184,14 +280,25 @@ namespace betteribttest
                 ControlFlowGraph graph = ControlFlowGraphBuilder.Build(instructions.ToList());
                 graph.ComputeDomiance();
                 graph.computeDominanceFrontier();
-                graph.BuildAllAst(new Decompile(stringList, InstanceList));
+                graph.ExportGraph(files.ScriptName + "_codegraph.txt");
+                graph.BuildAllAst(new Decompile(stringList, InstanceList), stackMap);
                 graph.ExportGraph(files.ScriptName + "_graph.txt");
             }
+#endif
             System.Diagnostics.Debug.WriteLine("Ok");
-
+            
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
-                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
+                if (files.ScriptName == "gml_Script_SCR_TEXT") continue; // too big and too complcated right now
+                try
+                {
+                    newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
+                } catch(Exception e)
+                {
+                    // drop all exceptions
+                    // throw new Exception(e);
+                }
+               
             }
 
             foreach (var files in cr.GetCodeStreams())

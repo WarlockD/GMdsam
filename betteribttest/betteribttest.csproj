@@ -62,14 +62,17 @@
     <Compile Include="ControlFlow.cs" />
     <Compile Include="ControlFlowGraphBuilder.cs" />
     <Compile Include="DecompilerNew.cs" />
+    <Compile Include="FlowAnalysis\ControlFlowEdge.cs" />
+    <Compile Include="FlowAnalysis\ControlFlowNode.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
-    <Compile Include="GMDisasembler.cs" />
+    <Compile Include="GMAst\GMAstTypes.cs" />
     <Compile Include="Instruction.cs" />
+    <Compile Include="ITextOutput.cs" />
     <Compile Include="LinkedHashSet.cs" />
     <Compile Include="Node.cs" />
     <Compile Include="PListDict.cs" />

@@ -15,9 +15,8 @@ namespace betteribttest
     /// </summary>
     public class AstStatement : Ast, IEnumerable<AstStatement>
     {
-        public Block RawBlock { get; set; }
-        protected AstStatement(Instruction i) : base(i) { RawBlock = null; }
-        protected AstStatement() : base() { RawBlock = null; }
+        protected AstStatement(Instruction i) : base(i) {  }
+        protected AstStatement() : base() { }
         public override Ast Invert()
         {
             throw new Exception("Cannot invert a statement");
@@ -29,6 +28,18 @@ namespace betteribttest
             List<T> ret = new List<T>();
             FindType<T>(ret);
             return ret;
+        }
+        protected AstStatement BlockOrSingle(AstStatement s)
+        {
+            // If its a block statement with ONE statment in it, lets get rid of the block
+            StatementBlock block = s as StatementBlock;
+            if (block != null && block.Count == 1)
+            {
+                s = block.First();
+                block.Remove(s); // clears the parrent
+            }
+            ParentSet(s);
+            return s;
         }
         public override sealed IEnumerable<Ast> AstEnumerator(bool includeSelf) { throw new Exception("Cannot enumerate Ast in statements"); }
         static readonly IEnumerable<AstStatement> EmptyEnumerator = Enumerable.Empty<AstStatement>();
@@ -105,16 +116,15 @@ namespace betteribttest
         }
         public Ast Enviroment { get; protected set; }
         public string EnviromentText { get; protected set; }
-        StatementBlock _block = null;
-        public StatementBlock block {
+        AstStatement _block = null;
+        public AstStatement Block {
             get { return _block; }
             set
             {
                 if(value != _block)
                 {
                     ParentClear(_block);
-                    ParentSet(value);
-                    _block = value;
+                    _block = BlockOrSingle(value);
                 }
             }
         }
@@ -136,6 +146,7 @@ namespace betteribttest
         public override Ast Copy()
         {
             PushEnviroment copy = new PushEnviroment(this.Instruction,this.Enviroment.Copy(),this.EnviromentText);
+            if (_block != null) copy.Block = _block.Copy() as AstStatement;
             return copy;
         }
     }
@@ -390,18 +401,7 @@ namespace betteribttest
                 _condition = value;
             }
         }
-        AstStatement BlockOrSingle(AstStatement s)
-        {
-            // If its a block statement with ONE statment in it, lets get rid of the block
-            StatementBlock block = s as StatementBlock;
-            if (block != null && block.Count == 1)
-            {
-                s = block.First();
-                block.Remove(s); // clears the parrent
-            }
-            ParentSet(s);
-            return s;
-        }
+    
 
         public AstStatement Then {
             get { return _then; }
@@ -416,7 +416,7 @@ namespace betteribttest
             get { return _else; }
             set
             {
-                ParentSet(value);
+                ParentClear(_else);
                 _else = BlockOrSingle(value);
             }
         }
@@ -434,7 +434,7 @@ namespace betteribttest
         {
             this.Condition = Condition;
             this.Then = Then;
-            Else = null;
+            _else = null;
         }
         public IfStatement(Instruction info, Ast Condition, AstStatement Then, AstStatement Else) : this(info, Condition, Then)
         {
@@ -444,7 +444,7 @@ namespace betteribttest
         {
             this.Condition = Condition;
             this.Then = new GotoStatement(target);
-            Else = null;
+            _else = null;
         }
         public override int DecompileToText(TextWriter wr)
         {
