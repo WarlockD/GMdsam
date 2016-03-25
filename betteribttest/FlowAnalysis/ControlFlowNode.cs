@@ -21,29 +21,9 @@ namespace betteribttest.FlowAnalysis
         EntryPoint,
         /// <summary>
         /// The exit point of the method (every ret instruction branches to this node)
+        /// This could also be a jump outside of the current function
         /// </summary>
         RegularExit,
-        /// <summary>
-        /// This node represents leaving a method irregularly by throwing an exception.
-        /// </summary>
-        ExceptionalExit,
-        /// <summary>
-        /// This node is used as a header for exception handler blocks.
-        /// </summary>
-        CatchHandler,
-        /// <summary>
-        /// This node is used as a header for finally blocks and fault blocks.
-        /// Every leave instruction in the try block leads to the handler of the containing finally block;
-        /// and exceptional control flow also leads to this handler.
-        /// </summary>
-        FinallyOrFaultHandler,
-        /// <summary>
-        /// This node is used as footer for finally blocks and fault blocks.
-        /// Depending on the "copyFinallyBlocks" option used when creating the graph, it is connected with all leave targets using
-        /// EndFinally edges (when not copying); or with a specific leave target using a normal edge (when copying).
-        /// For fault blocks, an exception edge is used to represent the "re-throwing" of the exception.
-        /// </summary>
-        EndFinallyOrFault
     }
 
     /// <summary>
@@ -65,12 +45,6 @@ namespace betteribttest.FlowAnalysis
         /// Type of the node.
         /// </summary>
         public readonly ControlFlowNodeType NodeType;
-
-        /// <summary>
-        /// If this node is a FinallyOrFaultHandler node, this field points to the corresponding EndFinallyOrFault node.
-        /// Otherwise, this field is null.
-        /// </summary>
-        public readonly ControlFlowNode EndFinallyOrFaultNode;
 
         /// <summary>
         /// Visited flag, used in various algorithms.
@@ -233,11 +207,6 @@ namespace betteribttest.FlowAnalysis
                         writer.Write(": GM_{0,-4}", Start.Address);
                     if (End != null)
                         writer.Write(" to GM_{0,-4}", End.Address+End.Size);
-                    break;
-                case ControlFlowNodeType.CatchHandler:
-                case ControlFlowNodeType.FinallyOrFaultHandler:
-                    writer.Write("Block #{0}: {1}: ", BlockIndex, NodeType);
-                   // Disassembler.DisassemblerHelpers.WriteTo(ExceptionHandler, new PlainTextOutput(writer));
                     break;
                 default:
                     writer.Write("Block #{0}: {1}", BlockIndex, NodeType);

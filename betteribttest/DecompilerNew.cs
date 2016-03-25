@@ -16,7 +16,7 @@ namespace betteribttest
     }
     public class Decompile
     {
-        ControlFlowGraph graph;
+        ControlFlowGraphOld graph;
         // Antlr4.Runtime.
         public string ScriptName { get; private set; }
         public Instruction.Instructions Instructions { get; private set; }
@@ -30,12 +30,12 @@ namespace betteribttest
 
         class Loop : IEquatable<Loop>
         {
-            public ControlFlowNode Header { get; private set; }
-            public List<ControlFlowNode> Blocks { get; private set; }
-            public Loop(ControlFlowNode header)
+            public ControlFlowNodeOld Header { get; private set; }
+            public List<ControlFlowNodeOld> Blocks { get; private set; }
+            public Loop(ControlFlowNodeOld header)
             {
                 Header = header;
-                Blocks = new List<ControlFlowNode>();
+                Blocks = new List<ControlFlowNodeOld>();
                 Blocks.Add(header);
             }
             public override int GetHashCode()
@@ -59,7 +59,7 @@ namespace betteribttest
             }
         }
         HashSet<Loop> loopList = new HashSet<Loop>();
-        Loop NatrualLoopForEdge(ControlFlowNode header, ControlFlowNode tail)
+        Loop NatrualLoopForEdge(ControlFlowNodeOld header, ControlFlowNodeOld tail)
         {
 
             Loop loop = null;
@@ -69,7 +69,7 @@ namespace betteribttest
                 loop = new Loop(header);
                 loopList.Add(loop);
             }
-            Stack<ControlFlowNode> workList = new Stack<ControlFlowNode>();
+            Stack<ControlFlowNodeOld> workList = new Stack<ControlFlowNodeOld>();
             if (header != tail)
             {
                 loop.Blocks.Add(tail);
@@ -77,7 +77,7 @@ namespace betteribttest
             }
             while (workList.Count > 0)
             {
-                ControlFlowNode node = workList.Pop();
+                ControlFlowNodeOld node = workList.Pop();
                 foreach (var pred in node.Predecessors)
                 {
                     if (!loop.Blocks.Contains(pred))
@@ -92,7 +92,7 @@ namespace betteribttest
         void ComputeNatrualLoops()
         {
             loopList = new HashSet<Loop>();
-            ControlFlowNode entryPoint = graph.EntryPoint;
+            ControlFlowNodeOld entryPoint = graph.EntryPoint;
             foreach (var node in graph.Nodes)
             {
                 if (node == entryPoint) continue;
@@ -113,18 +113,18 @@ namespace betteribttest
             if (block.Count > 0 && block.Last() is GotoStatement) block.Remove(block.Last());
             if (block.Count > 0 && block.First() is LabelStatement) block.Remove(block.First());
         }
-        void ReLinkNodes(ControlFlowNode from, ControlFlowNode to, bool clearNodes = false)
+        void ReLinkNodes(ControlFlowNodeOld from, ControlFlowNodeOld to, bool clearNodes = false)
         {
             if (clearNodes)
             {
                 from.Outgoing.Clear();
                 to.Incomming.Clear();
             }
-            var edge = new ControlFlowEdge(from, to);
+            var edge = new ControlFlowEdgeOld(from, to);
             from.Outgoing.Add(edge);
             to.Incomming.Add(edge);
         }
-        IfStatement GetBranchNodes(ControlFlowNode node, ref ControlFlowNode trueNode, ref ControlFlowNode falseNode)
+        IfStatement GetBranchNodes(ControlFlowNodeOld node, ref ControlFlowNodeOld trueNode, ref ControlFlowNodeOld falseNode)
         {
             if (node.Outgoing.Count != 2) return null;
             trueNode = node.Outgoing[0].Target;
@@ -163,8 +163,8 @@ namespace betteribttest
             if (block.Last() is GotoStatement) block.Remove(block.Last());
             for (int i = 0; i < block.Count; i++) if (block[i] is LabelStatement) block.RemoveAt(i);
         }
-        StatementBlock NodeToBlock(ControlFlowNode node, Stack<Ast> stack) { return new StatementBlock(ConvertManyStatements(node.Start, node.End, stack)); }
-        int NodeToAst(ControlFlowNode node, Stack<Ast> stack, bool removeStatementsAndGotos)
+        StatementBlock NodeToBlock(ControlFlowNodeOld node, Stack<Ast> stack) { return new StatementBlock(ConvertManyStatements(node.Start, node.End, stack)); }
+        int NodeToAst(ControlFlowNodeOld node, Stack<Ast> stack, bool removeStatementsAndGotos)
         {
             StatementBlock block = new StatementBlock();
             if (node.block == null && node.Address != -1)
@@ -176,7 +176,7 @@ namespace betteribttest
             node.block = block;
             return block.Count;
         }
-        bool CombineNodes(ControlFlowNode node) // reduces redundent nodes
+        bool CombineNodes(ControlFlowNodeOld node) // reduces redundent nodes
         {
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
@@ -196,13 +196,13 @@ namespace betteribttest
             graph.ExportGraph("export.txt");
             return true; // we found one
         }
-        bool ConvertAllSimpleIfStatements(ControlFlowNode node)
+        bool ConvertAllSimpleIfStatements(ControlFlowNodeOld node)
         {
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
             if (node.Outgoing.Count != 2) return false; // Not an iff statement
-            ControlFlowNode trueNode = null;
-            ControlFlowNode falseNode = null;
+            ControlFlowNodeOld trueNode = null;
+            ControlFlowNodeOld falseNode = null;
             IfStatement ifs = GetBranchNodes(node, ref trueNode, ref falseNode);
             if (trueNode.Outgoing.Count != 1 || trueNode.Outgoing[0].Target != falseNode) return false; // not a simple if statment, but we still got stuff after
             var continueNode = falseNode;
@@ -215,13 +215,13 @@ namespace betteribttest
             graph.ExportGraph("export.txt");
             return true; // we found one
         }
-        bool ConvertIfElseStatements(ControlFlowNode node)
+        bool ConvertIfElseStatements(ControlFlowNodeOld node)
         {
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
             if (node.Outgoing.Count != 2) return false; // Not an iff statement
-            ControlFlowNode trueNode = null;
-            ControlFlowNode falseNode = null;
+            ControlFlowNodeOld trueNode = null;
+            ControlFlowNodeOld falseNode = null;
             IfStatement ifs = GetBranchNodes(node, ref trueNode, ref falseNode);
             if (trueNode.Outgoing.Count != 1 || falseNode.Outgoing.Count != 1 || trueNode.Outgoing[0].Target != falseNode.Outgoing[0].Target) return false; ; // both don't end up at the same place
             var continueNode = trueNode.Outgoing[0].Target;
@@ -237,13 +237,13 @@ namespace betteribttest
             graph.ExportGraph("export.txt");
             return true; // we found one
         }
-        bool ConvertWhileLoops(ControlFlowNode node)
+        bool ConvertWhileLoops(ControlFlowNodeOld node)
         {
             if (node == null || node == graph.EntryPoint || node == graph.RegularExit) return false;
             if (node.Outgoing.Count == 0) return false; // or we are at the exit statment
             if (node.Outgoing.Count != 2) return false; // Not a while statement
-            ControlFlowNode trueNode = null;
-            ControlFlowNode falseNode = null;
+            ControlFlowNodeOld trueNode = null;
+            ControlFlowNodeOld falseNode = null;
             IfStatement ifs = GetBranchNodes(node, ref falseNode, ref trueNode);
             // here is the trick.  The trueNode dosn't matter how many outgoing it is
             // the only one that does matter is if the falseNood (loop body) outgoing ONLY goes back to node
@@ -316,10 +316,10 @@ namespace betteribttest
                 FixStatementBlockWithAnds(node.block);
             }
         }
-        Dictionary<ControlFlowNode, Stack<Ast>> stackMap;
+        Dictionary<ControlFlowNodeOld, Stack<Ast>> stackMap;
         void BuildTheWorld()
         {
-            stackMap = new Dictionary<ControlFlowNode, Stack<Ast>>();
+            stackMap = new Dictionary<ControlFlowNodeOld, Stack<Ast>>();
            
             graph.BuildAllAst(this,stackMap);
             graph.ExportGraph("start_ast.txt");
@@ -482,19 +482,19 @@ namespace betteribttest
             AstStatement ret = null;
             while (i != null && ret == null)
             {
-                 int count = i.GMCode.getOpTreeCount(); // not a leaf
+                 int count = i.Code.getOpTreeCount(); // not a leaf
                 if (count == 2)
                 {
                     if (count > stack.Count) throw new StackException(i, "Needed " + count + " on stack", null);
                     Ast right = stack.Pop().Copy();
                     Ast left = stack.Pop().Copy();
-                    AstTree ast = new AstTree(i, i.GMCode, left, right);
+                    AstTree ast = new AstTree(i, i.Code, left, right);
                     stack.Push(ast);
                     i = i.Next;
                 }
                 else
                 {
-                    switch (i.GMCode)
+                    switch (i.Code)
                     {
                         case GMCode.Conv:
                             i = i.Next; // ignore
@@ -549,7 +549,7 @@ namespace betteribttest
                         case GMCode.Bt:
                             {
                                 Ast condition = stack.Pop();
-                                ret = new IfStatement(i, i.GMCode == GMCode.Bf ? condition.Invert() : condition, i.Operand as Label);
+                                ret = new IfStatement(i, i.Code == GMCode.Bf ? condition.Invert() : condition, i.Operand as Label);
                             }
                             i = i.Next;
                             break;
@@ -650,7 +650,7 @@ namespace betteribttest
             //    RemoveAllConv(instructions); // mabye keep if we want to find types of globals and selfs but you can guess alot from context
             code = new SortedList<int, Instruction>(200);
             _last_pc = instructions.Last().Address;
-            graph = ControlFlowGraphBuilder.Build(instructions.ToList());
+            graph = ControlFlowGraphBuilderOld.Build(instructions.ToList());
             graph.ComputeDomiance();
             graph.computeDominanceFrontier();
             graph.ExportGraph("start.txt");

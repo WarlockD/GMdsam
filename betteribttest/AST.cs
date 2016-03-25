@@ -384,7 +384,7 @@ namespace betteribttest
         }
         public static AstConstant FromInstruction(Instruction i)
         {
-            Debug.Assert(i.GMCode == GMCode.Push && i.FirstType != GM_Type.Var);
+            Debug.Assert(i.Code == GMCode.Push && i.FirstType != GM_Type.Var);
             AstConstant con = null;
             switch (i.FirstType)
             {
