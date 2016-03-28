@@ -51,7 +51,8 @@ namespace betteribttest.FlowAnalysis
             Process.Start("dot", "\"" + fileName + ".gv\" -Tpng -o \"" + fileName + ".png\"").WaitForExit();
             Process.Start(fileName + ".png");
         }
-
+        ///public static string EscapeNewLineReplace = "\\n";
+        public static string EscapeNewLineReplace = "\\l"; // left justify
         static string Escape(string text)
         {
             if (Regex.IsMatch(text, @"^[\w\d]+$"))
@@ -59,7 +60,7 @@ namespace betteribttest.FlowAnalysis
                 return text;
             }
             else {
-                return "\"" + text.Replace("\\", "\\\\").Replace("\r", "").Replace("\n", "\\n").Replace("\"", "\\\"") + "\"";
+                return "\"" + text.Replace("\\", "\\\\").Replace("\r", "").Replace("\n", EscapeNewLineReplace).Replace("\"", "\\\"") + "\"";
             }
         }
 

@@ -449,13 +449,43 @@ namespace betteribttest
             i = i.Next;
             return assign;
         }
+        List<Label> exitLabels;
+        List<Label> labelStatementsPrinted;
+        List<Label> branchesSeen;
+        public void SetUpDecompiler()
+        {
+            exitLabels = new List<Label>();
+            labelStatementsPrinted = new List<Label>();
+            branchesSeen = new List<Label>();
+        }
+        public void ExtraLabels(List<AstStatement> ret)
+        {
+            if (exitLabels !=null)
+            {
+                foreach (var elabel in exitLabels)
+                {
+                    if (!labelStatementsPrinted.Contains(elabel))
+                    {
+                        ret.Add(new LabelStatement(elabel));
+                        labelStatementsPrinted.Add(elabel);
+                    }
+                }
+            }
+        }
         public List<AstStatement> ConvertManyStatements(Instruction start, Instruction end, Stack<Ast> stack)
         {
+            Debug.Assert(start != null && end != null);
             List<AstStatement> ret = new List<AstStatement>();
             Stack<List<AstStatement>> envStack = new Stack<List<AstStatement>>();
             Instruction next = end.Next;
             while (start != null && start != next)
             {
+                if (exitLabels!=null && start.Label != null)
+                {
+                    ret.Add(new LabelStatement(start.Label));
+                    if (labelStatementsPrinted.Contains(start.Label)) throw new Exception("Something went wrong");
+                    labelStatementsPrinted.Add(start.Label);
+                }
                 AstStatement stmt = ConvertOneStatement(ref start, stack);
                 if (stmt == null) break; // we done?  No statements?
                 if(stmt is PushEnviroment)
@@ -475,6 +505,7 @@ namespace betteribttest
                 else ret.Add(stmt);
             }
             if (envStack.Count > 0) throw new Exception("We are still in an enviroment stack");
+      
             return ret;
         }
         public AstStatement ConvertOneStatement(ref Instruction i,Stack<Ast> stack)
@@ -483,6 +514,11 @@ namespace betteribttest
             while (i != null && ret == null)
             {
                  int count = i.Code.getOpTreeCount(); // not a leaf
+                Label label = i.Operand as Label;
+                if(label != null && exitLabels != null)
+                {
+                    if (label.Address > i.Last.Address) exitLabels.Add(label);
+                }
                 if (count == 2)
                 {
                     if (count > stack.Count) throw new StackException(i, "Needed " + count + " on stack", null);
@@ -544,6 +580,7 @@ namespace betteribttest
                         case GMCode.B: // this is where the magic happens...woooooooooo
                             ret = new GotoStatement(i);
                             i = i.Next;
+                            if(branchesSeen!= null) branchesSeen.Add(label);
                             break;
                         case GMCode.Bf:
                         case GMCode.Bt:
@@ -552,6 +589,7 @@ namespace betteribttest
                                 ret = new IfStatement(i, i.Code == GMCode.Bf ? condition.Invert() : condition, i.Operand as Label);
                             }
                             i = i.Next;
+                            if (branchesSeen != null) branchesSeen.Add(label);
                             break;
                         case GMCode.BadOp:
                             i = i.Next; // skip

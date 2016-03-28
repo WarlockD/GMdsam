@@ -10,18 +10,34 @@ namespace betteribttest.FlowAnalysis
     {
         public static bool IsUnconditionalBranch(GMCode opcode)
         {
-            switch (opcode.FlowControl)
+            switch (opcode)
             {
-                case FlowControl.Branch:
-                case FlowControl.Throw:
-                case FlowControl.Return:
+                case GMCode.Exit:
+                case GMCode.Ret:
+                case GMCode.B:
                     return true;
-                case FlowControl.Next:
-                case FlowControl.Call:
-                case FlowControl.Cond_Branch:
+                case GMCode.Bt:
+                case GMCode.Bf:
                     return false;
                 default:
-                    throw new NotSupportedException(opcode.FlowControl.ToString());
+                    return false;
+            }
+        }
+        public static bool IsConditionalBranch(GMCode opcode)
+        {
+            switch (opcode)
+            {
+                case GMCode.Popenv:
+                case GMCode.Pushenv:
+                case GMCode.Exit:
+                case GMCode.Ret:
+                case GMCode.B:
+                    return false;
+                case GMCode.Bt:
+                case GMCode.Bf:
+                    return true;
+                default:
+                    return false;
             }
         }
     }

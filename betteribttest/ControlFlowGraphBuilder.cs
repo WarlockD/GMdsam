@@ -24,14 +24,14 @@ namespace betteribttest
             return builder.build();
         }
 
-        public ControlFlowGraphBuilderOld build()
+        public ControlFlowGraphOld build()
         {
             _nextBlockId = 0;
          
             
             createNodes();
             createRegularControlFlow();
-            return new ControlFlowGraphBuilderOld(_nodes.ToArray());
+            return new ControlFlowGraphOld(_nodes.ToArray());
         }
         private ControlFlowGraphBuilderOld(IList<Instruction> instructions)
         {

@@ -45,6 +45,7 @@ namespace betteribttest.FlowAnalysis
         public GraphVizGraph ExportGraph()
         {
             GraphVizGraph graph = new GraphVizGraph();
+            
             foreach (ControlFlowNode node in nodes)
             {
                 graph.AddNode(new GraphVizNode(node.BlockIndex) { label = node.ToString(), shape = "box" });
@@ -57,6 +58,10 @@ namespace betteribttest.FlowAnalysis
                     switch (edge.Type)
                     {
                         case JumpType.Normal:
+                            break;
+                        case JumpType.PopEnviroment:
+                        case JumpType.PushEnviroment:
+                            e.color = "pink";
                             break;
                         default:
                             e.color = "gray";

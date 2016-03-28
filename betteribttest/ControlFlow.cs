@@ -378,7 +378,7 @@ namespace betteribttest
             ResetVisited();
             EntryPoint.TraversePostOrder(o => o.DominatorTreeChildren, delegate (ControlFlowNodeOld n)
              {
-                 ISet<ControlFlowNode> dominanceFrontier = n.DomianceFrontier;
+                 ISet<ControlFlowNodeOld> dominanceFrontier = n.DomianceFrontier;
 
                  dominanceFrontier.Clear();
                  foreach (var s in n.Successors) if (s.ImmediateDominator != n) dominanceFrontier.Add(s);

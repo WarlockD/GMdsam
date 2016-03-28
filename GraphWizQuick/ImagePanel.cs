@@ -143,8 +143,10 @@ namespace GraphWizQuick
         public Size CanvasSize
         {
             get { return canvasSize; }
+            // There is no reason to "set" the canvas side if its just going to be changed in setScrollbarValues()
             set
             {
+
                 if (canvasSize == value) return;
                 canvasSize = value;
                 displayScrollbar();
@@ -163,7 +165,15 @@ namespace GraphWizQuick
             set 
             {
                 if (image == value) return;
-                if (value == null) ZoomPercent = 100;// reset zoom
+                if (value == null)
+                {
+                    ZoomPercent = 100;// reset zoom
+                }
+                else if (image != null && image.Size != value.Size)
+                {
+                    this.vScrollBar1.Value = 0;
+                    this.hScrollBar1.Value = 0;
+                }
                 image = value;
                 displayScrollbar();
                 setScrollbarValues(); 
@@ -213,8 +223,11 @@ namespace GraphWizQuick
 
                 Graphics g=e.Graphics;
                 g.InterpolationMode=interMode;
-                g.PixelOffsetMode = PixelOffsetMode.Half; //Added
-                g.Transform=mx;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+               //  g.PixelOffsetMode = PixelOffsetMode.Half; //Added
+                g.Transform = mx;
+                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                 g.SmoothingMode = SmoothingMode.HighQuality;
                 g.DrawImage(image,distRect,srcRect, GraphicsUnit.Pixel);
             }
 

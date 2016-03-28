@@ -23,6 +23,8 @@ namespace betteribttest.FlowAnalysis
         /// Jump to end of program, but not an exit or return
         /// </summary>
         JumpToEndOfProgram,
+        PushEnviroment,
+        PopEnviroment
     }
 
     /// <summary>

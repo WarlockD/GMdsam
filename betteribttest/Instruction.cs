@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Collections;
 using System.Diagnostics;
 
+using betteribttest.Dissasembler;
 namespace betteribttest
 {
 
@@ -407,6 +408,7 @@ namespace betteribttest
     {
         public List<Instruction> Instructions;
         public List<Label> Labels;
+        public List<EnviromentHandler> Enviroments;
     }
     public sealed class Instruction : IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>, ITextOut
     {
@@ -874,6 +876,7 @@ namespace betteribttest
             Instructions instructions = new Instructions();
             int pc = 0;
             List<Label> LabelsOutsideOfFuntion = new List<Label>();
+
             long lastpc = r.BaseStream.Length / 4;
             while (r.BaseStream.Length > r.BaseStream.Position)
             {
@@ -882,7 +885,7 @@ namespace betteribttest
                 inst.StringLookup = StringIndex; 
                 instructions.AddLast(inst);
                 System.Diagnostics.Debug.Assert(inst.Address == pc);
-                if (inst.Code.isBranch() )// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
+                if (inst.Code.isBranch())// || inst.Code == GMCode.Pushenv || inst.Code == GMCode.Popenv) // pushenv also has a branch 
                 { 
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
                     target += pc;

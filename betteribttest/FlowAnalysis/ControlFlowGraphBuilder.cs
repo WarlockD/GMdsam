@@ -39,7 +39,7 @@ namespace betteribttest.FlowAnalysis
             nodes.Add(entryPoint);
             regularExit = new ControlFlowNode(1, -1, ControlFlowNodeType.RegularExit);
             nodes.Add(regularExit);
-            Debug.Assert(nodes.Count == 3);
+            Debug.Assert(nodes.Count == 2);
         }
 
         /// <summary>
@@ -65,20 +65,25 @@ namespace betteribttest.FlowAnalysis
             CalculateHasIncomingJumps();
             CreateNodes();
             CreateRegularControlFlow();
+            /*
             CreateExceptionalControlFlow();
             if (copyFinallyBlocks)
                 CopyFinallyBlocksIntoLeaveEdges();
             else
                 TransformLeaveEdges();
+                */
             return new ControlFlowGraph(nodes.ToArray());
         }
 
         #region Step 1: calculate which instructions are the targets of jump instructions.
         void CalculateHasIncomingJumps()
         {
+            Instruction last = methodBody.Instructions.Last();
             foreach (Instruction inst in methodBody.Instructions)
             {
-                if (inst.Operand is Label)
+                Label l = inst.Operand as Label;
+                // we ignore popenv as a jump as its more of a marker on the start of the enviroment
+                if (l!=null && last.Address >= l.Address)
                 {
                     hasIncomingJumps[GetInstructionIndex((Label)inst.Operand)] = true;
                 }
@@ -89,10 +94,13 @@ namespace betteribttest.FlowAnalysis
             }
         }
         #endregion
-
+        SortedList<int, ControlFlowNode> PushEnviromentStarts;
+        SortedList<int, ControlFlowNode> PopEnviromentEnds;
         #region Step 2: create nodes
         void CreateNodes()
         {
+            PushEnviromentStarts = new SortedList<int, ControlFlowNode>();
+            PopEnviromentEnds = new SortedList<int, ControlFlowNode>();
             // Step 2a: find basic blocks and create nodes for them
             for (int i = 0; i < methodBody.Instructions.Count; i++)
             {
@@ -104,11 +112,16 @@ namespace betteribttest.FlowAnalysis
                     Instruction inst = methodBody.Instructions[i];
                     if (IsBranch(inst.Code) || inst.Code == GMCode.Pushenv || inst.Code == GMCode.Popenv)
                         break;
+                    // HACK.  popenv should be the last statment but the way the code dissasembles
+                    // the node builder would of put it as its own statment.
+                    // This hack skips the jump check so it gets in there right
+                    // not sure how this will work on popenv breaks though
+                  //  if (inst.Next != null && inst.Next.Code == GMCode.Popenv) continue; 
                     if (hasIncomingJumps[i + 1])
                         break;
                 }
-
-                nodes.Add(new ControlFlowNode(nodes.Count, blockStart, methodBody.Instructions[i]));
+                var node = new ControlFlowNode(nodes.Count, blockStart, methodBody.Instructions[i]);
+                nodes.Add(node);
             }
         }
         #endregion
@@ -116,186 +129,57 @@ namespace betteribttest.FlowAnalysis
         #region Step 3: create edges for the normal flow of control (assuming no exceptions thrown)
         void CreateRegularControlFlow()
         {
+            Instruction last = methodBody.Instructions.Last();
             CreateEdge(entryPoint, methodBody.Instructions[0], JumpType.Normal);
+            Action<ControlFlowNode> NextInstructionEdge = (ControlFlowNode node) =>{
+                if (node.End.Next == null) CreateEdge(node, regularExit, JumpType.Normal);
+                else CreateEdge(node, node.End.Next, JumpType.Normal);
+            };
             foreach (ControlFlowNode node in nodes)
             {
+                //Debug.Assert(node.BlockIndex != 93);
                 if (node.End != null)
                 {
-                    // create normal edges from one instruction to the next
-                    if (!OpCodeInfo.IsUnconditionalBranch(node.End.Code.IsUnconditionalControlFlow))
-                        CreateEdge(node, node.End.Next, JumpType.Normal);
+                    var code = node.End.Code;
+                    Label operandLabel = node.End.Operand as Label;
 
-                    // create edges for branch instructions
-                    if (node.End.OpCode.OperandType == OperandType.InlineBrTarget || node.End.OpCode.OperandType == OperandType.ShortInlineBrTarget)
+
+
+                    switch (code)
                     {
-                        if (node.End.OpCode == OpCodes.Leave || node.End.OpCode == OpCodes.Leave_S)
-                        {
-                            var handlerBlock = FindInnermostHandlerBlock(node.End.Offset);
-                            if (handlerBlock.NodeType == ControlFlowNodeType.FinallyOrFaultHandler)
-                                CreateEdge(node, (Instruction)node.End.Operand, JumpType.LeaveTry);
+                        case GMCode.Pushenv:  // jump out of enviroment
+                            CreateEdge(node, node.End.Next, JumpType.PushEnviroment);
+                            break;
+                        case GMCode.Popenv:
+                            // jump out of enviroment
+                            //    Debug.Assert(operandLabel != null); // figure out breaks
+                            if (node.End.Next == null) // bug, meh
+                                CreateEdge(node, regularExit, JumpType.PopEnviroment);
                             else
-                                CreateEdge(node, (Instruction)node.End.Operand, JumpType.Normal);
-                        }
-                        else {
-                            CreateEdge(node, (Instruction)node.End.Operand, JumpType.Normal);
-                        }
-                    }
-                    else if (node.End.OpCode.OperandType == OperandType.InlineSwitch)
-                    {
-                        foreach (Instruction i in (Instruction[])node.End.Operand)
-                            CreateEdge(node, i, JumpType.Normal);
+                                CreateEdge(node, node.End.Next, JumpType.PopEnviroment);
+                            break;
+                        case GMCode.Bt:
+                        case GMCode.Bf:
+                            NextInstructionEdge(node);
+                            goto case GMCode.B;
+                        case GMCode.B:
+                            CreateEdge(node, operandLabel, JumpType.Normal);
+                            break;
+                        case GMCode.Exit:
+                        case GMCode.Ret:
+                            CreateEdge(node, regularExit, JumpType.Normal);
+                            break;
+                        default:
+                            NextInstructionEdge(node);
+                            break;
                     }
 
-                    // create edges for return instructions
-                    if (node.End.OpCode.FlowControl == FlowControl.Return)
-                    {
-                        switch (node.End.OpCode.Code)
-                        {
-                            case Code.Ret:
-                                CreateEdge(node, regularExit, JumpType.Normal);
-                                break;
-                            case Code.Endfinally:
-                                ControlFlowNode handlerBlock = FindInnermostHandlerBlock(node.End.Offset);
-                                if (handlerBlock.EndFinallyOrFaultNode == null)
-                                    throw new InvalidProgramException("Found endfinally in block " + handlerBlock);
-                                CreateEdge(node, handlerBlock.EndFinallyOrFaultNode, JumpType.Normal);
-                                break;
-                            default:
-                                throw new NotSupportedException(node.End.OpCode.ToString());
-                        }
-                    }
                 }
             }
         }
         #endregion
 
-        #region Step 4: create edges for the exceptional control flow (from instructions that might throw, to the innermost containing exception handler)
-        void CreateExceptionalControlFlow()
-        {
-            foreach (ControlFlowNode node in nodes)
-            {
-                if (node.End != null && CanThrowException(node.End.OpCode))
-                {
-                    CreateEdge(node, FindInnermostExceptionHandlerNode(node.End.Offset), JumpType.JumpToExceptionHandler);
-                }
-                if (node.ExceptionHandler != null)
-                {
-                    if (node.EndFinallyOrFaultNode != null)
-                    {
-                        // For Fault and Finally blocks, create edge from "EndFinally" to next exception handler.
-                        // This represents the exception bubbling up after finally block was executed.
-                        CreateEdge(node.EndFinallyOrFaultNode, FindParentExceptionHandlerNode(node), JumpType.JumpToExceptionHandler);
-                    }
-                    else {
-                        // For Catch blocks, create edge from "CatchHandler" block (at beginning) to next exception handler.
-                        // This represents the exception bubbling up because it did not match the type of the catch block.
-                        CreateEdge(node, FindParentExceptionHandlerNode(node), JumpType.JumpToExceptionHandler);
-                    }
-                    CreateEdge(node, node.ExceptionHandler.HandlerStart, JumpType.Normal);
-                }
-            }
-        }
-
-        ExceptionHandler FindInnermostExceptionHandler(int instructionOffsetInTryBlock)
-        {
-            foreach (ExceptionHandler h in methodBody.ExceptionHandlers)
-            {
-                if (h.TryStart.Offset <= instructionOffsetInTryBlock && instructionOffsetInTryBlock < h.TryEnd.Offset)
-                {
-                    return h;
-                }
-            }
-            return null;
-        }
-
-        ControlFlowNode FindInnermostExceptionHandlerNode(int instructionOffsetInTryBlock)
-        {
-            ExceptionHandler h = FindInnermostExceptionHandler(instructionOffsetInTryBlock);
-            if (h != null)
-                return nodes.Single(n => n.ExceptionHandler == h && n.CopyFrom == null);
-            else
-                return exceptionalExit;
-        }
-
-        ControlFlowNode FindInnermostHandlerBlock(int instructionOffset)
-        {
-            foreach (ExceptionHandler h in methodBody.ExceptionHandlers)
-            {
-                if (h.TryStart.Offset <= instructionOffset && instructionOffset < h.TryEnd.Offset
-                    || h.HandlerStart.Offset <= instructionOffset && instructionOffset < h.HandlerEnd.Offset)
-                {
-                    return nodes.Single(n => n.ExceptionHandler == h && n.CopyFrom == null);
-                }
-            }
-            return exceptionalExit;
-        }
-
-        ControlFlowNode FindParentExceptionHandlerNode(ControlFlowNode exceptionHandler)
-        {
-            Debug.Assert(exceptionHandler.NodeType == ControlFlowNodeType.CatchHandler
-                         || exceptionHandler.NodeType == ControlFlowNodeType.FinallyOrFaultHandler);
-            int offset = exceptionHandler.ExceptionHandler.TryStart.Offset;
-            for (int i = exceptionHandler.BlockIndex + 1; i < nodes.Count; i++)
-            {
-                ExceptionHandler h = nodes[i].ExceptionHandler;
-                if (h != null && h.TryStart.Offset <= offset && offset < h.TryEnd.Offset)
-                    return nodes[i];
-            }
-            return exceptionalExit;
-        }
-        #endregion
-
-        #region Step 5a: replace LeaveTry edges with EndFinally edges
-        // this is used only for copyFinallyBlocks==false; see Step 5b otherwise
-        void TransformLeaveEdges()
-        {
-            for (int i = nodes.Count - 1; i >= 0; i--)
-            {
-                ControlFlowNode node = nodes[i];
-                if (node.End != null && node.Outgoing.Count == 1 && node.Outgoing[0].Type == JumpType.LeaveTry)
-                {
-                    Debug.Assert(node.End.OpCode == OpCodes.Leave || node.End.OpCode == OpCodes.Leave_S);
-
-                    ControlFlowNode target = node.Outgoing[0].Target;
-                    // remove the edge
-                    target.Incoming.Remove(node.Outgoing[0]);
-                    node.Outgoing.Clear();
-
-                    ControlFlowNode handler = FindInnermostExceptionHandlerNode(node.End.Offset);
-                    Debug.Assert(handler.NodeType == ControlFlowNodeType.FinallyOrFaultHandler);
-
-                    CreateEdge(node, handler, JumpType.Normal);
-                    CreateEdge(handler.EndFinallyOrFaultNode, target, JumpType.EndFinally);
-                }
-            }
-        }
-        #endregion
-
-        #region Step 5b: copy finally blocks into the LeaveTry edges
-        void CopyFinallyBlocksIntoLeaveEdges()
-        {
-            // We need to process try-finally blocks inside-out.
-            // We'll do that by going through all instructions in reverse order
-            for (int i = nodes.Count - 1; i >= 0; i--)
-            {
-                ControlFlowNode node = nodes[i];
-                if (node.End != null && node.Outgoing.Count == 1 && node.Outgoing[0].Type == JumpType.LeaveTry)
-                {
-                    Debug.Assert(node.End.OpCode == OpCodes.Leave || node.End.OpCode == OpCodes.Leave_S);
-
-                    ControlFlowNode target = node.Outgoing[0].Target;
-                    // remove the edge
-                    target.Incoming.Remove(node.Outgoing[0]);
-                    node.Outgoing.Clear();
-
-                    ControlFlowNode handler = FindInnermostExceptionHandlerNode(node.End.Offset);
-                    Debug.Assert(handler.NodeType == ControlFlowNodeType.FinallyOrFaultHandler);
-
-                    ControlFlowNode copy = CopyFinallySubGraph(handler, handler.EndFinallyOrFaultNode, target);
-                    CreateEdge(node, copy, JumpType.Normal);
-                }
-            }
-        }
+ 
 
         /// <summary>
         /// Creates a copy of all nodes pointing to 'end' and replaces those references with references to 'newEnd'.
@@ -347,9 +231,9 @@ namespace betteribttest.FlowAnalysis
                         case ControlFlowNodeType.Normal:
                             copy = new ControlFlowNode(newBlockIndex, node.Start, node.End);
                             break;
-                        case ControlFlowNodeType.FinallyOrFaultHandler:
-                            copy = new ControlFlowNode(newBlockIndex, node.ExceptionHandler, node.EndFinallyOrFaultNode);
-                            break;
+                    //    case ControlFlowNodeType.FinallyOrFaultHandler:
+                    //        copy = new ControlFlowNode(newBlockIndex, node.ExceptionHandler, node.EndFinallyOrFaultNode);
+                     //       break;
                         default:
                             // other nodes shouldn't occur when copying finally blocks
                             throw new NotSupportedException(node.NodeType.ToString());
@@ -386,14 +270,20 @@ namespace betteribttest.FlowAnalysis
                 return oldNode;
             }
         }
-        #endregion
 
         #region CreateEdge methods
         void CreateEdge(ControlFlowNode fromNode, Instruction toInstruction, JumpType type)
         {
             CreateEdge(fromNode, nodes.Single(n => n.Start == toInstruction), type);
         }
-
+        void CreateEdge(ControlFlowNode fromNode, Label toLabel, JumpType type)
+        {
+            Instruction last = methodBody.Instructions.Last();
+            if (toLabel.Address > last.Address)
+                CreateEdge(fromNode, regularExit, type);
+            else
+                CreateEdge(fromNode, nodes.Single(n => n.Start != null && n.Start.Address == toLabel.Address), type);
+        }
         void CreateEdge(ControlFlowNode fromNode, ControlFlowNode toNode, JumpType type)
         {
             ControlFlowEdge edge = new ControlFlowEdge(fromNode, toNode, type);

@@ -46,6 +46,12 @@ namespace betteribttest.FlowAnalysis
         /// </summary>
         public readonly ControlFlowNodeType NodeType;
 
+
+        /// <summary>
+        /// Hacky, but might become permanent
+        /// </summary>
+        public List<AstStatement> Block = null;
+
         /// <summary>
         /// Visited flag, used in various algorithms.
         /// Before using it in your algorithm, reset it to false by calling ControlFlowGraph.ResetVisited();
@@ -221,12 +227,24 @@ namespace betteribttest.FlowAnalysis
                 writer.WriteLine();
                 writer.Write("DominanceFrontier: " + string.Join(",", DominanceFrontier.OrderBy(d => d.BlockIndex).Select(d => d.BlockIndex.ToString())));
             }
-            foreach (Instruction inst in this.Instructions)
+            if(Block != null)
             {
-                writer.WriteLine();
-                writer.Write(inst.ToString());
-               // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
+                foreach (var stmt in this.Block)
+                {
+                    writer.WriteLine();
+                    stmt.DecompileToText(writer);
+                    // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
+                }
+            } else
+            {
+                foreach (Instruction inst in this.Instructions)
+                {
+                    writer.WriteLine();
+                    writer.Write(inst.ToString());
+                    // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
+                }
             }
+           
             if (UserData != null)
             {
                 writer.WriteLine();

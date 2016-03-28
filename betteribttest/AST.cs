@@ -47,10 +47,11 @@ namespace betteribttest
         public virtual IEnumerable<Ast> AstEnumerator(bool includeSelf=true) { if (includeSelf) yield return this; }
         public void SaveToFile(string filename)
         {
-            using (StreamWriter wr = new StreamWriter("temp_statement.txt"))
-            {
-                this.DecompileToText(wr);
-            }
+            StreamWriter wr = new StreamWriter(filename);
+            this.DecompileToText(wr);
+            wr.Flush();
+            wr.Close();
+            Debug.WriteLine("Saved StatementBlock to '" + filename + "'");
         }
         static protected void AddParm(TextWriter wr, string s)
         {
