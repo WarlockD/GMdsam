@@ -194,10 +194,20 @@ namespace betteribttest.GMAst
             return result;
         }
     }
+    public enum ILCode
+    {
+        Assign,
+        Push,
+        Call,
+        Expression,
+        Branch,
+        BranchTrue,
+        BranchFalse
+    }
 
     public class ILExpression : ILNode
     {
-        public GMCode Code { get; set; }
+        public ILCode Code { get; set; }
         public object Operand { get; set; }
         public List<ILExpression> Arguments { get; set; }
         // Mapping to the original instructions (useful for debugging)
@@ -208,7 +218,7 @@ namespace betteribttest.GMAst
 
         public static readonly object AnyOperand = new object();
 
-        public ILExpression(GMCode code, object operand, List<ILExpression> args)
+        public ILExpression(ILCode code, object operand, List<ILExpression> args)
         {
             if (operand is ILExpression)
                 throw new ArgumentException("operand");
@@ -219,7 +229,7 @@ namespace betteribttest.GMAst
             this.ILRanges = new List<ILRange>(1);
         }
 
-        public ILExpression(GMCode code, object operand, params ILExpression[] args)
+        public ILExpression(ILCode code, object operand, params ILExpression[] args)
         {
             if (operand is ILExpression)
                 throw new ArgumentException("operand");
@@ -255,27 +265,22 @@ namespace betteribttest.GMAst
                 return new ILLabel[] { };
             }
         }
-
-        public override void WriteTo(ITextOutput output)
+        bool ArgumentWriteTo(ITextOutput output)
         {
-            if (Operand is ILVariable)
-            {
-                if (Code == GMCode.Pop )
-                {
-                    output.Write(((ILVariable)Operand).Name);
-                    output.Write(" = ");
-                    Arguments.First().WriteTo(output);
-                    return;
-                }
-                else if (Code == GMCode.Push)
-                {
-                    output.Write(((ILVariable)Operand).Name);
-                    return;
-                }
-            }
-            output.Write(Code.GetName());
-
             output.Write('(');
+            bool first = true;
+
+            foreach (ILExpression arg in this.Arguments)
+            {
+                if (!first) output.Write(", ");
+                arg.WriteTo(output);
+                first = false;
+            }
+            output.Write(')');
+            return first;
+        }
+        bool OperandWriteTo(ITextOutput output)
+        {
             bool first = true;
             if (Operand != null)
             {
@@ -292,19 +297,48 @@ namespace betteribttest.GMAst
                             output.Write(", ");
                         output.WriteReference(labels[i].Name, labels[i]);
                     }
-                }else {
+                }
+                else {
                     output.Write(Operand.ToString());
-                 //   DisassemblerHelpers.WriteOperand(output, Operand);
+                    //   DisassemblerHelpers.WriteOperand(output, Operand);
                 }
                 first = false;
             }
-            foreach (ILExpression arg in this.Arguments)
+            return first;
+        }
+        public override void WriteTo(ITextOutput output)
+        {
+            switch (Code)
             {
-                if (!first) output.Write(", ");
-                arg.WriteTo(output);
-                first = false;
+                case ILCode.Call:
+                    output.Write(((ILVariable)Operand).Name);
+                    ArgumentWriteTo(output);
+                    break;
+                case ILCode.Assign:
+                    output.Write(((ILVariable)Operand).Name);
+                    output.Write(" = ");
+                    Arguments.First().WriteTo(output);
+                    break;
+                case ILCode.Push:
+                    output.Write("Push ");
+                    output.Write(Operand.ToString()); // generic, should cover all cases
+                    break;
+                case ILCode.Expression:
+                    output.Write(Operand.ToString()); // generic, should cover all cases
+                    break;
+                case ILCode.Branch:
+                    output.Write("Branch ");
+                    OperandWriteTo(output);
+                    break;
+                case ILCode.BranchFalse:
+                    output.Write("BranchFalse ");
+                    OperandWriteTo(output);
+                    break;
+                case ILCode.BranchTrue:
+                    output.Write("BranchTrue ");
+                    OperandWriteTo(output);
+                    break;
             }
-            output.Write(')');
         }
     }
 

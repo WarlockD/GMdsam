@@ -4,12 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using betteribttest.GMAst;
 
 namespace betteribttest.FlowAnalysis
 {
     /// <summary>
     /// Description of LoopsAndConditions.
     /// </summary>
+#if false
     public class LoopsAndConditions
     {
         Dictionary<Label, ControlFlowNode> labelToCfNode = new Dictionary<Label, ControlFlowNode>();
@@ -31,7 +33,7 @@ namespace betteribttest.FlowAnalysis
         public StatementBlock FindConditions(ControlFlowGraph graph)
         {
             var ret = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
-            return ret;
+            return null;
         }
 
      
@@ -64,7 +66,8 @@ namespace betteribttest.FlowAnalysis
                     Label falseLabel;
 
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchSingleAndBr(ILCode.Brtrue, out trueLabel, out condExpr, out falseLabel))
+                    if (basicBlock.MatchSingleAndBr(
+                        ILCode.Brtrue, out trueLabel, out condExpr, out falseLabel))
                     {
                         ControlFlowNode trueTarget;
                         labelToCfNode.TryGetValue(trueLabel, out trueTarget);
@@ -398,4 +401,5 @@ namespace betteribttest.FlowAnalysis
             return result;
         }
     }
+#endif
 }
