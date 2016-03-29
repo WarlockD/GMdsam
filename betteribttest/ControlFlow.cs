@@ -18,17 +18,17 @@ namespace betteribttest
         void Accept(T input);
     }
   
-    public class ControlFlowEdge :IEquatable<ControlFlowEdge>
+    public class ControlFlowEdgeOld :IEquatable<ControlFlowEdgeOld>
     {
-        public ControlFlowNode Source { get;  set; }
-        public ControlFlowNode Target { get;  set; }
-        public ControlFlowEdge(ControlFlowNode source, ControlFlowNode target)
+        public ControlFlowNodeOld Source { get;  set; }
+        public ControlFlowNodeOld Target { get;  set; }
+        public ControlFlowEdgeOld(ControlFlowNodeOld source, ControlFlowNodeOld target)
         {
             Debug.Assert(source != null && target != null);
             Source = source;
             Target = target;
         }
-        public  bool Equals(ControlFlowEdge edge)
+        public  bool Equals(ControlFlowEdgeOld edge)
         {
             return Source == edge.Source && Target == edge.Target;
         }
@@ -36,7 +36,7 @@ namespace betteribttest
         {
             if (object.ReferenceEquals(obj, null)) return false;
             if (object.ReferenceEquals(obj, this)) return true;
-            ControlFlowEdge edge = obj as ControlFlowEdge;
+            ControlFlowEdgeOld edge = obj as ControlFlowEdgeOld;
             return edge != null && Equals(edge);
         }
         public override string ToString()
@@ -48,7 +48,7 @@ namespace betteribttest
             return Source.GetHashCode() ^ Target.GetHashCode();
         }
     }
-    public class ControlFlowNode : IComparable<ControlFlowNode>, IEquatable<ControlFlowNode> , ITextOut
+    public class ControlFlowNodeOld : IComparable<ControlFlowNodeOld>, IEquatable<ControlFlowNodeOld> , ITextOut
     {
         public BitArray DebugDominators;
         public StatementBlock block;
@@ -60,37 +60,37 @@ namespace betteribttest
         {
             if (object.ReferenceEquals(obj, null)) return false;
             if (object.ReferenceEquals(obj, this)) return true;
-            ControlFlowNode node = obj as ControlFlowNode;
+            ControlFlowNodeOld node = obj as ControlFlowNodeOld;
             return node != null && Equals(node);
         }
-        public bool Equals(ControlFlowNode node)
+        public bool Equals(ControlFlowNodeOld node)
         {
             return BlockIndex == node.BlockIndex && Address == node.Address;
         }
-        public List<ControlFlowNode> DominatorTreeChildren = new List<ControlFlowNode>();
-        private LinkedHashSet<ControlFlowNode> _dominanceFrontier = new LinkedHashSet<ControlFlowNode>();
-        public LinkedHashSet<ControlFlowNode> DomianceFrontier {  get { return _dominanceFrontier; } }
-        private List<ControlFlowEdge> _incoming = new List<ControlFlowEdge>();
-        private List<ControlFlowEdge> _outgoing = new List<ControlFlowEdge>();
-        public List<ControlFlowEdge> Incomming { get { return _incoming; } set { _incoming = value; } }
-        public List<ControlFlowEdge> Outgoing { get { return _outgoing; } set { _outgoing = value; } }
-        public ControlFlowNode ImmediateDominator { get; set; }
+        public List<ControlFlowNodeOld> DominatorTreeChildren = new List<ControlFlowNodeOld>();
+        private LinkedHashSet<ControlFlowNodeOld> _dominanceFrontier = new LinkedHashSet<ControlFlowNodeOld>();
+        public LinkedHashSet<ControlFlowNodeOld> DomianceFrontier {  get { return _dominanceFrontier; } }
+        private List<ControlFlowEdgeOld> _incoming = new List<ControlFlowEdgeOld>();
+        private List<ControlFlowEdgeOld> _outgoing = new List<ControlFlowEdgeOld>();
+        public List<ControlFlowEdgeOld> Incomming { get { return _incoming; } set { _incoming = value; } }
+        public List<ControlFlowEdgeOld> Outgoing { get { return _outgoing; } set { _outgoing = value; } }
+        public ControlFlowNodeOld ImmediateDominator { get; set; }
         public Instruction Start { get; set; }
         public Instruction End { get; set; }
         public int BlockIndex { get; internal set; }
         public int Address { get; private set; }
-        public ControlFlowNode CopyFrom { get; set; }
+        public ControlFlowNodeOld CopyFrom { get; set; }
         public bool Visited { get; set; }
         public bool isReachable { get { return ImmediateDominator != null || Address == 0; } }
         public Object UserData { get; set; }
-        public ControlFlowNode(int blockIndex, int offset)
+        public ControlFlowNodeOld(int blockIndex, int offset)
         {
             BlockIndex = blockIndex;
             Address = offset;
             Start = null;
             End = null;
         }
-        public ControlFlowNode(int blockIndex, Instruction start, Instruction end)
+        public ControlFlowNodeOld(int blockIndex, Instruction start, Instruction end)
         {
             BlockIndex = blockIndex;
             Debug.Assert(start != null && end != null);
@@ -98,20 +98,20 @@ namespace betteribttest
             End = end;
             Address = start.Address;
         }
-        public bool Succeds(ControlFlowNode other)
+        public bool Succeds(ControlFlowNodeOld other)
         {
             if (other == null) return false;
             foreach (var i in _incoming) if (i.Source == other) return true;
             return false;
         }
-        public bool Precedes(ControlFlowNode other)
+        public bool Precedes(ControlFlowNodeOld other)
         {
             if (other == null) return false;
             foreach (var i in _outgoing) if (i.Source == other) return true;
             return false;
         }
-        public IEnumerable<ControlFlowNode> Predecessors { get { foreach (var i in _incoming) yield return i.Source; }  }
-        public IEnumerable<ControlFlowNode> Successors { get { foreach (var i in _outgoing) yield return i.Target; } }
+        public IEnumerable<ControlFlowNodeOld> Predecessors { get { foreach (var i in _incoming) yield return i.Source; }  }
+        public IEnumerable<ControlFlowNodeOld> Successors { get { foreach (var i in _outgoing) yield return i.Target; } }
         public IEnumerable<Instruction> Instructions
         {
             get
@@ -125,24 +125,24 @@ namespace betteribttest
                 }
             }
         }
-        public void TraversePreOrder(Func<ControlFlowNode, IEnumerable<ControlFlowNode>> children, Action<ControlFlowNode> visitAction)
+        public void TraversePreOrder(Func<ControlFlowNodeOld, IEnumerable<ControlFlowNodeOld>> children, Action<ControlFlowNodeOld> visitAction)
         {
             if (Visited) return;
             Visited = true;
             visitAction(this);
             foreach (var child in children(this)) child.TraversePreOrder(children, visitAction);
         }
-        public void TraversePostOrder(Func<ControlFlowNode, IEnumerable<ControlFlowNode>> children, Action<ControlFlowNode> visitAction)
+        public void TraversePostOrder(Func<ControlFlowNodeOld, IEnumerable<ControlFlowNodeOld>> children, Action<ControlFlowNodeOld> visitAction)
         {
             if (Visited) return;
             Visited = true;
             foreach (var child in children(this)) child.TraversePostOrder(children, visitAction);
             visitAction(this);
         }
-        public bool Dominates(ControlFlowNode node)
+        public bool Dominates(ControlFlowNodeOld node)
         {
             return DebugDominators.Get(node.BlockIndex);
-            ControlFlowNode current = node;
+            ControlFlowNodeOld current = node;
             while (current != null)
             {
                 if (current == this)
@@ -155,11 +155,11 @@ namespace betteribttest
             return false;
         }
 
-        public int CompareTo(ControlFlowNode other)
+        public int CompareTo(ControlFlowNodeOld other)
         {
             return BlockIndex.CompareTo(other.BlockIndex);
         }
-        public static Predicate<ControlFlowNode> REACHABLE_PREDICATE = node => node.isReachable;
+        public static Predicate<ControlFlowNodeOld> REACHABLE_PREDICATE = node => node.isReachable;
 
         public int WriteTextLine(TextWriter wr)
         {
@@ -218,16 +218,16 @@ namespace betteribttest
         }
     };
 
-    public class ControlFlowGraph : ITextOut
+    public class ControlFlowGraphOld : ITextOut
     {
 
-        List<ControlFlowNode> _nodes;
-        public ControlFlowNode EntryPoint { get { return _nodes[0]; } }
-        public ControlFlowNode RegularExit { get { return _nodes[1]; } }
-        public List<ControlFlowNode> Nodes { get { return _nodes; } }
-        public ControlFlowGraph(params ControlFlowNode[] nodes)
+        List<ControlFlowNodeOld> _nodes;
+        public ControlFlowNodeOld EntryPoint { get { return _nodes[0]; } }
+        public ControlFlowNodeOld RegularExit { get { return _nodes[1]; } }
+        public List<ControlFlowNodeOld> Nodes { get { return _nodes; } }
+        public ControlFlowGraphOld(params ControlFlowNodeOld[] nodes)
         {
-            _nodes = new List<ControlFlowNode>();
+            _nodes = new List<ControlFlowNodeOld>();
             foreach (var node in nodes)
             {
                 Debug.Assert(node != null);
@@ -246,7 +246,7 @@ namespace betteribttest
         }
         public void DebugDominance()
         {
-            ControlFlowNode entryPoint = EntryPoint;
+            ControlFlowNodeOld entryPoint = EntryPoint;
             int size = _nodes.Count;
             for (int i = 0; i < size; i++) _nodes[i].BlockIndex = i; // Re index
             foreach (var node in _nodes)
@@ -283,7 +283,7 @@ namespace betteribttest
         {
             DebugDominance();
 
-            ControlFlowNode entryPoint = EntryPoint;
+            ControlFlowNodeOld entryPoint = EntryPoint;
             entryPoint.ImmediateDominator = entryPoint;
             bool changed = true;
             while (changed)
@@ -291,9 +291,9 @@ namespace betteribttest
                 changed = false;
                 ResetVisited();
                if (cancelled) throw new Exception("Cancelled");
-                entryPoint.TraversePreOrder(input => input.Successors, delegate (ControlFlowNode b) {
+                entryPoint.TraversePreOrder(input => input.Successors, delegate (ControlFlowNodeOld b) {
                     if (b == entryPoint) return;
-                    ControlFlowNode newImmediateDominator = null;
+                    ControlFlowNodeOld newImmediateDominator = null;
                     foreach (var p in b.Predecessors)
                     {
                         if (p.Visited && p != b)
@@ -320,9 +320,9 @@ namespace betteribttest
             }
             entryPoint.ImmediateDominator = null;
 
-            foreach (ControlFlowNode node in _nodes)
+            foreach (ControlFlowNodeOld node in _nodes)
             {
-                ControlFlowNode immediateDominator = node.ImmediateDominator;
+                ControlFlowNodeOld immediateDominator = node.ImmediateDominator;
 
                 if (immediateDominator != null) immediateDominator.DominatorTreeChildren.Add(node);
             }
@@ -333,8 +333,8 @@ namespace betteribttest
             if (block.Last() is GotoStatement) block.Remove(block.Last());
             for (int i = 0; i < block.Count; i++) if (block[i] is LabelStatement) block.RemoveAt(i);
         }
-        StatementBlock NodeToBlock(Decompile dn, ControlFlowNode node, Stack<Ast> stack) { return new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack)); }
-        int NodeToAst(Decompile dn, ControlFlowNode node, Stack<Ast> stack, bool removeStatementsAndGotos)
+        StatementBlock NodeToBlock(Decompile dn, ControlFlowNodeOld node, Stack<Ast> stack) { return new StatementBlock(dn.ConvertManyStatements(node.Start, node.End, stack)); }
+        int NodeToAst(Decompile dn, ControlFlowNodeOld node, Stack<Ast> stack, bool removeStatementsAndGotos)
         {
             StatementBlock block = new StatementBlock();
             if (node.block == null && node.Address != -1)
@@ -346,7 +346,7 @@ namespace betteribttest
             node.block = block;
             return block.Count;
         }
-        public void BuildAllAst(Decompile dn, Dictionary<ControlFlowNode, Stack<Ast>> stackMap)
+        public void BuildAllAst(Decompile dn, Dictionary<ControlFlowNodeOld, Stack<Ast>> stackMap)
         {
             foreach(var node in _nodes)
             {
@@ -376,9 +376,9 @@ namespace betteribttest
 */
 
             ResetVisited();
-            EntryPoint.TraversePostOrder(o => o.DominatorTreeChildren, delegate (ControlFlowNode n)
+            EntryPoint.TraversePostOrder(o => o.DominatorTreeChildren, delegate (ControlFlowNodeOld n)
              {
-                 ISet<ControlFlowNode> dominanceFrontier = n.DomianceFrontier;
+                 ISet<ControlFlowNodeOld> dominanceFrontier = n.DomianceFrontier;
 
                  dominanceFrontier.Clear();
                  foreach (var s in n.Successors) if (s.ImmediateDominator != n) dominanceFrontier.Add(s);
@@ -399,8 +399,8 @@ namespace betteribttest
             output.Indent++;
 
 
-            LinkedHashSet<ControlFlowEdge> edges = new LinkedHashSet<ControlFlowEdge>();
-            foreach (ControlFlowNode node in _nodes)
+            LinkedHashSet<ControlFlowEdgeOld> edges = new LinkedHashSet<ControlFlowEdgeOld>();
+            foreach (ControlFlowNodeOld node in _nodes)
             {
                 output.WriteLine("\"{0}\" [", nodeName(node));
                 output.Indent++;
@@ -422,10 +422,10 @@ namespace betteribttest
             }
         //    output.Indent;
 
-            foreach (ControlFlowEdge edge in edges)
+            foreach (ControlFlowEdgeOld edge in edges)
             {
-                ControlFlowNode from = edge.Source;
-                ControlFlowNode to = edge.Target;
+                ControlFlowNodeOld from = edge.Source;
+                ControlFlowNodeOld to = edge.Target;
 
                 output.WriteLine("\"{0}\" -> \"{1}\" []", nodeName(from), nodeName(to));
                 //      output.Indent++;
@@ -445,12 +445,12 @@ namespace betteribttest
                 
         }
 
-        public static ControlFlowNode findCommonDominator(ControlFlowNode a, ControlFlowNode b)
+        public static ControlFlowNodeOld findCommonDominator(ControlFlowNodeOld a, ControlFlowNodeOld b)
         {
-            ISet<ControlFlowNode> path1 = new LinkedHashSet<ControlFlowNode>();
+            ISet<ControlFlowNodeOld> path1 = new LinkedHashSet<ControlFlowNodeOld>();
 
-            ControlFlowNode node1 = a;
-            ControlFlowNode node2 = b;
+            ControlFlowNodeOld node1 = a;
+            ControlFlowNodeOld node2 = b;
 
             while (node1 != null && path1.Add(node1)) node1 = node1.ImmediateDominator;
 
@@ -461,7 +461,7 @@ namespace betteribttest
             }
             throw new Exception("No common dominator found!");
         }
-        private string nodeName(ControlFlowNode node)
+        private string nodeName(ControlFlowNodeOld node)
         {
             if (node == EntryPoint) return "init";
             else if (node == RegularExit) return "exit";
@@ -492,7 +492,7 @@ namespace betteribttest
             System.CodeDom.Compiler.IndentedTextWriter output = new System.CodeDom.Compiler.IndentedTextWriter(wr);
             output.WriteLine("digraph g {");
             output.Indent++;
-            HashSet<ControlFlowNode> children = new HashSet<ControlFlowNode>();
+            HashSet<ControlFlowNodeOld> children = new HashSet<ControlFlowNodeOld>();
             foreach (var node in _nodes)
             {
                 output.WriteLine("\"{0}\"", nodeName(node));
@@ -509,8 +509,8 @@ namespace betteribttest
                     output.Indent++;
                     foreach (var edge in node.Incomming)
                     {
-                        ControlFlowNode from = edge.Source;
-                        ControlFlowNode to = edge.Target;
+                        ControlFlowNodeOld from = edge.Source;
+                        ControlFlowNodeOld to = edge.Target;
                         // we just have normal edges
                         output.WriteLine("\"{0}\" -> \"{1}\" []", nodeName(from), nodeName(to));
                     }
@@ -522,8 +522,8 @@ namespace betteribttest
                     output.Indent++;
                     foreach (var edge in node.Outgoing)
                     {
-                        ControlFlowNode from = edge.Source;
-                        ControlFlowNode to = edge.Target;
+                        ControlFlowNodeOld from = edge.Source;
+                        ControlFlowNodeOld to = edge.Target;
                         // we just have normal edges
                         output.WriteLine("\"{0}\" -> \"{1}\" []", nodeName(from), nodeName(to));
                     }
@@ -535,7 +535,7 @@ namespace betteribttest
             output.WriteLine("}");
             return 40;
         }
-        public ControlFlowNode FindNode(Instruction instruction)
+        public ControlFlowNodeOld FindNode(Instruction instruction)
         {
             int address = instruction.Address;
             foreach(var node in _nodes)
@@ -544,16 +544,16 @@ namespace betteribttest
             }
             return null;
         }
-        public ISet<ControlFlowNode> findDominatedNodes(ControlFlowNode head, ISet<ControlFlowNode> terminals)
+        public ISet<ControlFlowNodeOld> findDominatedNodes(ControlFlowNodeOld head, ISet<ControlFlowNodeOld> terminals)
         {
-            LinkedHashSet< ControlFlowNode > visited = new LinkedHashSet<ControlFlowNode>();
-            Queue< ControlFlowNode > agenda = new Queue<ControlFlowNode>();
-            LinkedHashSet< ControlFlowNode > result = new LinkedHashSet<ControlFlowNode>();
+            LinkedHashSet<ControlFlowNodeOld> visited = new LinkedHashSet<ControlFlowNodeOld>();
+            Queue<ControlFlowNodeOld> agenda = new Queue<ControlFlowNodeOld>();
+            LinkedHashSet<ControlFlowNodeOld> result = new LinkedHashSet<ControlFlowNodeOld>();
             agenda.Enqueue(head);
             visited.Add(head);
             while (agenda.Count >0)
             {
-                ControlFlowNode addNode = agenda.Dequeue();
+                ControlFlowNodeOld addNode = agenda.Dequeue();
 
                 if (terminals.Contains(addNode)) continue;
 
@@ -565,16 +565,16 @@ namespace betteribttest
                 if (!result.Add(addNode)) continue;
 
 
-                foreach (ControlFlowNode successor in addNode.Successors)
+                foreach (ControlFlowNodeOld successor in addNode.Successors)
                 {
                     if (visited.Add(successor)) agenda.Enqueue(successor);
                 }
             }
             return result;
         }
-        public Dictionary<Instruction,ControlFlowNode> CreateNodeMap()
+        public Dictionary<Instruction, ControlFlowNodeOld> CreateNodeMap()
         {
-            Dictionary<Instruction, ControlFlowNode> map = new Dictionary<Instruction, ControlFlowNode>();
+            Dictionary<Instruction, ControlFlowNodeOld> map = new Dictionary<Instruction, ControlFlowNodeOld>();
             foreach(var node in _nodes)
             {
                 for (Instruction p = node.Start; p != null && p.Address < node.End.Address; p = p.Next) map.Add(p, node);

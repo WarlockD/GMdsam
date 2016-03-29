@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Collections;
 using System.Diagnostics;
 
+using betteribttest.Dissasembler;
 namespace betteribttest
 {
 
@@ -344,7 +345,7 @@ namespace betteribttest
                     l.InstructionOrigin = node.Value;     // Link the instruction its attached too
                     behind = false;                 // tell the system to start to ad to the forward list
                 } else {
-                    if (i.GMCode.isBranch())// || i.GMCode == GMCode.Pushenv || (i.GMCode == GMCode.Popenv && i.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
+                    if (i.Code.isBranch())// || i.GMCode == GMCode.Pushenv || (i.GMCode == GMCode.Popenv && i.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
                     {
                         int target = GMCodeUtil.getBranchOffset(i.OpCode);
                         target += i.Address;
@@ -403,6 +404,12 @@ namespace betteribttest
             return l.Address == Address;
         }
     }
+    public class MethodBody
+    {
+        public List<Instruction> Instructions;
+        public List<Label> Labels;
+        public List<EnviromentHandler> Enviroments;
+    }
     public sealed class Instruction : IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>, ITextOut
     {
         // Internal next instruction, or previous instruction of code 
@@ -430,7 +437,7 @@ namespace betteribttest
         byte[] raw_opcode;
         int _operandInt;
         // makes it a bad op code that just has the offset and the operand
-        public bool isBranch { get { return this.GMCode.isBranch(); } }
+        public bool isBranch { get { return this.Code.isBranch(); } }
         public int BranchDesitation
         {
             get
@@ -444,7 +451,7 @@ namespace betteribttest
         public int Address { get; private set; }
         public Label Label { get;  set; }
         public uint OpCode { get; private set; }
-        public GMCode GMCode { get { return GMCodeUtil.getFromRaw(OpCode); } }
+        public GMCode Code { get { return GMCodeUtil.getFromRaw(OpCode); } }
         public object Operand { get; set; }
         public int OperandInt { get { return _operandInt; } }
         public static Instruction CreateFakeExitNode(Instruction i, bool need_label)
@@ -459,10 +466,10 @@ namespace betteribttest
         // this is used for the peep changing, don't need this really outside of it
         internal void ChangeInstruction(GMCode code, Label l)
         {
-            Debug.Assert(this.GMCode.isBranch());
+            Debug.Assert(this.Code.isBranch());
             OpCode = (uint)(((byte)code) << 24);
             OpCode &= (uint)(this.Address-l.Address);
-            Debug.Assert(this.GMCode.isBranch());
+            Debug.Assert(this.Code.isBranch());
         }
         internal Instruction(int offset, uint opCode) 
         {
@@ -485,7 +492,7 @@ namespace betteribttest
             {
                // Array.Resize(ref raw_opcode, size * sizeof(int));
               //  r.Read(raw_opcode, 4, (size - 1) * sizeof(int));
-                switch (this.GMCode)
+                switch (this.Code)
                 {
                     case GMCode.Call:
                     case GMCode.Pop:
@@ -562,7 +569,7 @@ namespace betteribttest
         }
         void FormatPrefix(StringBuilder line,int opcode,int type) {
             line.AppendFormat("{0,-5}{1,-5} ", Address, this.Label == null ? "" : this.Label.ToString());
-            line.Append(this.GMCode.GetName());
+            line.Append(this.Code.GetName());
             if ((opcode & 160) == 128)
             {
                 line.Append(GMCodeUtil.TypeToStringPostfix(type & 0xF));
@@ -669,7 +676,7 @@ namespace betteribttest
                 {
                     line.Append("break enviroment");
 
-                } else if (GMCode.IsConditional() || GMCode == GMCode.Pushenv || GMCode == GMCode.Popenv)
+                } else if (Code.IsConditional() || Code == GMCode.Pushenv || Code == GMCode.Popenv)
                 {
                     int offset = GMCodeUtil.getBranchOffset(OpCode);
                     line.Append(Address-offset);
@@ -791,12 +798,12 @@ namespace betteribttest
                 Instruction i = node.Value;
                 Label label = i.Label;
                 Label target = i.Operand as Label;
-                if (i.GMCode == GMCode.Push && (i.OpCode & 0xFFFF) == 0)
+                if (i.Code == GMCode.Push && (i.OpCode & 0xFFFF) == 0)
                 {
                     // We MIGHT have a short, check the statment before and after
                     Instruction before = i.Prev;
                     Instruction after = i.Next;
-                    if(before != null && before.GMCode == GMCode.B && before.Operand == after.Label && after.GMCode == GMCode.Bf) // If it skips the 0 push and goes to the branch
+                    if(before != null && before.Code == GMCode.B && before.Operand == after.Label && after.Code == GMCode.Bf) // If it skips the 0 push and goes to the branch
                     { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
                         foreach(var iref in i.Label.AllRefrencess) { // these are branches that don't need a stack, just change the operand
                             if (!iref.isBranch) throw new Exception("Something wrong boy");
@@ -807,7 +814,7 @@ namespace betteribttest
                             foreach (var iref in after.Label.AllRefrencess)  // these are branches HAVE to be Bf or Bt, change the op from after don't need a stack, just change the operand
                             {
                                 if (!iref.isBranch) throw new Exception("Something wrong boy");
-                                iref.ChangeInstruction(after.GMCode, after.Operand as Label);
+                                iref.ChangeInstruction(after.Code, after.Operand as Label);
                             }
                         }
                     //    input.Remove(after);
@@ -831,12 +838,12 @@ namespace betteribttest
                 Instruction i = node.Value;
                 Label label = i.Label;
                 Label target = i.Operand as Label;
-                if (i.GMCode == GMCode.Push && (i.OpCode & 0xFFFF) == 1) // push.e 1
+                if (i.Code == GMCode.Push && (i.OpCode & 0xFFFF) == 1) // push.e 1
                 {
                     // We MIGHT have a short, check the statment before and after
                     Instruction before = i.Prev;
                     Instruction after = i.Next;
-                    if (before != null && before.GMCode == GMCode.B && before.Operand == after.Label && after.GMCode == GMCode.Bf) // This is still the same for ors
+                    if (before != null && before.Code == GMCode.B && before.Operand == after.Label && after.Code == GMCode.Bf) // This is still the same for ors
                     { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
                         foreach (var iref in i.Label.AllRefrencess)
                         { // these are branches that don't need a stack, just change the operand
@@ -848,7 +855,7 @@ namespace betteribttest
                             foreach (var iref in after.Label.AllRefrencess)  // these are branches HAVE to be Bf or Bt, change the op from after don't need a stack, just change the operand
                             {
                                 if (!iref.isBranch) throw new Exception("Something wrong boy");
-                                iref.ChangeInstruction(after.GMCode, after.Operand as Label);
+                                iref.ChangeInstruction(after.Code, after.Operand as Label);
                             }
                         }
                         //    input.Remove(after);
@@ -869,6 +876,7 @@ namespace betteribttest
             Instructions instructions = new Instructions();
             int pc = 0;
             List<Label> LabelsOutsideOfFuntion = new List<Label>();
+
             long lastpc = r.BaseStream.Length / 4;
             while (r.BaseStream.Length > r.BaseStream.Position)
             {
@@ -877,7 +885,7 @@ namespace betteribttest
                 inst.StringLookup = StringIndex; 
                 instructions.AddLast(inst);
                 System.Diagnostics.Debug.Assert(inst.Address == pc);
-                if (inst.GMCode.isBranch() )// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
+                if (inst.Code.isBranch())// || inst.Code == GMCode.Pushenv || inst.Code == GMCode.Popenv) // pushenv also has a branch 
                 { 
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
                     target += pc;
@@ -918,7 +926,7 @@ namespace betteribttest
             {
                 if(i.Operand != null)
                 {
-                    switch (i.GMCode)
+                    switch (i.Code)
                     {
                         case GMCode.Push:
                             switch (i.FirstType)

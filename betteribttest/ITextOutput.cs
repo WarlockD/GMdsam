@@ -130,4 +130,172 @@ namespace betteribttest
             Flush(); // make sure it flushes though I thought Dispose will do this humm
         }
     }
+    public struct TextLocation
+    {
+        public readonly int Column;
+        public readonly int Line;
+        public TextLocation(int line, int column) { this.Line = line;  this.Column = column; }
+    }
+    public interface ITextOutput
+    {
+        TextLocation Location { get; }
+
+        void Indent();
+        void Unindent();
+        void Write(char ch);
+        void Write(string text);
+        void WriteLine();
+        void WriteDefinition(string text, object definition, bool isLocal = true);
+        void WriteReference(string text, object reference, bool isLocal = false);
+
+        void MarkFoldStart(string collapsedText = "...", bool defaultCollapsed = false);
+        void MarkFoldEnd();
+    }
+    public class TextOutputWriter : TextWriter
+    {
+        readonly ITextOutput output;
+
+        public TextOutputWriter(ITextOutput output)
+        {
+            if (output == null)
+                throw new ArgumentNullException("output");
+            this.output = output;
+        }
+
+        public override Encoding Encoding
+        {
+            get { return Encoding.UTF8; }
+        }
+
+        public override void Write(char value)
+        {
+            output.Write(value);
+        }
+
+        public override void Write(string value)
+        {
+            output.Write(value);
+        }
+
+        public override void WriteLine()
+        {
+            output.WriteLine();
+        }
+    }
+    public static class TextOutputExtensions
+    {
+        public static void Write(this ITextOutput output, string format, params object[] args)
+        {
+            output.Write(string.Format(format, args));
+        }
+
+        public static void WriteLine(this ITextOutput output, string text)
+        {
+            output.Write(text);
+            output.WriteLine();
+        }
+
+        public static void WriteLine(this ITextOutput output, string format, params object[] args)
+        {
+            output.WriteLine(string.Format(format, args));
+        }
+    }
+    public sealed class PlainTextOutput : ITextOutput
+    {
+        readonly TextWriter writer;
+        int indent;
+        bool needsIndent;
+
+        int line = 1;
+        int column = 1;
+
+        public PlainTextOutput(TextWriter writer)
+        {
+            if (writer == null)
+                throw new ArgumentNullException("writer");
+            this.writer = writer;
+        }
+
+        public PlainTextOutput()
+        {
+            this.writer = new StringWriter();
+        }
+
+        public TextLocation Location
+        {
+            get
+            {
+                return new TextLocation(line, column + (needsIndent ? indent : 0));
+            }
+        }
+
+        public override string ToString()
+        {
+            return writer.ToString();
+        }
+
+        public void Indent()
+        {
+            indent++;
+        }
+
+        public void Unindent()
+        {
+            indent--;
+        }
+
+        void WriteIndent()
+        {
+            if (needsIndent)
+            {
+                needsIndent = false;
+                for (int i = 0; i < indent; i++)
+                {
+                    writer.Write('\t');
+                }
+                column += indent;
+            }
+        }
+
+        public void Write(char ch)
+        {
+            WriteIndent();
+            writer.Write(ch);
+            column++;
+        }
+
+        public void Write(string text)
+        {
+            WriteIndent();
+            writer.Write(text);
+            column += text.Length;
+        }
+
+        public void WriteLine()
+        {
+            writer.WriteLine();
+            needsIndent = true;
+            line++;
+            column = 1;
+        }
+
+        public void WriteDefinition(string text, object definition, bool isLocal)
+        {
+            Write(text);
+        }
+
+        public void WriteReference(string text, object reference, bool isLocal)
+        {
+            Write(text);
+        }
+
+        void ITextOutput.MarkFoldStart(string collapsedText, bool defaultCollapsed)
+        {
+        }
+
+        void ITextOutput.MarkFoldEnd()
+        {
+        }
+
+    }
 }

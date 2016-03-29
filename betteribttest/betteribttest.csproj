@@ -62,8 +62,19 @@
     <Compile Include="ControlFlow.cs" />
     <Compile Include="ControlFlowGraphBuilder.cs" />
     <Compile Include="DecompilerNew.cs" />
+    <Compile Include="Dissasembler\EnviromentHandler.cs" />
+    <Compile Include="Dissasembler\OpCode.cs" />
+    <Compile Include="FlowAnalysis\AstBlock.cs" />
+    <Compile Include="FlowAnalysis\AstGraphBuilder.cs" />
     <Compile Include="FlowAnalysis\ControlFlowEdge.cs" />
+    <Compile Include="FlowAnalysis\ControlFlowGraph.cs" />
+    <Compile Include="FlowAnalysis\ControlFlowGraphBuilder.cs" />
     <Compile Include="FlowAnalysis\ControlFlowNode.cs" />
+    <Compile Include="FlowAnalysis\ControlStructureDetector.cs" />
+    <Compile Include="FlowAnalysis\GraphViz.cs" />
+    <Compile Include="FlowAnalysis\LoopsAndConditions.cs" />
+    <Compile Include="FlowAnalysis\OpCodeInfo.cs" />
+    <Compile Include="GMAst\PaternMatching.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -109,6 +120,7 @@
   <ItemGroup>
     <Content Include="TextFile1.txt" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
