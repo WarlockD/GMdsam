@@ -60,7 +60,14 @@ namespace betteribttest
         Popenv = 0xbc,
         Push = 0xc0,
         Call = 0xda,
-        Break = 0xff
+        Break = 0xff,
+       // special for IExpression
+       Var = 0xf3,
+        LogicAnd = 0xf4,
+        LogicOr = 0xf5,
+        LoopContinue = 0xf6,
+        LoopOrSwitchBreak = 0xf7,
+        Switch = 0xf9
     }
     public static class GMCodeUtil
     {
@@ -90,6 +97,8 @@ namespace betteribttest
             {  (GMCode)0x14, 2},
             {  (GMCode)0x15, 2},
             {  (GMCode)0x16, 2 },
+            { GMCode.LogicAnd, 2 },
+            { GMCode.LogicOr, 2 },
         };
         public static uint toUInt(this GMCode t, int operand)
         {
@@ -155,6 +164,8 @@ namespace betteribttest
             {  (GMCode)0x14, "!=" },
             {  (GMCode)0x15, ">=" },
             {  (GMCode)0x16, ">" },
+              { GMCode.LogicAnd, "&&" },
+            { GMCode.LogicOr, "||" },
         };
         public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
         {
@@ -243,9 +254,9 @@ namespace betteribttest
         }
         public static bool IsUnconditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.B;
+            return code == GMCode.B || code == GMCode.Exit || code == GMCode.Ret;
         }
-        public static bool IsConditional(this GMCode code)
+        public static bool IsConditionalControlFlow(this GMCode code)
         {
             return code == GMCode.Bt || code == GMCode.Bf;
         }
@@ -410,7 +421,8 @@ namespace betteribttest
         public List<Label> Labels;
         public List<EnviromentHandler> Enviroments;
     }
-    public sealed class Instruction : IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>, ITextOut
+
+    public sealed class Instruction : GMAst.ILNode, IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>
     {
         // Internal next instruction, or previous instruction of code 
         // not sure if I want to expose it or not
@@ -479,6 +491,66 @@ namespace betteribttest
             this._operandInt = 0;
             this.Label = null;
             this.Comment = null;
+        }
+        public int PopDelta
+        {
+            get
+            {
+                int count = Code.getOpTreeCount(); // not a leaf
+                if (count == 2) return 2; // pop 2, push 1
+                else
+                {
+                    switch (Code)
+                    {
+                        case GMCode.Dup:
+                            Debug.Assert(this.Instance == 0);
+                            return 1; // figure this one out, its more than this
+                        case GMCode.Popz:   // the call is now a statlemtn
+                        case GMCode.Pushenv:
+                        case GMCode.Bf:
+                        case GMCode.Bt:
+                        case GMCode.B:
+                        case GMCode.Conv:
+                        case GMCode.Not:
+                        case GMCode.Neg: // pop 1 push 1
+                            return 1;
+                        case GMCode.Pop:
+                            if (this.Instance == 0) return 0; // simple local var
+                            return OperandInt > 0 ? 2 : 1;
+                        case GMCode.Call:
+                            return this.Instance; // number of arguments
+                        default:
+                            return 0;
+                            throw new Exception("Not Implmented! ugh");
+                    }
+                }
+            }
+        }
+        public int PushDelta
+        {
+            get
+            {
+                int count = Code.getOpTreeCount(); // not a leaf
+                if (count == 2) return 1; // pop 2, push 1
+                else
+                {
+                    switch (Code)
+                    {
+                        case GMCode.Dup:
+                            Debug.Assert(this.Instance == 0);
+                            return 1; // figure this one out, its more than this
+                        case GMCode.Conv:
+                        case GMCode.Not:
+                        case GMCode.Neg: // pop 1 push 1 
+                        case GMCode.Push:
+                        case GMCode.Call:
+                            return 1;
+                        default:
+                            return 0;
+                            throw new Exception("Not Implmented! ugh");
+                    }
+                }
+            }
         }
         internal Instruction(int offset, BinaryReader r) 
         {
@@ -619,10 +691,10 @@ namespace betteribttest
         public override string ToString()
         {
             StringWriter sw = new StringWriter();
-            WriteTextLine(sw);
+            WriteTextLine(new PlainTextOutput(sw));
             return sw.ToString();
         }
-        public int WriteTextLine(TextWriter wr)
+        public int WriteTextLine(ITextOutput wr)
         {
             StringBuilder line = new StringBuilder();
             int opcode = (int)((OpCode >> 24) & 0xFF);
@@ -676,7 +748,7 @@ namespace betteribttest
                 {
                     line.Append("break enviroment");
 
-                } else if (Code.IsConditional() || Code == GMCode.Pushenv || Code == GMCode.Popenv)
+                } else if (Code.IsConditionalControlFlow() || Code == GMCode.Pushenv || Code == GMCode.Popenv)
                 {
                     int offset = GMCodeUtil.getBranchOffset(OpCode);
                     line.Append(Address-offset);
@@ -764,7 +836,7 @@ namespace betteribttest
                 int count = 0;
                 foreach(var i in this)
                 {
-                    i.WriteTextLine(wr);
+                    i.WriteTextLine(new PlainTextOutput(wr));
                     wr.WriteLine();
                     count++;
                 }
@@ -980,6 +1052,10 @@ namespace betteribttest
             if (Object.ReferenceEquals(other, this)) return true;
             return other.Address == Address;
         }
- 
+
+        public override void WriteTo(ITextOutput output)
+        {
+            WriteTextLine(output);
+        }
     }
 }

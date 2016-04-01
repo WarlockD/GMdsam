@@ -11,36 +11,106 @@ namespace betteribttest.FlowAnalysis
     /// <summary>
     /// Description of LoopsAndConditions.
     /// </summary>
-#if false
+
     public class LoopsAndConditions
     {
-        Dictionary<Label, ControlFlowNode> labelToCfNode = new Dictionary<Label, ControlFlowNode>();
+        Dictionary<ILLabel, ControlFlowNode> labelToCfNode = new Dictionary<ILLabel, ControlFlowNode>();
 
-        readonly Decompile context;
+       // readonly DecompilerContext context;
 
         uint nextLabelIndex = 0;
 
-        public LoopsAndConditions(Decompile context)
+        public LoopsAndConditions()//DecompilerContext context)
         {
-            this.context = context;
+           // this.context = context;
         }
 
-        public StatementBlock FindLoops(ControlFlowGraph graph)
+        public void FindLoops(ILBlock block)
         {
-                var ret = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
-                return ret;
-        }
-        public StatementBlock FindConditions(ControlFlowGraph graph)
-        {
-            var ret = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
-            return null;
+            if (block.Body.Count > 0)
+            {
+                ControlFlowGraph graph;
+                graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
+                graph.ComputeDominance();
+                graph.ComputeDominanceFrontier();
+                graph.ExportGraph().Save("loop_graph.dot");
+                block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
+            }
         }
 
-     
-
-        StatementBlock  FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
+        public void FindConditions(ILBlock block)
         {
-            List<AstStatement> result = new List<AstStatement>();
+            if (block.Body.Count > 0)
+            {
+                ControlFlowGraph graph;
+                graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
+                graph.ComputeDominance();
+                graph.ComputeDominanceFrontier();
+                graph.ExportGraph().Save("condition_graph.dot");
+                block.Body = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
+            }
+        }
+
+        ControlFlowGraph BuildGraph(IList<ILNode> nodes, ILLabel entryLabel)
+        {
+      
+            int index = 0;
+            List<ControlFlowNode> cfNodes = new List<ControlFlowNode>();
+            ControlFlowNode entryPoint = new ControlFlowNode(index++, 0, ControlFlowNodeType.EntryPoint);
+            cfNodes.Add(entryPoint);
+            ControlFlowNode regularExit = new ControlFlowNode(index++, -1, ControlFlowNodeType.RegularExit);
+            cfNodes.Add(regularExit);
+
+            // Create graph nodes
+            labelToCfNode = new Dictionary<ILLabel, ControlFlowNode>();
+            Dictionary<ILNode, ControlFlowNode> astNodeToCfNode = new Dictionary<ILNode, ControlFlowNode>();
+            foreach (ILBasicBlock node in nodes)
+            {
+                ControlFlowNode cfNode = new ControlFlowNode(index++, -1, ControlFlowNodeType.Normal);
+                cfNodes.Add(cfNode);
+                astNodeToCfNode[node] = cfNode;
+                cfNode.UserData = node;
+
+                // Find all contained labels
+                foreach (ILLabel label in node.GetSelfAndChildrenRecursive<ILLabel>())
+                {
+                    labelToCfNode[label] = cfNode;
+                }
+            }
+
+            // Entry endge
+            ControlFlowNode entryNode = labelToCfNode[entryLabel];
+            ControlFlowEdge entryEdge = new ControlFlowEdge(entryPoint, entryNode, JumpType.Normal);
+            entryPoint.Outgoing.Add(entryEdge);
+            entryNode.Incoming.Add(entryEdge);
+
+            // Create edges
+            foreach (ILBasicBlock node in nodes)
+            {
+                ControlFlowNode source = astNodeToCfNode[node];
+
+                // Find all branches
+                foreach (ILLabel target in node.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
+                {
+                    ControlFlowNode destination;
+                    
+                    // Labels which are out of out scope will not be in the collection
+                    // Insert self edge only if we are sure we are a loop
+                    if (labelToCfNode.TryGetValue(target, out destination) && (destination != source || target == node.Body.FirstOrDefault()))
+                    {
+                        ControlFlowEdge edge = new ControlFlowEdge(source, destination, JumpType.Normal);
+                        source.Outgoing.Add(edge);
+                        destination.Incoming.Add(edge);
+                    }
+                }
+            }
+
+            return new ControlFlowGraph(cfNodes.ToArray());
+        }
+
+        List<ILNode> FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
+        {
+            List<ILNode> result = new List<ILNode>();
 
             // Do not modify entry data
             scope = new HashSet<ControlFlowNode>(scope);
@@ -59,15 +129,12 @@ namespace betteribttest.FlowAnalysis
                     HashSet<ControlFlowNode> loopContents = FindLoopContent(scope, node);
 
                     // If the first expression is a loop condition
-                    StatementBlock basicBlock = (StatementBlock)node.UserData;
-                    IfStatement ifs = basicBlock.Last() as IfStatement;
-                    Ast condExpr;
-                    Label trueLabel;
-                    Label falseLabel;
-
+                    ILBasicBlock basicBlock = (ILBasicBlock)node.UserData;
+                    ILExpression condExpr;
+                    ILLabel trueLabel;
+                    ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchSingleAndBr(
-                        ILCode.Brtrue, out trueLabel, out condExpr, out falseLabel))
+                    if (basicBlock.MatchSingleAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel))
                     {
                         ControlFlowNode trueTarget;
                         labelToCfNode.TryGetValue(trueLabel, out trueTarget);
@@ -85,7 +152,7 @@ namespace betteribttest.FlowAnalysis
                             if (loopContents.Contains(falseTarget) || falseTarget == node)
                             {
                                 // Negate the condition
-                                condExpr = new ILExpression(ILCode.LogicNot, null, condExpr);
+                                condExpr = new ILExpression(GMCode.Not, null, condExpr);
                                 ILLabel tmp = trueLabel;
                                 trueLabel = falseLabel;
                                 falseLabel = tmp;
@@ -102,17 +169,17 @@ namespace betteribttest.FlowAnalysis
                             }
 
                             // Use loop to implement the brtrue
-                            basicBlock.Body.RemoveTail(ILCode.Brtrue, ILCode.Br);
+                            basicBlock.Body.RemoveTail(GMCode.Bt, GMCode.B);
                             basicBlock.Body.Add(new ILWhileLoop()
                             {
                                 Condition = condExpr,
                                 BodyBlock = new ILBlock()
                                 {
-                                    EntryGoto = new ILExpression(ILCode.Br, trueLabel),
+                                    EntryGoto = new ILExpression(GMCode.B, trueLabel),
                                     Body = FindLoops(loopContents, node, false)
                                 }
                             });
-                            basicBlock.Body.Add(new ILExpression(ILCode.Br, falseLabel));
+                            basicBlock.Body.Add(new ILExpression(GMCode.B, falseLabel));
                             result.Add(basicBlock);
 
                             scope.ExceptWith(loopContents);
@@ -128,7 +195,7 @@ namespace betteribttest.FlowAnalysis
                                 new ILLabel() { Name = "Loop_" + (nextLabelIndex++) },
                                 new ILWhileLoop() {
                                     BodyBlock = new ILBlock() {
-                                        EntryGoto = new ILExpression(ILCode.Br, (ILLabel)basicBlock.Body.First()),
+                                        EntryGoto = new ILExpression(GMCode.B, (ILLabel)basicBlock.Body.First()),
                                         Body = FindLoops(loopContents, node, true)
                                     }
                                 },
@@ -180,14 +247,16 @@ namespace betteribttest.FlowAnalysis
                         ILLabel[] caseLabels;
                         ILExpression switchArg;
                         ILLabel fallLabel;
-                        if (block.MatchLastAndBr(ILCode.Switch, out caseLabels, out switchArg, out fallLabel))
+
+                        // matches a switch statment, not sure how the hell I am going to do this
+                        if (block.MatchLastAndBr(GMCode.Switch, out caseLabels, out switchArg, out fallLabel))
                         {
 
                             // Replace the switch code with ILSwitch
                             ILSwitch ilSwitch = new ILSwitch() { Condition = switchArg };
-                            block.Body.RemoveTail(ILCode.Switch, ILCode.Br);
+                            block.Body.RemoveTail(GMCode.Switch, GMCode.B);
                             block.Body.Add(ilSwitch);
-                            block.Body.Add(new ILExpression(ILCode.Br, fallLabel));
+                            block.Body.Add(new ILExpression(GMCode.B, fallLabel));
                             result.Add(block);
 
                             // Remove the item so that it is not picked up as content
@@ -196,7 +265,7 @@ namespace betteribttest.FlowAnalysis
                             // Find the switch offset
                             int addValue = 0;
                             List<ILExpression> subArgs;
-                            if (ilSwitch.Condition.Match(ILCode.Sub, out subArgs) && subArgs[1].Match(ILCode.Ldc_I4, out addValue))
+                            if (ilSwitch.Condition.Match(GMCode.Sub, out subArgs) && subArgs[1].Match(GMCode.Push, out addValue))
                             {
                                 ilSwitch.Condition = subArgs[0];
                             }
@@ -228,7 +297,7 @@ namespace betteribttest.FlowAnalysis
                                     caseBlock = new ILSwitch.CaseBlock()
                                     {
                                         Values = new List<int>(),
-                                        EntryGoto = new ILExpression(ILCode.Br, condLabel)
+                                        EntryGoto = new ILExpression(GMCode.B, condLabel)
                                     };
                                     ilSwitch.CaseBlocks.Add(caseBlock);
 
@@ -238,13 +307,14 @@ namespace betteribttest.FlowAnalysis
                                     {
                                         HashSet<ControlFlowNode> content = FindDominatedNodes(scope, condTarget);
                                         scope.ExceptWith(content);
-                                        caseBlock.Body.AddRange(FindConditions(content, condTarget));
+                                        foreach (var con in FindConditions(content, condTarget)) caseBlock.Body.Add(con);
+                                     //   caseBlock.Body.AddRange(FindConditions(content, condTarget));
                                         // Add explicit break which should not be used by default, but the goto removal might decide to use it
                                         caseBlock.Body.Add(new ILBasicBlock()
                                         {
                                             Body = {
                                                 new ILLabel() { Name = "SwitchBreak_" + (nextLabelIndex++) },
-                                                new ILExpression(ILCode.LoopOrSwitchBreak, null)
+                                                new ILExpression(GMCode.LoopOrSwitchBreak, null)
                                             }
                                         });
                                     }
@@ -258,18 +328,19 @@ namespace betteribttest.FlowAnalysis
                                 HashSet<ControlFlowNode> content = FindDominatedNodes(scope, fallTarget);
                                 if (content.Any())
                                 {
-                                    var caseBlock = new ILSwitch.CaseBlock() { EntryGoto = new ILExpression(ILCode.Br, fallLabel) };
+                                    var caseBlock = new ILSwitch.CaseBlock() { EntryGoto = new ILExpression(GMCode.B, fallLabel) };
                                     ilSwitch.CaseBlocks.Add(caseBlock);
-                                    block.Body.RemoveTail(ILCode.Br);
+                                    block.Body.RemoveTail(GMCode.B);
 
                                     scope.ExceptWith(content);
-                                    caseBlock.Body.AddRange(FindConditions(content, fallTarget));
+                                    foreach (var con in FindConditions(content, fallTarget)) caseBlock.Body.Add(con);
+                                  
                                     // Add explicit break which should not be used by default, but the goto removal might decide to use it
                                     caseBlock.Body.Add(new ILBasicBlock()
                                     {
                                         Body = {
                                             new ILLabel() { Name = "SwitchBreak_" + (nextLabelIndex++) },
-                                            new ILExpression(ILCode.LoopOrSwitchBreak, null)
+                                            new ILExpression(GMCode.LoopOrSwitchBreak, null)
                                         }
                                     });
                                 }
@@ -280,23 +351,23 @@ namespace betteribttest.FlowAnalysis
                         ILExpression condExpr;
                         ILLabel trueLabel;
                         ILLabel falseLabel;
-                        if (block.MatchLastAndBr(ILCode.Brtrue, out trueLabel, out condExpr, out falseLabel))
+                        if (block.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel))
                         {
 
                             // Swap bodies since that seems to be the usual C# order
                             ILLabel temp = trueLabel;
                             trueLabel = falseLabel;
                             falseLabel = temp;
-                            condExpr = new ILExpression(ILCode.LogicNot, null, condExpr);
+                            condExpr = new ILExpression(GMCode.Not, null, condExpr);
 
                             // Convert the brtrue to ILCondition
                             ILCondition ilCond = new ILCondition()
                             {
                                 Condition = condExpr,
-                                TrueBlock = new ILBlock() { EntryGoto = new ILExpression(ILCode.Br, trueLabel) },
-                                FalseBlock = new ILBlock() { EntryGoto = new ILExpression(ILCode.Br, falseLabel) }
+                                TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
+                                FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
                             };
-                            block.Body.RemoveTail(ILCode.Brtrue, ILCode.Br);
+                            block.Body.RemoveTail(GMCode.Bt, GMCode.B);
                             block.Body.Add(ilCond);
                             result.Add(block);
 
@@ -313,13 +384,13 @@ namespace betteribttest.FlowAnalysis
                             {
                                 HashSet<ControlFlowNode> content = FindDominatedNodes(scope, trueTarget);
                                 scope.ExceptWith(content);
-                                ilCond.TrueBlock.Body.AddRange(FindConditions(content, trueTarget));
+                                foreach (var con in FindConditions(content, trueTarget)) ilCond.TrueBlock.Body.Add(con);
                             }
                             if (falseTarget != null && HasSingleEdgeEnteringBlock(falseTarget))
                             {
                                 HashSet<ControlFlowNode> content = FindDominatedNodes(scope, falseTarget);
                                 scope.ExceptWith(content);
-                                ilCond.FalseBlock.Body.AddRange(FindConditions(content, falseTarget));
+                                foreach (var con in FindConditions(content, falseTarget)) ilCond.FalseBlock.Body.Add(con);
                             }
                         }
                     }
@@ -401,5 +472,4 @@ namespace betteribttest.FlowAnalysis
             return result;
         }
     }
-#endif
 }

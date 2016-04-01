@@ -39,7 +39,7 @@ namespace betteribttest.FlowAnalysis
             foreach (var inst in Instructions)
             {
                 writer.WriteLine();
-                inst.WriteTextLine(writer);
+                inst.WriteTextLine(new PlainTextWriter(writer));
             }
             return writer.ToString();
         }

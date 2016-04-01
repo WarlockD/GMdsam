@@ -27,7 +27,7 @@ namespace betteribttest.GMAst
             return false;
         }
 
-        public static bool Match(this ILNode node, GMCode code, out List<ILExpression> args)
+        public static bool Match(this ILNode node, GMCode code, out IList<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null  && expr.Code == code)
@@ -52,7 +52,7 @@ namespace betteribttest.GMAst
             return false;
         }
 
-        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out List<ILExpression> args)
+        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out IList<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code)
@@ -68,7 +68,7 @@ namespace betteribttest.GMAst
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg)
         {
-            List<ILExpression> args;
+            IList<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -80,7 +80,7 @@ namespace betteribttest.GMAst
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg1, out ILExpression arg2)
         {
-            List<ILExpression> args;
+            IList<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 2)
             {
                 arg1 = args[0];

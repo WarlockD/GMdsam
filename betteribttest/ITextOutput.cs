@@ -9,7 +9,7 @@ using System.Diagnostics.Contracts;
 
 namespace betteribttest
 {
-    public class PlainTextWriter : TextWriter
+    public class PlainTextWriter : TextWriter, ITextOutput
     {
         TextWriter _stream;
         bool _flushed;
@@ -18,9 +18,7 @@ namespace betteribttest
         StringBuilder _outHeader;
         int _largestHeader;
         char _lastChar;
-        byte[] _byteBuffer;
         int _lineno;
-        int _position;
         int _ident;
         int _identWidth;
         char _identChar;
@@ -39,7 +37,8 @@ namespace betteribttest
         public int LineNumber { get { return _lineno; } }
         public int Position { get { return HeaderLength + _line.Length; } }
         public int HeaderLength { get { return _largestHeader + _identChar * _ident; } }
-        public int Indent { get { return _ident; } set { _ident = value; updateHeader(); } }
+        public void Indent() { _ident++; updateHeader(); }
+        public void Unindent() { _ident--; if (_ident < 0) _ident = 0; updateHeader(); }
         public int IdentWidth { get { return _identWidth; } set { _identWidth = value; updateHeader(); } }
         public char IdentChar { get { return _identChar; } set { _identChar = value; updateHeader(); } }
        
@@ -60,7 +59,7 @@ namespace betteribttest
             _flushed = false;
             _stream = stream;
             _line = null;
-            Indent = 0;
+            _ident = 0;
             IdentWidth = 4;// 4 charaters
             IdentChar = ' '; // spaces.  1, '\t' is an option if you like tabs
             Header = null;
@@ -75,27 +74,77 @@ namespace betteribttest
                 return _stream.Encoding;
             }
         }
-        // just override this method for now, Work on more latter
-        public override void Write(char value)
+
+        public TextLocation Location
         {
-            if (_stream == null) return; // safety check
+            get
+            {
+                throw new NotImplementedException();
+            }
+        }
+        bool ValidStreamForWrite()
+        {
+            if (_stream == null) return false; // safety check
             if (_line == null) // first write setup
             {
                 _line = new StringBuilder(256);
                 _lineno = 1;
                 _flushed = false;
             }
+            return true;
+        }
+        
+        bool checkIfNewLine(char current)
+        {
+            return ((CoreNewLine.Length == 2 && _lastChar == CoreNewLine[0] && current == CoreNewLine[1]) || (CoreNewLine.Length == 1 && current == CoreNewLine[0]));
+        }
+        // just override this method for now, Work on more latter
+        public override void Write(char value)
+        {
+            if(!ValidStreamForWrite()) return;
             _line.Append(value);
-            if ((CoreNewLine.Length == 2 && _lastChar == CoreNewLine[0] && value == CoreNewLine[1]) || (CoreNewLine.Length == 1 && value == CoreNewLine[0]))
-            { // new line
-                string line = _line.ToString();
-                if (!_flushed) _stream.Write(_outHeader.ToString());
-                _stream.Write(line);
-                _line.Clear();
-                _lineno++;
-                _flushed = false;
-            }
+            if(checkIfNewLine(value)) WriteLine();
             _lastChar = value;
+        }
+        public override void WriteLine()
+        {
+            string line = _line.ToString();
+            if (!_flushed) _stream.Write(_outHeader.ToString());
+            _stream.Write(line);
+            _line.Clear();
+            _lineno++;
+            _flushed = false;
+        }
+        public override void WriteLine(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            if (!ValidStreamForWrite()) return;
+            // There is a bug here I am too lasy to fix.  If the string starts a \n but there was already a \r seen, then
+            // it won't do the next line properly.  I could feed this char by char to Write(char) but this is WAY faster and
+            // I have yet to run into this bug.  Just to watch out for
+            string[] split = value.Split(CoreNewLine); // alwyas returns one element
+            foreach(var s in split)
+            {
+                _line.Append(s);
+                WriteLine();
+            }
+        }
+        public override void Write(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            if (!ValidStreamForWrite()) return;
+            // There is a bug here I am too lasy to fix.  If the string starts a \n but there was already a \r seen, then
+            // it won't do the next line properly.  I could feed this char by char to Write(char) but this is WAY faster and
+            // I have yet to run into this bug.  Just to watch out for
+            string[] split = value.Split(CoreNewLine); // alwyas returns one element
+            int count = 0;
+            while (count < split.Length)
+            {
+                string s = split[count++];
+                if (!string.IsNullOrEmpty(s)) _line.Append(s);
+                if (count >= split.Length) break;
+                WriteLine();
+            } 
         }
         public override void Flush()
         {
@@ -125,9 +174,30 @@ namespace betteribttest
             _stream = null;
             base.Dispose(disposing);
         }
+
+        public void WriteDefinition(string text, object definition, bool isLocal = true)
+        {
+            Write(text);
+        }
+
+        public void WriteReference(string text, object reference, bool isLocal = false)
+        {
+            Write(text);
+        }
+
+        public void MarkFoldStart(string collapsedText = "...", bool defaultCollapsed = false)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void MarkFoldEnd()
+        {
+            throw new NotImplementedException();
+        }
+
         ~PlainTextWriter()
         {
-            Flush(); // make sure it flushes though I thought Dispose will do this humm
+            Flush(); // make sure it flushes though I think Dispose will do this humm
         }
     }
     public struct TextLocation
@@ -200,7 +270,7 @@ namespace betteribttest
             output.WriteLine(string.Format(format, args));
         }
     }
-    public sealed class PlainTextOutput : ITextOutput
+    public sealed class PlainTextOutput : ITextOutput, IDisposable
     {
         readonly TextWriter writer;
         int indent;
@@ -296,6 +366,42 @@ namespace betteribttest
         void ITextOutput.MarkFoldEnd()
         {
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    writer.Dispose();
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        // ~PlainTextOutput() {
+        //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+        //   Dispose(false);
+        // }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
 
     }
 }

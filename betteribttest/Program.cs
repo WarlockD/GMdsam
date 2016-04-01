@@ -1,8 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.IO;
+using betteribttest.GMAst;
+using betteribttest.FlowAnalysis;
 
 namespace betteribttest
 {
@@ -109,6 +113,7 @@ namespace betteribttest
         [STAThread]
         static void Main()
         {
+
              cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
@@ -117,8 +122,8 @@ namespace betteribttest
 
 
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
-            Decompile newDecompiler = new Decompile(stringList, InstanceList);
-            InstanceList = newDecompiler.InstanceList = cr.objList.Select(x => x.Name).ToList();
+
+            betteribttest.GMAst.ILDecompile ild = new GMAst.ILDecompile(stringList, InstanceList);
             scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
 
 
@@ -136,7 +141,7 @@ namespace betteribttest
             // string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
             // we assume all the patches were done to calls and pushes
 
-            //   string filename_to_test = "gml_Object_OBJ_WRITER_Draw_0";// reall loop test as we got a break in it
+               string filename_to_test = "gml_Object_OBJ_WRITER_Draw_0";// reall loop test as we got a break in it
             // string filename_to_test = "obj_face_alphys_Step"; // this one is good but no shorts
             // string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
             //   string filename_to_test = "SCR_TEXT"; // start with something even simpler
@@ -147,12 +152,14 @@ namespace betteribttest
 
 
             // string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly
-            string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
-            //         string filename_to_test = "SCR_DIRECT"; // simple loop works!
+          //  string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+
+
+             //       string filename_to_test = "SCR_DIRECT"; // simple loop works!
             //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
             //   string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
 
-            Dictionary<ControlFlowNodeOld, Stack<Ast>> stackMap = new Dictionary<ControlFlowNodeOld, Stack<Ast>>();
+
 
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
@@ -169,11 +176,28 @@ namespace betteribttest
                 var graph = betteribttest.FlowAnalysis.ControlFlowGraphBuilder.Build(mb);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-                var loops = betteribttest.FlowAnalysis.ControlStructureDetector.DetectStructure(graph, new System.Threading.CancellationToken());
-                var block2 = betteribttest.FlowAnalysis.AstGraphBuilder.BuildAst(graph, newDecompiler);
                 var export = graph.ExportGraph();
-                block2.SaveToFile(files.ScriptName + "_pre.cpp");
-                export.Save(files.ScriptName + ".dot");
+                export.Save(files.ScriptName + "_raw.dot");
+
+
+
+
+                var list = ild.DecompileInternal(instructions.First.Value, instructions.Last.Value);
+                ILBlock method = new ILBlock();
+                method.Body = list;
+                using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(files.ScriptName + "_preil.txt"))) method.WriteTo(sw);
+                ILAstOptimizer bodyGraph = new ILAstOptimizer();
+                bodyGraph.Optimize(method);
+                using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(files.ScriptName + "_optimize.txt"))) method.WriteTo(sw);
+
+
+               
+
+
+                var loops = betteribttest.FlowAnalysis.ControlStructureDetector.DetectStructure(graph, new System.Threading.CancellationToken());
+                
+              //  block2.SaveToFile(files.ScriptName + "_pre.cpp");
+               
 
 
                 //graph.ExportGraph(files.ScriptName + "_codegraph.txt");

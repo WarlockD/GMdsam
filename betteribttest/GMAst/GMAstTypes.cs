@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -8,8 +11,86 @@ using System.Threading.Tasks;
 
 namespace betteribttest.GMAst
 {
+  
+
     public abstract class ILNode
     {
+        // Wow, why havn't I been using Collection? seriously!
+        public class ILList<T> : Collection<T> where T : ILNode
+        {
+            public ILList() : base()
+            {
+            }
+            static List<T> GetList(IList<T> check, bool copy=false) {
+                ILList<T> testIL = check as ILList<T>;
+                if (testIL != null) return GetList(testIL.Items,true); // evetualy we get to the list:P
+                List<T> testList = check as List<T>;
+                if (testList != null) return copy ? new List<T>(testList) : testList;
+                T[] testArray = check as T[];
+                if (testArray != null) return new List<T>(testArray);
+                throw new Exception("Not supported IList type " + check.GetType().ToString());
+            }
+            public ILList(IList<T> nodes) : base(GetList(nodes)) // make suer we have a clean list
+            {
+                Relink();
+            }
+            // requires some carful thinking
+            void Relink()
+            {
+                ILNode prev = null;
+                foreach (var node in this)
+                {
+                  //  node.Parent = _parent;
+                    node._next = null;
+                    if (prev != null)
+                    {
+                        node._previous = prev;
+                        prev._next = node;
+                    }
+                    else node._previous = null;
+                }
+            }
+            void ClearNode(ILNode node ) { node._next = node._previous = null; }
+            protected override void ClearItems()
+            {
+                foreach (var node in this) ClearNode(node);
+                base.ClearItems();
+            }
+            protected override void RemoveItem(int index)
+            {
+                ClearNode(this[index]);
+                base.RemoveItem(index);
+                Relink();
+            }
+            protected override void InsertItem(int index, T item)
+            {
+                base.InsertItem(index, item);
+                Relink();
+            }
+            protected override void SetItem(int index, T item)
+            {
+                ClearNode(this[index]);
+                base.SetItem(index, item);
+                Relink();
+            }
+        }
+        // The original idea was to use ILList<T> to handle the Parent as well, but you would
+        // need make Inode fake a parrent in the case of condition or loops as you want the expression
+        // and blocks to be the parrent.  You could also make the body have the list? humm
+        // I will think of it latter, its easyer to modify GotoRemover to use the parrent
+        // Howerver ILList DOES make sure that the collection class links the next and previous
+        // lists
+        protected ILNode _parent = null; 
+        ILNode _next = null;
+        ILNode _previous = null;
+        public virtual void SetParent(ILNode node) {
+            _parent = node;
+            foreach (var child in GetChildren()) child.SetParent(this);
+        }
+
+        public ILNode Parent { get { return _parent; } }
+        public ILNode Next { get { return _next; } } 
+        public ILNode Previoius { get { return _previous; } } 
         public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate = null) where T : ILNode
         {
             List<T> result = new List<T>(16);
@@ -29,7 +110,6 @@ namespace betteribttest.GMAst
                     node.AccumulateSelfAndChildrenRecursive(list, predicate);
             }
         }
-
         public virtual IEnumerable<ILNode> GetChildren()
         {
             yield break;
@@ -48,14 +128,18 @@ namespace betteribttest.GMAst
     public class ILBlock : ILNode
     {
         public ILExpression EntryGoto;
-
-        public List<ILNode> Body;
-
+        ILList<ILNode> _body;
+        public IList<ILNode> Body {
+            get { return _body; }
+            set {
+                if (_body != null) _body.Clear();
+                _body = new ILList<ILNode>(value);
+            }
+        }
         public ILBlock(params ILNode[] body)
         {
             this.Body = new List<ILNode>(body);
         }
-
         public ILBlock(List<ILNode> body)
         {
             this.Body = body;
@@ -80,12 +164,80 @@ namespace betteribttest.GMAst
             }
         }
     }
-
+    public class ILValue 
+    {
+        public object Value;
+        public GM_Type Type;
+        public ILValue(bool i) { this.Value = i; Type = GM_Type.Bool; }
+        public ILValue(int i) { this.Value = i; Type = GM_Type.Int; }
+        public ILValue(object i) { this.Value = i; Type = GM_Type.Var; }
+        public ILValue(string i) { this.Value = i; Type = GM_Type.String; }
+        public ILValue(float i) { this.Value = i; Type = GM_Type.Float; }
+        public ILValue(double i) { this.Value = i; Type = GM_Type.Double; }
+        public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
+        public ILValue(short i) { this.Value = i; Type = GM_Type.Short; }
+        public ILValue(object o, GM_Type type) { this.Value = o; Type = type; }
+        public static ILValue FromInstruction(Instruction i)
+        {
+            Debug.Assert(i.Code == GMCode.Push && i.FirstType != GM_Type.Var);
+            switch (i.FirstType)
+            {
+                case GM_Type.Double:
+                case GM_Type.Float:
+                case GM_Type.Int:
+                case GM_Type.Long:
+                case GM_Type.String:
+                    return new ILValue(i.Operand,i.FirstType); 
+                case GM_Type.Short:
+                    return new ILValue(i.Instance);
+                default:
+                    throw new Exception("Bad Type");
+            }
+        }
+        public override string ToString()
+        {
+            return Value.ToString();
+        }
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
+            if (Value.Equals(Value)) return true;
+            ILValue test = obj as ILValue;
+            return test != null && test.Value.Equals(Value);
+        }
+        public override int GetHashCode()
+        {
+            return Value.GetHashCode();
+        }
+    }
+    public static class ILNode_Helpers
+    {
+        public static bool TryParse(this ILValue node, out int value)
+        {
+            ILValue valueNode = node as ILValue;
+            if(valueNode != null && ( valueNode.Type == GM_Type.Short || valueNode.Type == GM_Type.Int))
+            {
+                value = valueNode.Type == GM_Type.Short ? (short)valueNode.Value : (int)valueNode.Value;
+                return true;
+            }
+            value = 0;
+            return false;
+        }
+    }
     public class ILBasicBlock : ILNode
     {
         /// <remarks> Body has to start with a label and end with unconditional control flow </remarks>
-        public List<ILNode> Body = new List<ILNode>();
-
+        ILList<ILNode> _body = new ILList<ILNode>();
+        public IList<ILNode> Body
+        {
+            get { return _body; }
+            set
+            {
+                _body.Clear();
+                _body = new ILList<ILNode>(value);
+            }
+        }
         public override IEnumerable<ILNode> GetChildren()
         {
             return this.Body;
@@ -101,26 +253,60 @@ namespace betteribttest.GMAst
         }
     }
 
-    public class ILLabel : ILNode
+    public class ILLabel : ILNode, IEquatable<ILLabel>
     {
         public string Name;
-
+        public Label OldLabel=null;
+        public bool isExit = false;
         public override void WriteTo(ITextOutput output)
         {
+
             output.WriteDefinition(Name + ":", this);
+        }
+
+        public bool Equals(ILLabel other)
+        {
+            return other.Name == Name;
+        }
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
+            ILLabel test = obj as ILLabel;
+            return test != null && Equals(test);
+        }
+        public override int GetHashCode()
+        {
+            return Name.GetHashCode();
         }
     }
     
 
     public class ILVariable
     {
+        // Side note, we "could" make this a node
+        // but in reality this is isolated 
+        // Unless I ever get a type/var anyisys system up, its going to stay like this
         public string Name;
-        public bool IsGenerated;
-
-
+        public ILExpression Instance=null; // We don't NEED this
+        public string InstanceName;
+        public ILExpression Index = null; // not null if we have an index
         public override string ToString()
         {
-            return Name;
+            string ret = InstanceName + "." + Name;
+            if (Index != null) ret += '[' + Index.ToString() + ']';
+            return ret;
+        }
+        public override bool Equals(object obj)
+        {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
+            ILVariable test = obj as ILVariable;
+            return test != null && test.Name == Name && test.InstanceName == InstanceName;
+        }
+        public override int GetHashCode()
+        {
+            return Name.GetHashCode() ^ InstanceName.GetHashCode();
         }
     }
 
@@ -194,22 +380,21 @@ namespace betteribttest.GMAst
             return result;
         }
     }
-    public enum ILCode
-    {
-        Assign,
-        Push,
-        Call,
-        Expression,
-        Branch,
-        BranchTrue,
-        BranchFalse
-    }
 
     public class ILExpression : ILNode
     {
-        public ILCode Code { get; set; }
+        public GMCode Code { get; set; }
         public object Operand { get; set; }
-        public List<ILExpression> Arguments { get; set; }
+        ILList<ILExpression> _args;
+        public IList<ILExpression> Arguments
+        {
+            get { return _args; }
+            set
+            {
+                _args.Clear();
+                _args = new ILList<ILExpression>(value);
+            }
+        }
         // Mapping to the original instructions (useful for debugging)
         public List<ILRange> ILRanges { get; set; }
 
@@ -218,25 +403,25 @@ namespace betteribttest.GMAst
 
         public static readonly object AnyOperand = new object();
 
-        public ILExpression(ILCode code, object operand, List<ILExpression> args)
+        public ILExpression(GMCode code, object operand, List<ILExpression> args)
         {
             if (operand is ILExpression)
                 throw new ArgumentException("operand");
 
             this.Code = code;
             this.Operand = operand;
-            this.Arguments = new List<ILExpression>(args);
+            this._args = new ILList<ILExpression>(args);
             this.ILRanges = new List<ILRange>(1);
         }
 
-        public ILExpression(ILCode code, object operand, params ILExpression[] args)
+        public ILExpression(GMCode code, object operand, params ILExpression[] args)
         {
             if (operand is ILExpression)
                 throw new ArgumentException("operand");
 
             this.Code = code;
             this.Operand = operand;
-            this.Arguments = new List<ILExpression>(args);
+            this._args = new ILList<ILExpression>(args);
             this.ILRanges = new List<ILRange>(1);
         }
 
@@ -306,38 +491,105 @@ namespace betteribttest.GMAst
             }
             return first;
         }
+        static bool CheckParm(ILExpression node)
+        {
+            return node.Code != GMCode.Push && node.Code != GMCode.Call;
+        }
         public override void WriteTo(ITextOutput output)
         {
-            switch (Code)
+            int count = Code.getOpTreeCount(); // not a leaf
+            if (count == 1)
             {
-                case ILCode.Call:
-                    output.Write(((ILVariable)Operand).Name);
-                    ArgumentWriteTo(output);
-                    break;
-                case ILCode.Assign:
-                    output.Write(((ILVariable)Operand).Name);
-                    output.Write(" = ");
-                    Arguments.First().WriteTo(output);
-                    break;
-                case ILCode.Push:
-                    output.Write("Push ");
-                    output.Write(Operand.ToString()); // generic, should cover all cases
-                    break;
-                case ILCode.Expression:
-                    output.Write(Operand.ToString()); // generic, should cover all cases
-                    break;
-                case ILCode.Branch:
-                    output.Write("Branch ");
-                    OperandWriteTo(output);
-                    break;
-                case ILCode.BranchFalse:
-                    output.Write("BranchFalse ");
-                    OperandWriteTo(output);
-                    break;
-                case ILCode.BranchTrue:
-                    output.Write("BranchTrue ");
-                    OperandWriteTo(output);
-                    break;
+                bool needParm = CheckParm(Arguments[0]);
+                output.Write(Code.getOpTreeString());
+                if (needParm) output.Write('(');
+                Arguments[0].WriteTo(output);
+                if (needParm) output.Write(')');
+            }
+            else if (count == 2)
+            {
+                bool needParm = CheckParm(Arguments[0]);
+                if (needParm) output.Write('(');
+                Arguments[0].WriteTo(output);
+                if (needParm) output.Write(')');
+                output.Write(' ');
+                output.Write(Code.getOpTreeString());
+                output.Write(' ');
+                needParm = CheckParm(Arguments[1]);
+                if (needParm) output.Write('(');
+                Arguments[1].WriteTo(output);
+                if (needParm) output.Write(')');
+            }
+            else
+            {
+
+                switch (Code)
+                {
+                    case GMCode.Var:
+                        output.Write(Operand.ToString()); // generic, should cover all cases
+                        break;
+                    case GMCode.Call:
+                        output.Write(Operand as string);
+                        ArgumentWriteTo(output);
+                        break;
+                    case GMCode.Pop:
+                        output.Write(((ILVariable)Operand).Name);
+                        output.Write(" = ");
+                        Arguments.First().WriteTo(output);
+                        break;
+                    case GMCode.Push:
+                     //   output.Write("Push(");
+                        output.Write(Operand.ToString()); // generic, should cover all cases
+                      //  output.Write(')');
+                        break;
+                    case GMCode.Dup:
+                        output.Write("Dup ");
+                        break;
+                    case GMCode.B: // this is where the magic happens...woooooooooo
+                        output.Write("Goto ");
+                        output.Write((Operand as ILLabel).Name);
+                        break;
+                    case GMCode.Bf:
+                        if (Arguments.Count > 0)
+                        {
+                            output.Write("Push(");
+                            Arguments[0].WriteTo(output);
+                            output.Write("); ");
+                        }
+                        output.Write("BranchIfFalse ");
+                        output.Write((Operand as ILLabel).Name);
+                        break;
+                    case GMCode.Bt:
+                        if (Arguments.Count > 0)
+                        {
+                            output.Write("Push(");
+                            Arguments[0].WriteTo(output);
+                            output.Write("); ");
+                        }
+                        output.Write("BranchIfTrue ");
+                        output.Write((Operand as ILLabel).Name);
+                        break;
+                    case GMCode.Pushenv:
+                        output.Write("PushEnviroment ");
+                        Arguments[0].WriteTo(output);
+                        output.Write(" : ");
+                        output.Write(Operand.ToString());
+                        break;
+                    case GMCode.Popenv:
+                        output.Write("PopEnviroment ");
+                        Arguments[0].WriteTo(output);
+                        output.Write(" : ");
+                        output.Write(Operand.ToString());
+                        break;
+                    case GMCode.Exit:
+                        output.Write("Exit");
+                        break;
+                    case GMCode.Ret:
+                        output.Write("Return");
+                        break;
+                    default:
+                        throw new Exception("Not Implmented! ugh");
+                }
             }
         }
     }
@@ -389,18 +641,36 @@ namespace betteribttest.GMAst
         {
             output.Write("if (");
             Condition.WriteTo(output);
-            output.WriteLine(") {");
-            output.Indent();
-            TrueBlock.WriteTo(output);
-            output.Unindent();
-            output.Write("}");
+            if (TrueBlock.Body.Count != 1)
+            {
+                output.WriteLine(") {");
+                output.Indent();
+                TrueBlock.WriteTo(output);
+                output.Unindent();
+                output.Write("}");
+            } else
+            {
+                output.Write(") ");
+                TrueBlock.Body[0].WriteTo(output);
+                output.WriteLine(";");
+            }
+            
             if (FalseBlock != null)
             {
-                output.WriteLine(" else {");
-                output.Indent();
-                FalseBlock.WriteTo(output);
-                output.Unindent();
-                output.WriteLine("}");
+                if (FalseBlock.Body.Count != 1)
+                {
+                    output.WriteLine(" else {");
+                    output.Indent();
+                    FalseBlock.WriteTo(output);
+                    output.Unindent();
+                    output.Write("}");
+                }
+                else
+                {
+                    output.Write("else ");
+                    FalseBlock.Body[0].WriteTo(output);
+                    output.WriteLine(";");
+                }
             }
         }
     }
@@ -477,6 +747,78 @@ namespace betteribttest.GMAst
             this.BodyBlock.WriteTo(output);
             output.Unindent();
             output.WriteLine("}");
+        }
+    }
+
+
+    public class ILTryCatchBlock : ILNode
+    {
+        public class CatchBlock : ILBlock
+        {
+            public ILVariable ExceptionVariable;
+
+            public override void WriteTo(ITextOutput output)
+            {
+                output.Write("catch ");
+                if (ExceptionVariable != null)
+                {
+                    output.Write(' ');
+                    output.Write(ExceptionVariable.Name);
+                }
+                output.WriteLine(" {");
+                output.Indent();
+                base.WriteTo(output);
+                output.Unindent();
+                output.WriteLine("}");
+            }
+        }
+
+        public ILBlock TryBlock;
+        public List<CatchBlock> CatchBlocks;
+        public ILBlock FinallyBlock;
+        public ILBlock FaultBlock;
+
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            if (this.TryBlock != null)
+                yield return this.TryBlock;
+            foreach (var catchBlock in this.CatchBlocks)
+            {
+                yield return catchBlock;
+            }
+            if (this.FaultBlock != null)
+                yield return this.FaultBlock;
+            if (this.FinallyBlock != null)
+                yield return this.FinallyBlock;
+        }
+
+        public override void WriteTo(ITextOutput output)
+        {
+            output.WriteLine(".try {");
+            output.Indent();
+            TryBlock.WriteTo(output);
+            output.Unindent();
+            output.WriteLine("}");
+            foreach (CatchBlock block in CatchBlocks)
+            {
+                block.WriteTo(output);
+            }
+            if (FaultBlock != null)
+            {
+                output.WriteLine("fault {");
+                output.Indent();
+                FaultBlock.WriteTo(output);
+                output.Unindent();
+                output.WriteLine("}");
+            }
+            if (FinallyBlock != null)
+            {
+                output.WriteLine("finally {");
+                output.Indent();
+                FinallyBlock.WriteTo(output);
+                output.Unindent();
+                output.WriteLine("}");
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 
 namespace betteribttest.FlowAnalysis
 {
+
 	/// <summary>
 	/// Constructs the Control Flow Graph from a Cecil method body.
 	/// </summary>
@@ -19,7 +20,7 @@ namespace betteribttest.FlowAnalysis
         // false means that the endfinally instruction will jump to any of the leave targets (EndFinally edge type).
         // true means that a copy of the whole finally block is created for each leave target. In this case, each endfinally node will be connected with the leave
         //   target using a normal edge.
-        bool copyFinallyBlocks = false;
+
 
         MethodBody methodBody;
         int[] offsets; // array index = instruction index; value = IL offset
@@ -27,7 +28,6 @@ namespace betteribttest.FlowAnalysis
         List<ControlFlowNode> nodes = new List<ControlFlowNode>();
         ControlFlowNode entryPoint;
         ControlFlowNode regularExit;
-        ControlFlowNode exceptionalExit;
 
         private ControlFlowGraphBuilder(MethodBody methodBody)
         {
