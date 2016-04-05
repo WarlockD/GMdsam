@@ -67,7 +67,8 @@ namespace betteribttest
         LogicOr = 0xf5,
         LoopContinue = 0xf6,
         LoopOrSwitchBreak = 0xf7,
-        Switch = 0xf9
+        Switch = 0xf9,
+        Leave = 0xfa, // used to leave a popenv satment when not at end
     }
     public static class GMCodeUtil
     {
@@ -330,7 +331,7 @@ namespace betteribttest
         }
         const uint breakPopenvOpcode = (uint)(((uint)(GMCode.Popenv)) << 24 | 0x00F00000);
         // this fixes all the instructions, and branches with labels so we can track them all
-        public static void ResolveCalls(LinkedList<Instruction> list)
+        public static void ResolveCalls(Instruction.Instructions list)
         {
             HashSet<Label> allLabels = new HashSet<Label>();
             foreach (var i in list)
@@ -338,22 +339,19 @@ namespace betteribttest
                 if (i.Label != null) allLabels.Add(i.Label);
                 Label l = i.Operand as Label;
                 if (l != null) allLabels.Add(l);
-            }
+            } // makes sure there are no label duplicates when we do this
             foreach (var l in allLabels) ResolveCalls(l, list);
         }
-        public static void ResolveCalls(Label l, LinkedList<Instruction> list)
+        public static void ResolveCalls(Label l, Instruction.Instructions list)
         {
             var fRefs = new List<Instruction>();
             var bRefs = new List<Instruction>();
             var Refs = new List<Instruction>();
-            var node = list.First;
             bool behind = true;
-            while (node != null)
-            {
-                Instruction i = node.Value;
+            foreach(var i in list) { 
                 if (i.Address == l.Address) {
                     i.Label = l;                    // Link the label, even if it wasn't there before
-                    l.InstructionOrigin = node.Value;     // Link the instruction its attached too
+                    l.InstructionOrigin = i;     // Link the instruction its attached too
                     behind = false;                 // tell the system to start to ad to the forward list
                 } else {
                     if (i.Code.isBranch())// || i.GMCode == GMCode.Pushenv || (i.GMCode == GMCode.Popenv && i.OpCode != breakPopenvOpcode))// || inst.GMCode == GMCode.Pushenv || inst.GMCode == GMCode.Popenv) // pushenv also has a branch 
@@ -362,13 +360,12 @@ namespace betteribttest
                         target += i.Address;
                         if (target == l.Address)
                         {
-                            if (behind) bRefs.Add(node.Value); else fRefs.Add(node.Value);
+                            if (behind) bRefs.Add(i); else fRefs.Add(i);
                             i.Operand = l; // make sure the label is in the operand even if it wasnt before
-                            Refs.Add(node.Value);
+                            Refs.Add(i);
                         }
                     }
                 }
-                node = node.Next;
             }
             l._forwardRefrences = fRefs;
             l._backardRefrences = bRefs;
@@ -422,16 +419,13 @@ namespace betteribttest
         public List<EnviromentHandler> Enviroments;
     }
 
-    public sealed class Instruction : GMAst.ILNode, IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>
+    public sealed class Instruction : IComparable<Label>, IComparable<Instruction>, IEquatable<Instruction>
     {
-        // Internal next instruction, or previous instruction of code 
-        // not sure if I want to expose it or not
-        LinkedListNode<Instruction> _link = null;
-        // We don't want to expose the LinkList in case I get an idea to modify it
-        public Instruction First {  get { return _link.List.First.Value; } }
-        public Instruction Last { get { return _link.List.Last.Value; } }
-        public Instruction Next {  get { return _link.Next == null ? null : _link.Next.Value; } }
-        public Instruction Prev {  get { return _link.Previous == null ? null : _link.Previous.Value; } }
+        // link the instructions, makes it easier to process
+        Instruction _next;
+        Instruction _previous;
+        public Instruction Next { get { return _next; } }
+        public Instruction Previous { get { return _previous; } }
 
         public IEnumerable<Instruction> RangeFrom(Instruction to)
         {
@@ -762,73 +756,106 @@ namespace betteribttest
             wr.Write(line.ToString());
             return 0;
         }
-        public class Instructions : LinkedList<Instruction>, ITextOut
+        public class Instructions : Collection<Instruction>, ITextOut
         {
-
-            public SortedDictionary<int, Label> labels = new SortedDictionary<int, Label>();
-            public SortedList<int, LinkedListNode<Instruction>> list = new SortedList<int, LinkedListNode<Instruction>>();
-            public LinkedList<Instruction> linkedList = new LinkedList<Instruction>();
-            public Instructions() : base() { }
-            public LinkedListNode<Instruction> MatchFrom(LinkedListNode<Instruction> start, Predicate<Instruction> match)
+            class InstructionOffsetCollection : KeyedCollection<int, Instruction>
             {
-                while (start != null) if (match(start.Value)) return start;
-                return null;
-            }
-            public IEnumerable<Instruction> MatchMany(Predicate<Instruction> match)
-            {
-                var start = First;
-                while (start != null) if (match(start.Value)) yield return start.Value;
-            }
-            public Instruction MatchOne(Predicate<Instruction> match)
-            {
-                var start = MatchFrom(First, match);
-                return start != null ? start.Value : null;
-            }
-
-            public IEnumerable<LinkedListNode<Instruction>> MatchMany(params Predicate<Instruction>[] toMatch)
-            {
-                var start = First;
-                List<Instruction> ret = new List<Instruction>();
-                while (start != null)
+                protected override int GetKeyForItem(Instruction item)
                 {
-                    var match_node = start;
-                    var testNode = start;
-                    ret.Clear();
-                    foreach (var match in toMatch)
+                    // In this example, the key is the part number.
+                    return item.Address;
+                }
+            }
+            bool _dirty = false;
+            InstructionOffsetCollection _fromOffset = new InstructionOffsetCollection();
+            public Instruction atOffset(int i)
+            {
+                return _fromOffset[i];
+            }
+            public Instructions() : base()
+            {
+            }
+            public Instructions(List<Instruction> list) : base(list)
+            {
+                Instruction prev = null;
+                foreach (var i in this)
+                {
+                    //  node.Parent = _parent;
+                    i._next = null;
+                    if (prev != null)
                     {
-                        if (testNode == null) yield break; // we are at the end of the list
-                        if (!match(testNode.Value)) break; 
-                        ret.Add(testNode.Value);
-                        testNode = testNode.Next;
+                        i._previous = prev;
+                        prev._next = i;
                     }
-                    start = testNode.Next; // get the next node in case we delete the previous nodes
-                    if (ret.Count == toMatch.Length) yield return match_node;
+                    else i._previous = null;
                 }
             }
-            public int RemoveAll(Predicate<Instruction> match)
+            void CheckSorting(Instruction i)
             {
-                if (list == null)
+                if (i._previous != null && i._previous.Address >= i.Address) throw new Exception("Previous addres to big");
+                if(i._next != null && i._next.Address <= i.Address) throw new Exception("Next addres to big");
+            }
+            protected override void ClearItems()
+            {
+                foreach (var item in this) item._next = item._previous = null;
+                _fromOffset.Clear();
+                base.ClearItems();
+            }
+            void Unlink(Instruction i)
+            {
+                if (i.Previous != null) i._previous._next = i._next;
+                if (i.Next != null) i._next._previous = i._previous;
+                _fromOffset.Remove(i);
+                i._next._previous = null;
+            }
+            void LinkAfter(Instruction before, Instruction item)
+            {
+                item._next = item._previous = null;
+                if (_fromOffset.Contains(item)) throw new Exception("Instruction Already Defined '" + item.Label.ToString() + "'");
+                _fromOffset.Add(item);
+                if (before == null) return; // no link in first item
+                if (before._next == null) // this case shouldn't happen as index== this.Count should catch it.  But JUSt in case
                 {
-                    throw new ArgumentNullException("list");
+                    item._next = null;
+                    item._previous = before;
+                    before._next = item;
                 }
-                if (match == null)
+                else
+                { // order is always important
+                    item._previous = before;
+                    item._next = before._next;
+                    before._next._previous = item;
+                    before._next = item;
+                }
+            }
+            protected override void RemoveItem(int index)
+            {
+                Unlink(this[index]);
+                base.RemoveItem(index);
+            }
+            protected override void InsertItem(int index, Instruction item)
+            {
+                Instruction before = null;
+                if(this.Count > 0)
                 {
-                    throw new ArgumentNullException("match");
+                    if (index == this.Count) // at the end
+                        before = this[this.Count - 1];
+                    else
+                        before = this[index];
                 }
-                var count = 0;
-                var node = First;
-                
-                while (node != null)
-                {
-                    var next = node.Next;
-                    if (match(node.Value))
-                    {
-                        Remove(node);
-                        count++;
-                    }
-                    node = next;
-                }
-                return count;
+                LinkAfter(before, item);
+                CheckSorting(item);
+                base.InsertItem(index, item);
+            }
+            protected override void SetItem(int index, Instruction item)
+            {
+                var old = this[index]; // trickery!
+                if (object.ReferenceEquals(item, old)) return; // don't do anything 
+                // check if we are adding an instruction that has the old label
+                LinkAfter(old, item); // insert it FIRST
+                Unlink(old); // THEN clear
+                CheckSorting(item);
+                base.SetItem(index, item);
             }
 
             public int WriteTextLine(TextWriter wr)
@@ -863,17 +890,16 @@ namespace betteribttest
         // first pass simple create form a stream
         public static void ReplaceShortCircuitInstructionsAnds(Instructions input)
         {
-            if (input.First == null) return;
-            var node = input.First;
+            var node = input.First();
             do
             {
-                Instruction i = node.Value;
+                Instruction i = node;
                 Label label = i.Label;
                 Label target = i.Operand as Label;
                 if (i.Code == GMCode.Push && (i.OpCode & 0xFFFF) == 0)
                 {
                     // We MIGHT have a short, check the statment before and after
-                    Instruction before = i.Prev;
+                    Instruction before = i.Previous;
                     Instruction after = i.Next;
                     if(before != null && before.Code == GMCode.B && before.Operand == after.Label && after.Code == GMCode.Bf) // If it skips the 0 push and goes to the branch
                     { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
@@ -893,7 +919,7 @@ namespace betteribttest
                         input.Remove(i);
                         input.Remove(before);
                         after.Label = null;
-                        node = input.First;
+                        node = input.First();
                         ResolveLabels(input); // fix this
                         continue;
                     }
@@ -903,17 +929,16 @@ namespace betteribttest
         }
         public static void ReplaceShortCircuitInstructionsOrs(Instructions input)
         {
-            if (input.First == null) return;
-            var node = input.First;
+            var node = input.First();
             do
             {
-                Instruction i = node.Value;
+                Instruction i = node;
                 Label label = i.Label;
                 Label target = i.Operand as Label;
                 if (i.Code == GMCode.Push && (i.OpCode & 0xFFFF) == 1) // push.e 1
                 {
                     // We MIGHT have a short, check the statment before and after
-                    Instruction before = i.Prev;
+                    Instruction before = i.Previous;
                     Instruction after = i.Next;
                     if (before != null && before.Code == GMCode.B && before.Operand == after.Label && after.Code == GMCode.Bf) // This is still the same for ors
                     { // We have a short, lets unoptimize this thing so the control graph dosn't go meh
@@ -934,7 +959,7 @@ namespace betteribttest
                         input.Remove(i);
                         input.Remove(before);
                         after.Label = null;
-                        node = input.First;
+                        node = input.First();
                         ResolveLabels(input); // fix this
                         continue;
                     }
@@ -945,35 +970,61 @@ namespace betteribttest
         public static Instructions Create(System.IO.BinaryReader r, List<string> StringIndex, List<string> InstanceList=null)
         {
             r.BaseStream.Position = 0;
+            long lastpc = r.BaseStream.Length / 4;
             Instructions instructions = new Instructions();
             int pc = 0;
             List<Label> LabelsOutsideOfFuntion = new List<Label>();
-
-            long lastpc = r.BaseStream.Length / 4;
+            
+            Dictionary<int, Label> labels = new Dictionary<int, Label>();
+            Func<int, Label> GetLabel = (int i) =>
+            {
+                Label l;
+                if (!labels.TryGetValue(i, out l)) labels[i] = new Label(i, i > lastpc);
+                return l;
+            };
+           
             while (r.BaseStream.Length > r.BaseStream.Position)
             {
                 Instruction inst = new Instruction(pc, r);
                 inst.InstanceLookup = InstanceList; // hack I know but I want prity print
                 inst.StringLookup = StringIndex; 
-                instructions.AddLast(inst);
+                instructions.Add(inst);
                 System.Diagnostics.Debug.Assert(inst.Address == pc);
                 if (inst.Code.isBranch())// || inst.Code == GMCode.Pushenv || inst.Code == GMCode.Popenv) // pushenv also has a branch 
                 { 
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
                     target += pc;
-                    Label l;
-                    if (!instructions.labels.TryGetValue(target, out l))
+                    inst.Operand = GetLabel(target);
+                } else if(inst.Code == GMCode.Pushenv)
+                {
+                    int target = GMCodeUtil.getBranchOffset(inst.OpCode);
+                    target += pc+1;
+                    inst.Operand = GetLabel(target);
+                }
+                else if (inst.Code == GMCode.Popenv)
+                {
+                    int target = GMCodeUtil.getBranchOffset(inst.OpCode);
+                    if(target == 0) // its a popbreak so we have to find the previous push
                     {
-                        //  l = new Label(target, target >= lastpc);
-                        l = new Label(target);
-                        instructions.labels.Add(target, l);
-                    //    if (target >= lastpc) LabelsOutsideOfFuntion.Add(l);
+                        inst.Operand = null;
+                        foreach (var pushI in instructions.Reverse())
+                        {
+                            if(pushI.Code == GMCode.Pushenv)
+                            {
+                                inst.Operand = pushI;
+                                break;
+                            }
+                        }
+                        Debug.Assert(inst.Operand != null);
+                    } else
+                    {
+                        target += pc - 1; // points to the instruction
+                        inst.Operand = instructions.atOffset(target);
                     }
-                    inst.Operand = l;
                 }
                 pc += inst.Size;
             }
-            
+           
             /*
             LabelsOutsideOfFuntion.Sort();
             foreach (var l in LabelsOutsideOfFuntion)
@@ -984,14 +1035,9 @@ namespace betteribttest
             }
             */
             // Link all the instructions together, mabye I should just include linkList
-            var node = instructions.First;
-            while(node != null)
-            {
-                node.Value._link = node;
-                node = node.Next;
-            }
 
-            if (instructions.labels.Count > 0) foreach (var l in instructions.labels) Label.ResolveCalls(l.Value, instructions);
+
+            if (labels.Count > 0) foreach (var l in labels) Label.ResolveCalls(l.Value, instructions);
            
             // now fix string indexes 
             foreach (var i in instructions)
@@ -1053,7 +1099,7 @@ namespace betteribttest
             return other.Address == Address;
         }
 
-        public override void WriteTo(ITextOutput output)
+        public  void WriteTo(ITextOutput output)
         {
             WriteTextLine(output);
         }

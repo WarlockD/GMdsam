@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace betteribttest.GMAst
 {
-  
+
 
     public abstract class ILNode
     {
@@ -21,9 +21,10 @@ namespace betteribttest.GMAst
             public ILList() : base()
             {
             }
-            static List<T> GetList(IList<T> check, bool copy=false) {
+            static List<T> GetList(IList<T> check, bool copy = false)
+            {
                 ILList<T> testIL = check as ILList<T>;
-                if (testIL != null) return GetList(testIL.Items,true); // evetualy we get to the list:P
+                if (testIL != null) return GetList(testIL.Items, true); // evetualy we get to the list:P
                 List<T> testList = check as List<T>;
                 if (testList != null) return copy ? new List<T>(testList) : testList;
                 T[] testArray = check as T[];
@@ -40,7 +41,7 @@ namespace betteribttest.GMAst
                 ILNode prev = null;
                 foreach (var node in this)
                 {
-                  //  node.Parent = _parent;
+                    //  node.Parent = _parent;
                     node._next = null;
                     if (prev != null)
                     {
@@ -50,7 +51,7 @@ namespace betteribttest.GMAst
                     else node._previous = null;
                 }
             }
-            void ClearNode(ILNode node ) { node._next = node._previous = null; }
+            void ClearNode(ILNode node) { node._next = node._previous = null; }
             protected override void ClearItems()
             {
                 foreach (var node in this) ClearNode(node);
@@ -80,17 +81,18 @@ namespace betteribttest.GMAst
         // I will think of it latter, its easyer to modify GotoRemover to use the parrent
         // Howerver ILList DOES make sure that the collection class links the next and previous
         // lists
-        protected ILNode _parent = null; 
+        protected ILNode _parent = null;
         ILNode _next = null;
         ILNode _previous = null;
-        public virtual void SetParent(ILNode node) {
+        public virtual void SetParent(ILNode node)
+        {
             _parent = node;
             foreach (var child in GetChildren()) child.SetParent(this);
         }
 
         public ILNode Parent { get { return _parent; } }
-        public ILNode Next { get { return _next; } } 
-        public ILNode Previoius { get { return _previous; } } 
+        public ILNode Next { get { return _next; } }
+        public ILNode Previoius { get { return _previous; } }
         public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate = null) where T : ILNode
         {
             List<T> result = new List<T>(16);
@@ -129,9 +131,11 @@ namespace betteribttest.GMAst
     {
         public ILExpression EntryGoto;
         ILList<ILNode> _body;
-        public IList<ILNode> Body {
+        public IList<ILNode> Body
+        {
             get { return _body; }
-            set {
+            set
+            {
                 if (_body != null) _body.Clear();
                 _body = new ILList<ILNode>(value);
             }
@@ -160,11 +164,12 @@ namespace betteribttest.GMAst
             foreach (ILNode child in this.GetChildren())
             {
                 child.WriteTo(output);
+                output.Write(';');
                 output.WriteLine();
             }
         }
     }
-    public class ILValue 
+    public class ILValue
     {
         public object Value;
         public GM_Type Type;
@@ -187,7 +192,7 @@ namespace betteribttest.GMAst
                 case GM_Type.Int:
                 case GM_Type.Long:
                 case GM_Type.String:
-                    return new ILValue(i.Operand,i.FirstType); 
+                    return new ILValue(i.Operand, i.FirstType);
                 case GM_Type.Short:
                     return new ILValue(i.Instance);
                 default:
@@ -216,7 +221,7 @@ namespace betteribttest.GMAst
         public static bool TryParse(this ILValue node, out int value)
         {
             ILValue valueNode = node as ILValue;
-            if(valueNode != null && ( valueNode.Type == GM_Type.Short || valueNode.Type == GM_Type.Int))
+            if (valueNode != null && (valueNode.Type == GM_Type.Short || valueNode.Type == GM_Type.Int))
             {
                 value = valueNode.Type == GM_Type.Short ? (short)valueNode.Value : (int)valueNode.Value;
                 return true;
@@ -248,6 +253,7 @@ namespace betteribttest.GMAst
             foreach (ILNode child in this.GetChildren())
             {
                 child.WriteTo(output);
+                output.Write(';');
                 output.WriteLine();
             }
         }
@@ -256,7 +262,7 @@ namespace betteribttest.GMAst
     public class ILLabel : ILNode, IEquatable<ILLabel>
     {
         public string Name;
-        public Label OldLabel=null;
+        public Label OldLabel = null;
         public bool isExit = false;
         public override void WriteTo(ITextOutput output)
         {
@@ -280,7 +286,7 @@ namespace betteribttest.GMAst
             return Name.GetHashCode();
         }
     }
-    
+
 
     public class ILVariable
     {
@@ -288,7 +294,7 @@ namespace betteribttest.GMAst
         // but in reality this is isolated 
         // Unless I ever get a type/var anyisys system up, its going to stay like this
         public string Name;
-        public ILExpression Instance=null; // We don't NEED this
+        public ILExpression Instance = null; // We don't NEED this
         public string InstanceName;
         public ILExpression Index = null; // not null if we have an index
         public override string ToString()
@@ -493,7 +499,14 @@ namespace betteribttest.GMAst
         }
         static bool CheckParm(ILExpression node)
         {
-            return node.Code != GMCode.Push && node.Code != GMCode.Call;
+            switch (node.Code)
+            {
+                case GMCode.Push:
+                case GMCode.Call:
+                    return false;
+                default:
+                    return true;
+            }
         }
         public override void WriteTo(ITextOutput output)
         {
@@ -538,15 +551,15 @@ namespace betteribttest.GMAst
                         Arguments.First().WriteTo(output);
                         break;
                     case GMCode.Push:
-                     //   output.Write("Push(");
+                        //   output.Write("Push(");
                         output.Write(Operand.ToString()); // generic, should cover all cases
-                      //  output.Write(')');
+                                                          //  output.Write(')');
                         break;
                     case GMCode.Dup:
                         output.Write("Dup ");
                         break;
                     case GMCode.B: // this is where the magic happens...woooooooooo
-                        output.Write("Goto ");
+                        output.Write("goto ");
                         output.Write((Operand as ILLabel).Name);
                         break;
                     case GMCode.Bf:
@@ -554,7 +567,7 @@ namespace betteribttest.GMAst
                         {
                             output.Write("Push(");
                             Arguments[0].WriteTo(output);
-                            output.Write("); ");
+                            output.Write(")");
                         }
                         output.Write("BranchIfFalse ");
                         output.Write((Operand as ILLabel).Name);
@@ -564,28 +577,35 @@ namespace betteribttest.GMAst
                         {
                             output.Write("Push(");
                             Arguments[0].WriteTo(output);
-                            output.Write("); ");
+                            output.Write(")");
                         }
                         output.Write("BranchIfTrue ");
                         output.Write((Operand as ILLabel).Name);
                         break;
                     case GMCode.Pushenv:
-                        output.Write("PushEnviroment ");
+                        output.Write("PushEnviroment(");
                         Arguments[0].WriteTo(output);
-                        output.Write(" : ");
+                        output.Write(") : ");
                         output.Write(Operand.ToString());
                         break;
                     case GMCode.Popenv:
-                        output.Write("PopEnviroment ");
+                        output.Write("PopEnviroment(");
                         Arguments[0].WriteTo(output);
-                        output.Write(" : ");
+                        output.Write("): ");
                         output.Write(Operand.ToString());
                         break;
-                    case GMCode.Exit:
-                        output.Write("Exit");
-                        break;
+                    case GMCode.Exit: // exit without
+                        output.Write("return; // exit");
+                        return;
                     case GMCode.Ret:
-                        output.Write("Return");
+                        output.Write("return ");
+                        Arguments[0].WriteTo(output);
+                        break;
+                    case GMCode.LoopOrSwitchBreak:
+                        output.Write("break");
+                        break;
+                    case GMCode.LoopContinue:
+                        output.Write("continue");
                         break;
                     default:
                         throw new Exception("Not Implmented! ugh");
@@ -610,7 +630,7 @@ namespace betteribttest.GMAst
         public override void WriteTo(ITextOutput output)
         {
             output.WriteLine("");
-            output.Write("loop (");
+            output.Write("while (");
             if (this.Condition != null)
                 this.Condition.WriteTo(output);
             output.WriteLine(") {");
@@ -648,13 +668,13 @@ namespace betteribttest.GMAst
                 TrueBlock.WriteTo(output);
                 output.Unindent();
                 output.Write("}");
-            } else
+            }
+            else
             {
                 output.Write(") ");
                 TrueBlock.Body[0].WriteTo(output);
-                output.WriteLine(";");
             }
-            
+
             if (FalseBlock != null)
             {
                 if (FalseBlock.Body.Count != 1)
@@ -669,7 +689,6 @@ namespace betteribttest.GMAst
                 {
                     output.Write("else ");
                     FalseBlock.Body[0].WriteTo(output);
-                    output.WriteLine(";");
                 }
             }
         }
@@ -729,13 +748,13 @@ namespace betteribttest.GMAst
 
     public class ILWithStatement : ILNode
     {
-        public ILBlock BodyBlock;
+        public ILBlock Body = new ILBlock();
         public ILExpression Enviroment;
         public override IEnumerable<ILNode> GetChildren()
         {
-            if(Enviroment != null) yield return Enviroment;
-            if (this.BodyBlock != null)
-                yield return this.BodyBlock;
+           // if (Enviroment != null) yield return Enviroment;
+            if (this.Body != null)
+                yield return this.Body;
         }
 
         public override void WriteTo(ITextOutput output)
@@ -744,9 +763,9 @@ namespace betteribttest.GMAst
             Enviroment.WriteTo(output);
             output.WriteLine(") {");
             output.Indent();
-            this.BodyBlock.WriteTo(output);
+            this.Body.WriteTo(output);
             output.Unindent();
-            output.WriteLine("}");
+            output.Write("}");
         }
     }
 
@@ -798,7 +817,7 @@ namespace betteribttest.GMAst
             output.Indent();
             TryBlock.WriteTo(output);
             output.Unindent();
-            output.WriteLine("}");
+            output.Write("}");
             foreach (CatchBlock block in CatchBlocks)
             {
                 block.WriteTo(output);
@@ -809,7 +828,7 @@ namespace betteribttest.GMAst
                 output.Indent();
                 FaultBlock.WriteTo(output);
                 output.Unindent();
-                output.WriteLine("}");
+                output.Write("}");
             }
             if (FinallyBlock != null)
             {
@@ -817,7 +836,7 @@ namespace betteribttest.GMAst
                 output.Indent();
                 FinallyBlock.WriteTo(output);
                 output.Unindent();
-                output.WriteLine("}");
+                output.Write("}");
             }
         }
     }

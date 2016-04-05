@@ -114,17 +114,18 @@ namespace betteribttest
         static void Main()
         {
 
-             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
+           //  cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-           // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
+            cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
             //Decompiler dism = new Decompiler(cr);
 
 
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
-
-            betteribttest.GMAst.ILDecompile ild = new GMAst.ILDecompile(stringList, InstanceList);
+            InstanceList = cr.objList.Select(x => x.Name).ToList();
             scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
+            betteribttest.GMAst.ILDecompile ild = new GMAst.ILDecompile(stringList, InstanceList);
+            
 
 
 
@@ -182,7 +183,7 @@ namespace betteribttest
 
 
 
-                var list = ild.DecompileInternal(instructions.First.Value, instructions.Last.Value);
+                var list = ild.DecompileInternal(instructions);
                 ILBlock method = new ILBlock();
                 method.Body = list;
                 using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(files.ScriptName + "_preil.txt"))) method.WriteTo(sw);

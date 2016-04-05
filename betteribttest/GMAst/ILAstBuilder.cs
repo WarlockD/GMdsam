@@ -112,9 +112,28 @@ namespace betteribttest.GMAst
         #endregion
 
         #region Step 3: create edges for the normal flow of control (assuming no exceptions thrown)
+        ControlFlowNode FindParrentPushEnv(ControlFlowNode node)
+        {
+            foreach(var n in node.Predecessors)
+            {
+                if (n.End.Code == GMCode.Pushenv) return n;
+                else return FindParrentPushEnv(n);
+            }
+            throw new Exception("Pop without a push?");
+        }
+        void CreatePopEdge(ControlFlowNode node)
+        {
+            if (node.End.Next == null) // bug, meh
+                CreateEdge(node, regularExit, JumpType.PopEnviroment);
+            else
+            {
+                CreateEdge(node, node.End.Next, JumpType.PopEnviroment);
+            }
+        }
         void CreateRegularControlFlow()
         {
             Instruction last = instructions.Last();
+            SortedList<int, ControlFlowNode> pushEnvToOffset = new SortedList<int, ControlFlowNode>();
             CreateEdge(entryPoint, instructions[0], JumpType.Normal);
             Action<ControlFlowNode> NextInstructionEdge = (ControlFlowNode node) =>
             {
@@ -127,6 +146,7 @@ namespace betteribttest.GMAst
                 if (node.End != null)
                 {
                     var code = node.End.Code;
+                    var inst = node.End;
                     Label operandLabel = node.End.Operand as Label;
 
 
@@ -135,14 +155,27 @@ namespace betteribttest.GMAst
                     {
                         case GMCode.Pushenv:  // jump out of enviroment
                             CreateEdge(node, node.End.Next, JumpType.PushEnviroment);
+                            pushEnvToOffset.Add(inst.BranchDesitation, node);
                             break;
                         case GMCode.Popenv:
-                            // jump out of enviroment
-                            //    Debug.Assert(operandLabel != null); // figure out breaks
-                            if (node.End.Next == null) // bug, meh
-                                CreateEdge(node, regularExit, JumpType.PopEnviroment);
-                            else
-                                CreateEdge(node, node.End.Next, JumpType.PopEnviroment);
+                            // jump out of enviroment, check if its linked
+                            {
+                                ControlFlowNode pushNode;
+                                if ((inst.OpCode & 0xFFFF) == 0) {
+                                    // its a leave instruction  
+                                    // BUG: If the push statement was not defined before this, it screw up
+                                    // not sure how to fix it and I have yet to see this happen yet
+                                    pushNode = pushEnvToOffset.Last().Value;
+                                    if (pushNode.PopEnvNodes != null) pushNode.PopEnvNodes = new List<ControlFlowNode>();
+                                    pushNode.PopEnvNodes.Add(node); // we save it to fix it latter till we find the normal pop out
+                                } else
+                                {
+                                    if (!pushEnvToOffset.TryGetValue(inst.BranchDesitation - 1, out pushNode)) throw new Exception("No push?");
+                                    if (pushNode.PopEnvNodes != null) foreach (var n in pushNode.PopEnvNodes) CreatePopEdge(n);
+                                    CreatePopEdge(node);
+                                    //nodes.Single(n => n.Start != null && n.Start.Address == toLabel.Address)
+                                }
+                            }         
                             break;
                         case GMCode.Bt:
                         case GMCode.Bf:

@@ -18,6 +18,17 @@ namespace betteribttest.GMAst
     {
         public List<string> StringIndex;
         public List<string> InstanceList;
+        Dictionary<int, ILLabel> labelToILabel;
+
+        public ILLabel GetILLabel(Label l)
+        {
+            ILLabel ret;
+            if (!labelToILabel.TryGetValue(l.Address, out ret))
+            {
+                labelToILabel[l.Address] = ret = new ILLabel() { Name = l.ToString(), OldLabel = l };
+            }
+            return ret;
+        }
         public string LookupInstance(ILExpression ast)
         {
             Debug.Assert(ast.Code == GMCode.Push);
@@ -83,16 +94,19 @@ namespace betteribttest.GMAst
         List<Label> exitLabels;
         List<Label> labelStatementsPrinted;
         List<Label> branchesSeen;
-        public void SetUpDecompiler()
+        Instruction.Instructions _instructions;
+        void SetUpDecompiler(Instruction.Instructions instructions)
         {
             exitLabels = new List<Label>();
             labelStatementsPrinted = new List<Label>();
             branchesSeen = new List<Label>();
+            labelToILabel = new Dictionary<int, ILLabel>();
+            _instructions = instructions;
         }
         public void AddLabel(Label label, List<ILNode> e)
         {
             if(labelStatementsPrinted.Contains(label)) throw new Exception("Duplicate label!");
-            e.Add(new ILLabel() { Name = label.ToString(), OldLabel = label });
+            e.Add(GetILLabel(label));
             labelStatementsPrinted.Add(label);
         }
         public void ExtraLabels(List<ILNode> ret)
@@ -105,36 +119,22 @@ namespace betteribttest.GMAst
                 }
             }
         }
-        public List<ILNode> ConvertManyStatements(Instruction start, Instruction end, Stack<ILExpression> stack)
-        {
-            Debug.Assert(start != null && end != null);
-            List<ILNode> ret = new List<ILNode>();
-            Instruction endNext = end.Next;
-            while (start != null && start != endNext)
-            {
-                if (exitLabels != null && start.Label != null) AddLabel(start.Label, ret);
-                ILExpression stmt = ConvertOneStatement(ref start, stack);
-                if (stmt == null) break; // we done?  No statements?
-                else ret.Add(stmt);
-            }
-            return ret;
-        }
 
-        public List<ILNode> DecompileInternal(Instruction start, Instruction end)
+        public List<ILNode> DecompileInternal(Instruction.Instructions instructions)
         {
-            SetUpDecompiler();
-            int last_pc = end.Address;
+            SetUpDecompiler(instructions);
+            int last_pc = instructions.Last().Address;
             List<ILNode> nodes = new List<ILNode>();
             ILLabel exitLabel = null;
             Dictionary<Instruction, Stack<ILExpression>> stacks = new Dictionary<Instruction, Stack<ILExpression>>();
-            Instruction i = start;
+            Instruction i = instructions.First();
             // side not, I don't think labels apper in wierd parts of the code
-            while(i!=null)
+            while (i!=null)
             {
                 Stack<ILExpression> stack;
                 if (!stacks.TryGetValue(i, out stack)) stack = new Stack<ILExpression>();
 
-                if (i.Label != null) nodes.Add(new ILLabel() { Name = i.Label.ToString(), OldLabel = i.Label });
+                if (i.Label != null) nodes.Add(GetILLabel(i.Label));
                 ILExpression stmt = ConvertOneStatement(ref i, stack);
                 nodes.Add(stmt);
                 if (!stmt.Code.IsUnconditionalControlFlow() && i != null && !stacks.ContainsKey(i)) stacks.Add(i, stack);
@@ -154,7 +154,7 @@ namespace betteribttest.GMAst
             if(exitLabel != null)
             {
                 nodes.Add(exitLabel);
-                nodes.Add(new ILExpression(GMCode.Ret, null));
+                nodes.Add(new ILExpression(GMCode.Exit, null));
             }
             return nodes;
         }
@@ -209,11 +209,11 @@ namespace betteribttest.GMAst
                         case GMCode.Bf:
                         case GMCode.Bt:
                         case GMCode.B: // this is where the magic happens...woooooooooo
-                            ret = new ILExpression(i.Code, new ILLabel() { Name = label.ToString(), OldLabel = label });
+                            ret = new ILExpression(i.Code, GetILLabel(label));
                             if (i.Code != GMCode.B && stack.Count > 0)
                             {
                                 ILExpression condition = stack.Pop();
-                                ret.Arguments.Add(new ILExpression(GMCode.Push, new ILValue(condition,GM_Type.Var)));
+                                ret.Arguments.Add(condition);
                             }
                             i = i.Next;
                             if (branchesSeen != null) branchesSeen.Add(label);
@@ -222,13 +222,21 @@ namespace betteribttest.GMAst
                             i = i.Next; // skip
                             break; // skip those
                         case GMCode.Pushenv:
-                        case GMCode.Popenv:
-                            {
-                                Label temp = new Label(i.BranchDesitation);
-                                ret = new ILExpression(i.Code, new ILLabel() { Name = temp.ToString(), OldLabel = temp }, stack.Pop());
+                            {   // Pushenv points to the ending popenv.  So lets make the label point to the end to be on the safe side
+                                Label temp = new Label(i.BranchDesitation+1);
+                                ret = new ILExpression(i.Code,  GetILLabel(temp), stack.Pop());
                             }
                             i = i.Next;
                             break;
+                        case GMCode.Popenv:
+                            {   // Pushenv points to the ending popenv.  So lets make the label point to the end to be on the safe side
+                                int addresToPush = i.BranchDesitation - 1;
+                                Instruction pushInstruction = _instructions.atOffset(addresToPush);
+                                ret = new ILExpression(i.Code, labelToILabel[pushInstruction.BranchDesitation + 1]);
+                            }
+                            i = i.Next;
+                            break;
+
                         case GMCode.Exit:
                         case GMCode.Ret:
                             ret = new ILExpression(i.Code, null);

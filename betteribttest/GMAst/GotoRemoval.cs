@@ -8,21 +8,36 @@ namespace betteribttest.GMAst
 {
     public class GotoRemoval
     {
-      //  Dictionary<ILNode, ILNode> parent = new Dictionary<ILNode, ILNode>();
-    //    Dictionary<ILNode, ILNode> nextSibling = new Dictionary<ILNode, ILNode>();
+        Dictionary<ILNode, ILNode> parent = new Dictionary<ILNode, ILNode>();
+        Dictionary<ILNode, ILNode> nextSibling = new Dictionary<ILNode, ILNode>();
 
         public void RemoveGotos(ILBlock method)
         {
-            
+            // Build the navigation data
+            parent[method] = null;
+            foreach (ILNode node in method.GetSelfAndChildrenRecursive<ILNode>())
+            {
+                ILNode previousChild = null;
+                foreach (ILNode child in node.GetChildren())
+                {
+                    if (parent.ContainsKey(child))
+                        throw new Exception("The following expression is linked from several locations: " + child.ToString());
+                    parent[child] = node;
+                    if (previousChild != null)
+                        nextSibling[previousChild] = child;
+                    previousChild = child;
+                }
+                if (previousChild != null)
+                    nextSibling[previousChild] = null;
+            }
+
             // Simplify gotos
             bool modified;
             do
             {
                 modified = false;
-                
-                foreach (ILExpression gotoExpr in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.Code == GMCode.B))//|| e.Code == ILCode.Leave))
+                foreach (ILExpression gotoExpr in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.Code == GMCode.B))
                 {
-                    method.SetParent(null);
                     modified |= TrySimplifyGoto(gotoExpr);
                 }
             } while (modified);
@@ -33,7 +48,6 @@ namespace betteribttest.GMAst
         public static void RemoveRedundantCode(ILBlock method)
         {
             // Remove dead lables and nops
-         
             HashSet<ILLabel> liveLabels = new HashSet<ILLabel>(method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()));
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
@@ -99,6 +113,13 @@ namespace betteribttest.GMAst
                     }
                 }
             }
+            // Remove empty falseBlocks
+            foreach (ILCondition condition in method.GetSelfAndChildrenRecursive<ILCondition>().Where(x => x.FalseBlock != null && x.FalseBlock.Body.Count == 0))
+            {
+                condition.FalseBlock = null;
+                modified = true;
+            }
+                
             if (modified)
             {
                 // More removals might be possible
@@ -111,7 +132,7 @@ namespace betteribttest.GMAst
             ILNode current = node;
             while (true)
             {
-                current = current.Parent;
+                current = parent[current];
                 if (current == null)
                     yield break;
                 yield return current;
@@ -120,10 +141,13 @@ namespace betteribttest.GMAst
 
         bool TrySimplifyGoto(ILExpression gotoExpr)
         {
-            Debug.Assert(gotoExpr.Code == GMCode.B );
+            Debug.Assert(gotoExpr.Code == GMCode.B);
+            // Debug.Assert(gotoExpr.Prefixes == null);
             Debug.Assert(gotoExpr.Operand != null);
+
             ILNode target = Enter(gotoExpr, new HashSet<ILNode>());
-            if (target == null) return false;
+            if (target == null)
+                return false;
 
             // The gotoExper is marked as visited because we do not want to
             // walk over node which we plan to modify
@@ -166,23 +190,59 @@ namespace betteribttest.GMAst
         /// </summary>
         ILNode Enter(ILNode node, HashSet<ILNode> visitedNodes)
         {
-            if (node == null) throw new ArgumentNullException();
+            if (node == null)
+                throw new ArgumentNullException();
 
-            if (!visitedNodes.Add(node)) return null;  // Infinite loop
-
+            if (!visitedNodes.Add(node))
+                return null;  // Infinite loop
 
             ILLabel label = node as ILLabel;
-            if (label != null) return Exit(label, visitedNodes);
+            if (label != null)
+            {
+                return Exit(label, visitedNodes);
+            }
 
             ILExpression expr = node as ILExpression;
             if (expr != null)
             {
-                if (expr.Code == GMCode.B)// || expr.Code == ILCode.Leave)
+                if (expr.Code == GMCode.B)
                 {
                     ILLabel target = (ILLabel)expr.Operand;
+                    // Early exit - same try-block
                     if (GetParents(expr).OfType<ILTryCatchBlock>().FirstOrDefault() == GetParents(target).OfType<ILTryCatchBlock>().FirstOrDefault())
                         return Enter(target, visitedNodes);
-                    return null;
+                    // Make sure we are not entering any try-block
+                    var srcTryBlocks = GetParents(expr).OfType<ILTryCatchBlock>().Reverse().ToList();
+                    var dstTryBlocks = GetParents(target).OfType<ILTryCatchBlock>().Reverse().ToList();
+                    // Skip blocks that we are already in
+                    int i = 0;
+                    while (i < srcTryBlocks.Count && i < dstTryBlocks.Count && srcTryBlocks[i] == dstTryBlocks[i]) i++;
+                    if (i == dstTryBlocks.Count)
+                    {
+                        return Enter(target, visitedNodes);
+                    }
+                    else {
+                        ILTryCatchBlock dstTryBlock = dstTryBlocks[i];
+                        // Check that the goto points to the start
+                        ILTryCatchBlock current = dstTryBlock;
+                        while (current != null)
+                        {
+                            foreach (ILNode n in current.TryBlock.Body)
+                            {
+                                if (n is ILLabel)
+                                {
+                                    if (n == target)
+                                        return dstTryBlock;
+                                }
+                                else if (!n.Match(GMCode.BadOp))
+                                {
+                                    current = n as ILTryCatchBlock;
+                                    break;
+                                }
+                            }
+                        }
+                        return null;
+                    }
                 }
                 else if (expr.Code == GMCode.BadOp)
                 {
@@ -237,6 +297,11 @@ namespace betteribttest.GMAst
                 }
             }
 
+            ILTryCatchBlock tryCatch = node as ILTryCatchBlock;
+            if (tryCatch != null)
+            {
+                return tryCatch;
+            }
 
             ILSwitch ilSwitch = node as ILSwitch;
             if (ilSwitch != null)
@@ -255,13 +320,13 @@ namespace betteribttest.GMAst
             if (node == null)
                 throw new ArgumentNullException();
 
-            ILNode nodeParent = node.Parent;
+            ILNode nodeParent = parent[node];
             if (nodeParent == null)
                 return null;  // Exited main body
 
             if (nodeParent is ILBlock)
             {
-                ILNode nextNode = node.Next;
+                ILNode nextNode = nextSibling[node];
                 if (nextNode != null)
                 {
                     return Enter(nextNode, visitedNodes);
@@ -273,6 +338,13 @@ namespace betteribttest.GMAst
 
             if (nodeParent is ILCondition)
             {
+                return Exit(nodeParent, visitedNodes);
+            }
+
+            if (nodeParent is ILTryCatchBlock)
+            {
+                // Finally blocks are completely ignored.
+                // We rely on the fact that try blocks can not be entered.
                 return Exit(nodeParent, visitedNodes);
             }
 
@@ -290,4 +362,3 @@ namespace betteribttest.GMAst
         }
     }
 }
-

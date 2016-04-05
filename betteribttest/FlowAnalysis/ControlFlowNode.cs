@@ -35,7 +35,7 @@ namespace betteribttest.FlowAnalysis
         /// Index of this node in the ControlFlowGraph.Nodes collection.
         /// </summary>
         public readonly int BlockIndex;
-
+        public List<ControlFlowNode> PopEnvNodes;
         /// <summary>
         /// Gets the IL offset of this node.
         /// </summary>
@@ -47,10 +47,6 @@ namespace betteribttest.FlowAnalysis
         public readonly ControlFlowNodeType NodeType;
 
 
-        /// <summary>
-        /// Hacky, but might become permanent
-        /// </summary>
-        public List<AstStatement> Block = null;
 
         /// <summary>
         /// Visited flag, used in various algorithms.
@@ -227,22 +223,11 @@ namespace betteribttest.FlowAnalysis
                 writer.WriteLine();
                 writer.Write("DominanceFrontier: " + string.Join(",", DominanceFrontier.OrderBy(d => d.BlockIndex).Select(d => d.BlockIndex.ToString())));
             }
-            if(Block != null)
+            foreach (Instruction inst in this.Instructions)
             {
-                foreach (var stmt in this.Block)
-                {
-                    writer.WriteLine();
-                    stmt.DecompileToText(writer);
-                    // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
-                }
-            } else
-            {
-                foreach (Instruction inst in this.Instructions)
-                {
-                    writer.WriteLine();
-                    writer.Write(inst.ToString());
-                    // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
-                }
+                writer.WriteLine();
+                writer.Write(inst.ToString());
+                // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
             }
            
             if (UserData != null)

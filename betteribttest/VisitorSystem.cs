@@ -1,4 +1,5 @@
-﻿using System;
+﻿using betteribttest.GMAst;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,28 +7,30 @@ using System.Threading.Tasks;
 
 namespace betteribttest
 {
+
     public interface IVisitorEngine
     {
-        void Run(AstStatement root);
+        void Run(ILNode root);
     }
     public class LinkAllGotosAndStatements : IVisitorEngine
     {
         public LinkAllGotosAndStatements() { }
-        public HashSet<GotoStatement> _gotoes;
-        public HashSet<LabelStatement> _labels;
+        public HashSet<ILExpression> _gotoes;
+        public HashSet<ILLabel> _labels;
 
-        public void Run(AstStatement root)
+        public void Run(ILNode root)
         {
-            _gotoes = new HashSet<GotoStatement>();
-            _labels = new HashSet<LabelStatement>();
-            foreach (AstStatement a in root) Visit((dynamic)a);
+            _gotoes = new HashSet<ILExpression>();
+            _labels = new HashSet<ILLabel>();
+            foreach (ILNode a in root.GetSelfAndChildrenRecursive<ILNode>()) Visit((dynamic)a);
         }
-        protected virtual void Visit(AstStatement node) { }
-        protected void Visit(GotoStatement node)
+        protected virtual void Visit(ILNode node) { }
+        protected void Visit(ILExpression node)
         {
+            if (node.Code != GMCode.B) return;
             if (!_gotoes.Add(node)) throw new Exception("node already there?"); 
         }
-        protected void Visit(LabelStatement node)
+        protected void Visit(ILLabel node)
         {
             if (!_labels.Add(node)) throw new Exception("node already there?");
         }

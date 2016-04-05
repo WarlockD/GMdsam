@@ -37,7 +37,10 @@ namespace betteribttest.FlowAnalysis
                 block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
             }
         }
+        void CombineLogicAndStatements(ILBlock block)
+        {
 
+        }
         public void FindConditions(ILBlock block)
         {
             if (block.Body.Count > 0)

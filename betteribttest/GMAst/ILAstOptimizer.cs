@@ -154,9 +154,10 @@ namespace betteribttest.GMAst
         }
     
     }
-    public class ILAstOptimizer
+    public partial class ILAstOptimizer
     {
         int nextLabelIndex = 0;
+        Dictionary<ILLabel, ILBasicBlock> basicBlockLookup = new Dictionary<ILLabel, ILBasicBlock>();
         void ReduceBranchInstructionSet(ILBlock block)
         {
             for (int i = 0; i < block.Body.Count; i++)
@@ -168,7 +169,7 @@ namespace betteribttest.GMAst
                     switch (expr.Code)
                     {
                         case GMCode.Bf:
-                            ILExpression condition = (expr.Arguments.Single().Operand as ILValue).Value as ILExpression;
+                            ILExpression condition = expr.Arguments.Single();
                             switch (condition.Code)
                             {
                                 case GMCode.Seq: condition.Code = GMCode.Sne; break;
@@ -349,6 +350,100 @@ namespace betteribttest.GMAst
                 }
             }
         }
+        #region SimplifyLogicNot
+        static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
+        {
+            bool modified = false;
+            expr = SimplifyLogicNot(expr, ref modified);
+            Debug.Assert(expr == null);
+            return modified;
+        }
+        static bool FixAllIfStatements(ILBlock expr)
+        {
+            bool modified=false;
+            foreach(var ifs in expr.GetSelfAndChildrenRecursive<ILCondition>())
+            {
+                var condition = ifs.Condition;
+                var newCondition = SimplifyLogicNot(condition, ref modified);
+                Debug.Assert(newCondition != null);
+                ifs.Condition = newCondition;
+            }
+            foreach (var loop in expr.GetSelfAndChildrenRecursive<ILWhileLoop>())
+            {
+                var condition = loop.Condition;
+                var newCondition = SimplifyLogicNot(condition, ref modified);
+                Debug.Assert(newCondition != null);
+                loop.Condition = newCondition;
+            }
+            return modified;
+        }
+        static ILExpression SimplifyLogicNot(ILExpression expr, ref bool modified)
+        {
+            ILExpression a;
+#if false
+            // not sure we need this
+            // "ceq(a, ldc.i4.0)" becomes "logicnot(a)" if the inferred type for expression "a" is boolean
+            if (expr.Code == GMCode.Seq && TypeAnalysis.IsBoolean(expr.Arguments[0].InferredType) && (a = expr.Arguments[1]).Code == ILCode.Ldc_I4 && (int)a.Operand == 0)
+            {
+                expr.Code = ILCode.LogicNot;
+                expr.ILRanges.AddRange(a.ILRanges);
+                expr.Arguments.RemoveAt(1);
+                modified = true;
+            }
+#endif
+            ILExpression res = null;
+            while (expr.Code == GMCode.Not)
+            {
+                a = expr.Arguments[0];
+                // remove double negation
+                if (a.Code == GMCode.Not)
+                {
+                    res = a.Arguments[0];
+                    res.ILRanges.AddRange(expr.ILRanges);
+                    res.ILRanges.AddRange(a.ILRanges);
+                    expr = res;
+                }
+                else {
+                    if (SimplifyLogicNotArgument(expr)) res = expr = a;
+                    break;
+                }
+            }
+
+            for (int i = 0; i < expr.Arguments.Count; i++)
+            {
+                a = SimplifyLogicNot(expr.Arguments[i], ref modified);
+                if (a != null)
+                {
+                    expr.Arguments[i] = a;
+                    modified = true;
+                }
+            }
+
+            return res;
+        }
+
+        /// <summary>
+        /// If the argument is a binary comparison operation then the negation is pushed through it
+        /// </summary>
+        static bool SimplifyLogicNotArgument(ILExpression expr)
+        {
+            var a = expr.Arguments[0];
+            GMCode c;
+            switch (a.Code)
+            {
+                case GMCode.Seq: c = GMCode.Sne; break;
+                case GMCode.Sne: c = GMCode.Seq; break;
+                case GMCode.Sgt: c = GMCode.Sle; break;
+                case GMCode.Sge: c = GMCode.Slt; break;
+                case GMCode.Slt: c = GMCode.Sge; break;
+                case GMCode.Sle: c = GMCode.Sgt; break;
+                default: return false;
+            }
+            a.Code = c;
+            a.ILRanges.AddRange(expr.ILRanges);
+            return true;
+        }
+#endregion
         public void Optimize(ILBlock method)
         {
             ReduceBranchInstructionSet(method);
@@ -365,11 +460,14 @@ namespace betteribttest.GMAst
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
                     modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
-
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
+             
                     //  modified |= block.RunOptimization(SimplifyLogicNot);
                     //  modified |= block.RunOptimization(MakeAssignmentExpression);
                 } while (modified);
             }
+            // handle the with statments
+            
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions().FindLoops(block);
@@ -386,7 +484,9 @@ namespace betteribttest.GMAst
             new GotoRemoval().RemoveGotos(method);
             RemoveRedundantCode(method);
             new GotoRemoval().RemoveGotos(method);
+            FixAllIfStatements(method);
             RemoveRedundantCode(method);
+            FlattenBasicBlocks(method); // do this again?
         }
     }
 }
