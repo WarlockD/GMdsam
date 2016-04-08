@@ -37,10 +37,7 @@ namespace betteribttest.FlowAnalysis
                 block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
             }
         }
-        void CombineLogicAndStatements(ILBlock block)
-        {
-
-        }
+       
         public void FindConditions(ILBlock block)
         {
             if (block.Body.Count > 0)
@@ -247,13 +244,17 @@ namespace betteribttest.FlowAnalysis
 
                     {
                         // Switch
-                        ILLabel[] caseLabels;
+                        IList<ILExpression> cases;
+                        List<ILLabel> caseLabels;
                         ILExpression switchArg;
                         ILLabel fallLabel;
-
+                     //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
                         // matches a switch statment, not sure how the hell I am going to do this
-                        if (block.MatchLastAndBr(GMCode.Switch, out caseLabels, out switchArg, out fallLabel))
+                        if (block.MatchSwitchBlock(out cases, out fallLabel))
                         {
+                            switchArg = cases[0].Arguments[0].Arguments[0]; // thats the switch arg
+                           caseLabels = cases.Select(x => x.Operand as ILLabel).ToList();
+                            foreach (var c in cases) caseLabels.Add(c.Operand as ILLabel);
 
                             // Replace the switch code with ILSwitch
                             ILSwitch ilSwitch = new ILSwitch() { Condition = switchArg };
@@ -289,7 +290,7 @@ namespace betteribttest.FlowAnalysis
                                     frontiers.UnionWith(condTarget.DominanceFrontier.Except(new[] { condTarget }));
                             }
 
-                            for (int i = 0; i < caseLabels.Length; i++)
+                            for (int i = 0; i < caseLabels.Count; i++)
                             {
                                 ILLabel condLabel = caseLabels[i];
 

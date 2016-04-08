@@ -169,10 +169,11 @@ namespace betteribttest.GMAst
             }
         }
     }
-    public class ILValue
+    public class ILValue : IEquatable<ILValue>
     {
-        public object Value;
-        public GM_Type Type;
+        public object Value { get; private set; }
+        public GM_Type Type { get; private set; }
+        public string Text = null;
         public ILValue(bool i) { this.Value = i; Type = GM_Type.Bool; }
         public ILValue(int i) { this.Value = i; Type = GM_Type.Int; }
         public ILValue(object i) { this.Value = i; Type = GM_Type.Var; }
@@ -182,6 +183,8 @@ namespace betteribttest.GMAst
         public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
         public ILValue(short i) { this.Value = i; Type = GM_Type.Short; }
         public ILValue(object o, GM_Type type) { this.Value = o; Type = type; }
+        public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; }
+        public ILValue(ILExpression e) { this.Value = e;  Type = GM_Type.ConstantExpression; }
         public static ILValue FromInstruction(Instruction i)
         {
             Debug.Assert(i.Code == GMCode.Push && i.FirstType != GM_Type.Var);
@@ -201,7 +204,9 @@ namespace betteribttest.GMAst
         }
         public override string ToString()
         {
-            return Value.ToString();
+            string ret = Value.ToString();
+            if (Text != null) ret += " /* " + Text + " */ ";
+            return ret;
         }
         public override bool Equals(object obj)
         {
@@ -209,11 +214,25 @@ namespace betteribttest.GMAst
             if (object.ReferenceEquals(obj, this)) return true;
             if (Value.Equals(Value)) return true;
             ILValue test = obj as ILValue;
-            return test != null && test.Value.Equals(Value);
+            return test != null && Equals(test);
         }
         public override int GetHashCode()
         {
             return Value.GetHashCode();
+        }
+
+        public bool Equals(ILValue other)
+        {
+            if (object.ReferenceEquals(other, null)) return false;
+            if (object.ReferenceEquals(other, this)) return true;
+            if (other.Type != Type) return false;
+            if (Type == GM_Type.NoType) return true; // consider this null or nothing
+            if (Type == GM_Type.ConstantExpression)
+            {
+                if (object.ReferenceEquals(other.Value, Value)) return true;
+                else return other.Value.ToString() == Value.ToString(); // a bit hacky, but true
+            }
+            else return Value.Equals(other.Value);
         }
     }
     public static class ILNode_Helpers
@@ -263,6 +282,7 @@ namespace betteribttest.GMAst
     {
         public string Name;
         public Label OldLabel = null;
+        public object UserData = null; // usally old dsam label
         public bool isExit = false;
         public override void WriteTo(ITextOutput output)
         {
@@ -286,8 +306,20 @@ namespace betteribttest.GMAst
             return Name.GetHashCode();
         }
     }
-
-
+   // holder till stack anylist can figure out what it is
+    public class ILUnkonwnVariable
+    {
+        public string Name;
+        public bool isArray;
+        public int Operand;
+        public GM_Type Type = GM_Type.NoType;
+        public override string ToString()
+        {
+            string ret = "stack." + Name;
+            if (isArray) ret += "[]";
+            return ret;
+        }
+    }
     public class ILVariable
     {
         // Side note, we "could" make this a node
@@ -297,6 +329,9 @@ namespace betteribttest.GMAst
         public ILExpression Instance = null; // We don't NEED this
         public string InstanceName;
         public ILExpression Index = null; // not null if we have an index
+        public bool IsGenerated = false;
+        public Instruction Pinned = null;
+        public GM_Type Type = GM_Type.NoType;
         public override string ToString()
         {
             string ret = InstanceName + "." + Name;
@@ -315,7 +350,7 @@ namespace betteribttest.GMAst
             return Name.GetHashCode() ^ InstanceName.GetHashCode();
         }
     }
-
+   
     public struct ILRange
     {
         public readonly int From;
@@ -503,35 +538,57 @@ namespace betteribttest.GMAst
             {
                 case GMCode.Push:
                 case GMCode.Call:
+                case GMCode.Var:
                     return false;
                 default:
                     return true;
             }
+        }
+        void WriteOperand(ITextOutput output)
+        {
+            if (Operand is ILValue) output.Write(Operand.ToString());
         }
         public override void WriteTo(ITextOutput output)
         {
             int count = Code.getOpTreeCount(); // not a leaf
             if (count == 1)
             {
-                bool needParm = CheckParm(Arguments[0]);
-                output.Write(Code.getOpTreeString());
-                if (needParm) output.Write('(');
-                Arguments[0].WriteTo(output);
-                if (needParm) output.Write(')');
+                if (Arguments.Count != 0)
+                {
+                    output.Write(Code.getOpTreeString());
+                    bool needParm = CheckParm(Arguments[0]);
+                    if (needParm) output.Write('(');
+                    Arguments[0].WriteTo(output);
+                    if (needParm) output.Write(')');
+                } else
+                {
+                    output.Write(Code.GetName());
+                    output.Write(" %pop%"); // fake
+                }
+               
             }
             else if (count == 2)
             {
-                bool needParm = CheckParm(Arguments[0]);
-                if (needParm) output.Write('(');
-                Arguments[0].WriteTo(output);
-                if (needParm) output.Write(')');
-                output.Write(' ');
-                output.Write(Code.getOpTreeString());
-                output.Write(' ');
-                needParm = CheckParm(Arguments[1]);
-                if (needParm) output.Write('(');
-                Arguments[1].WriteTo(output);
-                if (needParm) output.Write(')');
+                if(Arguments.Count != 0)
+                {
+                    bool needParm = CheckParm(Arguments[0]);
+                    if (needParm) output.Write('(');
+                    Arguments[0].WriteTo(output);
+                    if (needParm) output.Write(')');
+                    output.Write(' ');
+                    output.Write(Code.getOpTreeString());
+                    output.Write(' ');
+                    needParm = CheckParm(Arguments[1]);
+                    if (needParm) output.Write('(');
+                    Arguments[1].WriteTo(output);
+                    if (needParm) output.Write(')');
+                }
+                else
+                {
+                    output.Write(Code.GetName());
+                    output.Write(" %pop%, %pop%"); // fake
+                }
+
             }
             else
             {
@@ -542,16 +599,22 @@ namespace betteribttest.GMAst
                         output.Write(Operand.ToString()); // generic, should cover all cases
                         break;
                     case GMCode.Call:
-                        output.Write(Operand as string);
+                        output.Write(Operand.ToString());
                         ArgumentWriteTo(output);
                         break;
                     case GMCode.Pop:
-                        output.Write(((ILVariable)Operand).Name);
+                        output.Write(Operand.ToString());
                         output.Write(" = ");
-                        Arguments.First().WriteTo(output);
+                        if (Arguments.Count != 0)
+                            Arguments.First().WriteTo(output);
+                        else
+                            output.Write("%pop%");
+;                        break;
+                    case GMCode.Popz:
+                        output.Write("Popz");
                         break;
                     case GMCode.Push:
-                        //   output.Write("Push(");
+                        output.Write("Push ");
                         output.Write(Operand.ToString()); // generic, should cover all cases
                                                           //  output.Write(')');
                         break;
@@ -584,13 +647,16 @@ namespace betteribttest.GMAst
                         break;
                     case GMCode.Pushenv:
                         output.Write("PushEnviroment(");
-                        Arguments[0].WriteTo(output);
+                        if (Arguments.Count != 0)
+                            Arguments[0].WriteTo(output);
+                        else
+                            output.Write("%pop%");
                         output.Write(") : ");
                         output.Write(Operand.ToString());
                         break;
                     case GMCode.Popenv:
                         output.Write("PopEnviroment(");
-                        Arguments[0].WriteTo(output);
+                        //Arguments[0].WriteTo(output);
                         output.Write("): ");
                         output.Write(Operand.ToString());
                         break;
@@ -606,6 +672,25 @@ namespace betteribttest.GMAst
                         break;
                     case GMCode.LoopContinue:
                         output.Write("continue");
+                        break;
+                    case GMCode.Switch: // debug print of the created switch statement
+                        output.Write("switch(");
+                        Arguments[0].Arguments[0].Arguments[0].WriteTo(output); // Just a hack, writes the left side of the argument
+                        output.Write(") {");
+                        output.WriteLine();
+                        output.Indent();
+                        foreach(var arg in Arguments)
+                        {
+                            output.Write("case ");
+                            arg.Arguments[0].Arguments[1].WriteTo(output); // second bit
+                            output.Write(": goto ");
+                            output.Write((arg.Operand as ILLabel).Name);
+                            output.Write(";");
+                            output.WriteLine();
+                        }
+                        output.Unindent();
+                        output.Write("}");
+                        output.WriteLine();
                         break;
                     default:
                         throw new Exception("Not Implmented! ugh");
@@ -661,7 +746,8 @@ namespace betteribttest.GMAst
         {
             output.Write("if (");
             Condition.WriteTo(output);
-            if (TrueBlock.Body.Count != 1)
+            if (TrueBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
+            else if (TrueBlock.Body.Count != 1 || TrueBlock.Body[0] is ILCondition)
             {
                 output.WriteLine(") {");
                 output.Indent();
@@ -677,7 +763,8 @@ namespace betteribttest.GMAst
 
             if (FalseBlock != null)
             {
-                if (FalseBlock.Body.Count != 1)
+                if (FalseBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
+                else if (FalseBlock.Body.Count != 1 && FalseBlock.Body[0] is ILCondition)
                 {
                     output.WriteLine(" else {");
                     output.Indent();
@@ -687,7 +774,7 @@ namespace betteribttest.GMAst
                 }
                 else
                 {
-                    output.Write("else ");
+                    output.Write(" else ");
                     FalseBlock.Body[0].WriteTo(output);
                 }
             }

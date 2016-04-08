@@ -24,7 +24,8 @@ namespace betteribttest
         String,
         Instance,
         Short = 15, // This is usally short anyway
-        NoType
+        NoType,
+        ConstantExpression // used when an expression is constant
     }
     public enum GMCode : byte
     {
@@ -68,7 +69,8 @@ namespace betteribttest
         LoopContinue = 0xf6,
         LoopOrSwitchBreak = 0xf7,
         Switch = 0xf9,
-        Leave = 0xfa, // used to leave a popenv satment when not at end
+        Case = 0xfa,
+        Leave = 0xfb, // used to leave a popenv satment when not at end
     }
     public static class GMCodeUtil
     {
@@ -190,7 +192,7 @@ namespace betteribttest
         }
         public static bool IsArrayPushPop(uint operand)
         {
-            return (operand & 0x8000000) != 0;
+            return (operand & 0x8000000) == 0;
         }
         public static string EscapeString(string s)
         {
@@ -331,6 +333,8 @@ namespace betteribttest
         }
         const uint breakPopenvOpcode = (uint)(((uint)(GMCode.Popenv)) << 24 | 0x00F00000);
         // this fixes all the instructions, and branches with labels so we can track them all
+
+
         public static void ResolveCalls(Instruction.Instructions list)
         {
             HashSet<Label> allLabels = new HashSet<Label>();
@@ -342,6 +346,23 @@ namespace betteribttest
             } // makes sure there are no label duplicates when we do this
             foreach (var l in allLabels) ResolveCalls(l, list);
         }
+        // does not caculated refrences
+        public static void SimpleResolveCalls(Instruction.Instructions list,  Dictionary<int, Label> labels)
+        {
+            foreach(var l in labels.Values)
+            {
+                l.InstructionOrigin = list.atOffset(l.Address);
+                list.atOffset(l.Address).Label = l;
+            }
+            foreach(var i in list.Where(x=> x.isBranch))
+            {
+                var l = labels[i.BranchDesitation];
+                if (l._refrences == null) l._refrences = new List<Instruction>();
+                l._refrences.Add(i);
+                i.Operand = l;
+            }
+        }
+
         public static void ResolveCalls(Label l, Instruction.Instructions list)
         {
             var fRefs = new List<Instruction>();
@@ -448,18 +469,19 @@ namespace betteribttest
         {
             get
             {
-                Debug.Assert(isBranch);
-                Label l = Operand as Label;
-                return l.Address;
+                return GMCodeUtil.getBranchOffset(OpCode) + Address;
+              //  Label l = Operand as Label;
+               // return l.Address;
             }
         }
         public string Comment { get; set; }
         public int Address { get; private set; }
         public Label Label { get;  set; }
         public uint OpCode { get; private set; }
-        public GMCode Code { get { return GMCodeUtil.getFromRaw(OpCode); } }
+        public GMCode Code { get; private set; }
         public object Operand { get; set; }
         public int OperandInt { get { return _operandInt; } }
+       
         public static Instruction CreateFakeExitNode(Instruction i, bool need_label)
         {
             uint op = ((uint)GMCode.Exit << 24);
@@ -477,8 +499,18 @@ namespace betteribttest
             OpCode &= (uint)(this.Address-l.Address);
             Debug.Assert(this.Code.isBranch());
         }
+        public Instruction(GMCode code, int offset) {
+            this.Address = offset;
+            this.Code = code;
+            this.OpCode = 0;
+            this.Operand = null;
+            this._operandInt = 0;
+            this.Label = null;
+            this.Comment = null;
+        }
         internal Instruction(int offset, uint opCode) 
         {
+            this.Code = GMCodeUtil.getFromRaw(OpCode);
             this.Address = offset;
             this.OpCode = opCode;
             this.Operand = null;
@@ -553,6 +585,7 @@ namespace betteribttest
             this.Address = offset;
             // raw_opcode = r.ReadBytes(sizeof(int));
             this.OpCode = r.ReadUInt32();
+            this.Code =  GMCodeUtil.getFromRaw(OpCode); 
             raw_opcode = BitConverter.GetBytes(this.OpCode);
             if (Size > 1)
             {
@@ -628,11 +661,6 @@ namespace betteribttest
                 return (GM_Type)((OpCode >> 20) & 0x0F);
             }
         }
-        public int GetOperandPatch()
-        {
-            if (Operand != null && Operand is int) return (int)Operand & 0x1FFFFFF;
-            throw new Exception("Needed that operand");
-        }
         void FormatPrefix(StringBuilder line,int opcode,int type) {
             line.AppendFormat("{0,-5}{1,-5} ", Address, this.Label == null ? "" : this.Label.ToString());
             line.Append(this.Code.GetName());
@@ -666,13 +694,13 @@ namespace betteribttest
                 line.Append("; ");
                 if(Label != null)
                 {
-                    if(Label.BackwardRefrences.Count !=0)
+                    if(Label.BackwardRefrences!=null &&  Label.BackwardRefrences.Count !=0)
                     {
                         line.Append("BackwardRefs[");
                         CommaList(line, Label.BackwardRefrences);
                         line.Append("] ");
                     }
-                    if (Label.ForwardRefrences.Count > 0)
+                    if (Label.ForwardRefrences != null && Label.ForwardRefrences.Count > 0)
                     {
                         line.Append("ForwardRefs[");
                         CommaList(line, Label.ForwardRefrences);
@@ -766,7 +794,7 @@ namespace betteribttest
                     return item.Address;
                 }
             }
-            bool _dirty = false;
+        
             InstructionOffsetCollection _fromOffset = new InstructionOffsetCollection();
             public Instruction atOffset(int i)
             {
@@ -775,10 +803,10 @@ namespace betteribttest
             public Instructions() : base()
             {
             }
-            public Instructions(List<Instruction> list) : base(list)
+            static void Relink(IEnumerable<Instruction> list) // sigh this just works
             {
                 Instruction prev = null;
-                foreach (var i in this)
+                foreach (var i in list)
                 {
                     //  node.Parent = _parent;
                     i._next = null;
@@ -788,7 +816,28 @@ namespace betteribttest
                         prev._next = i;
                     }
                     else i._previous = null;
+                    prev = i;
                 }
+            }
+            static List<Instruction> CopyInstructionList(IEnumerable<Instruction> list)
+            {
+                List<Instruction> ret = new List<Instruction>();
+                foreach(var i in list)
+                {
+                    var clone = i.MemberwiseClone() as Instruction;
+                    clone._next = clone._previous = null;
+                    ret.Add(clone);
+                }
+                return ret;
+            }
+           
+            public Instructions(Instruction.Instructions copy) : base(CopyInstructionList(copy.Items))
+            {
+                Relink(this);
+            }
+            public Instructions(List<Instruction> list) : base(list)
+            {
+                Relink(this);
             }
             void CheckSorting(Instruction i)
             {
@@ -801,59 +850,43 @@ namespace betteribttest
                 _fromOffset.Clear();
                 base.ClearItems();
             }
-            void Unlink(Instruction i)
-            {
-                if (i.Previous != null) i._previous._next = i._next;
-                if (i.Next != null) i._next._previous = i._previous;
-                _fromOffset.Remove(i);
-                i._next._previous = null;
-            }
-            void LinkAfter(Instruction before, Instruction item)
-            {
-                item._next = item._previous = null;
-                if (_fromOffset.Contains(item)) throw new Exception("Instruction Already Defined '" + item.Label.ToString() + "'");
-                _fromOffset.Add(item);
-                if (before == null) return; // no link in first item
-                if (before._next == null) // this case shouldn't happen as index== this.Count should catch it.  But JUSt in case
-                {
-                    item._next = null;
-                    item._previous = before;
-                    before._next = item;
-                }
-                else
-                { // order is always important
-                    item._previous = before;
-                    item._next = before._next;
-                    before._next._previous = item;
-                    before._next = item;
-                }
-            }
             protected override void RemoveItem(int index)
             {
-                Unlink(this[index]);
+                var old = this[index]; 
+                if (old.Previous != null) old._previous._next = old._next;
+                if (old.Next != null) old._next._previous = old._previous;
+                _fromOffset.Remove(old);
                 base.RemoveItem(index);
             }
             protected override void InsertItem(int index, Instruction item)
             {
                 Instruction before = null;
-                if(this.Count > 0)
-                {
-                    if (index == this.Count) // at the end
+                if (index == this.Count) {// at the end
+                    if(this.Count != 0) // first item in the list
+                    {
                         before = this[this.Count - 1];
-                    else
-                        before = this[index];
+                        before._next = item;
+                        item._previous = before;
+                        item._next = null;
+                        CheckSorting(item);
+                    } 
+                    base.InsertItem(index, item);
+                } else
+                {
+                    base.InsertItem(index, item);
+                    Relink(this); // hard way, try not to insert so much
                 }
-                LinkAfter(before, item);
-                CheckSorting(item);
-                base.InsertItem(index, item);
+                _fromOffset.Add(item);
             }
             protected override void SetItem(int index, Instruction item)
             {
                 var old = this[index]; // trickery!
                 if (object.ReferenceEquals(item, old)) return; // don't do anything 
-                // check if we are adding an instruction that has the old label
-                LinkAfter(old, item); // insert it FIRST
-                Unlink(old); // THEN clear
+                item._next = old._next; // just swap them
+                item._previous = old._previous; // just swap them
+                old._next = old._previous = null;
+                _fromOffset.Remove(old);
+                _fromOffset.Add(item);
                 CheckSorting(item);
                 base.SetItem(index, item);
             }
@@ -890,6 +923,7 @@ namespace betteribttest
         // first pass simple create form a stream
         public static void ReplaceShortCircuitInstructionsAnds(Instructions input)
         {
+            if (input.Count == 0) return;
             var node = input.First();
             do
             {
@@ -929,6 +963,7 @@ namespace betteribttest
         }
         public static void ReplaceShortCircuitInstructionsOrs(Instructions input)
         {
+            if (input.Count == 0) return;
             var node = input.First();
             do
             {
@@ -974,15 +1009,21 @@ namespace betteribttest
             Instructions instructions = new Instructions();
             int pc = 0;
             List<Label> LabelsOutsideOfFuntion = new List<Label>();
-            
+            Dictionary<Label, Instruction> pushEnvLookup = new Dictionary<Label, Instruction>();
             Dictionary<int, Label> labels = new Dictionary<int, Label>();
             Func<int, Label> GetLabel = (int i) =>
             {
+                Debug.Assert(i > 0);
                 Label l;
-                if (!labels.TryGetValue(i, out l)) labels[i] = new Label(i, i > lastpc);
+                if (!labels.TryGetValue(i, out l))
+                {
+                    l = new Label(i, i > lastpc);
+                    labels[i] = l;
+                }
                 return l;
             };
            
+          //  Stack<Instruction> envStack = new Stack<Instruction>();
             while (r.BaseStream.Length > r.BaseStream.Position)
             {
                 Instruction inst = new Instruction(pc, r);
@@ -999,13 +1040,15 @@ namespace betteribttest
                 {
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
                     target += pc+1;
-                    inst.Operand = GetLabel(target);
+                    Label l = GetLabel(target);
+                    inst.Operand = l;
+                    pushEnvLookup.Add(l, inst);
                 }
                 else if (inst.Code == GMCode.Popenv)
                 {
                     int target = GMCodeUtil.getBranchOffset(inst.OpCode);
                     if(target == 0) // its a popbreak so we have to find the previous push
-                    {
+                    { // this will SO screw up if we are in a loop or doing a branch ugh
                         inst.Operand = null;
                         foreach (var pushI in instructions.Reverse())
                         {
@@ -1019,12 +1062,13 @@ namespace betteribttest
                     } else
                     {
                         target += pc - 1; // points to the instruction
-                        inst.Operand = instructions.atOffset(target);
+                        Label l = GetLabel(target);
+                        inst.Operand = l;
                     }
                 }
                 pc += inst.Size;
             }
-           
+
             /*
             LabelsOutsideOfFuntion.Sort();
             foreach (var l in LabelsOutsideOfFuntion)
@@ -1036,8 +1080,10 @@ namespace betteribttest
             */
             // Link all the instructions together, mabye I should just include linkList
 
-
-            if (labels.Count > 0) foreach (var l in labels) Label.ResolveCalls(l.Value, instructions);
+            // This takes a LOOONG time, so lets shorten it up, we don't need the back refrences
+            //if (labels.Count > 0) foreach (var l in labels) Label.ResolveCalls(l.Value, instructions);
+            if (labels.Count > 0) foreach (var l in labels) Label.SimpleResolveCalls(instructions,labels);
+            
            
             // now fix string indexes 
             foreach (var i in instructions)
@@ -1067,8 +1113,8 @@ namespace betteribttest
                 }
             }
             instructions.SaveInstructions("before_pre.txt");
-            ReplaceShortCircuitInstructionsOrs(instructions);
-            ReplaceShortCircuitInstructionsAnds(instructions);
+        //    ReplaceShortCircuitInstructionsOrs(instructions);
+        //    ReplaceShortCircuitInstructionsAnds(instructions);
             instructions.SaveInstructions("after_pre.txt");
             return instructions;
         }

@@ -132,5 +132,79 @@ namespace betteribttest.GMAst
             brLabel = null;
             return false;
         }
+        public static bool MatchLastFrom<T>(this IList<ILNode> bb, ref int from, out T e, Predicate<T> pred) where T : ILNode
+        {
+            if (bb.Count != 0)
+            {
+                Debug.Assert(from >= 0 && from < bb.Count);
+                for (int i = from; i >= 0; i++)
+                {
+                    if (bb[i] is ILLabel) continue; // skip labels
+                    T test = bb[i] as T;
+                    if (test != null && pred(test))
+                    {
+                        e = test;
+                        return true;
+                    }
+                    break;
+                }
+            }
+            e = default(T);
+            return false;
+        }
+        public static bool MatchLast<T>(this IList<ILNode> bb, out T e, Predicate<T> pred) where T : ILNode
+        {
+            if (bb.Count != 0)
+            {
+                int from = bb.Count - 1;
+                return MatchLastFrom(bb, ref from, out e, pred);
+            }
+            e = default(T);
+            return false;
+        }
+        public static bool isConstant(this ILExpression n)
+        {
+            return (n.Code == GMCode.Push && (n.Operand is ILValue || n.Operand is ILVariable)) || n.Code == GMCode.Call;
+        }
+        public static bool MatchLastConstant(this IList<ILNode> bb, out ILExpression e)
+        {
+            return bb.MatchLast(out e, n => (n != null && n.isConstant()));
+        }
+        public static bool MatchLastConstants(this IList<ILNode> bb, int count, out ILExpression[] constants)
+        {
+            ILExpression[] ret = new ILExpression[count];
+            int from = bb.Count - 1;
+            bool noMatch = false;
+            for(int i=0;i < count; i++)
+            {
+                if (bb.MatchLastFrom(ref from, out ret[i], n => (n != null && n.isConstant()))) from--;// skip the node
+                else {
+                    noMatch = true;
+                    break;
+                }
+            }
+            if(noMatch)
+            {
+                constants = default(ILExpression[]);
+                return false;
+            } else
+            {
+                constants = ret;
+                return true;
+            }
+        }
+        public static bool MatchSwitchBlock(this ILBasicBlock bb,  out IList<ILExpression> arg, out ILLabel fallLabel)
+        {
+
+            ILLabel brLabel;
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(GMCode.Switch, out fallLabel, out arg) &&
+                bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
+            {
+                if (brLabel.Name == fallLabel.Name) return true;
+            }
+            arg = null;
+            fallLabel = null;
+            return false;
+        }
     }
 }

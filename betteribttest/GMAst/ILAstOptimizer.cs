@@ -358,24 +358,44 @@ namespace betteribttest.GMAst
             Debug.Assert(expr == null);
             return modified;
         }
-        static bool FixAllIfStatements(ILBlock expr)
+        static bool SimplifyLogicNot(ref ILExpression expr)
+        {
+            bool modified = false;
+            var newExpr = SimplifyLogicNot(expr, ref modified);
+            if (newExpr != null) expr = newExpr;
+            return modified;
+        }
+        static void FixAllIfStatements(ILBlock expr)
         {
             bool modified=false;
-            foreach(var ifs in expr.GetSelfAndChildrenRecursive<ILCondition>())
+            do
             {
-                var condition = ifs.Condition;
-                var newCondition = SimplifyLogicNot(condition, ref modified);
-                Debug.Assert(newCondition != null);
-                ifs.Condition = newCondition;
-            }
-            foreach (var loop in expr.GetSelfAndChildrenRecursive<ILWhileLoop>())
+                modified = false;
+                var list = expr.GetSelfAndChildrenRecursive<ILCondition>().ToList();
+                foreach (var ifs in list) modified |= SimplifyLogicNot(ref ifs.Condition);
+            } while (modified);
+            do
             {
-                var condition = loop.Condition;
-                var newCondition = SimplifyLogicNot(condition, ref modified);
-                Debug.Assert(newCondition != null);
-                loop.Condition = newCondition;
+                modified = false;
+                var list = expr.GetSelfAndChildrenRecursive<ILWhileLoop>().ToList();
+                foreach (var loop in list) modified |= SimplifyLogicNot(ref loop.Condition);
+            } while (modified);
+          //  return;
+            do
+            {
+                modified = false;
+              
+                // combine ifstatements to logic ands
+                List<ILCondition> test = expr.GetSelfAndChildrenRecursive<ILCondition>(x => x.FalseBlock == null && x.TrueBlock.Body.Count == 1 && x.TrueBlock.Body[0] is ILCondition).ToList();
+                if (test == null || test.Count > 0) modified = true;
+                foreach (var ifs in test)
+                {
+                    var leftIf = (ifs.TrueBlock.Body[0] as ILCondition);
+                    ifs.TrueBlock = leftIf.TrueBlock;
+                    ifs.Condition = new ILExpression(GMCode.LogicAnd, null, ifs.Condition, leftIf.Condition);
+                }
             }
-            return modified;
+            while (modified);
         }
         static ILExpression SimplifyLogicNot(ILExpression expr, ref bool modified)
         {
@@ -404,7 +424,7 @@ namespace betteribttest.GMAst
                     expr = res;
                 }
                 else {
-                    if (SimplifyLogicNotArgument(expr)) res = expr = a;
+                    if (SimplifyLogicLogicArguments(expr)) res = expr = a;
                     break;
                 }
             }
@@ -418,10 +438,26 @@ namespace betteribttest.GMAst
                     modified = true;
                 }
             }
-
+           // Debug.Assert(res != null);
             return res;
         }
-
+        static bool SimplifyLogicLogicArguments(ILExpression expr)
+        {
+            var a = expr.Arguments[0];
+          
+            switch (a.Code)
+            {
+                case GMCode.LogicAnd: // this is complcated
+                case GMCode.LogicOr: // this is complcated
+                    a.Code = a.Code == GMCode.LogicOr ? GMCode.LogicAnd : GMCode.LogicOr;
+                    if (!SimplifyLogicNotArgument(a.Arguments[0])) a.Arguments[0] = new ILExpression(GMCode.Not, null, a.Arguments[0]);
+                    if (!SimplifyLogicNotArgument(a.Arguments[1])) a.Arguments[1] = new ILExpression(GMCode.Not, null, a.Arguments[1]);
+                    a.ILRanges.AddRange(expr.ILRanges);
+                    return true;
+                default:
+                    return SimplifyLogicNotArgument(expr);
+            }      
+        }
         /// <summary>
         /// If the argument is a binary comparison operation then the negation is pushed through it
         /// </summary>
@@ -443,7 +479,14 @@ namespace betteribttest.GMAst
             a.ILRanges.AddRange(expr.ILRanges);
             return true;
         }
-#endregion
+        #endregion
+
+        // Have to be run after goto removal
+        // This is a bit hacky though, we should put it in the simpleflow control but eh
+        void CombineLogicAndStatements(ILBlock block)
+        {
+            
+        }
         public void Optimize(ILBlock method)
         {
             ReduceBranchInstructionSet(method);
@@ -458,9 +501,8 @@ namespace betteribttest.GMAst
                 {
                     modified = false;
 
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
+                 //   modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                  modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
              
                     //  modified |= block.RunOptimization(SimplifyLogicNot);
                     //  modified |= block.RunOptimization(MakeAssignmentExpression);
@@ -477,16 +519,25 @@ namespace betteribttest.GMAst
             {
                 new LoopsAndConditions().FindConditions(block);
             }
+           
+            try
+            {
+                FlattenBasicBlocks(method);
 
-            FlattenBasicBlocks(method);
 
-            RemoveRedundantCode(method);
-            new GotoRemoval().RemoveGotos(method);
-            RemoveRedundantCode(method);
-            new GotoRemoval().RemoveGotos(method);
-            FixAllIfStatements(method);
-            RemoveRedundantCode(method);
-            FlattenBasicBlocks(method); // do this again?
+                RemoveRedundantCode(method);
+                new GotoRemoval().RemoveGotos(method);
+                RemoveRedundantCode(method);
+                new GotoRemoval().RemoveGotos(method);
+                FixAllIfStatements(method);
+                CombineLogicAndStatements(method);
+
+                RemoveRedundantCode(method); // all these might be redudent
+            } catch(Exception e)
+            {
+                Debug.WriteLine("Exception Goto: " + e.Message);
+            }
+            
         }
     }
 }

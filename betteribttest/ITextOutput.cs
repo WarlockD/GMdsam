@@ -55,14 +55,15 @@ namespace betteribttest
 
         public PlainTextWriter(TextWriter stream)
         {
+            _largestHeader = 0;
             _header = null;
             _flushed = false;
             _stream = stream;
             _line = null;
             _ident = 0;
-            IdentWidth = 4;// 4 charaters
-            IdentChar = ' '; // spaces.  1, '\t' is an option if you like tabs
-            Header = null;
+            _identWidth = 4;// 4 charaters
+            _identChar = ' '; // spaces.  1, '\t' is an option if you like tabs
+            _header = null;
             _outHeader = new StringBuilder(128);
             _lastChar = '\0';
             updateHeader();
@@ -111,6 +112,7 @@ namespace betteribttest
             string line = _line.ToString();
             if (!_flushed) _stream.Write(_outHeader.ToString());
             _stream.Write(line);
+            _stream.WriteLine();
             _line.Clear();
             _lineno++;
             _flushed = false;
@@ -126,7 +128,7 @@ namespace betteribttest
             foreach(var s in split)
             {
                 _line.Append(s);
-                WriteLine();
+                this.WriteLine();
             }
         }
         public override void Write(string value)

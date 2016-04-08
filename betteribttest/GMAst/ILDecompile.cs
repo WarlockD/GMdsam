@@ -19,7 +19,13 @@ namespace betteribttest.GMAst
         public List<string> StringIndex;
         public List<string> InstanceList;
         Dictionary<int, ILLabel> labelToILabel;
-
+        int _last_pc;
+        ILLabel _exitLabel = null;
+        Instruction.Instructions _instructions;
+        Dictionary<Instruction, Stack<ILExpression>> _stacks;
+        List<Label> exitLabels;
+        List<Label> labelStatementsPrinted;
+        List<Label> branchesSeen;
         public ILLabel GetILLabel(Label l)
         {
             ILLabel ret;
@@ -91,23 +97,25 @@ namespace betteribttest.GMAst
             i = i.Next;
             return assign;
         }
-        List<Label> exitLabels;
-        List<Label> labelStatementsPrinted;
-        List<Label> branchesSeen;
-        Instruction.Instructions _instructions;
+    
+
         void SetUpDecompiler(Instruction.Instructions instructions)
         {
             exitLabels = new List<Label>();
             labelStatementsPrinted = new List<Label>();
             branchesSeen = new List<Label>();
             labelToILabel = new Dictionary<int, ILLabel>();
-            _instructions = instructions;
+            _instructions = new Instruction.Instructions(instructions); // clone it
+            _exitLabel = null;
+            _last_pc = instructions.Last().Address;
+            _stacks = new Dictionary<Instruction, Stack<ILExpression>>();
         }
         public void AddLabel(Label label, List<ILNode> e)
         {
             if(labelStatementsPrinted.Contains(label)) throw new Exception("Duplicate label!");
             e.Add(GetILLabel(label));
             labelStatementsPrinted.Add(label);
+            _stacks = new Dictionary<Instruction, Stack<ILExpression>>();
         }
         public void ExtraLabels(List<ILNode> ret)
         {
@@ -119,43 +127,91 @@ namespace betteribttest.GMAst
                 }
             }
         }
-
+     
         public List<ILNode> DecompileInternal(Instruction.Instructions instructions)
         {
             SetUpDecompiler(instructions);
-            int last_pc = instructions.Last().Address;
+      
+
+           
+            var nodes = DecompileInternal( 0, instructions.Count - 1, _stacks);
+            if (_exitLabel != null)
+            {
+                nodes.Add(_exitLabel);
+                nodes.Add(new ILExpression(GMCode.Exit, null));
+            }
+            ILExpression expr = nodes.Last() as ILExpression;
+            if (expr != null && (expr.Code != GMCode.Exit || expr.Code != GMCode.Ret))
+            {
+                nodes.Add(new ILExpression(GMCode.Exit, null));
+            }
+            return nodes;
+        }
+        public Label FindNextBranchLabel(Instruction i)
+        {
+            while(i!= null)
+            {
+                if (i.Code == GMCode.B) return i.Operand as Label;
+                i = i.Next;
+            }
+            throw new Exception("Could not find");
+        }
+        // This hack converts case statements into a series of if statements while removeing dup
+        public List<ILNode> DecompileInternal(int to, int from, Dictionary<Instruction, Stack<ILExpression>> stacks)
+        {
             List<ILNode> nodes = new List<ILNode>();
-            ILLabel exitLabel = null;
-            Dictionary<Instruction, Stack<ILExpression>> stacks = new Dictionary<Instruction, Stack<ILExpression>>();
-            Instruction i = instructions.First();
+          
+            Instruction i = _instructions[to];
+            HashSet<Instruction> skip = new HashSet<Instruction>();
             // side not, I don't think labels apper in wierd parts of the code
-            while (i!=null)
+            while (i != null && _instructions.IndexOf(i) <= from)
             {
                 Stack<ILExpression> stack;
                 if (!stacks.TryGetValue(i, out stack)) stack = new Stack<ILExpression>();
 
                 if (i.Label != null) nodes.Add(GetILLabel(i.Label));
+                if (skip.Contains(i)) // we want to skip these instructions
+                {
+                    i = i.Next; continue;
+                }
                 ILExpression stmt = ConvertOneStatement(ref i, stack);
+                // Here is the switch case hack, we make a "switch" statement by collecting all the the switch
+                // cases with the ending being the jump to fail
+                // dup is exculsive used during this so I will have to check when its not?
+                if (stmt.Code == GMCode.Dup)
+                {
+                    stack.Push(stmt.Arguments[0]); // put it back on the stack
+                    Label failCase = FindNextBranchLabel(i);
+                    stacks.Add(failCase.InstructionOrigin, new Stack<ILExpression>(stack)); // Add it to the stack for the popv
+                    stmt.Code = GMCode.Switch;
+                    stmt.Arguments.Clear();
+                    stmt.Operand = GetILLabel(failCase);
+                    do
+                    {
+                        stmt.Arguments.Add(ConvertOneStatement(ref i, new Stack<ILExpression>(stack))); // should be one condition with a jump
+                        Debug.Assert(i.Code == GMCode.Dup || i.Code == GMCode.B);
+                        if (i.Code == GMCode.Dup) i = i.Next; // skip the dup
+
+                    } while (i.Code != GMCode.B); // first branch we see, its the fail
+                    skip.Add(failCase.InstructionOrigin); // skip the popz
+                }
                 nodes.Add(stmt);
                 if (!stmt.Code.IsUnconditionalControlFlow() && i != null && !stacks.ContainsKey(i)) stacks.Add(i, stack);
 
                 if (stmt.Code.IsConditionalControlFlow() || stmt.Code == GMCode.B)
                 {
                     ILLabel ilabel = stmt.Operand as ILLabel;
-                    if (ilabel.OldLabel.Address > last_pc)
+                    if (ilabel.OldLabel.Address > _last_pc)
                     {
                         // its an exit label, modfy it
                         ilabel.isExit = true;
-                        exitLabel = ilabel;
+                        _exitLabel = ilabel;
                     }
-                    else if(!stacks.ContainsKey(ilabel.OldLabel.InstructionOrigin))  stacks.Add(ilabel.OldLabel.InstructionOrigin, new Stack<ILExpression>(stack));
+                    else if (!stacks.ContainsKey(ilabel.OldLabel.InstructionOrigin)) stacks.Add(ilabel.OldLabel.InstructionOrigin, new Stack<ILExpression>(stack));
                 }
+
             }
-            if(exitLabel != null)
-            {
-                nodes.Add(exitLabel);
-                nodes.Add(new ILExpression(GMCode.Exit, null));
-            }
+           
             return nodes;
         }
         public ILExpression ConvertOneStatement(ref Instruction i, Stack<ILExpression> stack)
@@ -194,13 +250,45 @@ namespace betteribttest.GMAst
                         case GMCode.Call:
                             stack.Push(DoCallRValue(stack, ref i));
                             break;
-                        case GMCode.Dup:
-                            throw new Exception("Not sure what to do here");
-                        // i = i.Next;
-                        // break;
-                        case GMCode.Popz:   // the call is now a statlemtn
-                            Debug.Assert(stack.Peek().Code == GMCode.Call);
-                            ret = stack.Pop();
+                        case GMCode.Dup:    
+                            if(i.FirstType == GM_Type.Var)
+                            {
+                                Debug.Assert(i.Instance == 0); // simple v dup
+                                ret = new ILExpression(i.Code, null, stack.Pop());
+                                Debug.WriteLine("Saw a dup");
+                                // usally for a case statement
+                            } else
+                            {
+                                if(i.Instance == 0)
+                                {
+                                    stack.Push(stack.Peek());
+                                } else
+                                {
+                                    foreach(var e in stack.Reverse().ToList()) stack.Push(e);
+                                }
+                                
+                                // otherwise just try a normal dup
+                            }
+                            //Debug.Assert(i.FirstType == GM_Type.Var);
+                            // agenst a var                          
+                            // Fall though for case detection
+                            
+                            i = i.Next;
+                            break;
+                        case GMCode.Popz:
+                            // if it was a call, we want to pop it and return it as a statment
+                            // otherwise it was part of a case statment that killed the dups
+                            if (stack.Peek().Code == GMCode.Call)
+                            {
+                                ret = stack.Pop();
+                            }
+                            else {
+                                stack.Pop();
+                                Debug.WriteLine("poped a dup");
+                            }
+
+                          //  Debug.Assert(stack.Peek().Code == GMCode.Call);
+                           
                             i = i.Next;
                             break;
                         case GMCode.Pop:
@@ -222,18 +310,11 @@ namespace betteribttest.GMAst
                             i = i.Next; // skip
                             break; // skip those
                         case GMCode.Pushenv:
-                            {   // Pushenv points to the ending popenv.  So lets make the label point to the end to be on the safe side
-                                Label temp = new Label(i.BranchDesitation+1);
-                                ret = new ILExpression(i.Code,  GetILLabel(temp), stack.Pop());
-                            }
+                            ret = new ILExpression(i.Code,  GetILLabel(label), stack.Pop());
                             i = i.Next;
                             break;
                         case GMCode.Popenv:
-                            {   // Pushenv points to the ending popenv.  So lets make the label point to the end to be on the safe side
-                                int addresToPush = i.BranchDesitation - 1;
-                                Instruction pushInstruction = _instructions.atOffset(addresToPush);
-                                ret = new ILExpression(i.Code, labelToILabel[pushInstruction.BranchDesitation + 1]);
-                            }
+                            ret = new ILExpression(i.Code, GetILLabel(label));
                             i = i.Next;
                             break;
 
