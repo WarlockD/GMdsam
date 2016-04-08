@@ -250,11 +250,9 @@ namespace betteribttest.Dissasembler
                 case GMCode.B:
                 case GMCode.Bf:
                 case GMCode.Bt:
-                    i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
-                    break;
                 case GMCode.Popenv:
                 case GMCode.Pushenv:
-                    i._extra = (int)(0xFFFFFF & raw);
+                    i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
                     break;
                 case GMCode.BadOp:
                     throw new Exception("Bad opcode?");
@@ -316,6 +314,7 @@ namespace betteribttest.Dissasembler
             BinaryReader r = new BinaryReader(stream);
             return Dissasemble(r, stream.Length, StringList, InstanceList);
         }
+        // I had multipul passes on this so trying to combine it all to do one pass
         public static  SortedList<int,Instruction> Dissasemble(BinaryReader r, long length, List<string> StringList, List < string> InstanceList=null)
         {
             if (r == null) throw new ArgumentNullException("stream");
@@ -331,8 +330,13 @@ namespace betteribttest.Dissasembler
             {
                 Instruction i = DissasembleFromReader(pc, r);
                 pc += i.Size;
-                if (i.isBranch)
+                if (i.isBranch || i.Code == GMCode.Popenv)
                 {
+                    if(i.Code == GMCode.Popenv)
+                    {
+                        Instruction pushInstruction = list[i.Extra - 1]; // find the original push instruction
+                        i._extra = pushInstruction.Extra; // change the address  so it will point to the end of the enviroment
+                    }
                     branches.Add(i); // link labels
                     if (!labels.ContainsKey(i.Extra)) labels.Add(i.Extra, new Label(i.Extra));
                 }

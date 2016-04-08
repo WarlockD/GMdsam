@@ -173,18 +173,18 @@ namespace betteribttest.GMAst
     {
         public object Value { get; private set; }
         public GM_Type Type { get; private set; }
-        public string Text = null;
+        public string ValueText = null;
         public ILValue(bool i) { this.Value = i; Type = GM_Type.Bool; }
         public ILValue(int i) { this.Value = i; Type = GM_Type.Int; }
         public ILValue(object i) { this.Value = i; Type = GM_Type.Var; }
-        public ILValue(string i) { this.Value = i; Type = GM_Type.String; }
+        public ILValue(string i) { this.Value = i; Type = GM_Type.String; this.ValueText =  GMCodeUtil.EscapeString(i as string); }
         public ILValue(float i) { this.Value = i; Type = GM_Type.Float; }
         public ILValue(double i) { this.Value = i; Type = GM_Type.Double; }
         public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
         public ILValue(short i) { this.Value = i; Type = GM_Type.Short; }
         public ILValue(object o, GM_Type type) { this.Value = o; Type = type; }
-        public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; }
-        public ILValue(ILExpression e) { this.Value = e;  Type = GM_Type.ConstantExpression; }
+        public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
+        public ILValue(ILExpression e) { this.Value = e;  Type = GM_Type.ConstantExpression;  }
         public static ILValue FromInstruction(Instruction i)
         {
             Debug.Assert(i.Code == GMCode.Push && i.FirstType != GM_Type.Var);
@@ -204,9 +204,7 @@ namespace betteribttest.GMAst
         }
         public override string ToString()
         {
-            string ret = Value.ToString();
-            if (Text != null) ret += " /* " + Text + " */ ";
-            return ret;
+            return ValueText ?? Value.ToString();
         }
         public override bool Equals(object obj)
         {
@@ -443,7 +441,14 @@ namespace betteribttest.GMAst
         public GM_Type InferredType { get; set; }
 
         public static readonly object AnyOperand = new object();
-
+        public ILExpression(ILExpression i) // copy it
+        {
+            this.Code = i.Code;
+            this.Operand = i.Operand; // don't need to worry about this
+            this._args = new ILList<ILExpression>();
+            if(i.Arguments.Count!=0) foreach (var n in i.Arguments) this._args.Add(new ILExpression(n));
+            this.ILRanges = i.ILRanges;
+        }
         public ILExpression(GMCode code, object operand, List<ILExpression> args)
         {
             if (operand is ILExpression)
@@ -609,7 +614,7 @@ namespace betteribttest.GMAst
                             Arguments.First().WriteTo(output);
                         else
                             output.Write("%pop%");
-;                        break;
+                        ; break;
                     case GMCode.Popz:
                         output.Write("Popz");
                         break;
@@ -620,6 +625,7 @@ namespace betteribttest.GMAst
                         break;
                     case GMCode.Dup:
                         output.Write("Dup ");
+                        output.Write(Operand.ToString());
                         break;
                     case GMCode.B: // this is where the magic happens...woooooooooo
                         output.Write("goto ");
@@ -673,19 +679,21 @@ namespace betteribttest.GMAst
                     case GMCode.LoopContinue:
                         output.Write("continue");
                         break;
+                    case GMCode.Case:
+                        output.Write("case ");
+                        Arguments.Single().WriteTo(output); // second bit
+                        output.Write(": goto ");
+                        output.Write((Operand as ILLabel).Name);
+                        break;
                     case GMCode.Switch: // debug print of the created switch statement
                         output.Write("switch(");
-                        Arguments[0].Arguments[0].Arguments[0].WriteTo(output); // Just a hack, writes the left side of the argument
+                        Arguments[0].WriteTo(output); 
                         output.Write(") {");
                         output.WriteLine();
                         output.Indent();
-                        foreach(var arg in Arguments)
+                        for (int i = 1; i < Arguments.Count; i++)
                         {
-                            output.Write("case ");
-                            arg.Arguments[0].Arguments[1].WriteTo(output); // second bit
-                            output.Write(": goto ");
-                            output.Write((arg.Operand as ILLabel).Name);
-                            output.Write(";");
+                            Arguments[i].WriteTo(output);
                             output.WriteLine();
                         }
                         output.Unindent();

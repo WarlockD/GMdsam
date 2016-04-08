@@ -23,7 +23,7 @@ namespace betteribttest
                 int instance;
                 if (arg.TryParse(out instance) && (instance > 0 && instance < cr.spriteList.Count))
                 {
-                    arg.Text = "\"" + cr.spriteList[instance].Name + "\"";
+                    arg.ValueText = "\"" + cr.spriteList[instance].Name + "\"";
                 }
             }
         }
@@ -35,7 +35,7 @@ namespace betteribttest
                 int instance;
                 if (arg.TryParse(out instance) && (instance > 0 && instance < InstanceList.Count))
                 {
-                    arg.Text = "\"" + InstanceList[instance] + "\"";
+                    arg.ValueText = "\"" + InstanceList[instance] + "\"";
                 }
             }
         }
@@ -47,7 +47,7 @@ namespace betteribttest
                 int instance;
                 if (arg.TryParse(out instance) && (instance > 0 && instance < cr.resFonts.Count))
                 {
-                    arg.Text = "\"" + cr.resFonts[instance].Name + "\"";
+                    arg.ValueText = "\"" + cr.resFonts[instance].Name + "\"";
                 }
             }
         }
@@ -63,7 +63,7 @@ namespace betteribttest
                     byte red = (byte)(color & 0xFF);
                     byte green = (byte)(color >> 8 & 0xFF);
                     byte blue = (byte)(color >> 16 & 0xFF);
-                    arg.Text = "Red=" + red + " ,Green=" + green + " ,Blue=" + blue;
+                    arg.ValueText = "Red=" + red + " ,Green=" + green + " ,Blue=" + blue;
                 }
             }
         }
@@ -75,7 +75,7 @@ namespace betteribttest
                 int instance;
                 if (arg.TryParse(out instance) && (instance > 0 && instance < cr.scriptIndex.Count))
                 {
-                    arg.Text = "\"" + cr.scriptIndex[instance].script_name + "\"";
+                    arg.ValueText = "\"" + cr.scriptIndex[instance].script_name + "\"";
 
                 }
             }
@@ -207,34 +207,30 @@ namespace betteribttest
 
 
            //  string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly and VERY simple
-              string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+           //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+            // Emptyboarer is a MUST test.  It has a && in it as well as simple if statments and calls.  If we can't pass this nothing else will work
 
 
             //       string filename_to_test = "SCR_DIRECT"; // simple loop works!
-            //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
+              string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
             //   string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
 
 
 
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
-                Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
+              //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
                 
                 var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
                 betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values,files.ScriptName + "_new.asm");
                 new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, stringList, InstanceList);
 
                
-                if (instructions!= null) instructions.SaveInstructions(files.ScriptName + ".asm");
+              //  if (instructions!= null) instructions.SaveInstructions(files.ScriptName + ".asm");
                 continue;
-                if (instructions.Count == 0)
-                {
-                    System.Diagnostics.Debug.WriteLine("No instructions on script '" + files.ScriptName + "'");
-                    continue;
-                }
                 //System.Diagnostics.Debug.Assert(files.ScriptName != "gml_Object_obj_undyneboss_Destroy_0");
                 MethodBody mb = new MethodBody();
-                mb.Instructions = instructions.ToList();
+               // mb.Instructions = instructions.ToList();
                 var graph = betteribttest.FlowAnalysis.ControlFlowGraphBuilder.Build(mb);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
@@ -244,7 +240,7 @@ namespace betteribttest
 
 
 
-                var list = ild.DecompileInternal(instructions);
+                var list = ild.DecompileInternal(null);
                 ILBlock method = new ILBlock();
                 method.Body = list;
                 using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(files.ScriptName + "_preil.txt"))) method.WriteTo(sw);

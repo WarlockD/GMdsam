@@ -75,6 +75,7 @@ namespace betteribttest.Dissasembler
                 case GMCode.Sgt:
                 case GMCode.Sle:
                 case GMCode.Slt:
+                case GMCode.Sne:
                     return 2;
                 default:
                     throw new Exception("Unkonwn opcode");
@@ -118,8 +119,8 @@ namespace betteribttest.Dissasembler
                 case GMCode.Sgt:
                 case GMCode.Sle:
                 case GMCode.Slt:
+                case GMCode.Sne:
                     return 1;
-                    break;
                 default:
                     throw new Exception("Unkonwn opcode");
 
@@ -327,7 +328,7 @@ namespace betteribttest.Dissasembler
             v.Operand = newVar;
         }
         // Try to resolve expresions and turn them into constant expressions
-        void TryResolveSimpleExpresions(ref ILExpression v, List<ILNode> nodes)
+        void TryResolveSimpleExpresions(ref ILExpression v, List<ILNode> nodes) 
         {
             int popCount = v.Code.GetPopDelta();
             ILExpression[] args;
@@ -440,7 +441,76 @@ namespace betteribttest.Dissasembler
             }
             return nodes;
         }
-
+        // try to match a patern that goes with a switch and change it to a switch Expression
+        List<ILNode> MatchCase(List<ILNode> ast, int btPosition)
+        {
+            int index = ast.FindLastIndexOf(GMCode.Dup, btPosition); // might be a a switch even
+            if (index == -1) return null;
+            List<ILNode> list = new List<ILNode>();
+            for (int i = index; index <= btPosition; index++) list.Add(ast[i]);
+            return list;
+        }
+        // detect the size of the case going backwards, if there isn't a case there return -1;
+        int FindEndOfSwitch(List<ILNode> ast, ILLabel fallOutLabel)
+        {
+            ILLabel test;
+            for (int i=0;i < ast.Count; i++)
+            {
+                if(ast[i].Match(GMCode.Bt) && ast[i+1].Match(GMCode.B, out test) && (test == fallOutLabel)) return i + 1;
+            }
+            return -1;
+        }
+        // trying to do this here instead of the Optimize portion
+        public void SwitchDetection(List<ILNode> ast)
+        {
+            bool modified = false;
+            int from = ast.Count - 1;
+            do
+            {
+                int popz = ast.FindLastIndexOf(GMCode.Popz,from); // Only time popz is used is in switches and calls
+                if(popz != -1 && ast[popz-1].Match(GMCode.Call)) { from = popz -1; continue; } // skip and continue
+                ILLabel fallOutLabel = ast[popz - 1] as ILLabel;
+                Debug.Assert(fallOutLabel != null); // Label should be right before it
+                // Now that we have the fallOutLabel, lets find the patern that is the end of the long switch branches
+                int endCase = FindEndOfSwitch(ast, fallOutLabel);
+                int startCase = endCase - 1;
+                Debug.Assert(endCase != -1);    // find the start index of the switch case
+                for (int current = ast.FindLastIndexOf(GMCode.Dup, endCase - 1); current != -1; current = ast.FindLastIndexOf(GMCode.Dup, current - 1)) startCase = current;
+                ILExpression switchExpression = ast[startCase - 1] as ILExpression;
+                Debug.Assert(switchExpression != null); // HAS to be an expression
+                Debug.Assert(switchExpression.isConstant()); // HAS to be already processed
+                if (switchExpression.Code == GMCode.Push) switchExpression.Code = GMCode.Var; // convert it
+                List <ILNode> switchBlock = new List<ILNode>();
+                for (int i = startCase; i < ((endCase+1) - startCase); i++) {
+                    ILExpression e = ast[i] as ILExpression;
+                    Debug.Assert(e != null); // more checking, make sure we have just expressions in here
+                    if(e.Code == GMCode.Dup) e = new ILExpression(switchExpression); // replace it with the switch expression
+                    if(e.Code == GMCode.Seq) TryResolveSimpleExpresions(ref e, switchBlock); // Resolve the equal statement in there
+                    switchBlock.Add(e);
+                }
+                // Time to make the switch expression!
+                ILExpression finalSwitch = new ILExpression(GMCode.Switch, fallOutLabel);
+                finalSwitch.Arguments.Add(switchExpression); // first argument is the compare switch condition
+                for (int i = 0; i < switchBlock.Count; i += 2) { // evey two expresions condition/ label
+                    ILLabel caseLabel;
+                    ILValue condition;
+                    if (switchBlock[i].Match(GMCode.Push, out condition) && switchBlock[i+1].Match(GMCode.Bt,out caseLabel))
+                    {
+                        Debug.Assert(condition.Type == GM_Type.ConstantExpression); // should be an expression
+                        finalSwitch.Arguments.Add(new ILExpression(GMCode.Case, caseLabel, (condition.Value as ILExpression).Arguments[0])); // Just add the left hand
+                    }
+                }
+                // be sure to remove from reverse order so the indexes we have are still valid
+                ast.RemoveAt(popz); // finaly remove the popz at the end of the case as the stack shold be clean then
+                ast.RemoveAt(endCase); // remove the end casegoto as we don't need it anymore
+                
+                // Now the annoying part.  we have to remove all the nodes
+                ast.RemoveRange(startCase, endCase - startCase);
+                // then replace the push condition with the switch statement
+                ast[startCase - 1] = finalSwitch;
+                
+            } while (modified);
+        }
         public List<ILNode> Build(SortedList<int, Instruction> method, bool optimize, List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
         {
             if (method.Count == 0) return new List<ILNode>();
@@ -450,6 +520,7 @@ namespace betteribttest.Dissasembler
             _method = method;
             this.optimize = optimize;
             List<ILNode> ast = BuildPreAst();
+            SwitchDetection(ast);
             //List<ByteCode> body = StackAnalysis(method);
             ast.DebugPrintILAst("bytecode_test.txt");
      

@@ -132,7 +132,17 @@ namespace betteribttest.GMAst
             brLabel = null;
             return false;
         }
-        public static bool MatchLastFrom<T>(this IList<ILNode> bb, ref int from, out T e, Predicate<T> pred) where T : ILNode
+        public static int FindLastIndexOf(this IList<ILNode> ast, GMCode code, int from)
+        {
+            if (ast.Count == 0 || from < 0 || from > (ast.Count-1)) return -1;
+            for (int i = from; i >= 0; i--) if (ast[i].Match(code)) return i;
+            return -1;
+        }
+        public static int FindLastIndexOf(this IList<ILNode> ast, GMCode code)
+        {
+            return ast.FindLastIndexOf(code, ast.Count - 1);
+        }
+        public static bool MatchLastFrom<L,T>(this IList<L> bb, ref int from, out T e, Predicate<T> pred) where T : ILNode where L : ILNode
         {
             if (bb.Count != 0)
             {
@@ -152,12 +162,12 @@ namespace betteribttest.GMAst
             e = default(T);
             return false;
         }
-        public static bool MatchLast<T>(this IList<ILNode> bb, out T e, Predicate<T> pred) where T : ILNode
+        public static bool MatchLast<L,T>(this IList<L> bb, out T e, Predicate<T> pred) where T : ILNode where L : ILNode
         {
             if (bb.Count != 0)
             {
                 int from = bb.Count - 1;
-                return MatchLastFrom(bb, ref from, out e, pred);
+                return bb.MatchLastFrom(ref from, out e, pred);
             }
             e = default(T);
             return false;
@@ -166,11 +176,16 @@ namespace betteribttest.GMAst
         {
             return (n.Code == GMCode.Push && (n.Operand is ILValue || n.Operand is ILVariable)) || n.Code == GMCode.Call;
         }
-        public static bool MatchLastConstant(this IList<ILNode> bb, out ILExpression e)
+        public static bool MatchLastConstant<T>(this IList<T> bb, out ILExpression e) where T : ILNode
         {
             return bb.MatchLast(out e, n => (n != null && n.isConstant()));
         }
-        public static bool MatchLastConstants(this IList<ILNode> bb, int count, out ILExpression[] constants)
+        public static bool MatchLastConstanFrom<T>(this IList<T> bb, int from, out ILExpression e) where T : ILNode
+        {
+            if (bb.MatchLastFrom(ref from, out e, n => (n != null && n.isConstant()))) return true;
+            return false;
+        }
+        public static bool MatchLastConstants<T>(this IList<T> bb, int count, out ILExpression[] constants) where T : ILNode
         {
             ILExpression[] ret = new ILExpression[count];
             int from = bb.Count - 1;

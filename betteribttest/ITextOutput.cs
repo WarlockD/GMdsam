@@ -20,8 +20,7 @@ namespace betteribttest
         char _lastChar;
         int _lineno;
         int _ident;
-        int _identWidth;
-        char _identChar;
+        string _identString;
         void updateHeader()
         {
             _outHeader.Clear();
@@ -32,15 +31,17 @@ namespace betteribttest
                 _outHeader.Append(_header);
                 if (_outHeader.Length < _largestHeader) _outHeader.Append(' ', _largestHeader - _outHeader.Length);
             }
-            _outHeader.Append(_identChar, _identChar * _ident);
+            if (!string.IsNullOrEmpty(_identString))
+            {
+                for (int i = 0; i < _ident; i++) _outHeader.Append(_identString);
+            }
         }
         public int LineNumber { get { return _lineno; } }
         public int Position { get { return HeaderLength + _line.Length; } }
-        public int HeaderLength { get { return _largestHeader + _identChar * _ident; } }
+        public int HeaderLength { get { return _largestHeader + (_identString != null ? _identString.Length * _ident : 0); } }
         public void Indent() { _ident++; updateHeader(); }
         public void Unindent() { _ident--; if (_ident < 0) _ident = 0; updateHeader(); }
-        public int IdentWidth { get { return _identWidth; } set { _identWidth = value; updateHeader(); } }
-        public char IdentChar { get { return _identChar; } set { _identChar = value; updateHeader(); } }
+        public string IndentString { get { return _identString; } set { _identString = value; updateHeader(); } }
        
         public string Header
         {
@@ -61,8 +62,7 @@ namespace betteribttest
             _stream = stream;
             _line = null;
             _ident = 0;
-            _identWidth = 4;// 4 charaters
-            _identChar = ' '; // spaces.  1, '\t' is an option if you like tabs
+            _identString = "    ";
             _header = null;
             _outHeader = new StringBuilder(128);
             _lastChar = '\0';
@@ -197,10 +197,6 @@ namespace betteribttest
             throw new NotImplementedException();
         }
 
-        ~PlainTextWriter()
-        {
-            Flush(); // make sure it flushes though I think Dispose will do this humm
-        }
     }
     public struct TextLocation
     {
