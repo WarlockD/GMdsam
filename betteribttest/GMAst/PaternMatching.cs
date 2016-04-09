@@ -26,7 +26,6 @@ namespace betteribttest.GMAst
             operand = default(T);
             return false;
         }
-
         public static bool Match(this ILNode node, GMCode code, out IList<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
@@ -42,7 +41,7 @@ namespace betteribttest.GMAst
 
         public static bool Match(this ILNode node, GMCode code, out ILExpression arg)
         {
-            List<ILExpression> args;
+            IList<ILExpression> args;
             if (node.Match(code, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -142,71 +141,39 @@ namespace betteribttest.GMAst
         {
             return ast.FindLastIndexOf(code, ast.Count - 1);
         }
-        public static bool MatchLastFrom<L,T>(this IList<L> bb, ref int from, out T e, Predicate<T> pred) where T : ILNode where L : ILNode
+        public static bool MatchLastCount<T>(this IList<T> ast, GMCode code,int count, out List<ILExpression> match) where T : ILNode
         {
-            if (bb.Count != 0)
+            do
             {
-                Debug.Assert(from >= 0 && from < bb.Count);
-                for (int i = from; i >= 0; i++)
+                if (ast.Count == 0 && ast.Count < count) break;
+                int i = ast.Count - 1, j = 0;
+                List<ILExpression> ret = new List<ILExpression>();
+                for (; i >= 0 && j < count; i--, j++)
                 {
-                    if (bb[i] is ILLabel) continue; // skip labels
-                    T test = bb[i] as T;
-                    if (test != null && pred(test))
-                    {
-                        e = test;
-                        return true;
-                    }
-                    break;
+                    ILExpression test;
+                    if (ast.ElementAtOrDefault(i).Match(code, out test)) ret.Add(test); else break;
                 }
-            }
-            e = default(T);
-            return false;
+                if (j != count) break; // bad match or not enough match
+                match = ret;
+                return true;
+            } while (false);
+            match = default(List<ILExpression>);
+            return false; 
         }
-        public static bool MatchLast<L,T>(this IList<L> bb, out T e, Predicate<T> pred) where T : ILNode where L : ILNode
-        {
-            if (bb.Count != 0)
-            {
-                int from = bb.Count - 1;
-                return bb.MatchLastFrom(ref from, out e, pred);
-            }
-            e = default(T);
-            return false;
-        }
+      
         public static bool isConstant(this ILExpression n)
         {
-            return (n.Code == GMCode.Push && (n.Operand is ILValue || n.Operand is ILVariable)) || n.Code == GMCode.Call;
+            return (n.Code == GMCode.Push && (n.Arguments.Single().Code == GMCode.Constant)) || n.Code == GMCode.Call;
         }
-        public static bool MatchLastConstant<T>(this IList<T> bb, out ILExpression e) where T : ILNode
+        public static void RemoveLast<T>(this List<T> a)
         {
-            return bb.MatchLast(out e, n => (n != null && n.isConstant()));
+            if (a.Count == 0) return;
+            a.RemoveAt(a.Count - 1);
         }
-        public static bool MatchLastConstanFrom<T>(this IList<T> bb, int from, out ILExpression e) where T : ILNode
+        public static void RemoveLast<T>(this List<T> a,int count)
         {
-            if (bb.MatchLastFrom(ref from, out e, n => (n != null && n.isConstant()))) return true;
-            return false;
-        }
-        public static bool MatchLastConstants<T>(this IList<T> bb, int count, out ILExpression[] constants) where T : ILNode
-        {
-            ILExpression[] ret = new ILExpression[count];
-            int from = bb.Count - 1;
-            bool noMatch = false;
-            for(int i=0;i < count; i++)
-            {
-                if (bb.MatchLastFrom(ref from, out ret[i], n => (n != null && n.isConstant()))) from--;// skip the node
-                else {
-                    noMatch = true;
-                    break;
-                }
-            }
-            if(noMatch)
-            {
-                constants = default(ILExpression[]);
-                return false;
-            } else
-            {
-                constants = ret;
-                return true;
-            }
+            if (a.Count < count) a.Clear();
+            else a.RemoveRange(a.Count - count, count);
         }
         public static bool MatchSwitchBlock(this ILBasicBlock bb,  out IList<ILExpression> arg, out ILLabel fallLabel)
         {

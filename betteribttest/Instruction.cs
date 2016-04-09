@@ -70,7 +70,8 @@ namespace betteribttest
         LoopOrSwitchBreak = 0xf7,
         Switch = 0xf9,
         Case = 0xfa,
-        Leave = 0xfb, // used to leave a popenv satment when not at end
+        Constant = 0xfb, 
+        Assign,
     }
     public static class GMCodeUtil
     {

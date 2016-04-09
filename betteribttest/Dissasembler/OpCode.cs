@@ -109,7 +109,7 @@ namespace betteribttest.Dissasembler
             do
             {
                 if (Operand == null || Types == null) break;
-                if (Types[0] == GM_Type.Int || Types[0] == GM_Type.Short)
+                if (Types[0] == GM_Type.Int || Types[0] == GM_Type.Short || Operand is int)
                 {
                     value = (int)Operand;
                     return true;
@@ -203,6 +203,7 @@ namespace betteribttest.Dissasembler
             i._extra = (short)(0xFFFF & raw); // default for almost eveything
             switch (i.Code)
             {
+                
                 case GMCode.Call:
                     i.Types = new GM_Type[] { (GM_Type)((raw >> 16) & 15) };
                     return true;

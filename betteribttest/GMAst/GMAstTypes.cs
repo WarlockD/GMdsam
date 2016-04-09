@@ -18,8 +18,10 @@ namespace betteribttest.GMAst
         // Wow, why havn't I been using Collection? seriously!
         public class ILList<T> : Collection<T> where T : ILNode
         {
-            public ILList() : base()
+            public ILNode Parent = null;
+            public ILList(ILNode parent = null) : base()
             {
+                this.Parent = parent;
             }
             static List<T> GetList(IList<T> check, bool copy = false)
             {
@@ -31,8 +33,9 @@ namespace betteribttest.GMAst
                 if (testArray != null) return new List<T>(testArray);
                 throw new Exception("Not supported IList type " + check.GetType().ToString());
             }
-            public ILList(IList<T> nodes) : base(GetList(nodes)) // make suer we have a clean list
+            public ILList(IList<T> nodes, ILNode parent = null) : base(GetList(nodes)) // make suer we have a clean list
             {
+                this.Parent = parent;
                 Relink();
             }
             // requires some carful thinking
@@ -41,7 +44,7 @@ namespace betteribttest.GMAst
                 ILNode prev = null;
                 foreach (var node in this)
                 {
-                    //  node.Parent = _parent;
+                    node._parent = Parent;
                     node._next = null;
                     if (prev != null)
                     {
@@ -51,7 +54,7 @@ namespace betteribttest.GMAst
                     else node._previous = null;
                 }
             }
-            void ClearNode(ILNode node) { node._next = node._previous = null; }
+            void ClearNode(ILNode node) { node._next = node._previous = node._parent = null; }
             protected override void ClearItems()
             {
                 foreach (var node in this) ClearNode(node);
@@ -137,16 +140,16 @@ namespace betteribttest.GMAst
             set
             {
                 if (_body != null) _body.Clear();
-                _body = new ILList<ILNode>(value);
+                _body = new ILList<ILNode>(value,this);
             }
         }
         public ILBlock(params ILNode[] body)
         {
-            this.Body = new List<ILNode>(body);
+            this.Body = new ILList<ILNode>(body.ToList(),this);
         }
         public ILBlock(List<ILNode> body)
         {
-            this.Body = body;
+            this.Body = new ILList<ILNode>(body, this);
         }
 
         public override IEnumerable<ILNode> GetChildren()
@@ -183,6 +186,7 @@ namespace betteribttest.GMAst
         public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
         public ILValue(short i) { this.Value = i; Type = GM_Type.Short; }
         public ILValue(object o, GM_Type type) { this.Value = o; Type = type; }
+        public ILValue(ILVariable v) { this.Value = v; Type = GM_Type.Var; }
         public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
         public ILValue(ILExpression e) { this.Value = e;  Type = GM_Type.ConstantExpression;  }
         public static ILValue FromInstruction(Instruction i)
@@ -257,8 +261,12 @@ namespace betteribttest.GMAst
             set
             {
                 _body.Clear();
-                _body = new ILList<ILNode>(value);
+                _body = new ILList<ILNode>(value,this);
             }
+        }
+        public ILBasicBlock()
+        {
+            _body = new ILList<ILNode>(this);
         }
         public override IEnumerable<ILNode> GetChildren()
         {
@@ -302,20 +310,6 @@ namespace betteribttest.GMAst
         public override int GetHashCode()
         {
             return Name.GetHashCode();
-        }
-    }
-   // holder till stack anylist can figure out what it is
-    public class ILUnkonwnVariable
-    {
-        public string Name;
-        public bool isArray;
-        public int Operand;
-        public GM_Type Type = GM_Type.NoType;
-        public override string ToString()
-        {
-            string ret = "stack." + Name;
-            if (isArray) ret += "[]";
-            return ret;
         }
     }
     public class ILVariable
@@ -431,7 +425,7 @@ namespace betteribttest.GMAst
             set
             {
                 _args.Clear();
-                _args = new ILList<ILExpression>(value);
+                _args = new ILList<ILExpression>(value,this);
             }
         }
         // Mapping to the original instructions (useful for debugging)
@@ -445,7 +439,7 @@ namespace betteribttest.GMAst
         {
             this.Code = i.Code;
             this.Operand = i.Operand; // don't need to worry about this
-            this._args = new ILList<ILExpression>();
+            this._args = new ILList<ILExpression>(this);
             if(i.Arguments.Count!=0) foreach (var n in i.Arguments) this._args.Add(new ILExpression(n));
             this.ILRanges = i.ILRanges;
         }
@@ -456,7 +450,7 @@ namespace betteribttest.GMAst
 
             this.Code = code;
             this.Operand = operand;
-            this._args = new ILList<ILExpression>(args);
+            this._args = new ILList<ILExpression>(args, this);
             this.ILRanges = new List<ILRange>(1);
         }
 
@@ -467,7 +461,7 @@ namespace betteribttest.GMAst
 
             this.Code = code;
             this.Operand = operand;
-            this._args = new ILList<ILExpression>(args);
+            this._args = new ILList<ILExpression>(args, this);
             this.ILRanges = new List<ILRange>(1);
         }
 
@@ -486,14 +480,12 @@ namespace betteribttest.GMAst
         {
             if (this.Operand is ILLabel)
             {
-                return new ILLabel[] { (ILLabel)this.Operand };
+                yield return this.Operand as ILLabel ;
             }
-            else if (this.Operand is ILLabel[])
+            else if(Code == GMCode.Switch)
             {
-                return (ILLabel[])this.Operand;
-            }
-            else {
-                return new ILLabel[] { };
+                var list =  Arguments.Skip(1).Select(x => x.Operand as ILLabel).ToList();
+                foreach (var l in list) yield return l;
             }
         }
         bool ArgumentWriteTo(ITextOutput output)
@@ -541,17 +533,47 @@ namespace betteribttest.GMAst
         {
             switch (node.Code)
             {
-                case GMCode.Push:
                 case GMCode.Call:
                 case GMCode.Var:
+                case GMCode.Constant:
                     return false;
                 default:
                     return true;
             }
         }
-        void WriteOperand(ITextOutput output)
+        void WriteOperand(ITextOutput output,bool escapeString=true)
         {
-            if (Operand is ILValue) output.Write(Operand.ToString());
+            if (Operand is ILLabel) output.Write((Operand as ILLabel).Name);
+            else if (escapeString)
+            {
+                if (Operand is string)
+                    output.Write(GMCodeUtil.EscapeString((string)Operand));
+                else if (Operand is ILValue)
+                {
+                    ILValue val = Operand as ILValue;
+                    if (val.Type == GM_Type.String) output.Write(GMCodeUtil.EscapeString((string)val.Value));
+                    else output.Write(val.Value.ToString());
+                }
+                else output.Write(Operand.ToString());
+            } else output.Write(Operand.ToString());
+        }
+        /// <summary>
+        /// This makes sure when we write an argument, the string looks right
+        /// </summary>
+        /// <param name="output"></param>
+        /// <param name="index"></param>
+        /// <param name="escapeString"></param>
+        void WriteArgument(ITextOutput output, int index, bool escapeString = true)
+        {
+            ILExpression arg = Arguments[index];
+            if (arg.Code == GMCode.Constant) arg.WriteOperand(output, escapeString);
+            else arg.WriteTo(output); // don't know what it is
+        }
+        static readonly string POPDefaultString = "%POP%";
+        void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
+        {
+            if (index < Arguments.Count) WriteArgument(output, index, escapeString);
+            else output.Write(POPDefaultString);    
         }
         public override void WriteTo(ITextOutput output)
         {
@@ -563,12 +585,13 @@ namespace betteribttest.GMAst
                     output.Write(Code.getOpTreeString());
                     bool needParm = CheckParm(Arguments[0]);
                     if (needParm) output.Write('(');
-                    Arguments[0].WriteTo(output);
+                    WriteArgument(output, 0);
                     if (needParm) output.Write(')');
                 } else
                 {
                     output.Write(Code.GetName());
-                    output.Write(" %pop%"); // fake
+                    output.Write(' ');
+                    output.Write(POPDefaultString); // fake
                 }
                
             }
@@ -578,50 +601,65 @@ namespace betteribttest.GMAst
                 {
                     bool needParm = CheckParm(Arguments[0]);
                     if (needParm) output.Write('(');
-                    Arguments[0].WriteTo(output);
+                    WriteArgument(output, 0);
                     if (needParm) output.Write(')');
                     output.Write(' ');
                     output.Write(Code.getOpTreeString());
                     output.Write(' ');
                     needParm = CheckParm(Arguments[1]);
                     if (needParm) output.Write('(');
-                    Arguments[1].WriteTo(output);
+                    WriteArgument(output, 1);
                     if (needParm) output.Write(')');
                 }
                 else
                 {
                     output.Write(Code.GetName());
-                    output.Write(" %pop%, %pop%"); // fake
+                    output.Write(' ');
+                    output.Write(POPDefaultString); 
+                    output.Write(", ");
+                    output.Write(POPDefaultString); 
                 }
-
             }
             else
             {
 
                 switch (Code)
                 {
-                    case GMCode.Var:
-                        output.Write(Operand.ToString()); // generic, should cover all cases
+                    case GMCode.Constant: // primitive c# type
+                        WriteOperand(output);
+                        break;
+                    case GMCode.Var:  // should be ILVariable
+                        if (Arguments.Count > 0) WriteArgument(output, 0, false); 
+                        else output.Write("stack");
+                        output.Write(".");
+                        WriteOperand(output, false);// generic, string name
+                        if (Arguments.Count > 1) // its an array
+                        {
+                            output.Write('[');
+                            WriteArgument(output, 1, false);
+                            output.Write(']');
+                        }
                         break;
                     case GMCode.Call:
                         output.Write(Operand.ToString());
                         ArgumentWriteTo(output);
                         break;
                     case GMCode.Pop:
-                        output.Write(Operand.ToString());
+                        if (Arguments.Count > 0) Arguments[0].WriteTo(output);
+                        else output.Write(POPDefaultString);
+                        break;
+                    case GMCode.Assign:
+                        WriteArgumentOrPop(output, 0, false);
                         output.Write(" = ");
-                        if (Arguments.Count != 0)
-                            Arguments.First().WriteTo(output);
-                        else
-                            output.Write("%pop%");
-                        ; break;
+                        WriteArgumentOrPop(output, 1, true);
+                        break;
                     case GMCode.Popz:
                         output.Write("Popz");
                         break;
                     case GMCode.Push:
                         output.Write("Push ");
-                        output.Write(Operand.ToString()); // generic, should cover all cases
-                                                          //  output.Write(')');
+                        Debug.Assert(Operand == null);
+                        WriteArgumentOrPop(output, 0);
                         break;
                     case GMCode.Dup:
                         output.Write("Dup ");
@@ -629,7 +667,7 @@ namespace betteribttest.GMAst
                         break;
                     case GMCode.B: // this is where the magic happens...woooooooooo
                         output.Write("goto ");
-                        output.Write((Operand as ILLabel).Name);
+                        WriteOperand(output);
                         break;
                     case GMCode.Bf:
                         if (Arguments.Count > 0)
@@ -638,8 +676,8 @@ namespace betteribttest.GMAst
                             Arguments[0].WriteTo(output);
                             output.Write(")");
                         }
-                        output.Write("BranchIfFalse ");
-                        output.Write((Operand as ILLabel).Name);
+                        output.Write("Branch IfFalse ");
+                        WriteOperand(output);
                         break;
                     case GMCode.Bt:
                         if (Arguments.Count > 0)
@@ -649,29 +687,23 @@ namespace betteribttest.GMAst
                             output.Write(")");
                         }
                         output.Write("BranchIfTrue ");
-                        output.Write((Operand as ILLabel).Name);
+                        WriteOperand(output);
                         break;
                     case GMCode.Pushenv:
                         output.Write("PushEnviroment(");
-                        if (Arguments.Count != 0)
-                            Arguments[0].WriteTo(output);
-                        else
-                            output.Write("%pop%");
-                        output.Write(") : ");
-                        output.Write(Operand.ToString());
+                        WriteArgumentOrPop(output, 0);
+                        output.Write(")");
                         break;
                     case GMCode.Popenv:
-                        output.Write("PopEnviroment(");
-                        //Arguments[0].WriteTo(output);
-                        output.Write("): ");
-                        output.Write(Operand.ToString());
+                        output.Write("PopEnviroment ");
+                        WriteOperand(output);
                         break;
                     case GMCode.Exit: // exit without
                         output.Write("return; // exit");
                         return;
                     case GMCode.Ret:
                         output.Write("return ");
-                        Arguments[0].WriteTo(output);
+                        WriteArgumentOrPop(output, 0);
                         break;
                     case GMCode.LoopOrSwitchBreak:
                         output.Write("break");
@@ -681,19 +713,21 @@ namespace betteribttest.GMAst
                         break;
                     case GMCode.Case:
                         output.Write("case ");
+                        WriteArgumentOrPop(output, 0);
                         Arguments.Single().WriteTo(output); // second bit
                         output.Write(": goto ");
-                        output.Write((Operand as ILLabel).Name);
+                        WriteOperand(output);
                         break;
                     case GMCode.Switch: // debug print of the created switch statement
                         output.Write("switch(");
-                        Arguments[0].WriteTo(output); 
+                        WriteArgument(output, 0);
                         output.Write(") {");
                         output.WriteLine();
                         output.Indent();
                         for (int i = 1; i < Arguments.Count; i++)
                         {
-                            Arguments[i].WriteTo(output);
+                            WriteArgument(output, i);
+                            output.Write(';');
                             output.WriteLine();
                         }
                         output.Unindent();

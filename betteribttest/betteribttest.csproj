@@ -63,6 +63,7 @@
     <Compile Include="Dissasembler\EnviromentHandler.cs" />
     <Compile Include="Dissasembler\LoopAndConditions.cs" />
     <Compile Include="Dissasembler\OpCode.cs" />
+    <Compile Include="Dissasembler\Optimize.cs" />
     <Compile Include="Dissasembler\StackAnalysis.cs" />
     <Compile Include="FlowAnalysis\ControlFlowEdge.cs" />
     <Compile Include="FlowAnalysis\ControlFlowGraph.cs" />

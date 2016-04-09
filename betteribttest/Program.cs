@@ -157,10 +157,10 @@ namespace betteribttest
         static void Main()
         {
 
-             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
+            // cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-           // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
+            cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
             //Decompiler dism = new Decompiler(cr);
 
 
