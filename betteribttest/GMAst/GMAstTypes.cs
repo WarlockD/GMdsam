@@ -435,13 +435,13 @@ namespace betteribttest.GMAst
         public GM_Type InferredType { get; set; }
 
         public static readonly object AnyOperand = new object();
-        public ILExpression(ILExpression i) // copy it
+        public ILExpression(ILExpression i, List<ILRange> range = null) // copy it
         {
             this.Code = i.Code;
             this.Operand = i.Operand; // don't need to worry about this
             this._args = new ILList<ILExpression>(this);
             if(i.Arguments.Count!=0) foreach (var n in i.Arguments) this._args.Add(new ILExpression(n));
-            this.ILRanges = i.ILRanges;
+            this.ILRanges = new List<ILRange>(range ?? i.ILRanges);
         }
         public ILExpression(GMCode code, object operand, List<ILExpression> args)
         {
@@ -475,7 +475,8 @@ namespace betteribttest.GMAst
         {
             return this.Operand is ILLabel || this.Operand is ILLabel[];
         }
-
+        // better preformance
+       
         public IEnumerable<ILLabel> GetBranchTargets()
         {
             if (this.Operand is ILLabel)
@@ -563,14 +564,30 @@ namespace betteribttest.GMAst
         /// <param name="output"></param>
         /// <param name="index"></param>
         /// <param name="escapeString"></param>
-        void WriteArgument(ITextOutput output, int index, bool escapeString = true)
+        public void WriteArgument(ITextOutput output, int index, bool escapeString = true)
         {
             ILExpression arg = Arguments[index];
             if (arg.Code == GMCode.Constant) arg.WriteOperand(output, escapeString);
             else arg.WriteTo(output); // don't know what it is
         }
+        public void WriteArguments(ITextOutput output, int start, bool escapeString = true)
+        {
+            if ((Arguments.Count - start) == 0) WriteArgument(output, start, escapeString);
+            else
+            {
+                output.Write('{');
+                output.Indent();
+                for (; start < Arguments.Count; start++)
+                {
+                    WriteArgument(output, start, escapeString);
+                    output.WriteLine();
+                }
+                output.Unindent();
+                output.Write('}');
+            }
+        }
         static readonly string POPDefaultString = "%POP%";
-        void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
+        public void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
         {
             if (index < Arguments.Count) WriteArgument(output, index, escapeString);
             else output.Write(POPDefaultString);    
@@ -691,8 +708,14 @@ namespace betteribttest.GMAst
                         break;
                     case GMCode.Pushenv:
                         output.Write("PushEnviroment(");
-                        WriteArgumentOrPop(output, 0);
+                        WriteArgumentOrPop(output, 0, false);
                         output.Write(")");
+                        break;
+                    case GMCode.SimplePushenv:
+                        output.Write("with(");
+                        WriteArgument(output, 0, false);
+                        output.Write(") ");
+                        WriteArguments(output, 1, true);
                         break;
                     case GMCode.Popenv:
                         output.Write("PopEnviroment ");
@@ -714,7 +737,6 @@ namespace betteribttest.GMAst
                     case GMCode.Case:
                         output.Write("case ");
                         WriteArgumentOrPop(output, 0);
-                        Arguments.Single().WriteTo(output); // second bit
                         output.Write(": goto ");
                         WriteOperand(output);
                         break;
@@ -888,13 +910,10 @@ namespace betteribttest.GMAst
 
         public override void WriteTo(ITextOutput output)
         {
-            output.Write("with (");
+            output.Write("with(");
             Enviroment.WriteTo(output);
-            output.WriteLine(") {");
-            output.Indent();
-            this.Body.WriteTo(output);
-            output.Unindent();
-            output.Write("}");
+            output.Write(") ");
+            Body.Body.WriteNodes(output);
         }
     }
 

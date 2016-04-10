@@ -139,14 +139,15 @@ namespace betteribttest
             // it won't do the next line properly.  I could feed this char by char to Write(char) but this is WAY faster and
             // I have yet to run into this bug.  Just to watch out for
             string[] split = value.Split(CoreNewLine); // alwyas returns one element
-            int count = 0;
-            while (count < split.Length)
-            {
-                string s = split[count++];
-                if (!string.IsNullOrEmpty(s)) _line.Append(s);
-                if (count >= split.Length) break;
-                WriteLine();
-            } 
+            if (split.Length == 1) _line.Append(split[0]);
+            else {
+                for (int i = 1; i < _line.Length; i++)
+                {
+                    string s = split[i];
+                    this.WriteLine();
+                    if (!string.IsNullOrEmpty(s)) _line.Append(s);
+                }
+            }
         }
         public override void Flush()
         {

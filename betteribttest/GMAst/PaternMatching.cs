@@ -9,6 +9,46 @@ namespace betteribttest.GMAst
 {
     public static class PatternMatching
     {
+        public static void WriteNodes<T>(this IList<T> nodes, ITextOutput output) where T : ILNode
+        {
+            if (nodes.Count == 0) return;
+            else if(nodes.Count == 1) nodes[0].WriteTo(output);
+            else
+            {
+                output.Write('{');
+                output.WriteLine();
+                output.Indent();
+                foreach (var n in nodes)
+                {
+                    n.WriteTo(output);
+                    output.WriteLine();
+                }
+                output.Unindent();
+                output.WriteLine();
+                output.Write('}');
+            }
+        }
+        public static void CollectLabels(this ILExpression node, HashSet<ILLabel> labels)
+        {
+            ILLabel label = node.Operand as ILLabel;
+            if (label != null) labels.Add(label);
+            foreach (var e in node.Arguments) e.CollectLabels(labels);
+        }
+        public static void CollectLabels<T>(this IList<T> nodes, HashSet<ILLabel> labels) where T : ILNode
+        {
+            foreach(var n in nodes)
+            {
+                ILExpression e = n as ILExpression;
+                if(e != null) { e.CollectLabels(labels); continue; }
+                ILLabel label = n as ILLabel;
+                if (label != null) { labels.Add(label); continue; }
+            }
+        }
+        public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges)
+        {
+            expr.ILRanges.AddRange(ilranges);
+            return expr;
+        }
         public static bool Match(this ILNode node, GMCode code)
         {
             ILExpression expr = node as ILExpression;

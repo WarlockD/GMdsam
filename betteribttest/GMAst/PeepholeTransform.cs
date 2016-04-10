@@ -9,6 +9,7 @@ namespace betteribttest.GMAst
 {
     public partial class ILAstOptimizer
     {
+     
         bool IntroduceWithStatements(IList<ILNode> body)
         {
             bool modified = false;

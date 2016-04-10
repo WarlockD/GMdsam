@@ -9,6 +9,9 @@ using System.Collections;
 using System.Diagnostics;
 
 using betteribttest.Dissasembler;
+using System.Text.RegularExpressions;
+using System.Globalization;
+
 namespace betteribttest
 {
 
@@ -72,9 +75,13 @@ namespace betteribttest
         Case = 0xfa,
         Constant = 0xfb, 
         Assign,
+        // filler used when a push is VERY simple, no breaks
+        // it makes the graph builder not puke as much
+        SimplePushenv, 
     }
     public static class GMCodeUtil
     {
+   
         public static int getBranchOffset(uint op)
         {
             if ((op & 0x800000) != 0) op |= 0xFF000000; else op &= 0x00FFFFFF;
@@ -195,6 +202,11 @@ namespace betteribttest
         {
             return (operand & 0x8000000) == 0;
         }
+        // can't use this as on larger strings and indents it does stuff like "" + ""
+        // I could regex it out of the exit string, but after doing some cpu anilitics this is 
+        // a VERY slow function and it needs to be much faster
+        // Rewrote it as a manual parser, but needs to be fixed latter
+#if false
         public static string EscapeString(string s)
         {
             using (var writer = new StringWriter())
@@ -206,6 +218,41 @@ namespace betteribttest
                 }
             }
         }
+#else
+        public static string EscapeString(string input)
+        {
+            StringBuilder literal = new StringBuilder(input.Length + 2);
+            literal.Append("\"");
+            foreach (var c in input)
+            {
+                switch (c)
+                {
+                    case '\'': literal.Append(@"\'"); break;
+                    case '\"': literal.Append("\\\""); break;
+                    case '\\': literal.Append(@"\\"); break;
+                    case '\0': literal.Append(@"\0"); break;
+                    case '\a': literal.Append(@"\a"); break;
+                    case '\b': literal.Append(@"\b"); break;
+                    case '\f': literal.Append(@"\f"); break;
+                    case '\n': literal.Append(@"\n"); break;
+                    case '\r': literal.Append(@"\r"); break;
+                    case '\t': literal.Append(@"\t"); break;
+                    case '\v': literal.Append(@"\v"); break;
+                    default:
+                        // ASCII printable character
+                        if (c >= 0x20 && c <= 0x7e) literal.Append(c);
+                         // As UTF16 escaped character
+                        else if (Char.GetUnicodeCategory(c) == UnicodeCategory.Control){
+                            literal.Append(@"\u");
+                            literal.Append(((int)c).ToString("x4"));
+                        }
+                        break;
+                }
+            }
+            literal.Append("\"");
+            return literal.ToString();
+        }
+#endif
         public static GMCode getFromRaw(uint raw)
         {
             return (GMCode)((raw >> 24) & 0xFF);

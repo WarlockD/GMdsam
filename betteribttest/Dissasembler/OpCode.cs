@@ -324,56 +324,70 @@ namespace betteribttest.Dissasembler
             long lastpc = r.BaseStream.Length / 4;
             SortedList<int, Instruction> list = new SortedList<int, Instruction>();
             Dictionary<int,Label> labels = new Dictionary<int, Label>();
+            Dictionary<int, Label> pushEnviroment = new Dictionary<int, Label>();
             List<Instruction> branches = new List<Instruction>();
+            Func<Instruction, int,Label> GiveInstructionALabel = (Instruction inst, int laddress) =>
+             {
+                 Label label;
+                 if(!labels.TryGetValue(laddress,out label)) labels.Add(laddress, label = new Label(laddress));
+                 inst.Operand = label;
+                 branches.Add(inst); // add it to the branches to handle latter
+                 return label;
+             };
+          
             Instruction prev = null;
             StringBuilder sb = new StringBuilder(50);
             while(r.BaseStream.Position < length)
             {
                 Instruction i = DissasembleFromReader(pc, r);
                 pc += i.Size;
-                if (i.isBranch || i.Code == GMCode.Popenv)
+                switch (i.Code)
                 {
-                    if(i.Code == GMCode.Popenv)
-                    {
-                        Instruction pushInstruction = list[i.Extra - 1]; // find the original push instruction
-                        i._extra = pushInstruction.Extra; // change the address  so it will point to the end of the enviroment
-                    }
-                    branches.Add(i); // link labels
-                    if (!labels.ContainsKey(i.Extra)) labels.Add(i.Extra, new Label(i.Extra));
-                }
-                else
-                {
-                    switch (i.Code)
-                    {
-                        case GMCode.Push:
-                            if (i.Types[0] == GM_Type.Var)
-                            {
-                                // i.Operand = StringList[(int)i.Operand]; Don't want to touch as it might 
-                                sb.Clear();
-                                sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
-                                sb.Append('.');
-                                sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
-                                i.OperandText = sb.ToString();
-                            }
-                            else if (i.Types[0] == GM_Type.String)
-                            {
-                                i.Operand = StringList[(int)i.Operand];
-                                i.OperandText = GMCodeUtil.EscapeString(i.Operand as string);
-                            }
-                            break;
-                        case GMCode.Pop: // technicaly pop is always a var, but eh
-                            //i.Operand = StringList[(int)i.Operand]; Don't do it this wa as we might need to find out of its an array
+                    case GMCode.Pushenv:
+                        pushEnviroment.Add(i.Extra, GiveInstructionALabel(i, i.Extra+1)); // skip the pop
+                        break;
+                    case GMCode.Popenv:
+                        {
+                            Label endOfEnviroment;
+                            if (!pushEnviroment.TryGetValue(i.Address, out endOfEnviroment)) // skip this
+                                throw new Exception("Can't find matching push");
+                            i.Operand = endOfEnviroment; // don't need to add it to labels as it already exists
+                        }
+                        break;
+                    case GMCode.Bf:
+                    case GMCode.Bt:
+                    case GMCode.B:
+                        GiveInstructionALabel(i, i.Extra);
+                        break;
+                    case GMCode.Push:
+                        if (i.Types[0] == GM_Type.Var)
+                        {
+                            // i.Operand = StringList[(int)i.Operand]; Don't want to touch as it might 
                             sb.Clear();
                             sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
                             sb.Append('.');
                             sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
                             i.OperandText = sb.ToString();
-                            break;
-                        case GMCode.Call:
-                            i.OperandText = StringList[(int)i.Operand];
-                            i.Operand = i.OperandText;
-                            break;
-                    }
+                        }
+                        else if (i.Types[0] == GM_Type.String)
+                        {
+                            i.Operand = StringList[(int)i.Operand];
+                            i.OperandText = GMCodeUtil.EscapeString(i.Operand as string);
+                        }
+                        break;
+                    case GMCode.Pop: // technicaly pop is always a var, but eh
+                                     //i.Operand = StringList[(int)i.Operand]; Don't do it this wa as we might need to find out of its an array
+                        sb.Clear();
+                        sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
+                        sb.Append('.');
+                        sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
+                        i.OperandText = sb.ToString();
+                        break;
+                    case GMCode.Call:
+                        i.OperandText = StringList[(int)i.Operand];
+                        i.Operand = i.OperandText;
+                        break;
+
                 }
                 i.Previous = prev;
                 if (prev == null) prev = i;
@@ -388,14 +402,12 @@ namespace betteribttest.Dissasembler
             } // must be done for graph and in case we have a branch that goes right outside.  Its implied in any event
             foreach (var i in branches)
             {
-                Label l = labels[i.Extra];
+                Label l = i.Operand as Label;
                 if(l.Origin == null) // Link the label 
                 {
                     l.Origin = list[l.Address];
                     list[l.Address].Label = l;
                 }
-                i.Operand = l;
-                l.Refrences.Add(i);
             }
             return list;
         }
