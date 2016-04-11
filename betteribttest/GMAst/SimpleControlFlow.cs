@@ -39,7 +39,7 @@ namespace betteribttest.GMAst
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
-            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel))
+            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel))
             {
                 for (int pass = 0; pass < 2; pass++)
                 {
@@ -53,11 +53,11 @@ namespace betteribttest.GMAst
                     ILBasicBlock nextBasicBlock = labelToBasicBlock[nextLabel];
                     ILExpression nextCondExpr;
                     ILLabel nextTrueLablel;
-                    ILLabel nextFalseLabel;
+                    ILLabel nextFalseLabel; 
                     if (body.Contains(nextBasicBlock) &&
                         nextBasicBlock != head &&
                         labelGlobalRefCount[(ILLabel)nextBasicBlock.Body.First()] == 1 &&
-                        nextBasicBlock.MatchSingleAndBr(GMCode.Bt, out nextTrueLablel, out nextCondExpr, out nextFalseLabel) &&
+                        nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) &&
                         (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
                     {
                         // Create short cicuit branch
@@ -69,7 +69,7 @@ namespace betteribttest.GMAst
                         else {
                             logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, negate ? condExpr : new ILExpression(GMCode.Not, null, condExpr), nextCondExpr);
                         }
-                        head.Body.RemoveTail(GMCode.Bt, GMCode.B);
+                        head.Body.RemoveTail(GMCode.Bf, GMCode.B);
                         head.Body.Add(new ILExpression(GMCode.Bt, nextTrueLablel, logicExpr));
                         head.Body.Add(new ILExpression(GMCode.B, nextFalseLabel));
 

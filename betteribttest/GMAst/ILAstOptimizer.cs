@@ -110,15 +110,13 @@ namespace betteribttest.GMAst
 
         public static void RemoveTail(this IList<ILNode> body, params GMCode[] codes)
         {
-            int codeIndex = codes.Length - 1;
-            int bodyIndex = body.Count - 1;
-            while(codeIndex>=0)
+            int bodyIndex = body.Count - codes.Length;
+            for (int codeIndex = codes.Length-1; codeIndex>=0; codeIndex--)
             {
-                if (((ILExpression)body[bodyIndex]).Code != codes[codeIndex])
+                ILExpression node = body.Last() as ILExpression;
+                if (node.Code != codes[codeIndex])
                     throw new Exception("Tailing code does not match expected.");
-                body.RemoveAt(bodyIndex);
-                codeIndex--;
-                bodyIndex--;
+                body.RemoveAt(body.Count - 1);
             }
         }
 

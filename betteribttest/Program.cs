@@ -207,12 +207,12 @@ namespace betteribttest
 
 
            //  string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly and VERY simple
-           //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+              string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
             // Emptyboarer is a MUST test.  It has a && in it as well as simple if statments and calls.  If we can't pass this nothing else will work
 
 
-            //       string filename_to_test = "SCR_DIRECT"; // simple loop works!
-              string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
+            //      string filename_to_test = "SCR_DIRECT"; // simple loop works!
+            //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
             //   string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
 
 

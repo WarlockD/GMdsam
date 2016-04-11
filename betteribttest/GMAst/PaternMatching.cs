@@ -71,7 +71,7 @@ namespace betteribttest.GMAst
             ILExpression expr = node as ILExpression;
             if (expr != null  && expr.Code == code)
             {
-                Debug.Assert(expr.Operand == null);
+                //Debug.Assert(expr.Operand == null);
                 args = expr.Arguments;
                 return true;
             }
@@ -146,10 +146,11 @@ namespace betteribttest.GMAst
 
         public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILExpression arg, out ILLabel brLabel)
         {
-            if (bb.Body.Count == 3 &&
+            if (bb.Body.Count == 4 &&
                 bb.Body[0] is ILLabel &&
-                bb.Body[1].Match(code, out operand, out arg) &&
-                bb.Body[2].Match(GMCode.B, out brLabel))
+                bb.Body[1].Match(GMCode.Push,out arg) &&
+                bb.Body[2].Match(code, out operand) && 
+                bb.Body[3].Match(GMCode.B, out brLabel))
             {
                 return true;
             }
@@ -158,16 +159,39 @@ namespace betteribttest.GMAst
             brLabel = null;
             return false;
         }
-
-        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILExpression arg, out ILLabel brLabel)
+        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
         {
-            if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand, out arg) &&
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand) &&
+              bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
+            {
+                return true;
+            }
+            operand = default(T);
+            brLabel = null;
+            return false;
+        }
+            public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILExpression arg, out ILLabel brLabel)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - 3).Match(GMCode.Push, out arg) &&
+                bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand) &&
                 bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
             {
                 return true;
             }
             operand = default(T);
             arg = null;
+            brLabel = null;
+            return false;
+        }
+        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out IList<ILExpression> args, out ILLabel brLabel)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand, out args) &&
+                bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
+            {
+                return true;
+            }
+            operand = default(T);
+            args = null;
             brLabel = null;
             return false;
         }

@@ -305,11 +305,11 @@ namespace betteribttest
         }
         public static bool IsUnconditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.B || code == GMCode.Exit || code == GMCode.Ret;
+            return code == GMCode.B || code == GMCode.Exit || code == GMCode.Ret || code == GMCode.LoopContinue || code == GMCode.LoopOrSwitchBreak;
         }
         public static bool IsConditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.Bt || code == GMCode.Bf;
+            return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.Switch;
         }
         public static bool isBranch(this GMCode code)
         {

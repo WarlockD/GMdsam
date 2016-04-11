@@ -248,8 +248,9 @@ namespace betteribttest.FlowAnalysis
                         List<ILLabel> caseLabels;
                         ILExpression switchArg;
                         ILLabel fallLabel;
-                     //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
+                        //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
                         // matches a switch statment, not sure how the hell I am going to do this
+#if false
                         if (block.MatchSwitchBlock(out cases, out fallLabel))
                         {
                             switchArg = cases[0].Arguments[0].Arguments[0]; // thats the switch arg
@@ -349,8 +350,9 @@ namespace betteribttest.FlowAnalysis
                                     });
                                 }
                             }
-                        }
 
+                    }
+#endif
                         // Two-way branch
                         ILExpression condExpr;
                         ILLabel trueLabel;

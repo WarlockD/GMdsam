@@ -423,14 +423,25 @@ namespace betteribttest.Dissasembler
                     case GMCode.Conv:
                         continue; // ignore all Conv for now
                     case GMCode.Call:
-                        expr = TryResolveCall(operand as string, extra, nodes);
+                        expr = new ILExpression(GMCode.Push, null, TryResolveCall(operand as string, extra, nodes));
+                        break;
+                    case GMCode.Popz:
+                        {
+                            ILExpression push;
+                            if (nodes.Last().Match(GMCode.Push, out push) && push.Code == GMCode.Call)
+                            {
+                                nodes[nodes.Count - 1] = push;  // its not a push anymore as it was popped void statment
+                                continue;
+                            }
+                            else expr = new ILExpression(code, null);
+                        }
                         break;
                     case GMCode.Pop: // var define, so lets define it
                         expr = BuildVar((int)operand, extra,nodes);  // try to figure out the var
                         expr = new ILExpression(GMCode.Assign, null, expr); // change it to an assign
                         {
                             ILExpression push; // see if we can get the value
-                            if (nodes.LastOrDefault().Match(GMCode.Push, out push))
+                            if (nodes.LastOrDefault().Match(GMCode.Push, out push) || nodes.LastOrDefault().Match(GMCode.Call, out push))
                             {
                                 nodes.RemoveLast();
                                 expr.Arguments.Add(push);
@@ -466,7 +477,6 @@ namespace betteribttest.Dissasembler
                         expr = new ILExpression(code, extra); // save the extra value for dups incase its dup eveything or just one
                         break;
                     case GMCode.Exit:
-                    case GMCode.Popz:
                         expr = new ILExpression(code, null);
                         break;
                     default:
@@ -544,14 +554,13 @@ namespace betteribttest.Dissasembler
             } while (false);
             return false;
         }
-        public void SwitchDetection(List<ILNode> ast)
+        public bool SwitchDetection(int start, List<ILNode> ast)
         {
-            bool modified = false;
-            int from = ast.Count - 1;
+            int from = start;
             do
             {
                 int popz = ast.FindLastIndexOf(GMCode.Popz, from); // Only time popz is used is in switches and calls
-                if (popz != -1 && ast[popz - 1].Match(GMCode.Call)) { from = popz - 1; continue; } // skip and continue
+                if (popz == -1 || ast.ElementAtOrDefault(popz - 1).Match(GMCode.Call)) break; // skip and continue
                 ILLabel fallOutLabel = ast[popz - 1] as ILLabel;
                 Debug.Assert(fallOutLabel != null); // Label should be right before it
                 // Now that we have the fallOutLabel, lets find the patern that is the end of the long switch branches
@@ -588,14 +597,15 @@ namespace betteribttest.Dissasembler
                 }
                 // be sure to remove from reverse order so the indexes we have are still valid
                 ast.RemoveAt(popz); // finaly remove the popz at the end of the case as the stack shold be clean then
-                ast.RemoveAt(endCase); // remove the end casegoto as we don't need it anymore
+              //  ast.RemoveAt(endCase); // remove the end casegoto as we don't need it anymore
 
                 // Now the annoying part.  we have to remove all the nodes
                 ast.RemoveRange(startCase, endCase - startCase);
                 // then replace the push condition with the switch statement
                 ast[startCase - 1] = finalSwitch;
-
-            } while (modified);
+                return true;
+            } while (false);
+            return false;
         }
         public bool MatchDupPatern(int start, List<ILNode> nodes)
         {
@@ -646,10 +656,10 @@ namespace betteribttest.Dissasembler
         {
             do
             {
-                if(nodes[start].Match(GMCode.Dup)) throw new Exception("We Missed a Dup");
-                if(!nodes[start].Match(GMCode.Popz)) break; // try to match a popz
-                if(!nodes.ElementAtOrDefault(start-1).Match(GMCode.Call)) throw new Exception("PopZ without a function call");
-                nodes.RemoveAt(start); // remove it
+               // if (nodes[start].Match(GMCode.Dup) &&) throw new Exception("We Missed a Dup");
+                if (!nodes[start].Match(GMCode.Call) 
+                     || !nodes.ElementAtOrDefault(start + 1).Match(GMCode.Popz)) break;
+                nodes.RemoveAt(start+1); // remove it
                 return true;
             } while (false);
             return false;
@@ -703,22 +713,96 @@ namespace betteribttest.Dissasembler
                 for (int i = 0; i < nodes.Count; i++) modified |= pred(i, nodes);
             } while (modified);
         }
-        public List<ILNode> Build(SortedList<int, Instruction> method, bool optimize, List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        void FlattenBasicBlocks(ILNode node)
         {
-            if (method.Count == 0) return new List<ILNode>();
+            ILBlock block = node as ILBlock;
+            if (block != null)
+            {
+                List<ILNode> flatBody = new List<ILNode>();
+                foreach (ILNode child in block.GetChildren())
+                {
+                    FlattenBasicBlocks(child);
+                    ILBasicBlock childAsBB = child as ILBasicBlock;
+                    if (childAsBB != null)
+                    {
+                        if (!(childAsBB.Body.FirstOrDefault() is ILLabel))
+                            throw new Exception("Basic block has to start with a label. \n" + childAsBB.ToString());
+                        if (childAsBB.Body.LastOrDefault() is ILExpression && !childAsBB.Body.LastOrDefault().IsUnconditionalControlFlow())
+                            throw new Exception("Basci block has to end with unconditional control flow. \n" + childAsBB.ToString());
+                        flatBody.AddRange(childAsBB.GetChildren());
+                    }
+                    else {
+                        flatBody.Add(child);
+                    }
+                }
+                block.EntryGoto = null;
+                block.Body = flatBody;
+            }
+            else if (node is ILExpression)
+            {
+                // Optimization - no need to check expressions
+            }
+            else if (node != null)
+            {
+                // Recursively find all ILBlocks
+                foreach (ILNode child in node.GetChildren())
+                {
+                    FlattenBasicBlocks(child);
+                }
+            }
+        }
+        public List<ILNode> Build(SortedList<int, Instruction> code, bool optimize, List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        {
+            if (code.Count == 0) return new List<ILNode>();
             //variables = new Dictionary<string, VariableDefinition>();
             this.InstanceList = InstanceList;
             this.StringList = StringList;
-            _method = method;
+            _method = code;
             this.optimize = optimize;
             List<ILNode> ast = BuildPreAst();
-            SwitchDetection(ast);
-            DoPattern(ast, MatchDupPatern);
-            DoPattern(ast, FixPopZandCheckDUP);
-            DoPattern(ast, SimplfyPushEnviroments);
             
+         //   DoPattern(ast, FixPopZandCheckDUP);
+            DoPattern(ast, SwitchDetection);
+            DoPattern(ast, MatchDupPatern);
+            // DoPattern(ast, SimplfyPushEnviroments);
+            ILBlock method = new ILBlock();
+            method.Body = ast;
+            betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
+            foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
+                Optimize.SplitToBasicBlocks(block);
+
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                bool modified;
+                do
+                {
+                    modified = false;
+
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
+
+                    //  modified |= block.RunOptimization(SimplifyLogicNot);
+                    //  modified |= block.RunOptimization(MakeAssignmentExpression);
+                } while (modified);
+            }
+          
+            method.Body.DebugPrintILAst("before_loop.txt");
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                new LoopsAndConditions().FindLoops(block);
+            }
+            method.Body.DebugPrintILAst("before_conditions.txt");
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                new LoopsAndConditions().FindConditions(block);
+            }
+            FlattenBasicBlocks(method);
+ 
+            Optimize.RemoveRedundantCode(method);
+            new GotoRemoval().RemoveGotos(method);
+            Optimize.RemoveRedundantCode(method);
             //List<ByteCode> body = StackAnalysis(method);
-            ast.DebugPrintILAst("bytecode_test.txt");
+            method.Body.DebugPrintILAst("bytecode_test.txt");
 
             // We don't have a fancy
 

@@ -849,15 +849,17 @@ namespace betteribttest.GMAst
     {
         public class CaseBlock : ILBlock
         {
-            public List<int> Values;  // null for the default case
+            public List<ILExpression> Values;  // null for the default case
 
             public override void WriteTo(ITextOutput output)
             {
                 if (this.Values != null)
                 {
-                    foreach (int i in this.Values)
+                    foreach (var i in this.Values)
                     {
-                        output.WriteLine("case {0}:", i);
+                        output.Write("case ");
+                        i.WriteTo(output);
+                        output.WriteLine(": ");
                     }
                 }
                 else {

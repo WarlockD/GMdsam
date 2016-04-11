@@ -11,15 +11,15 @@ namespace betteribttest.Dissasembler
 {
     class Optimize
     {
-        int nextLabelIndex = 0;
+        
         /// <summary>
         /// Group input into a set of blocks that can be later arbitraliby schufled.
         /// The method adds necessary branches to make control flow between blocks
         /// explicit and thus order independent.
         /// </summary>
-
-        void SplitToBasicBlocks(ILBlock block)
+        public static void SplitToBasicBlocks(ILBlock block)
         {
+            int nextLabelIndex = 0;
             List<ILNode> basicBlocks = new List<ILNode>();
 
             ILLabel entryLabel = block.Body.FirstOrDefault() as ILLabel ?? new ILLabel() { Name = "Block_" + (nextLabelIndex++) };
@@ -30,9 +30,7 @@ namespace betteribttest.Dissasembler
 
             if (block.Body.Count > 0)
             {
-                if (block.Body[0] != entryLabel)
-                    basicBlock.Body.Add(block.Body[0]);
-
+                if (block.Body[0] != entryLabel) basicBlock.Body.Add(block.Body[0]);
                 for (int i = 1; i < block.Body.Count; i++)
                 {
                     ILNode lastNode = block.Body[i - 1];
@@ -71,10 +69,63 @@ namespace betteribttest.Dissasembler
             block.Body = basicBlocks;
             return;
         }
-          /// <summary>
-		/// Flattens all nested basic blocks, except the the top level 'node' argument
-		/// </summary>
-		void FlattenBasicBlocks(ILNode node)
+        public static void RemoveRedundantCode(ILBlock method)
+        {
+            Dictionary<ILLabel, int> labelRefCount = new Dictionary<ILLabel, int>();
+            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
+            {
+                labelRefCount[target] = labelRefCount.GetOrDefault(target) + 1;
+            }
+
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                IList<ILNode> body = block.Body;
+                IList<ILNode> newBody = new List<ILNode>(body.Count);
+                for (int i = 0; i < body.Count; i++)
+                {
+                    ILLabel target;
+                    ILExpression popExpr;
+                    if (body[i].Match(GMCode.B, out target) && i + 1 < body.Count && body[i + 1] == target)
+                    {
+                        // Ignore the branch
+                        if (labelRefCount[target] == 1) i++;  // Ignore the label as well
+
+                    }
+                    else if (body[i].Match(GMCode.BadOp))
+                    {
+                        // Ignore nop
+                    }
+                    else if (body[i].Match(GMCode.Pop, out popExpr))
+                    {
+                        foreach (var t in popExpr.Arguments) if (t.Code == GMCode.Pop) throw new Exception("We should have NO pop expresions insde of a pop expression");
+                    }
+                    else {
+                        ILLabel label = body[i] as ILLabel;
+                        if (label != null)
+                        {
+                            if (labelRefCount.GetOrDefault(label) > 0)
+                                newBody.Add(label);
+                        }
+                        else {
+                            newBody.Add(body[i]);
+                        }
+                    }
+                }
+                block.Body = newBody;
+            }
+
+
+            // 'dup' removal
+            foreach (ILExpression expr in method.GetSelfAndChildrenRecursive<ILExpression>())
+            {
+                if (expr.Code == GMCode.Dup) throw new Exception("Dups shoul be removed at this stage");
+            }
+        }
+    
+            /// <summary>
+            /// Flattens all nested basic blocks, except the the top level 'node' argument
+            /// </summary>
+            void FlattenBasicBlocks(ILNode node)
         {
             ILBlock block = node as ILBlock;
             if (block != null)
@@ -117,60 +168,7 @@ namespace betteribttest.Dissasembler
 		/// Ignore arguments of 'leave'
 		/// </summary>
 		/// <param name="method"></param>
-		internal static void RemoveRedundantCode(ILBlock method)
-        {
-            Dictionary<ILLabel, int> labelRefCount = new Dictionary<ILLabel, int>();
-            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
-            {
-                labelRefCount[target] = labelRefCount.GetOrDefault(target) + 1;
-            }
-
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
-            {
-                IList<ILNode> body = block.Body;
-                List<ILNode> newBody = new List<ILNode>(body.Count);
-                for (int i = 0; i < body.Count; i++)
-                {
-                    ILLabel target;
-                    if (body[i].Match(GMCode.B, out target) && i + 1 < body.Count && body[i + 1] == target)
-                    {
-                        // Ignore the branch
-                        if (labelRefCount[target] == 1)
-                            i++;  // Ignore the label as well
-                    }
-                    else if (body[i].Match(GMCode.BadOp))
-                    {
-                    }
-                    else {
-                        ILLabel label = body[i] as ILLabel;
-                        if (label != null)
-                        {
-                            if (labelRefCount.GetOrDefault(label) > 0)
-                                newBody.Add(label);
-                        }
-                        else {
-                            newBody.Add(body[i]);
-                        }
-                    }
-                }
-                block.Body = newBody;
-            }
-
-
-            // 'dup' removal
-            foreach (ILExpression expr in method.GetSelfAndChildrenRecursive<ILExpression>())
-            {
-                for (int i = 0; i < expr.Arguments.Count; i++)
-                {
-                    ILExpression child;
-                    if (expr.Arguments[i].Match(GMCode.Dup, out child))
-                    {
-                        child.ILRanges.AddRange(expr.Arguments[i].ILRanges);
-                        expr.Arguments[i] = child;
-                    }
-                }
-            }
-        }
+		
         #region SimplifyLogicNot
         static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
         {

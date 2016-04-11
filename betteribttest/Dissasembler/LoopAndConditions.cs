@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using betteribttest.GMAst;
 using betteribttest.FlowAnalysis;
+using System.Diagnostics;
 
 namespace betteribttest.Dissasembler
 {
@@ -46,7 +47,12 @@ namespace betteribttest.Dissasembler
                 block.Body = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
             }
         }
-
+        void CreateEdge(ControlFlowNode source, ControlFlowNode destination)
+        {
+            ControlFlowEdge edge = new ControlFlowEdge(source, destination, JumpType.Normal);
+            source.Outgoing.Add(edge);
+            destination.Incoming.Add(edge);
+        }
         ControlFlowGraph BuildGraph(IList<ILNode> nodes, ILLabel entryLabel)
         {
 
@@ -130,8 +136,9 @@ namespace betteribttest.Dissasembler
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchSingleAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel))
+                    if (basicBlock.MatchSingleAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel))
                     {
+                        
                         ControlFlowNode trueTarget;
                         labelToCfNode.TryGetValue(trueLabel, out trueTarget);
                         ControlFlowNode falseTarget;
@@ -165,7 +172,7 @@ namespace betteribttest.Dissasembler
                             }
 
                             // Use loop to implement the brtrue
-                            basicBlock.Body.RemoveTail(GMCode.Bt, GMCode.B);
+                            basicBlock.Body.RemoveTail(GMCode.Push, GMCode.Bf, GMCode.B);
                             basicBlock.Body.Add(new ILWhileLoop()
                             {
                                 Condition = condExpr,
@@ -237,23 +244,25 @@ namespace betteribttest.Dissasembler
                 {
 
                     ILBasicBlock block = (ILBasicBlock)node.UserData;
-
+                   
                     {
                         // Switch
                         IList<ILExpression> cases;
                         List<ILLabel> caseLabels;
-                        ILExpression switchArg;
+                        ILExpression switchCondition;
                         ILLabel fallLabel;
+                        ILLabel endBlock;
                         //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
                         // matches a switch statment, not sure how the hell I am going to do this
-                        if (block.MatchSwitchBlock(out cases, out fallLabel))
+                        if (block.MatchLastAndBr(GMCode.Switch,out fallLabel, out cases, out endBlock))
                         {
-                            switchArg = cases[0].Arguments[0].Arguments[0]; // thats the switch arg
+                            Debug.Assert(fallLabel == endBlock); // this should be true
+                            switchCondition = cases[0]; // thats the switch arg
+                            cases.RemoveAt(0); // remove the switch condition
                             caseLabels = cases.Select(x => x.Operand as ILLabel).ToList();
-                            foreach (var c in cases) caseLabels.Add(c.Operand as ILLabel);
 
                             // Replace the switch code with ILSwitch
-                            ILSwitch ilSwitch = new ILSwitch() { Condition = switchArg };
+                            ILSwitch ilSwitch = new ILSwitch() { Condition = switchCondition };
                             block.Body.RemoveTail(GMCode.Switch, GMCode.B);
                             block.Body.Add(ilSwitch);
                             block.Body.Add(new ILExpression(GMCode.B, fallLabel));
@@ -261,14 +270,6 @@ namespace betteribttest.Dissasembler
 
                             // Remove the item so that it is not picked up as content
                             scope.RemoveOrThrow(node);
-
-                            // Find the switch offset
-                            int addValue = 0;
-                            List<ILExpression> subArgs;
-                            if (ilSwitch.Condition.Match(GMCode.Sub, out subArgs) && subArgs[1].Match(GMCode.Push, out addValue))
-                            {
-                                ilSwitch.Condition = subArgs[0];
-                            }
 
                             // Pull in code of cases
                             ControlFlowNode fallTarget = null;
@@ -296,7 +297,7 @@ namespace betteribttest.Dissasembler
                                 {
                                     caseBlock = new ILSwitch.CaseBlock()
                                     {
-                                        Values = new List<int>(),
+                                        Values = new List<ILExpression>(),
                                         EntryGoto = new ILExpression(GMCode.B, condLabel)
                                     };
                                     ilSwitch.CaseBlocks.Add(caseBlock);
@@ -319,7 +320,7 @@ namespace betteribttest.Dissasembler
                                         });
                                     }
                                 }
-                                caseBlock.Values.Add(i + addValue);
+                                caseBlock.Values.Add(cases[i].Arguments[0]);
                             }
 
                             // Heuristis to determine if we want to use fallthough as default case
@@ -346,51 +347,65 @@ namespace betteribttest.Dissasembler
                                 }
                             }
                         }
-
+                     //   Debug.Assert((block.Body.First() as ILLabel).Name != "L1938");
                         // Two-way branch
-                        ILExpression condExpr;
                         ILLabel trueLabel;
                         ILLabel falseLabel;
-                        if (block.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel))
+                        if (block.MatchLastAndBr(GMCode.Bf, out falseLabel,  out trueLabel)) 
                         {
-
-                            // Swap bodies since that seems to be the usual C# order
-                            ILLabel temp = trueLabel;
-                            trueLabel = falseLabel;
-                            falseLabel = temp;
-                            condExpr = new ILExpression(GMCode.Not, null, condExpr);
-
-                            // Convert the brtrue to ILCondition
-                            ILCondition ilCond = new ILCondition()
+                            IList<ILNode> body = block.Body;
+                            ILExpression condExpr; // this is a simple condition, skip anything short curiket for now
+                            // Match a condition patern
+                            if(block.Body.ElementAtOrDefault(block.Body.Count - 3).Match(GMCode.Push, out condExpr))
                             {
-                                Condition = condExpr,
-                                TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
-                                FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
-                            };
-                            block.Body.RemoveTail(GMCode.Bt, GMCode.B);
-                            block.Body.Add(ilCond);
-                            result.Add(block);
+                                //condExpr = new ILExpression(GMCode.Not, null, condExpr); don't need as we are testing for Bf
 
-                            // Remove the item immediately so that it is not picked up as content
-                            scope.RemoveOrThrow(node);
+                                // Convert the brtrue to ILCondition
+                                ILCondition ilCond = new ILCondition()
+                                {
+                                    Condition = condExpr,
+                                    TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
+                                    FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
+                                };
+                                block.Body.RemoveTail(GMCode.Push,GMCode.Bf, GMCode.B);
+                                block.Body.Add(ilCond);
+                                result.Add(block);
 
-                            ControlFlowNode trueTarget = null;
-                            labelToCfNode.TryGetValue(trueLabel, out trueTarget);
-                            ControlFlowNode falseTarget = null;
-                            labelToCfNode.TryGetValue(falseLabel, out falseTarget);
+                                // Remove the item immediately so that it is not picked up as content
+                                scope.RemoveOrThrow(node);
 
-                            // Pull in the conditional code
-                            if (trueTarget != null && HasSingleEdgeEnteringBlock(trueTarget))
-                            {
-                                HashSet<ControlFlowNode> content = FindDominatedNodes(scope, trueTarget);
-                                scope.ExceptWith(content);
-                                foreach (var con in FindConditions(content, trueTarget)) ilCond.TrueBlock.Body.Add(con);
-                            }
-                            if (falseTarget != null && HasSingleEdgeEnteringBlock(falseTarget))
-                            {
-                                HashSet<ControlFlowNode> content = FindDominatedNodes(scope, falseTarget);
-                                scope.ExceptWith(content);
-                                foreach (var con in FindConditions(content, falseTarget)) ilCond.FalseBlock.Body.Add(con);
+                                ControlFlowNode trueTarget = null;
+                                labelToCfNode.TryGetValue(trueLabel, out trueTarget);
+                                ControlFlowNode falseTarget = null;
+                                labelToCfNode.TryGetValue(falseLabel, out falseTarget);
+                                if(trueTarget != null && falseTarget != null)
+                                {
+                                    ILBasicBlock trueBlock = (ILBasicBlock)trueTarget.UserData;
+                                    ILBasicBlock falseBlock = (ILBasicBlock)falseTarget.UserData;
+                                    ILExpression leftShort;
+                                    ILExpression rightShort;
+                                    if (trueBlock.Body.ElementAtOrDefault(trueBlock.Body.Count-2).Match(GMCode.Push,out leftShort) &&
+                                        falseBlock.Body.ElementAtOrDefault(falseBlock.Body.Count - 2).Match(GMCode.Push, out rightShort))
+                                    {
+                                        if(rightShort.Operand is int && (int)rightShort.Operand == 0) // this is a logic and, got to rebuild the graph
+                                        {
+
+                                        }
+                                    }
+                                }
+                                // Pull in the conditional code
+                                if (trueTarget != null && HasSingleEdgeEnteringBlock(trueTarget))
+                                {
+                                    HashSet<ControlFlowNode> content = FindDominatedNodes(scope, trueTarget);
+                                    scope.ExceptWith(content);
+                                    foreach (var con in FindConditions(content, trueTarget)) ilCond.TrueBlock.Body.Add(con);
+                                }
+                                if (falseTarget != null && HasSingleEdgeEnteringBlock(falseTarget))
+                                {
+                                    HashSet<ControlFlowNode> content = FindDominatedNodes(scope, falseTarget);
+                                    scope.ExceptWith(content);
+                                    foreach (var con in FindConditions(content, falseTarget)) ilCond.FalseBlock.Body.Add(con);
+                                }
                             }
                         }
                     }
