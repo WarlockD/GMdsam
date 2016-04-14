@@ -178,8 +178,8 @@ namespace betteribttest.Dissasembler
 
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                IList<ILNode> body = block.Body;
-                IList<ILNode> newBody = new List<ILNode>(body.Count);
+                List<ILNode> body = block.Body;
+                List<ILNode> newBody = new List<ILNode>(body.Count);
                 for (int i = 0; i < body.Count; i++)
                 {
                     ILLabel target;

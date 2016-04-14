@@ -288,10 +288,10 @@ namespace betteribttest.Dissasembler
                         expr = new ILExpression(GMCode.Call, operand as string); //   TryResolveCall(operand as string, extra, nodes);
                       //  Debug.Assert(extra != 3);
                         expr = TryResolveSimpleExpresions(extra, expr, nodes);
-                 //       Debug.Assert("instance_create" != (operand as string));
+                        //       Debug.Assert("instance_create" != (operand as string));
                         // HACK TODO: Ok, so I screwed up on poping the expresions, because of this there
                         // needs to be a refactor on the optimize code that deals with conditions.  Ugh.
-                         if (expr.Arguments[0].Arguments.Count > 1) expr.Arguments[0].Arguments = expr.Arguments[0].Arguments.Reverse().ToList();
+                        expr.Arguments[0].Arguments.Reverse();
                         break;
                     case GMCode.Popz:
                         {

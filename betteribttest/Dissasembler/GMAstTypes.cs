@@ -15,87 +15,10 @@ namespace betteribttest.Dissasembler
 
     public abstract class ILNode
     {
-        // Wow, why havn't I been using Collection? seriously!
-        public class ILList<T> : Collection<T> where T : ILNode
-        {
-            public ILNode Parent = null;
-            public ILList(ILNode parent = null) : base()
-            {
-                this.Parent = parent;
-            }
-            static List<T> GetList(IList<T> check, bool copy = false)
-            {
-                ILList<T> testIL = check as ILList<T>;
-                if (testIL != null) return GetList(testIL.Items, true); // evetualy we get to the list:P
-                List<T> testList = check as List<T>;
-                if (testList != null) return copy ? new List<T>(testList) : testList;
-                T[] testArray = check as T[];
-                if (testArray != null) return new List<T>(testArray);
-                throw new Exception("Not supported IList type " + check.GetType().ToString());
-            }
-            public ILList(IList<T> nodes, ILNode parent = null) : base(GetList(nodes)) // make suer we have a clean list
-            {
-                this.Parent = parent;
-                Relink();
-            }
-            // requires some carful thinking
-            void Relink()
-            {
-                ILNode prev = null;
-                foreach (var node in this)
-                {
-                    node._parent = Parent;
-                    node._next = null;
-                    if (prev != null)
-                    {
-                        node._previous = prev;
-                        prev._next = node;
-                    }
-                    else node._previous = null;
-                }
-            }
-            void ClearNode(ILNode node) { node._next = node._previous = node._parent = null; }
-            protected override void ClearItems()
-            {
-                foreach (var node in this) ClearNode(node);
-                base.ClearItems();
-            }
-            protected override void RemoveItem(int index)
-            {
-                ClearNode(this[index]);
-                base.RemoveItem(index);
-                Relink();
-            }
-            protected override void InsertItem(int index, T item)
-            {
-                base.InsertItem(index, item);
-                Relink();
-            }
-            protected override void SetItem(int index, T item)
-            {
-                ClearNode(this[index]);
-                base.SetItem(index, item);
-                Relink();
-            }
-        }
-        // The original idea was to use ILList<T> to handle the Parent as well, but you would
-        // need make Inode fake a parrent in the case of condition or loops as you want the expression
-        // and blocks to be the parrent.  You could also make the body have the list? humm
-        // I will think of it latter, its easyer to modify GotoRemover to use the parrent
-        // Howerver ILList DOES make sure that the collection class links the next and previous
-        // lists
-        protected ILNode _parent = null;
-        ILNode _next = null;
-        ILNode _previous = null;
-        public virtual void SetParent(ILNode node)
-        {
-            _parent = node;
-            foreach (var child in GetChildren()) child.SetParent(this);
-        }
-
-        public ILNode Parent { get { return _parent; } }
-        public ILNode Next { get { return _next; } }
-        public ILNode Previoius { get { return _previous; } }
+        // removed ILList<T>
+        // I originaly wanted to make a list class that could handle parent and child nodes automaticly
+        // but in the end it was adding to much managment where just a very few parts of the
+        // decompiler needed
         public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate = null) where T : ILNode
         {
             List<T> result = new List<T>(16);
@@ -132,20 +55,7 @@ namespace betteribttest.Dissasembler
     public class ILBasicBlock : ILNode
     {
         /// <remarks> Body has to start with a label and end with unconditional control flow </remarks>
-        ILList<ILNode> _body = new ILList<ILNode>();
-        public IList<ILNode> Body
-        {
-            get { return _body; }
-            set
-            {
-                _body.Clear();
-                _body = new ILList<ILNode>(value, this);
-            }
-        }
-        public ILBasicBlock()
-        {
-            _body = new ILList<ILNode>(this);
-        }
+        public List<ILNode> Body = new List<ILNode>();
         public override IEnumerable<ILNode> GetChildren()
         {
             return this.Body;
@@ -163,25 +73,11 @@ namespace betteribttest.Dissasembler
     public class ILBlock : ILNode
     {
         public ILExpression EntryGoto;
-        ILList<ILNode> _body;
-        public IList<ILNode> Body
-        {
-            get { return _body; }
-            set
-            {
-                if (_body != null) _body.Clear();
-                _body = new ILList<ILNode>(value,this);
-            }
-        }
+        public List<ILNode> Body = new List<ILNode>();
         public ILBlock(params ILNode[] body)
         {
-            this.Body = new ILList<ILNode>(body.ToList(),this);
+            this.Body = body.ToList();
         }
-        public ILBlock(List<ILNode> body)
-        {
-            this.Body = new ILList<ILNode>(body, this);
-        }
-
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.EntryGoto != null)
@@ -274,7 +170,6 @@ namespace betteribttest.Dissasembler
         public bool isExit = false;
         public override void WriteTo(ITextOutput output)
         {
-
             output.WriteDefinition(Name + ":", this);
         }
 
@@ -400,16 +295,7 @@ namespace betteribttest.Dissasembler
     {
         public GMCode Code { get; set; }
         public object Operand { get; set; }
-        ILList<ILExpression> _args;
-        public IList<ILExpression> Arguments
-        {
-            get { return _args; }
-            set
-            {
-                _args.Clear();
-                _args = new ILList<ILExpression>(value,this);
-            }
-        }
+        public List<ILExpression> Arguments;
         // Mapping to the original instructions (useful for debugging)
         public List<ILRange> ILRanges { get; set; }
 
@@ -421,8 +307,8 @@ namespace betteribttest.Dissasembler
         {
             this.Code = i.Code;
             this.Operand = i.Operand; // don't need to worry about this
-            this._args = new ILList<ILExpression>(this);
-            if(i.Arguments.Count!=0) foreach (var n in i.Arguments) this._args.Add(new ILExpression(n));
+            this.Arguments = new List<ILExpression>(i.Arguments.Count);
+            if(i.Arguments.Count!=0) foreach (var n in i.Arguments) this.Arguments.Add(new ILExpression(n));
             this.ILRanges = new List<ILRange>(range ?? i.ILRanges);
         }
         public ILExpression(GMCode code, object operand, List<ILExpression> args)
@@ -432,7 +318,7 @@ namespace betteribttest.Dissasembler
 
             this.Code = code;
             this.Operand = operand;
-            this._args = new ILList<ILExpression>(args, this);
+            this.Arguments = new List<ILExpression>(args);
             this.ILRanges = new List<ILRange>(1);
         }
 
@@ -443,7 +329,7 @@ namespace betteribttest.Dissasembler
 
             this.Code = code;
             this.Operand = operand;
-            this._args = new ILList<ILExpression>(args, this);
+            this.Arguments = new List<ILExpression>(args);
             this.ILRanges = new List<ILRange>(1);
         }
 
@@ -473,50 +359,21 @@ namespace betteribttest.Dissasembler
                 return new ILLabel[] { };
             }
         }
-        bool ArgumentWriteTo(ITextOutput output)
+        void WriteCommaArguments(ITextOutput output)
         {
             output.Write('(');
-            bool first = true;
-
-            foreach (ILExpression arg in this.Arguments)
+            for(int i=0;i < Arguments.Count; i++)
             {
-                if (!first) output.Write(", ");
-                arg.WriteTo(output);
-                first = false;
+                if (i!=0) output.Write(", ");
+                WriteArgument(output, i, true);
             }
             output.Write(')');
-            return first;
         }
-        bool OperandWriteTo(ITextOutput output)
+        bool CheckParm(int index)
         {
-            bool first = true;
-            if (Operand != null)
-            {
-                if (Operand is ILLabel)
-                {
-                    output.WriteReference(((ILLabel)Operand).Name, Operand);
-                }
-                else if (Operand is ILLabel[])
-                {
-                    ILLabel[] labels = (ILLabel[])Operand;
-                    for (int i = 0; i < labels.Length; i++)
-                    {
-                        if (i > 0)
-                            output.Write(", ");
-                        output.WriteReference(labels[i].Name, labels[i]);
-                    }
-                }
-                else {
-                    output.Write(Operand.ToString());
-                    //   DisassemblerHelpers.WriteOperand(output, Operand);
-                }
-                first = false;
-            }
-            return first;
-        }
-        static bool CheckParm(ILExpression node)
-        {
-            switch (node.Code)
+            ILExpression e = Arguments.ElementAtOrDefault(index);
+            if (e == null) return false;
+            switch (e.Code)
             {
                 case GMCode.Call:
                 case GMCode.Var:
@@ -564,61 +421,37 @@ namespace betteribttest.Dissasembler
             if (index < Arguments.Count) WriteArgument(output, index, escapeString);
             else output.Write(POPDefaultString);    
         }
+        public void WriteParm(ITextOutput output, int index) {
+            bool needParm = CheckParm(index);
+            if (needParm) output.Write('(');
+            WriteArgumentOrPop(output, index);
+            if (needParm) output.Write(')');
+        }
         public override void WriteTo(ITextOutput output)
         {
             int count = Code.getOpTreeCount(); // not a leaf
             if (count == 1)
             {
-                if (Arguments.Count != 0)
-                {
-                    output.Write(Code.getOpTreeString());
-                    bool needParm = CheckParm(Arguments[0]);
-                    if (needParm) output.Write('(');
-                    WriteArgument(output, 0);
-                    if (needParm) output.Write(')');
-                } else
-                {
-                    output.Write(Code.GetName());
-                    output.Write(' ');
-                    output.Write(POPDefaultString); // fake
-                }
-               
+                output.Write(Code.getOpTreeString());
+                WriteParm(output, 0);
             }
             else if (count == 2)
             {
-                if(Arguments.Count != 0)
-                {
-                    bool needParm = CheckParm(Arguments[0]);
-                    if (needParm) output.Write('(');
-                    WriteArgument(output, 0);
-                    if (needParm) output.Write(')');
-                    output.Write(' ');
-                    output.Write(Code.getOpTreeString());
-                    output.Write(' ');
-                    needParm = CheckParm(Arguments[1]);
-                    if (needParm) output.Write('(');
-                    WriteArgument(output, 1);
-                    if (needParm) output.Write(')');
-                }
-                else
-                {
-                    output.Write(Code.GetName());
-                    output.Write(' ');
-                    output.Write(POPDefaultString); 
-                    output.Write(", ");
-                    output.Write(POPDefaultString); 
-                }
+                WriteParm(output, 0);
+                output.Write(' ');
+                output.Write(Code.getOpTreeString());
+                output.Write(' ');
+                WriteParm(output, 1);
             }
             else
             {
-
                 switch (Code)
                 {
                     case GMCode.Constant: // primitive c# type
                         WriteOperand(output);
                         break;
                     case GMCode.Var:  // should be ILVariable
-                        if (Arguments.Count > 0) WriteArgument(output, 0, false); 
+                        if (Arguments.Count > 0) WriteArgument(output, 0, false);
                         else output.Write("stack");
                         output.Write(".");
                         WriteOperand(output, false);// generic, string name
@@ -631,7 +464,7 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Call:
                         output.Write(Operand.ToString());
-                        ArgumentWriteTo(output);
+                        WriteCommaArguments(output);
                         break;
                     case GMCode.Pop:
                         if (Arguments.Count > 0) Arguments[0].WriteTo(output);
