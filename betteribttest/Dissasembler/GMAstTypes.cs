@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.GMAst
+namespace betteribttest.Dissasembler
 {
 
 
@@ -129,7 +129,37 @@ namespace betteribttest.GMAst
 
         public abstract void WriteTo(ITextOutput output);
     }
+    public class ILBasicBlock : ILNode
+    {
+        /// <remarks> Body has to start with a label and end with unconditional control flow </remarks>
+        ILList<ILNode> _body = new ILList<ILNode>();
+        public IList<ILNode> Body
+        {
+            get { return _body; }
+            set
+            {
+                _body.Clear();
+                _body = new ILList<ILNode>(value, this);
+            }
+        }
+        public ILBasicBlock()
+        {
+            _body = new ILList<ILNode>(this);
+        }
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            return this.Body;
+        }
 
+        public override void WriteTo(ITextOutput output)
+        {
+            foreach (ILNode child in this.GetChildren())
+            {
+                child.WriteTo(output);
+                output.WriteLine();
+            }
+        }
+    }
     public class ILBlock : ILNode
     {
         public ILExpression EntryGoto;
@@ -189,23 +219,6 @@ namespace betteribttest.GMAst
         public ILValue(ILVariable v) { this.Value = v; Type = GM_Type.Var; }
         public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
         public ILValue(ILExpression e) { this.Value = e;  Type = GM_Type.ConstantExpression;  }
-        public static ILValue FromInstruction(Instruction i)
-        {
-            Debug.Assert(i.Code == GMCode.Push && i.FirstType != GM_Type.Var);
-            switch (i.FirstType)
-            {
-                case GM_Type.Double:
-                case GM_Type.Float:
-                case GM_Type.Int:
-                case GM_Type.Long:
-                case GM_Type.String:
-                    return new ILValue(i.Operand, i.FirstType);
-                case GM_Type.Short:
-                    return new ILValue(i.Instance);
-                default:
-                    throw new Exception("Bad Type");
-            }
-        }
         public override string ToString()
         {
             return ValueText ?? Value.ToString();
@@ -251,38 +264,7 @@ namespace betteribttest.GMAst
             return false;
         }
     }
-    public class ILBasicBlock : ILNode
-    {
-        /// <remarks> Body has to start with a label and end with unconditional control flow </remarks>
-        ILList<ILNode> _body = new ILList<ILNode>();
-        public IList<ILNode> Body
-        {
-            get { return _body; }
-            set
-            {
-                _body.Clear();
-                _body = new ILList<ILNode>(value,this);
-            }
-        }
-        public ILBasicBlock()
-        {
-            _body = new ILList<ILNode>(this);
-        }
-        public override IEnumerable<ILNode> GetChildren()
-        {
-            return this.Body;
-        }
-
-        public override void WriteTo(ITextOutput output)
-        {
-            foreach (ILNode child in this.GetChildren())
-            {
-                child.WriteTo(output);
-                output.Write(';');
-                output.WriteLine();
-            }
-        }
-    }
+  
 
     public class ILLabel : ILNode, IEquatable<ILLabel>
     {
@@ -481,12 +463,14 @@ namespace betteribttest.GMAst
         {
             if (this.Operand is ILLabel)
             {
-                yield return this.Operand as ILLabel ;
+                return new ILLabel[] { (ILLabel)this.Operand };
             }
-            else if(Code == GMCode.Switch)
+            else if (this.Operand is ILLabel[])
             {
-                var list =  Arguments.Skip(1).Select(x => x.Operand as ILLabel).ToList();
-                foreach (var l in list) yield return l;
+                return (ILLabel[])this.Operand;
+            }
+            else {
+                return new ILLabel[] { };
             }
         }
         bool ArgumentWriteTo(ITextOutput output)
@@ -570,21 +554,9 @@ namespace betteribttest.GMAst
             if (arg.Code == GMCode.Constant) arg.WriteOperand(output, escapeString);
             else arg.WriteTo(output); // don't know what it is
         }
-        public void WriteArguments(ITextOutput output, int start, bool escapeString = true)
+        public void WriteArguments(ITextOutput output, int start)
         {
-            if ((Arguments.Count - start) == 0) WriteArgument(output, start, escapeString);
-            else
-            {
-                output.Write('{');
-                output.Indent();
-                for (; start < Arguments.Count; start++)
-                {
-                    WriteArgument(output, start, escapeString);
-                    output.WriteLine();
-                }
-                output.Unindent();
-                output.Write('}');
-            }
+            Arguments.WriteNodes(output, start);
         }
         static readonly string POPDefaultString = "%POP%";
         public void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
@@ -709,13 +681,8 @@ namespace betteribttest.GMAst
                     case GMCode.Pushenv:
                         output.Write("PushEnviroment(");
                         WriteArgumentOrPop(output, 0, false);
-                        output.Write(")");
-                        break;
-                    case GMCode.SimplePushenv:
-                        output.Write("with(");
-                        WriteArgument(output, 0, false);
-                        output.Write(") ");
-                        WriteArguments(output, 1, true);
+                        output.Write(") : ");
+                        WriteOperand(output, false);
                         break;
                     case GMCode.Popenv:
                         output.Write("PopEnviroment ");
@@ -808,39 +775,17 @@ namespace betteribttest.GMAst
 
         public override void WriteTo(ITextOutput output)
         {
-            output.Write("if (");
+            output.Write("if(");
             Condition.WriteTo(output);
+            output.Write(") ");
             if (TrueBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
-            else if (TrueBlock.Body.Count != 1 || TrueBlock.Body[0] is ILCondition)
-            {
-                output.WriteLine(") {");
-                output.Indent();
-                TrueBlock.WriteTo(output);
-                output.Unindent();
-                output.Write("}");
-            }
-            else
-            {
-                output.Write(") ");
-                TrueBlock.Body[0].WriteTo(output);
-            }
-
+            else TrueBlock.Body.WriteNodes(output);
             if (FalseBlock != null)
             {
+                output.WriteLine(); // some of these conditions get to long so put a line here
+                output.Write("else ");
                 if (FalseBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
-                else if (FalseBlock.Body.Count != 1 && FalseBlock.Body[0] is ILCondition)
-                {
-                    output.WriteLine(" else {");
-                    output.Indent();
-                    FalseBlock.WriteTo(output);
-                    output.Unindent();
-                    output.Write("}");
-                }
-                else
-                {
-                    output.Write(" else ");
-                    FalseBlock.Body[0].WriteTo(output);
-                }
+                else FalseBlock.Body.WriteNodes(output);
             }
         }
     }
@@ -905,7 +850,7 @@ namespace betteribttest.GMAst
         public ILExpression Enviroment;
         public override IEnumerable<ILNode> GetChildren()
         {
-           // if (Enviroment != null) yield return Enviroment;
+            if (Enviroment != null) yield return Enviroment;
             if (this.Body != null)
                 yield return this.Body;
         }

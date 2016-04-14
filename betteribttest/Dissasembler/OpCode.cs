@@ -207,6 +207,7 @@ namespace betteribttest.Dissasembler
                 case GMCode.Call:
                     i.Types = new GM_Type[] { (GM_Type)((raw >> 16) & 15) };
                     return true;
+                case GMCode.Exit:
                 case GMCode.Ret:
                 case GMCode.Not:
                 case GMCode.Neg:
@@ -251,12 +252,22 @@ namespace betteribttest.Dissasembler
                 case GMCode.B:
                 case GMCode.Bf:
                 case GMCode.Bt:
+                    i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
+                    break;
                 case GMCode.Popenv:
+                    Debug.WriteLine("Popenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
+                    if (0xBCF00000 == raw) // its a popbreak
+                        i._extra = 0;
+                    else
+                        i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
+                    break;
                 case GMCode.Pushenv:
+                    Debug.WriteLine("Pushenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
                     i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
                     break;
                 case GMCode.BadOp:
                     throw new Exception("Bad opcode?");
+             
                 default:
                     throw new Exception("Unkonwn opcode");
             }
@@ -344,14 +355,32 @@ namespace betteribttest.Dissasembler
                 switch (i.Code)
                 {
                     case GMCode.Pushenv:
-                        pushEnviroment.Add(i.Extra, GiveInstructionALabel(i, i.Extra+1)); // skip the pop
+                        {
+                            Label endOfEnviroment = GiveInstructionALabel(i, i.Extra +1);// skip the pop
+                            i.Operand = endOfEnviroment;
+                            pushEnviroment.Add(i.Address, endOfEnviroment);
+                            branches.Add(i);
+                        }
                         break;
                     case GMCode.Popenv:
                         {
                             Label endOfEnviroment;
-                            if (!pushEnviroment.TryGetValue(i.Address, out endOfEnviroment)) // skip this
-                                throw new Exception("Can't find matching push");
-                            i.Operand = endOfEnviroment; // don't need to add it to labels as it already exists
+                            if (pushEnviroment.TryGetValue(i.Extra - 1, out endOfEnviroment))
+                            {
+                                i.Operand = GiveInstructionALabel(i, i.Extra - 1);  // not a break, set the label BACK to the push as we are simulating a loop
+                            }
+                            else {
+                                foreach(Instruction ii in list.Values.Reverse())
+                                {
+                                    if(ii.Code == GMCode.Pushenv)
+                                    {
+                                        i.Operand = GiveInstructionALabel(i, ii.Address); // we want to make these continues
+                                        break;
+                                    }
+                                }
+                            }
+                            branches.Add(i);
+                            Debug.Assert(i.Operand != null);       
                         }
                         break;
                     case GMCode.Bf:

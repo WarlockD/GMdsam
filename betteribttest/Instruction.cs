@@ -164,8 +164,8 @@ namespace betteribttest
             {  (GMCode)0x0a, "&" },
             {  (GMCode)0x0b, "|" },
             { (GMCode) 0x0c, "^" },
-            { (GMCode) 0x0d, "~" },
-            {  (GMCode)0x0e, "!" },
+            { GMCode.Neg, "-"  },
+            {  GMCode.Not, "!" },
 
             {  (GMCode)0x0f, "<<" },
             {  (GMCode)0x10, ">>" },
@@ -305,11 +305,11 @@ namespace betteribttest
         }
         public static bool IsUnconditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.B || code == GMCode.Exit || code == GMCode.Ret || code == GMCode.LoopContinue || code == GMCode.LoopOrSwitchBreak;
+            return code == GMCode.B || code == GMCode.Exit || code == GMCode.Ret || code == GMCode.LoopContinue || code == GMCode.LoopOrSwitchBreak || code == GMCode.Popenv;
         }
         public static bool IsConditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.Switch;
+            return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.Switch || code == GMCode.Pushenv;
         }
         public static bool isBranch(this GMCode code)
         {
@@ -331,6 +331,124 @@ namespace betteribttest
 
             }
         }
+        public static bool isExpression(this GMCode i)
+        {
+            switch (i)
+            {
+                case GMCode.Neg:
+                case GMCode.Not:
+                case GMCode.Add:
+                case GMCode.Sub:
+                case GMCode.Mul:
+                case GMCode.Div:
+                case GMCode.Mod:
+                case GMCode.And:
+                case GMCode.Or:
+                case GMCode.Xor:
+                case GMCode.Sal:
+                case GMCode.Seq:
+                case GMCode.Sge:
+                case GMCode.Sgt:
+                case GMCode.Sle:
+                case GMCode.Slt:
+                case GMCode.Sne:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        public static int GetPopDelta(this GMCode i)
+        {
+            switch (i)
+            {
+                case GMCode.Popenv:
+                case GMCode.Exit:
+                case GMCode.Conv:
+                    break; // we ignore conv
+                case GMCode.Call:
+                case GMCode.Push:
+                case GMCode.Pop:
+                case GMCode.Dup:
+                    throw new Exception("Need more info for pop");
+                case GMCode.Popz:
+                case GMCode.Ret:
+                case GMCode.B:
+                case GMCode.Bt:
+                case GMCode.Bf:
+                case GMCode.Neg:
+                case GMCode.Not:
+                case GMCode.Pushenv:
+                    return 1;
+                case GMCode.Add:
+                case GMCode.Sub:
+                case GMCode.Mul:
+                case GMCode.Div:
+                case GMCode.Mod:
+                case GMCode.And:
+                case GMCode.Or:
+                case GMCode.Xor:
+                case GMCode.Sal:
+                case GMCode.Seq:
+                case GMCode.Sge:
+                case GMCode.Sgt:
+                case GMCode.Sle:
+                case GMCode.Slt:
+                case GMCode.Sne:
+                    return 2;
+                case GMCode.Var:
+                case GMCode.Constant:
+                    return 0;
+                default:
+                    throw new Exception("Unkonwn opcode");
+            }
+            return 0;
+        }
+        public static int GetPushDelta(this GMCode code)
+        {
+            switch (code)
+            {
+                case GMCode.Popenv:
+                case GMCode.Exit:
+                case GMCode.Conv:
+                    break; // we ignore conv
+                case GMCode.Call:
+                case GMCode.Push:
+                    return 1;
+                case GMCode.Pop:
+                case GMCode.Popz:
+                case GMCode.B:
+                case GMCode.Bt:
+                case GMCode.Bf:
+                case GMCode.Ret:
+                case GMCode.Pushenv:
+                    break;
+                case GMCode.Dup:
+                    throw new Exception("Need more info for dup");
+                case GMCode.Neg:
+                case GMCode.Not:
+                case GMCode.Add:
+                case GMCode.Sub:
+                case GMCode.Mul:
+                case GMCode.Div:
+                case GMCode.Mod:
+                case GMCode.And:
+                case GMCode.Or:
+                case GMCode.Xor:
+                case GMCode.Sal:
+                case GMCode.Seq:
+                case GMCode.Sge:
+                case GMCode.Sgt:
+                case GMCode.Sle:
+                case GMCode.Slt:
+                case GMCode.Sne:
+                    return 1;
+                default:
+                    throw new Exception("Unkonwn opcode");
+
+            }
+            return 0;
+        }
+   
     }
 
     public interface ITextOut

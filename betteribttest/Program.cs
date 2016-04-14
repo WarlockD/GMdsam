@@ -2,11 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.IO;
-using betteribttest.GMAst;
-using betteribttest.FlowAnalysis;
+using betteribttest.Dissasembler;
 
 namespace betteribttest
 {
@@ -157,17 +153,16 @@ namespace betteribttest
         static void Main()
         {
 
-            // cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
+             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-            cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
+           // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
             //Decompiler dism = new Decompiler(cr);
 
 
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
             InstanceList = cr.objList.Select(x => x.Name).ToList();
             scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
-            betteribttest.GMAst.ILDecompile ild = new GMAst.ILDecompile(stringList, InstanceList);
 
 
             FunctionFix.Add("instance_create", instanceCreateFunction);
@@ -206,66 +201,32 @@ namespace betteribttest
 
 
 
-           //  string filename_to_test = "Script_scr_asgface"; // this decompiles perfectly and VERY simple
-              string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WE GOT IT WOOOOOOO 
+          //   string filename_to_test = "Script_scr_asgface"; // WORKS 4/12 too simple
+           //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WORKS 4/12
             // Emptyboarer is a MUST test.  It has a && in it as well as simple if statments and calls.  If we can't pass this nothing else will work
 
 
-            //      string filename_to_test = "SCR_DIRECT"; // simple loop works!
-            //  string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
-            //   string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break
+             //    string filename_to_test = "SCR_DIRECT"; // simple loop works! WORKS 4/12
+            string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
+
+
+          //     string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break WORKS 4/14
 
 
 
             foreach (var files in cr.GetCodeStreams(filename_to_test))
             {
-              //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
-                
+                //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
+
                 var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values,files.ScriptName + "_new.asm");
+                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + "_new.asm");
                 new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, stringList, InstanceList);
 
-               
-              //  if (instructions!= null) instructions.SaveInstructions(files.ScriptName + ".asm");
+
+                //  if (instructions!= null) instructions.SaveInstructions(files.ScriptName + ".asm");
                 continue;
                 //System.Diagnostics.Debug.Assert(files.ScriptName != "gml_Object_obj_undyneboss_Destroy_0");
-                MethodBody mb = new MethodBody();
-               // mb.Instructions = instructions.ToList();
-                var graph = betteribttest.FlowAnalysis.ControlFlowGraphBuilder.Build(mb);
-                graph.ComputeDominance();
-                graph.ComputeDominanceFrontier();
-                var export = graph.ExportGraph();
-                export.Save(files.ScriptName + "_raw.dot");
-
-
-
-
-                var list = ild.DecompileInternal(null);
-                ILBlock method = new ILBlock();
-                method.Body = list;
-                using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(files.ScriptName + "_preil.txt"))) method.WriteTo(sw);
-                ILAstOptimizer bodyGraph = new ILAstOptimizer();
-                bodyGraph.Optimize(method);
-                    // fix up functions a bit
-                    FunctionFix.FixCalls(method);
-                PushFix.FixCalls(method);
-                using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(files.ScriptName + "_optimize.txt"))) method.WriteTo(sw);
-
-
-               
-
-
-                //var loops = betteribttest.FlowAnalysis.ControlStructureDetector.DetectStructure(graph, new System.Threading.CancellationToken());
-                
-              //  block2.SaveToFile(files.ScriptName + "_pre.cpp");
-               
-
-
-                //graph.ExportGraph(files.ScriptName + "_codegraph.txt");
-                // graph.BuildAllAst(new Decompile(stringList, InstanceList), stackMap);
-                //  graph.ExportGraph(files.ScriptName + "_graph.txt");
             }
-
             System.Diagnostics.Debug.WriteLine("Ok");
 #if false
             foreach (var files in cr.GetCodeStreams(filename_to_test))
@@ -281,34 +242,7 @@ namespace betteribttest
                 }
                
             }
-
-            foreach (var files in cr.GetCodeStreams())
-            {
-                newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
-            }
-            return;
-            //       cr.DumpAllStrings("STRINGS.TXT");
-            //   dism.DissasembleEveything();
-            //     dism.writeFile("frog");
-            //dism.TestStreamOutput("frog");
-    
-            //    dism.TestStreamOutput("obj_shaker_Alarm");
-            //   dism.TestStreamOutput("gasterblaster_Draw");
-            //  dism.TestStreamOutput("sansbullet");
-            //    dism.TestStreamOutput("SCR_BORDERSETUP");
-            //    dism.TestStreamOutput("obj_face_alphys_Step");
-            //  dism.TestStreamOutput("SCR_GAMESTART");
-            //     dism.TestStreamOutput("scr_facechoice");
-            //   dism.TestStreamOutput("obj_dialoguer");
-            //    cr.SaveTexturePacker("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.png", "D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\test.plist", 14);
-            //   cr.SaveNewTextureFormat("D:\\cocos2d-x\\tests\\cpp-empty-test\\Resources\\");
 #endif
-            //   ChunkReader cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-            //   Disam dism = new Disam(cr);
-            //  dism.writeFile("frog");
-         //   Application.EnableVisualStyles();
-         //   Application.SetCompatibleTextRenderingDefault(false);
-         //   Application.Run(new Form1());
         }
     }
 }

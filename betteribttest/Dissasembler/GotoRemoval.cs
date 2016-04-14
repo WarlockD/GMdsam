@@ -4,7 +4,8 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace betteribttest.GMAst
+
+namespace betteribttest.Dissasembler
 {
     public class GotoRemoval
     {
@@ -63,7 +64,15 @@ namespace betteribttest.GMAst
                     body.RemoveAt(body.Count - 1);
                 }
             }
-
+            // Remove redundant continue
+            foreach (ILWithStatement with in method.GetSelfAndChildrenRecursive<ILWithStatement>())
+            {
+                var body = with.Body.Body;
+                if (body.Count > 0 && body.Last().Match(GMCode.LoopContinue))
+                {
+                    body.RemoveAt(body.Count - 1);
+                }
+            }
             // Remove redundant break at the end of case
             // Remove redundant case blocks altogether
             foreach (ILSwitch ilSwitch in method.GetSelfAndChildrenRecursive<ILSwitch>())
@@ -92,7 +101,7 @@ namespace betteribttest.GMAst
             }
 
             // Remove redundant return at the end of method
-            if (method.Body.Count > 0 && method.Body.Last().Match(GMCode.Ret) && ((ILExpression)method.Body.Last()).Arguments.Count == 0)
+            if (method.Body.Count > 0 && (method.Body.Last().Match(GMCode.Ret)|| method.Body.Last().Match(GMCode.Exit) )&& ((ILExpression)method.Body.Last()).Arguments.Count == 0)
             {
                 method.Body.RemoveAt(method.Body.Count - 1);
             }
@@ -103,7 +112,7 @@ namespace betteribttest.GMAst
             {
                 for (int i = 0; i < block.Body.Count - 1;)
                 {
-                    if (block.Body[i].IsUnconditionalControlFlow() && block.Body[i + 1].Match(GMCode.Ret))
+                    if (block.Body[i].IsUnconditionalControlFlow() && (block.Body[i + 1].Match(GMCode.Ret) || block.Body[i + 1].Match(GMCode.Exit)))
                     {
                         modified = true;
                         block.Body.RemoveAt(i + 1);
@@ -165,7 +174,7 @@ namespace betteribttest.GMAst
                 return true;
             }
 
-            ILNode breakBlock = GetParents(gotoExpr).FirstOrDefault(n => n is ILWhileLoop || n is ILSwitch);
+            ILNode breakBlock = GetParents(gotoExpr).FirstOrDefault(n => n is ILWhileLoop || n is ILSwitch || n is ILWithStatement);
             if (breakBlock != null && target == Exit(breakBlock, new HashSet<ILNode>() { gotoExpr }))
             {
                 gotoExpr.Code = GMCode.LoopOrSwitchBreak;
@@ -173,7 +182,7 @@ namespace betteribttest.GMAst
                 return true;
             }
 
-            ILNode continueBlock = GetParents(gotoExpr).FirstOrDefault(n => n is ILWhileLoop);
+            ILNode continueBlock = GetParents(gotoExpr).FirstOrDefault(n => n is ILWhileLoop || n is ILWithStatement);
             if (continueBlock != null && target == Enter(continueBlock, new HashSet<ILNode>() { gotoExpr }))
             {
                 gotoExpr.Code = GMCode.LoopContinue;
@@ -250,12 +259,12 @@ namespace betteribttest.GMAst
                 }
                 else if (expr.Code == GMCode.LoopOrSwitchBreak)
                 {
-                    ILNode breakBlock = GetParents(expr).First(n => n is ILWhileLoop || n is ILSwitch);
+                    ILNode breakBlock = GetParents(expr).First(n => n is ILWhileLoop || n is ILSwitch || n is ILWithStatement);
                     return Exit(breakBlock, new HashSet<ILNode>() { expr });
                 }
                 else if (expr.Code == GMCode.LoopContinue)
                 {
-                    ILNode continueBlock = GetParents(expr).First(n => n is ILWhileLoop);
+                    ILNode continueBlock = GetParents(expr).First(n => n is ILWhileLoop || n is ILWithStatement);
                     return Enter(continueBlock, new HashSet<ILNode>() { expr });
                 }
                 else {
@@ -283,6 +292,17 @@ namespace betteribttest.GMAst
             if (cond != null)
             {
                 return cond.Condition;
+            }
+            ILWithStatement with = node as ILWithStatement;
+            if (with != null)
+            {
+                if (with.Enviroment != null)
+                {
+                    return with.Enviroment;
+                }
+                else {
+                    return Enter(with.Body, visitedNodes);
+                }
             }
 
             ILWhileLoop loop = node as ILWhileLoop;
@@ -353,7 +373,7 @@ namespace betteribttest.GMAst
                 return null;  // Implicit exit from switch is not allowed
             }
 
-            if (nodeParent is ILWhileLoop)
+            if (nodeParent is ILWhileLoop || nodeParent is ILWithStatement)
             {
                 return Enter(nodeParent, visitedNodes);
             }

@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.GMAst
+namespace betteribttest.Dissasembler
 {
+#if false
     public class StackException : Exception
     {
         public Stack<ILExpression> stack;
@@ -336,4 +337,5 @@ namespace betteribttest.GMAst
             return ret; // We shouldn't end here unless its the end of the instructions
         }
     }
+#endif
 }

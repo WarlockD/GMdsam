@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using betteribttest.GMAst;
 using betteribttest.FlowAnalysis;
 using System.Diagnostics;
 
@@ -32,6 +31,29 @@ namespace betteribttest.Dissasembler
                 graph.ComputeDominanceFrontier();
                 graph.ExportGraph().Save("loop_graph.dot");
                 block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
+            }
+        }
+        public void FindWiths(ILBlock block)
+        {
+            if (block.Body.Count > 0)
+            {
+                List<ILBasicBlock> pushEnv = new List<ILBasicBlock>();
+                List<ILBasicBlock> popEnv = new List<ILBasicBlock>();
+                foreach (var bb in block.GetSelfAndChildrenRecursive<ILBasicBlock>())
+                {
+                    foreach(var n in bb.GetChildren())
+                    {
+                        ILExpression e = n as ILExpression;
+                        if(e != null)
+                        {
+                            if (e.Code == GMCode.Pushenv) pushEnv.Add(bb);
+                            if (e.Code == GMCode.Popenv) popEnv.Add(bb);
+                        }
+                    }
+                }
+                if (pushEnv.Count == 0 && popEnv.Count == 0) return;
+                Debug.WriteLine("WOOO");
+               
             }
         }
 
@@ -110,7 +132,67 @@ namespace betteribttest.Dissasembler
             return new ControlFlowGraph(cfNodes.ToArray());
         }
 
-        List<ILNode> FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
+
+        List<ILNode> FindWiths(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
+        {
+            List<ILNode> result = new List<ILNode>();
+
+            // Do not modify entry data
+            scope = new HashSet<ControlFlowNode>(scope);
+            Queue<ControlFlowNode> agenda = new Queue<ControlFlowNode>();
+            agenda.Enqueue(entryPoint);
+            while (agenda.Count > 0)
+            {
+                ControlFlowNode node = agenda.Dequeue();
+                // Find a block that represents a simple condition
+                if (scope.Contains(node))
+                {
+                    ILBasicBlock head = (ILBasicBlock)node.UserData;
+                    ILLabel pushlabel;
+                    ILLabel nextLabel;
+                    if (head.MatchLastAndBr(GMCode.Popenv, out pushlabel, out nextLabel) &&
+                        pushlabel == nextLabel // This is not a break
+                        )
+                    {
+                        scope.RemoveOrThrow(node);
+                        // alright we do this like we did the simple
+                        ILExpression popExpression = head.Body[head.Body.Count - 2] as ILExpression;
+                       
+                        Stack<ILNode> pushExpresions = new Stack<ILNode>(); // have to reverse the order
+                        int i;
+                        ILExpression e = null;
+                        for (i = head.Body.Count - 3; i >= 0; i--)
+                        {
+                            ILNode n = head.Body[i];
+                            Debug.Assert(!(n is ILLabel)); // We need to handle a break then
+                            e = n as ILExpression;
+                            if (e != null && e.Code == GMCode.Pushenv) break;
+                            pushExpresions.Push(n);
+                        }
+                        ILWithStatement stmt = new ILWithStatement();
+                        stmt.Enviroment = e.Arguments[0];
+                        foreach (var f in pushExpresions) { stmt.Body.Body.Add(f); head.Body.Remove(f); }
+                        head.Body.Remove(popExpression);
+                        head.Body[i] = stmt;
+                        e.Code = GMCode.SimplePushenv;                        
+                    }
+                }
+                // Using the dominator tree should ensure we find the the widest loop first
+                foreach (var child in node.DominatorTreeChildren)
+                {
+                    agenda.Enqueue(child);
+                }
+            }
+
+            // Add whatever is left
+            foreach (var node in scope)
+            {
+                result.Add((ILNode)node.UserData);
+            }
+
+            return result;
+        }
+            List<ILNode> FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
         {
             List<ILNode> result = new List<ILNode>();
 
@@ -136,9 +218,10 @@ namespace betteribttest.Dissasembler
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchSingleAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel))
+                    if (basicBlock.MatchSingleAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) || 
+                        basicBlock.MatchSingleAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel)) // built it the same way
                     {
-                        
+                        bool ispushEnv = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code == GMCode.Pushenv; 
                         ControlFlowNode trueTarget;
                         labelToCfNode.TryGetValue(trueLabel, out trueTarget);
                         ControlFlowNode falseTarget;
@@ -170,18 +253,34 @@ namespace betteribttest.Dissasembler
                                 var pullIn = scope.Except(postLoopContents).Where(n => node.Dominates(n));
                                 loopContents.UnionWith(pullIn);
                             }
-
-                            // Use loop to implement the brtrue
-                            basicBlock.Body.RemoveTail(GMCode.Push, GMCode.Bf, GMCode.B);
-                            basicBlock.Body.Add(new ILWhileLoop()
+                            if(ispushEnv)
                             {
-                                Condition = condExpr,
-                                BodyBlock = new ILBlock()
+                                // Use loop to implement the brtrue
+                                basicBlock.Body.RemoveTail(GMCode.Pushenv, GMCode.B);
+                                basicBlock.Body.Add(new ILWithStatement()
                                 {
-                                    EntryGoto = new ILExpression(GMCode.B, trueLabel),
-                                    Body = FindLoops(loopContents, node, false)
-                                }
-                            });
+                                    Enviroment = condExpr,
+                                    Body = new ILBlock()
+                                    {
+                                        EntryGoto = new ILExpression(GMCode.B, trueLabel),
+                                        Body = FindLoops(loopContents, node, false)
+                                    }
+                                });
+                            } else
+                            {
+                                // Use loop to implement the brtrue
+                                basicBlock.Body.RemoveTail(GMCode.Bf, GMCode.B);
+                                basicBlock.Body.Add(new ILWhileLoop()
+                                {
+                                    Condition = condExpr,
+                                    BodyBlock = new ILBlock()
+                                    {
+                                        EntryGoto = new ILExpression(GMCode.B, trueLabel),
+                                        Body = FindLoops(loopContents, node, false)
+                                    }
+                                });
+                            }
+                          
                             basicBlock.Body.Add(new ILExpression(GMCode.B, falseLabel));
                             result.Add(basicBlock);
 
@@ -248,18 +347,16 @@ namespace betteribttest.Dissasembler
                     {
                         // Switch
                         IList<ILExpression> cases;
-                        List<ILLabel> caseLabels;
+                        ILLabel[] caseLabels;
                         ILExpression switchCondition;
                         ILLabel fallLabel;
-                        ILLabel endBlock;
                         //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
                         // matches a switch statment, not sure how the hell I am going to do this
-                        if (block.MatchLastAndBr(GMCode.Switch,out fallLabel, out cases, out endBlock))
+                        if (block.MatchLastAndBr(GMCode.Switch,out caseLabels, out cases, out fallLabel))
                         {
-                            Debug.Assert(fallLabel == endBlock); // this should be true
+                        //    Debug.Assert(fallLabel == endBlock); // this should be true
                             switchCondition = cases[0]; // thats the switch arg
                             cases.RemoveAt(0); // remove the switch condition
-                            caseLabels = cases.Select(x => x.Operand as ILLabel).ToList();
 
                             // Replace the switch code with ILSwitch
                             ILSwitch ilSwitch = new ILSwitch() { Condition = switchCondition };
@@ -287,7 +384,7 @@ namespace betteribttest.Dissasembler
                                     frontiers.UnionWith(condTarget.DominanceFrontier.Except(new[] { condTarget }));
                             }
 
-                            for (int i = 0; i < caseLabels.Count; i++)
+                            for (int i = 0; i < caseLabels.Length; i++)
                             {
                                 ILLabel condLabel = caseLabels[i];
 
@@ -351,62 +448,47 @@ namespace betteribttest.Dissasembler
                         // Two-way branch
                         ILLabel trueLabel;
                         ILLabel falseLabel;
-                        if (block.MatchLastAndBr(GMCode.Bf, out falseLabel,  out trueLabel)) 
+                        IList<ILExpression> condExprs;
+                        if (block.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExprs, out trueLabel)
+                            && condExprs[0].Code != GMCode.Pop)  // its resolved
                         {
+                            ILExpression condExpr = condExprs[0];
                             IList<ILNode> body = block.Body;
-                            ILExpression condExpr; // this is a simple condition, skip anything short curiket for now
+                            // this is a simple condition, skip anything short curiket for now
                             // Match a condition patern
-                            if(block.Body.ElementAtOrDefault(block.Body.Count - 3).Match(GMCode.Push, out condExpr))
+                            // Convert the brtrue to ILCondition
+                            ILCondition ilCond = new ILCondition()
                             {
-                                //condExpr = new ILExpression(GMCode.Not, null, condExpr); don't need as we are testing for Bf
+                                Condition = condExpr,
+                                TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
+                                FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
+                            };
+                            block.Body.RemoveTail(GMCode.Bf, GMCode.B);
+                            block.Body.Add(ilCond);
+                            result.Add(block);
 
-                                // Convert the brtrue to ILCondition
-                                ILCondition ilCond = new ILCondition()
-                                {
-                                    Condition = condExpr,
-                                    TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
-                                    FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
-                                };
-                                block.Body.RemoveTail(GMCode.Push,GMCode.Bf, GMCode.B);
-                                block.Body.Add(ilCond);
-                                result.Add(block);
+                            // Remove the item immediately so that it is not picked up as content
+                            scope.RemoveOrThrow(node);
 
-                                // Remove the item immediately so that it is not picked up as content
-                                scope.RemoveOrThrow(node);
-
-                                ControlFlowNode trueTarget = null;
-                                labelToCfNode.TryGetValue(trueLabel, out trueTarget);
-                                ControlFlowNode falseTarget = null;
-                                labelToCfNode.TryGetValue(falseLabel, out falseTarget);
-                                if(trueTarget != null && falseTarget != null)
-                                {
-                                    ILBasicBlock trueBlock = (ILBasicBlock)trueTarget.UserData;
-                                    ILBasicBlock falseBlock = (ILBasicBlock)falseTarget.UserData;
-                                    ILExpression leftShort;
-                                    ILExpression rightShort;
-                                    if (trueBlock.Body.ElementAtOrDefault(trueBlock.Body.Count-2).Match(GMCode.Push,out leftShort) &&
-                                        falseBlock.Body.ElementAtOrDefault(falseBlock.Body.Count - 2).Match(GMCode.Push, out rightShort))
-                                    {
-                                        if(rightShort.Operand is int && (int)rightShort.Operand == 0) // this is a logic and, got to rebuild the graph
-                                        {
-
-                                        }
-                                    }
-                                }
-                                // Pull in the conditional code
-                                if (trueTarget != null && HasSingleEdgeEnteringBlock(trueTarget))
-                                {
-                                    HashSet<ControlFlowNode> content = FindDominatedNodes(scope, trueTarget);
-                                    scope.ExceptWith(content);
-                                    foreach (var con in FindConditions(content, trueTarget)) ilCond.TrueBlock.Body.Add(con);
-                                }
-                                if (falseTarget != null && HasSingleEdgeEnteringBlock(falseTarget))
-                                {
-                                    HashSet<ControlFlowNode> content = FindDominatedNodes(scope, falseTarget);
-                                    scope.ExceptWith(content);
-                                    foreach (var con in FindConditions(content, falseTarget)) ilCond.FalseBlock.Body.Add(con);
-                                }
+                            ControlFlowNode trueTarget = null;
+                            labelToCfNode.TryGetValue(trueLabel, out trueTarget);
+                            ControlFlowNode falseTarget = null;
+                            labelToCfNode.TryGetValue(falseLabel, out falseTarget);
+   
+                            // Pull in the conditional code
+                            if (trueTarget != null && HasSingleEdgeEnteringBlock(trueTarget))
+                            {
+                                HashSet<ControlFlowNode> content = FindDominatedNodes(scope, trueTarget);
+                                scope.ExceptWith(content);
+                                foreach (var con in FindConditions(content, trueTarget)) ilCond.TrueBlock.Body.Add(con);
                             }
+                            if (falseTarget != null && HasSingleEdgeEnteringBlock(falseTarget))
+                            {
+                                HashSet<ControlFlowNode> content = FindDominatedNodes(scope, falseTarget);
+                                scope.ExceptWith(content);
+                                foreach (var con in FindConditions(content, falseTarget)) ilCond.FalseBlock.Body.Add(con);
+                            }
+
                         }
                     }
 

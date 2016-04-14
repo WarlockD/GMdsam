@@ -3,12 +3,111 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using betteribttest.GMAst;
 using betteribttest.FlowAnalysis;
 using System.Diagnostics;
 
 namespace betteribttest.Dissasembler
 {
+    public static class ILAstOptimizerExtensionMethods
+    {
+        /// <summary>
+        /// Perform one pass of a given optimization on this block.
+        /// This block must consist of only basicblocks.
+        /// </summary>
+        public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILBasicBlock, int, bool> optimization)
+        {
+            bool modified = false;
+            IList<ILNode> body = block.Body;
+            for (int i = body.Count - 1; i >= 0; i--)
+            {
+                if (i < body.Count && optimization(body, (ILBasicBlock)body[i], i))
+                {
+                    modified = true;
+                }
+            }
+            return modified;
+        }
+
+        public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILExpression, int, bool> optimization)
+        {
+            bool modified = false;
+            foreach (ILBasicBlock bb in block.Body)
+            {
+                for (int i = bb.Body.Count - 1; i >= 0; i--)
+                {
+                    ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
+                    if (expr != null && optimization(bb.Body, expr, i))
+                    {
+                        modified = true;
+                    }
+                }
+            }
+            return modified;
+        }
+
+        public static bool IsConditionalControlFlow(this ILNode node)
+        {
+            ILExpression expr = node as ILExpression;
+            return expr != null && expr.Code.IsConditionalControlFlow();
+        }
+
+        public static bool IsUnconditionalControlFlow(this ILNode node)
+        {
+            ILExpression expr = node as ILExpression;
+            return expr != null && expr.Code.IsUnconditionalControlFlow();
+        }
+
+
+        public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges)
+        {
+            expr.ILRanges.AddRange(ilranges);
+            return expr;
+        }
+
+        public static void RemoveTail(this IList<ILNode> body, params GMCode[] codes)
+        {
+            int bodyIndex = body.Count - codes.Length;
+            for (int codeIndex = codes.Length - 1; codeIndex >= 0; codeIndex--)
+            {
+                ILExpression node = body.Last() as ILExpression;
+                if (node.Code != codes[codeIndex])
+                    throw new Exception("Tailing code does not match expected.");
+                body.RemoveAt(body.Count - 1);
+            }
+        }
+
+        public static V GetOrDefault<K, V>(this Dictionary<K, V> dict, K key)
+        {
+            V ret;
+            dict.TryGetValue(key, out ret);
+            return ret;
+        }
+
+        public static void RemoveOrThrow<T>(this ICollection<T> collection, T item)
+        {
+            if (!collection.Remove(item))
+                throw new Exception("The item was not found in the collection");
+        }
+
+        public static void RemoveOrThrow<K, V>(this IDictionary<K, V> collection, K key)
+        {
+            if (!collection.Remove(key))
+                throw new Exception("The key was not found in the dictionary");
+        }
+
+        public static bool ContainsReferenceTo(this ILExpression expr, ILVariable v)
+        {
+            if (expr.Operand == v)
+                return true;
+            foreach (var arg in expr.Arguments)
+            {
+                if (ContainsReferenceTo(arg, v))
+                    return true;
+            }
+            return false;
+        }
+
+    }
     class Optimize
     {
         
@@ -114,12 +213,13 @@ namespace betteribttest.Dissasembler
                 block.Body = newBody;
             }
 
-
+#if false
             // 'dup' removal
             foreach (ILExpression expr in method.GetSelfAndChildrenRecursive<ILExpression>())
             {
                 if (expr.Code == GMCode.Dup) throw new Exception("Dups shoul be removed at this stage");
             }
+#endif
         }
     
             /// <summary>
@@ -169,7 +269,7 @@ namespace betteribttest.Dissasembler
 		/// </summary>
 		/// <param name="method"></param>
 		
-        #region SimplifyLogicNot
+#region SimplifyLogicNot
         static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
         {
             bool modified = false;
@@ -331,6 +431,6 @@ namespace betteribttest.Dissasembler
             a.ILRanges.AddRange(expr.ILRanges);
             return true;
         }
-        #endregion
+#endregion
     }
 }

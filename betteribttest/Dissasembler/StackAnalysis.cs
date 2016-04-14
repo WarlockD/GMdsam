@@ -3,10 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using betteribttest.FlowAnalysis;
-using betteribttest.GMAst;
 
 namespace betteribttest.Dissasembler
 {
@@ -40,123 +36,6 @@ namespace betteribttest.Dissasembler
                 }
             }
 
-        }
-        public static bool isExpression(this GMCode i)
-        {
-            switch (i)
-            {
-                case GMCode.Neg:
-                case GMCode.Not:
-                case GMCode.Add:
-                case GMCode.Sub:
-                case GMCode.Mul:
-                case GMCode.Div:
-                case GMCode.Mod:
-                case GMCode.And:
-                case GMCode.Or:
-                case GMCode.Xor:
-                case GMCode.Sal:
-                case GMCode.Seq:
-                case GMCode.Sge:
-                case GMCode.Sgt:
-                case GMCode.Sle:
-                case GMCode.Slt:
-                case GMCode.Sne:
-                    return true;
-                default:
-                    return false;
-            }
-        }
-        public static int GetPopDelta(this GMCode i)
-        {
-            switch (i)
-            {
-                case GMCode.Popenv:
-                case GMCode.Exit:
-                case GMCode.Conv:
-                    break; // we ignore conv
-                case GMCode.Call:
-                case GMCode.Push:
-                case GMCode.Pop:
-                case GMCode.Dup:
-                    throw new Exception("Need more info for pop");
-                case GMCode.Popz:
-                case GMCode.Ret:
-                case GMCode.B:
-                case GMCode.Bt:
-                case GMCode.Bf:
-                case GMCode.Neg:
-                case GMCode.Not:
-                case GMCode.Pushenv:
-                    return 1;
-                case GMCode.Add:
-                case GMCode.Sub:
-                case GMCode.Mul:
-                case GMCode.Div:
-                case GMCode.Mod:
-                case GMCode.And:
-                case GMCode.Or:
-                case GMCode.Xor:
-                case GMCode.Sal:
-                case GMCode.Seq:
-                case GMCode.Sge:
-                case GMCode.Sgt:
-                case GMCode.Sle:
-                case GMCode.Slt:
-                case GMCode.Sne:
-                    return 2;
-                case GMCode.Var:
-                case GMCode.Constant:
-                    return 0;
-                default:
-                    throw new Exception("Unkonwn opcode");
-            }
-            return 0;
-        }
-        public static int GetPushDelta(this GMCode code)
-        {
-            switch (code)
-            {
-                case GMCode.Popenv:
-                case GMCode.Exit:
-                case GMCode.Conv:
-                    break; // we ignore conv
-                case GMCode.Call:
-                case GMCode.Push:
-                    return 1;
-                case GMCode.Pop:
-                case GMCode.Popz:
-                case GMCode.B:
-                case GMCode.Bt:
-                case GMCode.Bf:
-                case GMCode.Ret:
-                case GMCode.Pushenv:
-                    break;
-                case GMCode.Dup:
-                    throw new Exception("Need more info for dup");
-                case GMCode.Neg:
-                case GMCode.Not:
-                case GMCode.Add:
-                case GMCode.Sub:
-                case GMCode.Mul:
-                case GMCode.Div:
-                case GMCode.Mod:
-                case GMCode.And:
-                case GMCode.Or:
-                case GMCode.Xor:
-                case GMCode.Sal:
-                case GMCode.Seq:
-                case GMCode.Sge:
-                case GMCode.Sgt:
-                case GMCode.Sle:
-                case GMCode.Slt:
-                case GMCode.Sne:
-                    return 1;
-                default:
-                    throw new Exception("Unkonwn opcode");
-
-            }
-            return 0;
         }
         public static int? GetPopDelta(this Instruction i)
         {
@@ -271,10 +150,20 @@ namespace betteribttest.Dissasembler
         /// </summary>
         /// <param name="v"></param>
         /// <returns></returns>
-        ILExpression GetConstantExpression(ILExpression v)
+        bool ExpressionIsSimple(ILExpression expr)
         {
-            if (v.Code == GMCode.Push) return v.Arguments.Single();
-            else return v;
+            return expr.Code == GMCode.Call || expr.Code == GMCode.Constant || expr.Code == GMCode.Var ||
+                                (expr.Code.isExpression() && expr.Arguments.Count > 0);
+        }
+        bool NodeIsSimple(ILNode node, out ILExpression expr)
+        {
+            expr = node as ILExpression;
+            if (expr != null)
+            {
+                if (expr.Code == GMCode.Push) expr = expr.Arguments[0];
+                return ExpressionIsSimple(expr);
+            }
+            return false;
         }
         ILExpression InstanceToExpression(int instance)
         {
@@ -317,7 +206,7 @@ namespace betteribttest.Dissasembler
         ILExpression BuildVar(int operand, int extra, List<ILNode> nodes)
         {
             ILExpression v = new ILExpression(GMCode.Var, StringList[operand & 0x1FFFFF]);// standard for eveyone
-
+           
             // check if its simple
             if (extra != 0) // its not on the stack, so its not an array and we have the instance so resolve the name, simple
             {
@@ -325,80 +214,52 @@ namespace betteribttest.Dissasembler
             }
             else // its ON the stack so all we know is if its an array or if is
             {
+                ILExpression instance;
                 if (operand >= 0) // is array
                 {
-                    List<ILExpression> match;
-                    if (nodes.MatchLastCount(GMCode.Push, 2, out match))
+                    ILExpression index;
+                    if (NodeIsSimple(nodes.Last(), out index) && NodeIsSimple(nodes.ElementAt(nodes.Count-2), out instance))
                     {
-                        v.Arguments.Add(match[1]); // instance first
-                        v.Arguments.Add(match[0]); // then index
+                        v.Arguments.Add(InstanceToExpression(instance)); // instance first
+                        v.Arguments.Add(index); // then index
                         nodes.RemoveLast(2);
-                    }
-                    else // put pop fillers
-                    {
-                        v.Arguments.Add(new ILExpression(GMCode.Pop, null)); // instance first
-                        v.Arguments.Add(new ILExpression(GMCode.Pop, null)); // instance first
                     }
                 }
                 else
                 {
-                    ILExpression match;
-                    if (nodes.LastOrDefault().Match(GMCode.Push, out match))
+                    if (NodeIsSimple(nodes.Last(), out instance))
                     {
-                        v.Arguments.Add(match); // instance
+                        v.Arguments.Add(InstanceToExpression(instance)); // instance
                         nodes.RemoveLast();
                     }
-                    else
-                    {
-                        v.Arguments.Add(new ILExpression(GMCode.Pop, null)); // filler
-                    }
                 }
-                v.Arguments[0] = InstanceToExpression(v.Arguments[0]); // fix instance
             }
             return v;
         }
         // This tries to do a VERY simple resolve of a var.
         // for instance, if its an array, and the index is a simple constant, remove it from nodes and asemble a proper ILVarable
 
-        ILExpression TryResolveSimpleExpresions(ILExpression v, List<ILNode> nodes)
+        ILExpression TryResolveSimpleExpresions(int popCount, ILExpression v, List<ILNode> nodes)
         {
-            do
+            int nodeIndex = nodes.Count - popCount;
+            while (nodeIndex < nodes.Count)
             {
-                int popCount = v.Code.GetPopDelta();
-                if (popCount == 0) break;
-                ILExpression arg1 = popCount > 0 ? nodes.LastOrDefault() as ILExpression : null;
-                ILExpression arg2 = popCount > 1 ? nodes.ElementAtOrDefault(nodes.Count - 2) as ILExpression : null; // its on a stack so reverse order
-                if (arg1 != null) {
-                    if (arg1.Code == GMCode.Push) arg1 = arg1.Arguments[0];
-                    else if(arg1.Code != GMCode.Call) break;
-                }
-                if (arg2 != null)
-                {
-                    if (arg2.Code == GMCode.Push) arg2 = arg2.Arguments[0];
-                    else if (arg2.Code != GMCode.Call) break;
-                }
-                v.Arguments.Clear();
-                if (arg2 != null) { nodes.RemoveLast(); v.Arguments.Add(arg2); }
-                if (arg1 != null) { nodes.RemoveLast(); v.Arguments.Add(arg1); }
-            } while (false);
-            return  new ILExpression(GMCode.Push, null, v);
+                ILExpression arg = null;
+                if (NodeIsSimple(nodes.ElementAt(nodeIndex++), out arg))
+                    v.Arguments.Add(arg);
+                else break;
+            }
+            if (v.Arguments.Count == popCount)
+                nodes.RemoveRange(nodes.Count - popCount, popCount);
+            else v.Arguments.Clear();
+            return new ILExpression(GMCode.Push, null, v);
         }
         ILExpression TryResolveCall(string funcName, int length, List<ILNode> nodes)
         {
             ILExpression call = new ILExpression(GMCode.Call, funcName);
-            List<ILExpression> args;
-            if (nodes.MatchLastCount(GMCode.Push, length, out args))
-            {
-                nodes.RemoveLast(length);
-                call.Arguments = args;
-                return call;
-            }
-            else
-            {
-                while (length-- > 0) call.Arguments.Add(new ILExpression(GMCode.Pop, null));
-                return call;// fail, couldn't find constant arguments;
-            }
+            return TryResolveSimpleExpresions(length, call, nodes);
         }
+      
         List<ILNode> BuildPreAst()
         { // Just convert instructions to ast streight
             List<ILNode> nodes = new List<ILNode>();
@@ -423,14 +284,21 @@ namespace betteribttest.Dissasembler
                     case GMCode.Conv:
                         continue; // ignore all Conv for now
                     case GMCode.Call:
-                        expr = new ILExpression(GMCode.Push, null, TryResolveCall(operand as string, extra, nodes));
+                        
+                        expr = new ILExpression(GMCode.Call, operand as string); //   TryResolveCall(operand as string, extra, nodes);
+                      //  Debug.Assert(extra != 3);
+                        expr = TryResolveSimpleExpresions(extra, expr, nodes);
+                 //       Debug.Assert("instance_create" != (operand as string));
+                        // HACK TODO: Ok, so I screwed up on poping the expresions, because of this there
+                        // needs to be a refactor on the optimize code that deals with conditions.  Ugh.
+                         if (expr.Arguments[0].Arguments.Count > 1) expr.Arguments[0].Arguments = expr.Arguments[0].Arguments.Reverse().ToList();
                         break;
                     case GMCode.Popz:
                         {
                             ILExpression push;
                             if (nodes.Last().Match(GMCode.Push, out push) && push.Code == GMCode.Call)
                             {
-                                nodes[nodes.Count - 1] = push;  // its not a push anymore as it was popped void statment
+                                nodes[nodes.Count - 1] = push;  // its not a push anymore as it was popped void return
                                 continue;
                             }
                             else expr = new ILExpression(code, null);
@@ -441,7 +309,7 @@ namespace betteribttest.Dissasembler
                         expr = new ILExpression(GMCode.Assign, null, expr); // change it to an assign
                         {
                             ILExpression push; // see if we can get the value
-                            if (nodes.LastOrDefault().Match(GMCode.Push, out push) || nodes.LastOrDefault().Match(GMCode.Call, out push))
+                            if (NodeIsSimple(nodes.Last(), out push))
                             {
                                 nodes.RemoveLast();
                                 expr.Arguments.Add(push);
@@ -458,20 +326,35 @@ namespace betteribttest.Dissasembler
                         {
                             expr = new ILExpression(GMCode.Pushenv, ConvertLabel(i.Operand as Label));
                             ILExpression push;
-                            if (nodes.LastOrDefault().Match(GMCode.Push, out push))
+                            if (NodeIsSimple(nodes.ElementAt(nodes.Count-2), out push))
                             {
-                                nodes.RemoveLast();
+                                nodes.RemoveAt(nodes.Count - 2);
                                 expr.Arguments.Add(InstanceToExpression(push));
-                            } else expr.Arguments.Add(new ILExpression(GMCode.Pop, null));
+                            } 
                         }
                         break;
                     case GMCode.Popenv:
-                        expr = new ILExpression(GMCode.Popenv, ConvertLabel(i.Operand as Label));
+                        // Since the disasseembler turned the popenv labels to the end of the pushenviroment, lets make them
+                        // branches so it makes the with detection easier
+
+                        //expr = new ILExpression(GMCode.Popenv, ConvertLabel(i.Operand as Label));
+                        expr = new ILExpression(GMCode.B, ConvertLabel(i.Operand as Label));
                         break;
                     case GMCode.B:
+                        expr = new ILExpression(GMCode.B, ConvertLabel(i.Operand as Label));
+                        break;
                     case GMCode.Bt:
                     case GMCode.Bf: // we could try converting all Bf to Bt here, but Bt's seem to only be used in special shorts or switch/case, so save that info here
-                        expr = new ILExpression(code, ConvertLabel(operand as Label));
+                        {
+                            expr = new ILExpression(code, ConvertLabel(i.Operand as Label));
+                            ILExpression push;
+                            if (NodeIsSimple(nodes.Last(), out push))
+                                nodes.RemoveAt(nodes.Count - 1);
+                            else // We must have a fake push so the patern matching works
+                                push = new ILExpression(GMCode.Pop, null);
+                            expr.Arguments.Add(push);
+                            //  Debug.Assert(code == GMCode.Bt || expr.Arguments.Count == 1);
+                        }
                         break;
                     case GMCode.Dup:
                         expr = new ILExpression(code, extra); // save the extra value for dups incase its dup eveything or just one
@@ -480,8 +363,11 @@ namespace betteribttest.Dissasembler
                         expr = new ILExpression(code, null);
                         break;
                     default:
-                        expr = new ILExpression(code, null);
-                        if (code.GetPopDelta() > 0) expr = TryResolveSimpleExpresions( expr, nodes);
+                        {
+                            expr = new ILExpression(code, null);
+                            int popDelta = code.GetPopDelta();
+                            expr = TryResolveSimpleExpresions(popDelta, expr, nodes);
+                        }
                         break;
                 }
                 expr.ILRanges.Add(new ILRange(i.Address, i.Address));
@@ -525,7 +411,7 @@ namespace betteribttest.Dissasembler
                 int popDelta = expr.Code.GetPopDelta();
                 if (popDelta == 1)
                 {
-                    if (expr.Arguments.Count > 0 && expr.Arguments[0].Code != GMCode.Pop) break; // already resolved
+                    if (expr.Arguments.Count > 0) break; // already resolved
                     ILExpression arg1 = null;
                     if (MatchPushConstant(nodes, start - 1, out arg1))
                     {
@@ -537,7 +423,7 @@ namespace betteribttest.Dissasembler
                 }
                 else if (popDelta == 2)
                 {
-                    if (expr.Arguments.Count > 1 && expr.Arguments[0].Code != GMCode.Pop && expr.Arguments[1].Code != GMCode.Pop) break; // already resolved
+                    if (expr.Arguments.Count > 0) break; // already resolved
 
                     ILExpression arg1 = null;
                     ILExpression arg2 = null;
@@ -554,59 +440,7 @@ namespace betteribttest.Dissasembler
             } while (false);
             return false;
         }
-        public bool SwitchDetection(int start, List<ILNode> ast)
-        {
-            int from = start;
-            do
-            {
-                int popz = ast.FindLastIndexOf(GMCode.Popz, from); // Only time popz is used is in switches and calls
-                if (popz == -1 || ast.ElementAtOrDefault(popz - 1).Match(GMCode.Call)) break; // skip and continue
-                ILLabel fallOutLabel = ast[popz - 1] as ILLabel;
-                Debug.Assert(fallOutLabel != null); // Label should be right before it
-                // Now that we have the fallOutLabel, lets find the patern that is the end of the long switch branches
-                int endCase = FindEndOfSwitch(ast, fallOutLabel);
-                int startCase = endCase - 1;
-                Debug.Assert(endCase != -1);    // find the start index of the switch case
-                for (int current = ast.FindLastIndexOf(GMCode.Dup, endCase - 1); current != -1; current = ast.FindLastIndexOf(GMCode.Dup, current - 1)) startCase = current;
-                ILExpression switchExpression = ast[startCase - 1] as ILExpression;
-                Debug.Assert(switchExpression != null); // HAS to be an expression
-                Debug.Assert(switchExpression.Code == GMCode.Push);
-                //switchExpression = switchExpression.Arguments.Single(); // get the condition
-                List<ILNode> switchBlock = new List<ILNode>();
-                for (int i = startCase; i < ((endCase + 1) - startCase); i++)
-                {
-                    ILExpression e = ast[i] as ILExpression;
-                    Debug.Assert(e != null); // more checking, make sure we have just expressions in here
-                    if (e.Code == GMCode.Dup) e = new ILExpression(switchExpression, e.ILRanges); // replace it with the switch expression
-                    switchBlock.Add(e);
-                }
-                DoPattern(switchBlock, SimplifyExpression);
-                // Time to make the switch expression!
-                ILExpression finalSwitch = new ILExpression(GMCode.Switch, fallOutLabel);
-                finalSwitch.Arguments.Add(switchExpression); // first argument is the compare switch condition
-                for (int i = 0; i < switchBlock.Count; i += 2)
-                { // evey two expresions condition/ label
-                    ILLabel caseLabel;
-                    ILExpression condition;
-                    if (switchBlock[i].Match(GMCode.Push, out condition)
-                        && switchBlock.ElementAtOrDefault(i + 1).Match(GMCode.Bt, out caseLabel))
-                    {
-                        Debug.Assert(condition.Code.isExpression()); // should be an expression
-                        finalSwitch.Arguments.Add(new ILExpression(GMCode.Case, caseLabel, condition.Arguments[1])); // Just add the right hand
-                    }
-                }
-                // be sure to remove from reverse order so the indexes we have are still valid
-                ast.RemoveAt(popz); // finaly remove the popz at the end of the case as the stack shold be clean then
-              //  ast.RemoveAt(endCase); // remove the end casegoto as we don't need it anymore
-
-                // Now the annoying part.  we have to remove all the nodes
-                ast.RemoveRange(startCase, endCase - startCase);
-                // then replace the push condition with the switch statement
-                ast[startCase - 1] = finalSwitch;
-                return true;
-            } while (false);
-            return false;
-        }
+      
         public bool MatchDupPatern(int start, List<ILNode> nodes)
         {
             /* Pattern is
@@ -637,12 +471,12 @@ namespace betteribttest.Dissasembler
                 instance = InstanceToExpression(instance); // try to resolve the instance
                 // We got all we needed, lets check the assignment
                 Debug.Assert(args[0].Code == GMCode.Var); // sanity check
-                Debug.Assert((args[0].Arguments.Count == 1 && arrayIndex == null) || (args[0].Arguments.Count == 2 && arrayIndex != null));
-                args[0].Arguments[0] = instance;
-                if (arrayIndex != null) args[0].Arguments[1] = arrayIndex;
+                // Need to make copies so the parrents are all happy
+                args[0].Arguments.Add(new ILExpression(instance));
+                if (arrayIndex != null) args[0].Arguments.Add(new ILExpression(arrayIndex));
                 // now the left hand of the expresson for assgment
-                args[1].Arguments[0].Arguments[0] = instance;
-                if (arrayIndex != null) args[1].Arguments[0].Arguments[1] = arrayIndex;
+                args[1].Arguments[0].Arguments.Add(new ILExpression(instance));
+                if (arrayIndex != null) args[1].Arguments[0].Arguments.Add(new ILExpression(arrayIndex));
                 // DONE! lets clean up being sure not to remove the assign we just modified
                 nodes.RemoveRange(index, start - index);
                 return true;
@@ -762,7 +596,6 @@ namespace betteribttest.Dissasembler
             List<ILNode> ast = BuildPreAst();
             
          //   DoPattern(ast, FixPopZandCheckDUP);
-            DoPattern(ast, SwitchDetection);
             DoPattern(ast, MatchDupPatern);
             // DoPattern(ast, SimplfyPushEnviroments);
             ILBlock method = new ILBlock();
@@ -770,15 +603,18 @@ namespace betteribttest.Dissasembler
             betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
             foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
                 Optimize.SplitToBasicBlocks(block);
-
+            method.Body.DebugPrintILAst("basic_blocks.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 bool modified;
                 do
                 {
                     modified = false;
-
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                    //    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).SwitchDetection);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).FixAndShort);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).FixOrShort);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).MakeSimplePushEnviroments); 
                     modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
 
                     //  modified |= block.RunOptimization(SimplifyLogicNot);
@@ -796,6 +632,7 @@ namespace betteribttest.Dissasembler
             {
                 new LoopsAndConditions().FindConditions(block);
             }
+
             FlattenBasicBlocks(method);
  
             Optimize.RemoveRedundantCode(method);

@@ -70,24 +70,19 @@
     <Compile Include="FlowAnalysis\ControlFlowGraphBuilder.cs" />
     <Compile Include="FlowAnalysis\ControlFlowNode.cs" />
     <Compile Include="FlowAnalysis\ControlStructureDetector.cs" />
-    <Compile Include="GMAst\GotoRemoval.cs" />
+    <Compile Include="Dissasembler\GotoRemoval.cs" />
     <Compile Include="FlowAnalysis\GraphViz.cs" />
-    <Compile Include="FlowAnalysis\LoopsAndConditions.cs" />
     <Compile Include="FlowAnalysis\OpCodeInfo.cs" />
-    <Compile Include="GMAst\ILAstBuilder.cs" />
-    <Compile Include="GMAst\ILAstOptimizer.cs" />
-    <Compile Include="GMAst\ILDecompile.cs" />
-    <Compile Include="GMAst\PaternMatching.cs" />
-    <Compile Include="GMAst\GMAstTypes.cs" />
-    <Compile Include="GMAst\PeepholeTransform.cs" />
-    <Compile Include="GMAst\SimpleControlFlow.cs" />
+    <Compile Include="Dissasembler\ILDecompile.cs" />
+    <Compile Include="Dissasembler\PaternMatching.cs" />
+    <Compile Include="Dissasembler\GMAstTypes.cs" />
+    <Compile Include="Dissasembler\SimpleControlFlow.cs" />
     <Compile Include="Instruction.cs" />
     <Compile Include="ITextOutput.cs" />
     <Compile Include="LinkedHashSet.cs" />
     <Compile Include="PListDict.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="VisitorSystem.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
