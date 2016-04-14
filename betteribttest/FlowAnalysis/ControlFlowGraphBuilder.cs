@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using betteribttest.Dissasembler;
 
 namespace betteribttest.FlowAnalysis
 {
@@ -11,7 +12,7 @@ namespace betteribttest.FlowAnalysis
 	/// </summary>
 	public sealed class ControlFlowGraphBuilder
     {
-        public static ControlFlowGraph Build(MethodBody methodBody)
+        public static ControlFlowGraph Build(List<Instruction> methodBody)
         {
             return new ControlFlowGraphBuilder(methodBody).Build();
         }
@@ -22,18 +23,18 @@ namespace betteribttest.FlowAnalysis
         //   target using a normal edge.
 
 
-        MethodBody methodBody;
+        List<Instruction> methodBody;
         int[] offsets; // array index = instruction index; value = IL offset
         bool[] hasIncomingJumps; // array index = instruction index
         List<ControlFlowNode> nodes = new List<ControlFlowNode>();
         ControlFlowNode entryPoint;
         ControlFlowNode regularExit;
 
-        private ControlFlowGraphBuilder(MethodBody methodBody)
+        private ControlFlowGraphBuilder(List<Instruction> methodBody)
         {
             this.methodBody = methodBody;
-            offsets = methodBody.Instructions.Select(i => i.Address).ToArray();
-            hasIncomingJumps = new bool[methodBody.Instructions.Count];
+            offsets = methodBody.Select(i => i.Address).ToArray();
+            hasIncomingJumps = new bool[methodBody.Count];
 
             entryPoint = new ControlFlowNode(0, 0, ControlFlowNodeType.EntryPoint);
             nodes.Add(entryPoint);
@@ -78,8 +79,8 @@ namespace betteribttest.FlowAnalysis
         #region Step 1: calculate which instructions are the targets of jump instructions.
         void CalculateHasIncomingJumps()
         {
-            Instruction last = methodBody.Instructions.Last();
-            foreach (Instruction inst in methodBody.Instructions)
+            Instruction last = methodBody.Last();
+            foreach (Instruction inst in methodBody)
             {
                 Label l = inst.Operand as Label;
                 // we ignore popenv as a jump as its more of a marker on the start of the enviroment
@@ -102,14 +103,14 @@ namespace betteribttest.FlowAnalysis
             PushEnviromentStarts = new SortedList<int, ControlFlowNode>();
             PopEnviromentEnds = new SortedList<int, ControlFlowNode>();
             // Step 2a: find basic blocks and create nodes for them
-            for (int i = 0; i < methodBody.Instructions.Count; i++)
+            for (int i = 0; i < methodBody.Count; i++)
             {
-                Instruction blockStart = methodBody.Instructions[i];
+                Instruction blockStart = methodBody[i];
               //  ExceptionHandler blockStartEH = FindInnermostExceptionHandler(blockStart.Offset);
                 // try and see how big we can make that block:
-                for (; i + 1 < methodBody.Instructions.Count; i++)
+                for (; i + 1 < methodBody.Count; i++)
                 {
-                    Instruction inst = methodBody.Instructions[i];
+                    Instruction inst = methodBody[i];
                     if (IsBranch(inst.Code) || inst.Code == GMCode.Pushenv || inst.Code == GMCode.Popenv)
                         break;
                     // HACK.  popenv should be the last statment but the way the code dissasembles
@@ -120,7 +121,7 @@ namespace betteribttest.FlowAnalysis
                     if (hasIncomingJumps[i + 1])
                         break;
                 }
-                var node = new ControlFlowNode(nodes.Count, blockStart, methodBody.Instructions[i]);
+                var node = new ControlFlowNode(nodes.Count, blockStart, methodBody[i]);
                 nodes.Add(node);
             }
         }
@@ -129,8 +130,8 @@ namespace betteribttest.FlowAnalysis
         #region Step 3: create edges for the normal flow of control (assuming no exceptions thrown)
         void CreateRegularControlFlow()
         {
-            Instruction last = methodBody.Instructions.Last();
-            CreateEdge(entryPoint, methodBody.Instructions[0], JumpType.Normal);
+            Instruction last = methodBody.Last();
+            CreateEdge(entryPoint, methodBody[0], JumpType.Normal);
             Action<ControlFlowNode> NextInstructionEdge = (ControlFlowNode node) =>{
                 if (node.End.Next == null) CreateEdge(node, regularExit, JumpType.Normal);
                 else CreateEdge(node, node.End.Next, JumpType.Normal);
@@ -278,7 +279,7 @@ namespace betteribttest.FlowAnalysis
         }
         void CreateEdge(ControlFlowNode fromNode, Label toLabel, JumpType type)
         {
-            Instruction last = methodBody.Instructions.Last();
+            Instruction last = methodBody.Last();
             if (toLabel.Address > last.Address)
                 CreateEdge(fromNode, regularExit, type);
             else

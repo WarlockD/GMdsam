@@ -13,7 +13,7 @@ namespace betteribttest
         static List<string> scriptList;
         static void spriteArgument(ILVariable v, ILExpression expr)
         {
-            if (expr.Code == GMCode.Push)
+            if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
@@ -25,7 +25,7 @@ namespace betteribttest
         }
         static void instanceArgument(ILVariable v, ILExpression expr)
         {
-            if (expr.Code == GMCode.Push)
+            if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
@@ -37,7 +37,7 @@ namespace betteribttest
         }
         static void fontArgument(ILVariable v, ILExpression expr)
         {
-            if (expr.Code == GMCode.Push)
+            if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
@@ -50,7 +50,7 @@ namespace betteribttest
         // This just makes color look easyer to read
         static void colorArgument(ILVariable v, ILExpression expr)
         {
-            if (expr.Code == GMCode.Push)
+            if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int color;
@@ -65,7 +65,7 @@ namespace betteribttest
         }
         static void scriptArgument(ILVariable v, ILExpression expr)
         {
-            if (expr.Code == GMCode.Push)
+            if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
@@ -152,8 +152,7 @@ namespace betteribttest
         [STAThread]
         static void Main()
         {
-
-             cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
+                cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
            // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
@@ -185,11 +184,11 @@ namespace betteribttest
             PushFix.Add("myfont", fontArgument);
             //  string filename_to_test = "undyne";
             //    string filename_to_test = "gasterblaster"; // lots of stuff  loops though THIS WORKS THIS WORKS!
-         //   string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
+            //   string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
             // we assume all the patches were done to calls and pushes
 
             //  string filename_to_test = "gml_Object_OBJ_WRITER_Draw_0";// reall loop test as we got a break in it
-          //  string filename_to_test = "gml_Object_OBJ_WRITER";// reall loop test as we got a break in it
+            //  string filename_to_test = "gml_Object_OBJ_WRITER";// reall loop test as we got a break in it
 
 
             // string filename_to_test = "obj_face_alphys_Step"; // this one is good but no shorts
@@ -197,20 +196,21 @@ namespace betteribttest
             //  string filename_to_test = "SCR_TEXT"; // start with something even simpler
             //  string filename_to_test = "gml_Object_obj_dmgwriter_old_Draw_0"; // intrsting code, a bt?
             // string filename_to_test = "write"; // lots of stuff
-            //  string filename_to_test = "OBJ_WRITER";
+            //string filename_to_test = "OBJ_WRITER";
+
+            // dosn't work, still need to work on shorts too meh
+            string filename_to_test = "gml_Object_OBJ_WRITER_Alarm_0"; // good switch test
 
 
-
-          //   string filename_to_test = "Script_scr_asgface"; // WORKS 4/12 too simple
-           //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WORKS 4/12
+            //   string filename_to_test = "Script_scr_asgface"; // WORKS 4/12 too simple
+            //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WORKS 4/12
             // Emptyboarer is a MUST test.  It has a && in it as well as simple if statments and calls.  If we can't pass this nothing else will work
+            //    string filename_to_test = "SCR_DIRECT"; // simple loop works! WORKS 4/12
+            // case statement woo! way to long, WORKS 4/14 my god, if this one works, they eveything works!  I hope
+            // string filename_to_test = "gml_Script_SCR_TEXT";
 
 
-             //    string filename_to_test = "SCR_DIRECT"; // simple loop works! WORKS 4/12
-            string filename_to_test = "gml_Script_SCR_TEXT";// case statement woo! way to long
-
-
-          //     string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break WORKS 4/14
+            //     string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break WORKS 4/14
 
 
 
@@ -220,8 +220,10 @@ namespace betteribttest
 
                 var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
                 betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + "_new.asm");
-                new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, stringList, InstanceList);
-
+                ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, stringList, InstanceList);
+                //   block.Body.WriteNodes
+                block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
+                block.DebugSave(files.ScriptName + ".cpp", "// ScriptName: " + files.ScriptName);
 
                 //  if (instructions!= null) instructions.SaveInstructions(files.ScriptName + ".asm");
                 continue;

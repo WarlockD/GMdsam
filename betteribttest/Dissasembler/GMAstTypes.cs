@@ -63,11 +63,8 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-            foreach (ILNode child in this.GetChildren())
-            {
-                child.WriteTo(output);
-                output.WriteLine();
-            }
+          //  output.Write("/* Basic Block */");
+            Body.WriteNodes(output, true);
         }
     }
     public class ILBlock : ILNode
@@ -90,11 +87,19 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-            foreach (ILNode child in this.GetChildren())
+            Body.WriteNodes(output, true);
+        }
+        public void WriteBlock(ITextOutput output, string BlockTitle = null)
+        {
+            if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine(BlockTitle);
+            WriteTo(output);
+            output.WriteLine(); // extra line
+        }
+        public void DebugSave(string filename,string fileHeader=null)
+        {
+            using (PlainTextOutput pto = new PlainTextOutput(new System.IO.StreamWriter(filename)))
             {
-                child.WriteTo(output);
-                output.Write(';');
-                output.WriteLine();
+                WriteBlock(pto, fileHeader);
             }
         }
     }
@@ -106,15 +111,19 @@ namespace betteribttest.Dissasembler
         public ILValue(bool i) { this.Value = i; Type = GM_Type.Bool; }
         public ILValue(int i) { this.Value = i; Type = GM_Type.Int; }
         public ILValue(object i) { this.Value = i; Type = GM_Type.Var; }
-        public ILValue(string i) { this.Value = i; Type = GM_Type.String; this.ValueText =  GMCodeUtil.EscapeString(i as string); }
+        public ILValue(string i) { this.Value = i; Type = GM_Type.String; this.ValueText = GMCodeUtil.EscapeString(i as string); }
         public ILValue(float i) { this.Value = i; Type = GM_Type.Float; }
         public ILValue(double i) { this.Value = i; Type = GM_Type.Double; }
         public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
-        public ILValue(short i) { this.Value = i; Type = GM_Type.Short; }
-        public ILValue(object o, GM_Type type) { this.Value = o; Type = type; }
+        public ILValue(short i) { this.Value = (int)i; Type = GM_Type.Short; }
+        public ILValue(object o, GM_Type type) {
+            if (o is short) this.Value = (int)((short)o);
+            else this.Value = o;
+            Type = type;
+        }
         public ILValue(ILVariable v) { this.Value = v; Type = GM_Type.Var; }
         public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
-        public ILValue(ILExpression e) { this.Value = e;  Type = GM_Type.ConstantExpression;  }
+        public ILValue(ILExpression e) { this.Value = e; Type = GM_Type.ConstantExpression; }
         public override string ToString()
         {
             return ValueText ?? Value.ToString();
@@ -145,7 +154,31 @@ namespace betteribttest.Dissasembler
             }
             else return Value.Equals(other.Value);
         }
+        public static explicit operator int(ILValue c)
+        {
+            switch (c.Type)
+            {
+                case GM_Type.Short: return ((int)c.Value);
+                case GM_Type.Int: return ((int)c.Value);
+                default:
+                    throw new Exception("Cannot convert type " + c.Type.ToString() + " to int ");
+            }
+        }
+        public static bool operator!=(ILValue c, int v)
+        {
+            return !(c == v);
+        }
+        public static bool operator==(ILValue c, int v)
+        {
+            switch (c.Type)
+            {
+                case GM_Type.Short: return ((int)c.Value) == v;
+                case GM_Type.Int: return ((int)c.Value) == v;
+                default: return false;
+            }
+        }
     }
+        
     public static class ILNode_Helpers
     {
         public static bool TryParse(this ILValue node, out int value)
@@ -578,15 +611,13 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-            output.WriteLine("");
-            output.Write("while (");
+            output.Write("while(");
             if (this.Condition != null)
                 this.Condition.WriteTo(output);
-            output.WriteLine(") {");
-            output.Indent();
+            else
+                output.Write("true");
+            output.Write(") ");
             this.BodyBlock.WriteTo(output);
-            output.Unindent();
-            output.WriteLine("}");
         }
     }
 

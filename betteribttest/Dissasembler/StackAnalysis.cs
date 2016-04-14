@@ -9,34 +9,7 @@ namespace betteribttest.Dissasembler
 
     public static class ILAstBuilderExtensions
     {
-        public static void DebugPrintILAst(this IEnumerable<ILNode> nodes, string filename)
-        {
-            int labelMax = 0;
-            foreach (var n in nodes.OfType<ILLabel>()) if (n.ToString().Length > labelMax) labelMax = n.ToString().Length;
-            using (StreamWriter sw = new StreamWriter(filename))
-            {
-                PlainTextWriter ptw = new PlainTextWriter(sw);
-                ptw.Header = new string(' ', labelMax + 2); // fill up header
-                bool inLabel = false;
-                foreach (var i in nodes)
-                {
-                    if (i is ILLabel)
-                    {
-                        if (inLabel) ptw.WriteLine();
-                        ptw.Header = i.ToString();
-                        inLabel = true;
-                    }
-                    else
-                    {
-                        i.WriteTo(ptw);
-                        ptw.WriteLine();
-                        inLabel = false;
-                        ptw.Header = null;
-                    }
-                }
-            }
-
-        }
+      
         public static int? GetPopDelta(this Instruction i)
         {
             int count = 0;
@@ -134,13 +107,14 @@ namespace betteribttest.Dissasembler
         { // throws things if the cast is bad
             switch (type)
             {
-                case GM_Type.Bool: return new ILExpression(GMCode.Constant, (bool)obj);
-                case GM_Type.Double: return new ILExpression(GMCode.Constant, (double)obj);
-                case GM_Type.Float: return new ILExpression(GMCode.Constant, (float)obj);
-                case GM_Type.Long: return new ILExpression(GMCode.Constant, (long)obj);
-                case GM_Type.Int: return new ILExpression(GMCode.Constant, (int)obj);
-                case GM_Type.String: return new ILExpression(GMCode.Constant, (string)obj);
-                case GM_Type.Short: return new ILExpression(GMCode.Constant, (int)obj);
+                case GM_Type.Bool: 
+                case GM_Type.Double:
+                case GM_Type.Float: 
+                case GM_Type.Long: 
+                case GM_Type.Int: 
+                case GM_Type.String: 
+                case GM_Type.Short:
+                    return new ILExpression(GMCode.Constant, new ILValue(obj, type));
                 default:
                     throw new Exception("Cannot convert simple type");
             }
@@ -165,31 +139,49 @@ namespace betteribttest.Dissasembler
             }
             return false;
         }
+        string InstanceToString(int instance)
+        {
+            if (instance < 0)
+            {
+                string instanceName;
+                if (GMCodeUtil.instanceLookup.TryGetValue(instance, out instanceName))
+                    return instanceName;
+
+            }
+            else if (InstanceList != null && instance > 0 && instance < InstanceList.Count)
+            {
+                return InstanceList[instance];
+            }
+            // fallback
+            return '$' + instance.ToString() + '$';
+        }
         ILExpression InstanceToExpression(int instance)
         {
-            if(instance < 0)
+            if (instance < 0)
             {
                 string instanceName;
                 if (GMCodeUtil.instanceLookup.TryGetValue(instance, out instanceName))
                     return new ILExpression(GMCode.Constant, instanceName);
-                
-            } else if(InstanceList != null && instance>0 && instance < InstanceList.Count)
+
+            }
+            else if (InstanceList != null && instance > 0 && instance < InstanceList.Count)
             {
                 return new ILExpression(GMCode.Constant, InstanceList[instance]);
             }
             // fallback
-            return new ILExpression(GMCode.Constant, instance);  
+            return new ILExpression(GMCode.Constant, instance);
         }
         ILExpression InstanceToExpression(ILExpression instance)
         {
             switch (instance.Code)
             {
                 case GMCode.Constant:
-                    if (instance.Operand is int)
                     {
-                        ILExpression ret = InstanceToExpression((int)instance.Operand);
-                        ret.ILRanges = instance.ILRanges;
-                        instance = ret;
+                        ILValue value = instance.Operand as ILValue;
+                        if(value.Type == GM_Type.Short || value.Type == GM_Type.Int)
+                        {
+                            value.ValueText = InstanceToString((int)value);
+                        }
                     }
                     break;
                 case GMCode.Push: // it was a push, pull the arg out and try it
@@ -585,9 +577,9 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
-        public List<ILNode> Build(SortedList<int, Instruction> code, bool optimize, List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        public ILBlock Build(SortedList<int, Instruction> code, bool optimize, List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
         {
-            if (code.Count == 0) return new List<ILNode>();
+            if (code.Count == 0) return new ILBlock();
             //variables = new Dictionary<string, VariableDefinition>();
             this.InstanceList = InstanceList;
             this.StringList = StringList;
@@ -603,14 +595,14 @@ namespace betteribttest.Dissasembler
             betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
             foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
                 Optimize.SplitToBasicBlocks(block);
-            method.Body.DebugPrintILAst("basic_blocks.txt");
+            method.DebugSave("basic_blocks.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 bool modified;
                 do
                 {
                     modified = false;
-                    //    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                   //     modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
                     modified |= block.RunOptimization(new SimpleControlFlow(method).SwitchDetection);
                     modified |= block.RunOptimization(new SimpleControlFlow(method).FixAndShort);
                     modified |= block.RunOptimization(new SimpleControlFlow(method).FixOrShort);
@@ -622,12 +614,12 @@ namespace betteribttest.Dissasembler
                 } while (modified);
             }
           
-            method.Body.DebugPrintILAst("before_loop.txt");
+            method.DebugSave("before_loop.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions().FindLoops(block);
             }
-            method.Body.DebugPrintILAst("before_conditions.txt");
+            method.DebugSave("before_conditions.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions().FindConditions(block);
@@ -639,12 +631,12 @@ namespace betteribttest.Dissasembler
             new GotoRemoval().RemoveGotos(method);
             Optimize.RemoveRedundantCode(method);
             //List<ByteCode> body = StackAnalysis(method);
-            method.Body.DebugPrintILAst("bytecode_test.txt");
+           
 
             // We don't have a fancy
 
 
-            return ast;
+            return method;
 
         }
     }

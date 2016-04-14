@@ -296,15 +296,15 @@ namespace betteribttest.Dissasembler
         public static bool MatchCaseBlockStart(this ILBasicBlock bb, out ILExpression switchCondition, out ILExpression caseCondition, out ILLabel caseLabel, out ILLabel nextCase)
         {
             int dupType = 0;
+            int len = bb.Body.Count;
             ILExpression pushSeq;
             ILExpression btExpresion;
-            if (bb.Body.Count == 7 &&
-                bb.Body[0] is ILLabel &&
-                bb.Body[1].Match(GMCode.Push, out switchCondition) &&
-                bb.Body[2].Match(GMCode.Dup, out dupType) &&
+            if (bb.Body[0] is ILLabel &&
+                bb.Body.ElementAtOrDefault(len - 6).Match(GMCode.Push, out switchCondition) &&
+                bb.Body.ElementAtOrDefault(len - 5).Match(GMCode.Dup, out dupType) &&
                 dupType == 0 &&
-                bb.Body[3].Match(GMCode.Push, out caseCondition) &&
-                bb.Body[4].Match(GMCode.Push, out pushSeq) &&
+                bb.Body.ElementAtOrDefault(len - 4).Match(GMCode.Push, out caseCondition) &&
+                bb.Body.ElementAtOrDefault(len-3).Match(GMCode.Push, out pushSeq) &&
                 pushSeq.Code == GMCode.Seq &&
                 bb.MatchLastAndBr(GMCode.Bt, out caseLabel, out btExpresion, out nextCase)
                 ) return true;

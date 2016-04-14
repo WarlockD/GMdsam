@@ -128,7 +128,7 @@ namespace betteribttest.Dissasembler
                 {
                     Debug.Assert(fallThoughBlockCondition.Code == GMCode.Pop);
                     // usally its an expr else 0 or maybe a expr else 1, so lets test true first
-                    int trueConstant;
+                    ILValue trueConstant;
                     if (rightExpr.Match(GMCode.Constant, out trueConstant) && trueConstant == 0)
                     { // This is a logic AND lets make it as such
                         // now the trick, there are ALOT OF LABELS in here that we have to move around, makes it so much
@@ -184,7 +184,7 @@ namespace betteribttest.Dissasembler
                 {
                     Debug.Assert(fallThoughBlockCondition.Code == GMCode.Pop);
                     // usally its an expr else 0 or maybe a expr else 1, so lets test true first
-                    int trueConstant;
+                    ILValue trueConstant;
                     if (leftExpr.Match(GMCode.Constant, out trueConstant) && trueConstant == 1)
                     { // This is a logic OR lets make it as such
                         // now the trick, there are ALOT OF LABELS in here that we have to move around, makes it so much

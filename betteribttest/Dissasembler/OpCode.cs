@@ -423,6 +423,8 @@ namespace betteribttest.Dissasembler
                 else prev.Next = i;
                 list.Add(i.Address, i);
             }
+            if (list.Count == 0) return list; // return list, its empty
+
             Instruction last = list.Last().Value;
             if(last.Code != GMCode.Exit || last.Code != GMCode.Ret)
             {

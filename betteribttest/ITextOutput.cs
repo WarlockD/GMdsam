@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Text;
+using System.Collections.Generic;
 using System.Threading;
 using System.Globalization;
 using System.Runtime.Versioning;
 using System.Runtime.Serialization;
 using System.IO;
 using System.Diagnostics.Contracts;
+using System.Diagnostics;
 
 namespace betteribttest
 {
@@ -208,7 +210,7 @@ namespace betteribttest
     public interface ITextOutput
     {
         TextLocation Location { get; }
-
+        string Header { get; set; }
         void Indent();
         void Unindent();
         void Write(char ch);
@@ -271,20 +273,71 @@ namespace betteribttest
     }
     public sealed class PlainTextOutput : ITextOutput, IDisposable
     {
+        const int maxLineLength = 80;
+        static string[] emptyHeaders;
+        static PlainTextOutput()
+        {
+            emptyHeaders = new string[maxLineLength]; // lines should only be 80 chars long
+            emptyHeaders[0] = "";
+            for (int i = 1; i < 80; i++) emptyHeaders[i] = string.Intern(new string(' ', i));
+        }
+        static string CheckHeader(int max, string header = null)
+        {
+            string ret;
+
+            if (string.IsNullOrWhiteSpace(header))
+            {
+               
+                ret = emptyHeaders[max];
+            }
+            else {
+               //Math.Max(header.Length, max);
+              //  if (newLength >= emptyHeaders.Length) throw new Exception("Header '" + header + "' and Max(" + max + ") is more than " + emptyHeaders.Length);
+                if (header.Length < max)
+                {
+                    int newLength = max - header.Length;
+                    if (newLength >= emptyHeaders.Length) throw new Exception("Max(" + max + ") is more than " + emptyHeaders.Length);
+                    ret = header + emptyHeaders[newLength];
+                }
+                else ret = header;
+            }
+            return ret;
+        }
         readonly TextWriter writer;
         int indent;
         bool needsIndent;
-
+        
         int line = 1;
         int column = 1;
-
-        public PlainTextOutput(TextWriter writer)
+        string _header;
+        int _headerMaxLength = 0;
+        public string Header
+        {
+            get { return  _header; }
+            set
+            {
+                this._header = CheckHeader(_headerMaxLength, value);
+                if(this._header.Length > this._headerMaxLength) this._headerMaxLength = _header.Length;
+            }
+        }
+        public PlainTextOutput(TextWriter writer,int HeaderMaxLength)
         {
             if (writer == null)
                 throw new ArgumentNullException("writer");
             this.writer = writer;
+            this._header = CheckHeader(HeaderMaxLength);
+            this._headerMaxLength = this._header.Length;
+            this.needsIndent = true;
         }
-
+        public PlainTextOutput(TextWriter writer, string header=null)
+        {
+            if (writer == null)
+                throw new ArgumentNullException("writer");
+            this.writer = writer;
+            this._header = CheckHeader(0, header);
+            this._headerMaxLength = this._header.Length;
+            this.needsIndent = true;
+        }
         public PlainTextOutput()
         {
             this.writer = new StringWriter();
@@ -311,6 +364,7 @@ namespace betteribttest
         public void Unindent()
         {
             indent--;
+            if (indent < 0) throw new Exception("Ident below ident level");
         }
 
         void WriteIndent()
@@ -318,26 +372,41 @@ namespace betteribttest
             if (needsIndent)
             {
                 needsIndent = false;
+                writer.Write(_header);
                 for (int i = 0; i < indent; i++)
                 {
                     writer.Write('\t');
                 }
-                column += indent;
+                column += indent + _header.Length;
             }
         }
 
         public void Write(char ch)
         {
             WriteIndent();
-            writer.Write(ch);
-            column++;
+            if (ch == '\n') WriteLine();
+            else {
+                writer.Write(ch);
+                column++;
+            }
         }
 
         public void Write(string text)
         {
             WriteIndent();
-            writer.Write(text);
-            column += text.Length;
+            foreach(var c in text)
+            {
+                if (c == '\n')
+                {
+                    WriteLine();
+                    WriteIndent();
+                }
+                else {
+                    writer.Write(c);
+                    column++;
+                }
+            }
+           // column += text.Length;
         }
 
         public void WriteLine()
