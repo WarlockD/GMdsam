@@ -9,21 +9,22 @@ namespace betteribttest.Dissasembler
 {
     public static class PatternMatching
     {
-        public static void WriteNodes<T>(this IList<T> nodes,  ITextOutput output, int start, int count, bool endingSemiColon=true) where T : ILNode
+        public static bool WriteNodes<T>(this IList<T> nodes,  ITextOutput output, int start, int count, bool endingSemiColon, bool withBrackets) where T : ILNode
         {
             // Generic method to print a list of nodes
-            if (nodes.Count == 0 || count == 0) return;
-            else if ((nodes.Count - start)== 1 || count == 1)
+            if (nodes.Count == 0 || count == 0) return false;
+            else if ((nodes.Count - start) == 1 || count == 1)
             {
                 nodes[start].WriteTo(output);
                 if (endingSemiColon) output.Write(';');
+                return false;
             }
             else
             {
-                output.Write('{');
+                if (withBrackets) output.Write('{');
                 output.WriteLine();
                 output.Indent();
-                for(;start < count; start++)
+                for (; start < count; start++)
                 {
                     ILNode n = nodes[start];
                     n.WriteTo(output);
@@ -31,16 +32,17 @@ namespace betteribttest.Dissasembler
                     output.WriteLine();
                 }
                 output.Unindent();
-                output.Write('}');
+                if (withBrackets) output.Write('}');
+                return true; // we did a writeline, atleast one
             }
         }
-        public static void WriteNodes<T>(this IList<T> nodes, ITextOutput output, int start, bool endingSemiColon = true) where T : ILNode
+        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, int start, bool endingSemiColon, bool withBrackets) where T : ILNode
         {
-            nodes.WriteNodes(output, start, nodes.Count - start, endingSemiColon);
+            return nodes.WriteNodes(output, start, nodes.Count - start, endingSemiColon, withBrackets);
         }
-        public static void WriteNodes<T>(this IList<T> nodes, ITextOutput output,  bool endingSemiColon = true) where T : ILNode
+        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, bool endingSemiColon, bool withBrackets) where T : ILNode
         {
-            nodes.WriteNodes(output, 0, nodes.Count, endingSemiColon);
+            return nodes.WriteNodes(output, 0, nodes.Count, endingSemiColon, withBrackets);
         }
         public static void CollectLabels(this ILExpression node, HashSet<ILLabel> labels)
         {

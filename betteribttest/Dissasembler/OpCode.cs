@@ -255,14 +255,14 @@ namespace betteribttest.Dissasembler
                     i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
                     break;
                 case GMCode.Popenv:
-                    Debug.WriteLine("Popenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
+                  //  Debug.WriteLine("Popenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
                     if (0xBCF00000 == raw) // its a popbreak
                         i._extra = 0;
                     else
                         i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
                     break;
                 case GMCode.Pushenv:
-                    Debug.WriteLine("Pushenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
+                //    Debug.WriteLine("Pushenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
                     i._extra = i.Address + GMCodeUtil.getBranchOffset(raw);
                     break;
                 case GMCode.BadOp:

@@ -195,8 +195,19 @@ namespace betteribttest.Dissasembler
             }
             return instance;// eveything else we just return as we cannot simplify it
         }
+        // hack for right now
+        ILExpression DupVarFix(List<ILNode> nodes)
+        {
+            ILExpression e = nodes.Last() as ILExpression;
+            if(e != null && e.Code == GMCode.Dup && (int)e.Operand == 0) // simple dup
+            {
+                e=  nodes.ElementAt(nodes.Count - 2) as ILExpression;
+            }
+            return e;
+        }
         ILExpression BuildVar(int operand, int extra, List<ILNode> nodes)
         {
+            int loadtype = operand >> 24;
             ILExpression v = new ILExpression(GMCode.Var, StringList[operand & 0x1FFFFF]);// standard for eveyone
            
             // check if its simple
@@ -219,7 +230,9 @@ namespace betteribttest.Dissasembler
                 }
                 else
                 {
-                    if (NodeIsSimple(nodes.Last(), out instance))
+                    operand &= 0x1FFFFFFF;
+                    ILExpression e = DupVarFix(nodes); // Hack for some wierd non array vars?
+                    if (NodeIsSimple(e, out instance))
                     {
                         v.Arguments.Add(InstanceToExpression(instance)); // instance
                         nodes.RemoveLast();
@@ -251,7 +264,16 @@ namespace betteribttest.Dissasembler
             ILExpression call = new ILExpression(GMCode.Call, funcName);
             return TryResolveSimpleExpresions(length, call, nodes);
         }
-      
+        void HackDebug(Instruction inst , IList<Instruction> list)
+        {
+            int index = list.IndexOf(inst);
+            for(int i= index -5; i < index +5; i++)
+            {
+                string line = list[i].ToString();
+                if (i == index) line+="**";
+                Debug.WriteLine(line);
+            }
+        }
         List<ILNode> BuildPreAst()
         { // Just convert instructions to ast streight
             List<ILNode> nodes = new List<ILNode>();
@@ -266,6 +288,7 @@ namespace betteribttest.Dissasembler
              };
             foreach (var i in _method.Values)
             {
+          //      Debug.Assert(nodes.Count != 236);
                 GMCode code = i.Code;
                 object operand = i.Operand;
                 int extra = i.Extra;
@@ -350,6 +373,7 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Dup:
                         expr = new ILExpression(code, extra); // save the extra value for dups incase its dup eveything or just one
+                        HackDebug(i, _method.Values);
                         break;
                     case GMCode.Exit:
                         expr = new ILExpression(code, null);
@@ -367,71 +391,9 @@ namespace betteribttest.Dissasembler
             }
             return nodes;
         }
-        // try to match a patern that goes with a switch and change it to a switch Expression
-        // detect the size of the case going backwards, if there isn't a case there return -1;
-        int FindEndOfSwitch(List<ILNode> ast, ILLabel fallOutLabel)
-        {
-            ILLabel test;
-            for (int i = 0; i < ast.Count; i++)
-            {
-                if (ast[i].Match(GMCode.Bt) && ast[i + 1].Match(GMCode.B, out test) && (test == fallOutLabel)) return i + 1;
-            }
-            return -1;
-        }
-        // trying to do this here instead of the Optimize portion
-        bool MatchPushConstant(List<ILNode> nodes, int start, out ILExpression expr)
-        {
-            do
-            {
-                ILExpression e = nodes.ElementAtOrDefault(start) as ILExpression;
-                if (e == null) break;
-                if (e.Code == GMCode.Call) expr = e;
-                else if (e.Code == GMCode.Push) expr = e.Arguments[0];
-                else break;
-                return true;
-            } while (false);
-            expr = default(ILExpression);
-            return false;
-        }
+  
 
-        bool SimplifyExpression(int start, List<ILNode> nodes)
-        {
-            do
-            {
-                ILExpression expr;
-                if (!nodes[start].Match(GMCode.Push, out expr) || !expr.Code.isExpression()) break;
-                int popDelta = expr.Code.GetPopDelta();
-                if (popDelta == 1)
-                {
-                    if (expr.Arguments.Count > 0) break; // already resolved
-                    ILExpression arg1 = null;
-                    if (MatchPushConstant(nodes, start - 1, out arg1))
-                    {
-                        expr.Arguments.Clear();
-                        expr.Arguments.Add(arg1);
-                        nodes.RemoveAt(start - 1);
-                    }
-                    else break; // couldn't match
-                }
-                else if (popDelta == 2)
-                {
-                    if (expr.Arguments.Count > 0) break; // already resolved
-
-                    ILExpression arg1 = null;
-                    ILExpression arg2 = null;
-                    if (MatchPushConstant(nodes, start - 1, out arg2) && MatchPushConstant(nodes, start - 2, out arg1))
-                    {
-                        expr.Arguments.Clear();
-                        expr.Arguments.Add(arg1);
-                        expr.Arguments.Add(arg2);
-                        nodes.RemoveRange(start - 2, 2);
-                    }
-                    else break; // couldn't match
-                }
-                return true;
-            } while (false);
-            return false;
-        }
+      
       
         public bool MatchDupPatern(int start, List<ILNode> nodes)
         {
@@ -602,14 +564,18 @@ namespace betteribttest.Dissasembler
                 do
                 {
                     modified = false;
-                   //     modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                  
                     modified |= block.RunOptimization(new SimpleControlFlow(method).SwitchDetection);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).FixAndShort);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).FixOrShort);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method).MakeSimplePushEnviroments); 
+
+              
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyTernaryOperator);
+                   // modified |= block.RunOptimization(new SimpleControlFlow(method).FixAndShort);
+                  //  modified |= block.RunOptimization(new SimpleControlFlow(method).FixOrShort);
+                  //  modified |= block.RunOptimization(new SimpleControlFlow(method).MakeSimplePushEnviroments); 
                     modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);
 
-                    //  modified |= block.RunOptimization(SimplifyLogicNot);
+                    modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
                     //  modified |= block.RunOptimization(MakeAssignmentExpression);
                 } while (modified);
             }
@@ -630,8 +596,9 @@ namespace betteribttest.Dissasembler
             Optimize.RemoveRedundantCode(method);
             new GotoRemoval().RemoveGotos(method);
             Optimize.RemoveRedundantCode(method);
+            new GotoRemoval().RemoveGotos(method);
             //List<ByteCode> body = StackAnalysis(method);
-           
+            GotoRemoval.RemoveRedundantCode(method);
 
             // We don't have a fancy
 

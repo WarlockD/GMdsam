@@ -11,7 +11,7 @@ namespace betteribttest
         static ChunkReader cr;
         static List<string> InstanceList;
         static List<string> scriptList;
-        static void spriteArgument(ILVariable v, ILExpression expr)
+        static void spriteArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
@@ -23,7 +23,19 @@ namespace betteribttest
                 }
             }
         }
-        static void instanceArgument(ILVariable v, ILExpression expr)
+        static void soundArgument(ILExpression expr)
+        {
+            if (expr.Code == GMCode.Constant)
+            {
+                ILValue arg = expr.Operand as ILValue;
+                int instance;
+                if (arg.TryParse(out instance) && (instance > 0 && instance < cr.audioList.Count))
+                {
+                    arg.ValueText = "\"" + cr.audioList[instance].Name + "\"";
+                }
+            }
+        }
+        static void instanceArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
@@ -35,7 +47,7 @@ namespace betteribttest
                 }
             }
         }
-        static void fontArgument(ILVariable v, ILExpression expr)
+        static void fontArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
@@ -48,7 +60,7 @@ namespace betteribttest
             }
         }
         // This just makes color look easyer to read
-        static void colorArgument(ILVariable v, ILExpression expr)
+        static void colorArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
@@ -63,7 +75,7 @@ namespace betteribttest
                 }
             }
         }
-        static void scriptArgument(ILVariable v, ILExpression expr)
+        static void scriptArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
@@ -76,36 +88,40 @@ namespace betteribttest
                 }
             }
         }
-        static void scriptExecuteFunction(string n, IList<ILExpression> l)
+        static void scriptExecuteFunction(string n, List<ILExpression> l)
         {
             Debug.Assert(l.Count > 0);
-            scriptArgument(null, l[0]);
+            scriptArgument(l[0]);
         }
-        static void instanceCreateFunction(string n, IList<ILExpression> l)
+        static void instanceCreateFunction(string n, List<ILExpression> l)
         {
             Debug.Assert(l.Count == 3);
-            instanceArgument(null, l[2]);
+            instanceArgument(l[2]);
         }
-        static void draw_spriteExisits(string n, IList<ILExpression> l)
+        static void draw_spriteExisits(string n, List<ILExpression> l)
         {
             Debug.Assert(l.Count > 1);
-            spriteArgument(null, l[0]);
+            spriteArgument(l[0]);
         }
 
-        static void instanceExisits(string n, IList<ILExpression> l)
+        static void instanceExisits(string n, List<ILExpression> l)
         {
-            Debug.Assert(l.Count ==1);
-            instanceArgument(null, l[0]);
+            Debug.Assert(l.Count == 1);
+            instanceArgument(l[0]);
         }
-        static void instanceCollision_line(string n, IList<ILExpression> l)
+        static void instanceCollision_line(string n, List<ILExpression> l)
         {
             Debug.Assert(l.Count > 4);
-            instanceArgument(null, l[3]);
+            instanceArgument(l[3]);
         }
-       
+        static void soundPlayStop(string n, List<ILExpression> l)
+        {
+            Debug.Assert(l.Count > 4);
+            instanceArgument(l[0]);
+        }
         public class CallFunctionLookup
         {
-            public delegate void FunctionToText(string funcname, IList<ILExpression> arguments);
+            public delegate void FunctionToText(string funcname, List<ILExpression> arguments);
             Dictionary<string, FunctionToText> _lookup = new Dictionary<string, FunctionToText>();
             public void Add(string funcname, FunctionToText func) { _lookup.Add(funcname, func); }
             public void FixCalls(ILBlock block)
@@ -120,68 +136,82 @@ namespace betteribttest
         }
         public class AssignRightValueLookup
         {
-            public delegate void ArgumentToText(ILVariable v, ILExpression argument);
+            public delegate void ArgumentToText(ILExpression argument);
             Dictionary<string, ArgumentToText> _lookup = new Dictionary<string, ArgumentToText>();
-            public void Add(string funcname, ArgumentToText func) { _lookup.Add(funcname, func); }
+            public void Add(string varName, ArgumentToText func) { _lookup.Add(varName, func); }
             public void FixCalls(ILBlock block)
             {
                 // Check for assigns
-                foreach (var push in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Pop))
+                foreach (var push in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Assign))
                 {
                     ArgumentToText func;
-                    ILVariable v = push.Operand as ILVariable;
-                    if (_lookup.TryGetValue(v.Name, out func)) func(v,  push.Arguments[0]);
+                    if (_lookup.TryGetValue(push.Arguments[0].ToString(), out func)) func(push.Arguments[0]);
                 }
                 // Check for equality
                 foreach (var condition in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Seq || x.Code == GMCode.Sne))
                 {
                     ArgumentToText func;
-                    if(condition.Arguments[0].Code == GMCode.Push)
-                    {
-                        ILVariable v = condition.Arguments[0].Operand as ILVariable;
-                        if (_lookup.TryGetValue(v.Name, out func)) func(v, condition.Arguments[1]);
-                    }                    
+                    if (_lookup.TryGetValue(condition.Arguments[0].ToString(), out func)) func(condition.Arguments[1]);
+                    else if (_lookup.TryGetValue(condition.Arguments[1].ToString(), out func)) func(condition.Arguments[0]);
                 }
             }
         }
         static CallFunctionLookup FunctionFix = new CallFunctionLookup();
         static AssignRightValueLookup PushFix = new AssignRightValueLookup();
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
+        static void Instructions()
         {
-                cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
-            //  cr.DumpAllObjects("objects.txt");
-            // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
-           // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
-            //Decompiler dism = new Decompiler(cr);
+            Console.WriteLine("Useage <exe> data.win <-asm> search_term");
+            Console.WriteLine("search_term will search all scripts or object names for the text and save that file as a *.cpp");
+            Console.WriteLine("-asm will also write the bytecode dissasembly");
+            Console.WriteLine("There will be some wierd gotos/labels in case statements.  Ignore them, I am still trying to find that bug");
+        }
+        static void FunctionReplacement()
+        {
+            FunctionFix.Add("instance_create", instanceCreateFunction);
+            FunctionFix.Add("collision_line", instanceCollision_line);
+            FunctionFix.Add("instance_exists", instanceExisits);
+            FunctionFix.Add("script_execute", scriptExecuteFunction);
+            FunctionFix.Add("draw_sprite", draw_spriteExisits);
+            FunctionFix.Add("draw_sprite_ext", draw_spriteExisits);
+            FunctionFix.Add("snd_stop", (string name, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count > 0);
+                soundArgument(l[0]);
+            });
+            FunctionFix.Add("snd_play", (string name, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count > 0);
+                soundArgument(l[0]);
+            });
 
 
+            FunctionFix.Add("draw_set_font", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                fontArgument(l[0]);
+            });
+            FunctionFix.Add("draw_set_color", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                colorArgument(l[0]);
+            });
+            PushFix.Add("self.sym_s", spriteArgument);
+            PushFix.Add("self.mycolor", colorArgument);
+            PushFix.Add("self.myfont", fontArgument);
+            PushFix.Add("self.txtsound", soundArgument);
+        }
+        static void DebugMain()
+        {
+            // before I properly set up Main
+            cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
             List<string> stringList = cr.stringList.Select(x => x.str).ToList();
             InstanceList = cr.objList.Select(x => x.Name).ToList();
             scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
-
-
-            FunctionFix.Add("instance_create", instanceCreateFunction);
-                FunctionFix.Add("collision_line", instanceCollision_line);
-                FunctionFix.Add("instance_exists", instanceExisits);
-                FunctionFix.Add("script_execute", scriptExecuteFunction);
-                FunctionFix.Add("draw_sprite", draw_spriteExisits);
-                FunctionFix.Add("draw_sprite_ext", draw_spriteExisits);
-
-            FunctionFix.Add("draw_set_font", (string funcname, IList<ILExpression> l) =>{
-                Debug.Assert(l.Count == 1);
-                fontArgument(null,l[0]);
-            });
-            FunctionFix.Add("draw_set_color", (string funcname, IList<ILExpression> l) => {
-                Debug.Assert(l.Count == 1);
-                colorArgument(null, l[0]);
-            });
-            PushFix.Add("sym_s", spriteArgument);
-            PushFix.Add("mycolor", colorArgument);
-            PushFix.Add("myfont", fontArgument);
+            //  cr.DumpAllObjects("objects.txt");
+            // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
+            // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
+            //Decompiler dism = new Decompiler(cr);
+            FunctionReplacement();
             //  string filename_to_test = "undyne";
             //    string filename_to_test = "gasterblaster"; // lots of stuff  loops though THIS WORKS THIS WORKS!
             //   string filename_to_test = "sansbullet"; //  other is a nice if not long if statements
@@ -193,14 +223,14 @@ namespace betteribttest
 
             // string filename_to_test = "obj_face_alphys_Step"; // this one is good but no shorts
             // string filename_to_test = "SCR_TEXTTYPE"; // start with something even simpler
-            //  string filename_to_test = "SCR_TEXT"; // start with something even simpler
-            //  string filename_to_test = "gml_Object_obj_dmgwriter_old_Draw_0"; // intrsting code, a bt?
-            // string filename_to_test = "write"; // lots of stuff
-            //string filename_to_test = "OBJ_WRITER";
+            string filename_to_test = "SCR_TEXT"; // start with something even simpler
+                                                  //  string filename_to_test = "gml_Object_obj_dmgwriter_old_Draw_0"; // intrsting code, a bt?
+                                                  // string filename_to_test = "write"; // lots of stuff
+                                                  //string filename_to_test = "OBJ_WRITER";
 
             // dosn't work, still need to work on shorts too meh
-            string filename_to_test = "gml_Object_OBJ_WRITER_Alarm_0"; // good switch test
-
+            //  string filename_to_test = "gml_Object_OBJ_WRITER_Alarm_0"; // good switch test WORKS 5/15
+            //  string filename_to_test = "GAMESTART";
 
             //   string filename_to_test = "Script_scr_asgface"; // WORKS 4/12 too simple
             //   string filename_to_test = "gml_Object_obj_emptyborder_s_Step_0"; // slighty harder now WORKS 4/12
@@ -212,39 +242,74 @@ namespace betteribttest
 
             //     string filename_to_test = "gml_Object_obj_battlebomb_Alarm_3"; // hard, has pushenv with a break WORKS 4/14
 
+            filename_to_test = "gml_Object_OBJ_WRITERCREATOR_Create_0";
+        }
+        static void BadExit(int i)
+        {
+            Instructions();
+            Environment.Exit(i);
+        }
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main(string[] args)
+        {
+            string dataWinFileName = args.ElementAtOrDefault(0);
+            if (string.IsNullOrWhiteSpace(dataWinFileName))
+            {
+                Console.WriteLine("Missing data.win file");
+                BadExit(1);
+            }
+            try
+            {
+                cr = new ChunkReader(dataWinFileName, false); // main pc
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Could not open data.win file '" + dataWinFileName + "'");
+                Console.WriteLine("Exception: " + e.Message);
+                BadExit(1);
+            }
 
+            List<string> stringList = cr.stringList.Select(x => x.str).ToList();
+            InstanceList = cr.objList.Select(x => x.Name).ToList();
+            scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
+            FunctionReplacement();
 
-            foreach (var files in cr.GetCodeStreams(filename_to_test))
+            bool doAsm = false;
+            string toSearch = args.ElementAtOrDefault(1);
+            if (toSearch == "-asm")
+            {
+                doAsm = true;
+                toSearch = args.ElementAtOrDefault(2);
+            }
+            if (toSearch == null)
+            {
+                Console.WriteLine("Missing search field");
+                BadExit(1);
+            }
+            List<string> FilesFound = new List<string>();
+            foreach (var files in cr.GetCodeStreams(toSearch))
             {
                 //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
 
                 var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + "_new.asm");
+                if (doAsm) betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + ".asm");
                 ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, stringList, InstanceList);
                 //   block.Body.WriteNodes
-                block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
+                FunctionFix.FixCalls(block);
+                PushFix.FixCalls(block);
+                FilesFound.Add(files.ScriptName);
+                // block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
                 block.DebugSave(files.ScriptName + ".cpp", "// ScriptName: " + files.ScriptName);
-
-                //  if (instructions!= null) instructions.SaveInstructions(files.ScriptName + ".asm");
-                continue;
-                //System.Diagnostics.Debug.Assert(files.ScriptName != "gml_Object_obj_undyneboss_Destroy_0");
+                Console.WriteLine("Written: " + files.ScriptName + ".cpp");
             }
-            System.Diagnostics.Debug.WriteLine("Ok");
-#if false
-            foreach (var files in cr.GetCodeStreams(filename_to_test))
+            if(FilesFound.Count==0)
             {
-                if (files.ScriptName == "gml_Script_SCR_TEXT") continue; // too big and too complcated right now
-                try
-                {
-                    newDecompiler.Disasemble(files.ScriptName, files.stream, stringList, InstanceList);
-                } catch(Exception e)
-                {
-                    // drop all exceptions
-                    // throw new Exception(e);
-                }
-               
-            }
-#endif
+                Console.WriteLine("No scripts or objects found with '" + toSearch + "' in the name");
+            } 
+            System.Diagnostics.Debug.WriteLine("Done");
         }
     }
 }

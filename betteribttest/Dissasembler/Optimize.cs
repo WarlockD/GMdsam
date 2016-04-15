@@ -14,10 +14,10 @@ namespace betteribttest.Dissasembler
         /// Perform one pass of a given optimization on this block.
         /// This block must consist of only basicblocks.
         /// </summary>
-        public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILBasicBlock, int, bool> optimization)
+        public static bool RunOptimization(this ILBlock block, Func<List<ILNode>, ILBasicBlock, int, bool> optimization)
         {
             bool modified = false;
-            IList<ILNode> body = block.Body;
+            List<ILNode> body = block.Body;
             for (int i = body.Count - 1; i >= 0; i--)
             {
                 if (i < body.Count && optimization(body, (ILBasicBlock)body[i], i))
@@ -28,7 +28,7 @@ namespace betteribttest.Dissasembler
             return modified;
         }
 
-        public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILExpression, int, bool> optimization)
+        public static bool RunOptimization(this ILBlock block, Func<List<ILNode>, ILExpression, int, bool> optimization)
         {
             bool modified = false;
             foreach (ILBasicBlock bb in block.Body)
@@ -270,7 +270,7 @@ namespace betteribttest.Dissasembler
 		/// <param name="method"></param>
 		
 #region SimplifyLogicNot
-        static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
+        public static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
         {
             bool modified = false;
             expr = SimplifyLogicNot(expr, ref modified);

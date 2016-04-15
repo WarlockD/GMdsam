@@ -64,7 +64,7 @@ namespace betteribttest.Dissasembler
         public override void WriteTo(ITextOutput output)
         {
           //  output.Write("/* Basic Block */");
-            Body.WriteNodes(output, true);
+            Body.WriteNodes(output, true,true);
         }
     }
     public class ILBlock : ILNode
@@ -87,7 +87,7 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-            Body.WriteNodes(output, true);
+            Body.WriteNodes(output, true,true);
         }
         public void WriteBlock(ITextOutput output, string BlockTitle = null)
         {
@@ -118,6 +118,7 @@ namespace betteribttest.Dissasembler
         public ILValue(short i) { this.Value = (int)i; Type = GM_Type.Short; }
         public ILValue(object o, GM_Type type) {
             if (o is short) this.Value = (int)((short)o);
+            else if(type == GM_Type.String) this.ValueText = GMCodeUtil.EscapeString(o as string);
             else this.Value = o;
             Type = type;
         }
@@ -186,7 +187,7 @@ namespace betteribttest.Dissasembler
             ILValue valueNode = node as ILValue;
             if (valueNode != null && (valueNode.Type == GM_Type.Short || valueNode.Type == GM_Type.Int))
             {
-                value = valueNode.Type == GM_Type.Short ? (short)valueNode.Value : (int)valueNode.Value;
+                value = (int)valueNode;
                 return true;
             }
             value = 0;
@@ -426,8 +427,8 @@ namespace betteribttest.Dissasembler
                 else if (Operand is ILValue)
                 {
                     ILValue val = Operand as ILValue;
-                    if (val.Type == GM_Type.String) output.Write(GMCodeUtil.EscapeString((string)val.Value));
-                    else output.Write(val.Value.ToString());
+                    if (escapeString && val.Type == GM_Type.String) output.Write(val.ValueText);
+                    else output.Write(val.ToString());
                 }
                 else output.Write(Operand.ToString());
             } else output.Write(Operand.ToString());
@@ -446,7 +447,7 @@ namespace betteribttest.Dissasembler
         }
         public void WriteArguments(ITextOutput output, int start)
         {
-            Arguments.WriteNodes(output, start);
+            Arguments.WriteNodes(output, start,true,true);
         }
         static readonly string POPDefaultString = "%POP%";
         public void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
@@ -643,13 +644,13 @@ namespace betteribttest.Dissasembler
             Condition.WriteTo(output);
             output.Write(") ");
             if (TrueBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
-            else TrueBlock.Body.WriteNodes(output);
+            else TrueBlock.Body.WriteNodes(output,true,true);
             if (FalseBlock != null)
             {
                 output.WriteLine(); // some of these conditions get to long so put a line here
                 output.Write("else ");
                 if (FalseBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
-                else FalseBlock.Body.WriteNodes(output);
+                else FalseBlock.Body.WriteNodes(output,true,true);
             }
         }
     }
@@ -668,15 +669,14 @@ namespace betteribttest.Dissasembler
                     {
                         output.Write("case ");
                         i.WriteTo(output);
-                        output.WriteLine(": ");
+                        output.Write(": ");
                     }
                 }
                 else {
-                    output.WriteLine("default:");
+                    output.Write("default: ");
                 }
-                output.Indent();
-                base.WriteTo(output);
-                output.Unindent();
+                // make sure there is a writeline
+                if (!base.Body.WriteNodes(output, true, false)) output.WriteLine();
             }
         }
 
@@ -699,10 +699,7 @@ namespace betteribttest.Dissasembler
             Condition.WriteTo(output);
             output.WriteLine(") {");
             output.Indent();
-            foreach (CaseBlock caseBlock in this.CaseBlocks)
-            {
-                caseBlock.WriteTo(output);
-            }
+            foreach (CaseBlock caseBlock in this.CaseBlocks) caseBlock.WriteTo(output);
             output.Unindent();
             output.WriteLine("}");
         }
@@ -724,7 +721,7 @@ namespace betteribttest.Dissasembler
             output.Write("with(");
             Enviroment.WriteTo(output);
             output.Write(") ");
-            Body.Body.WriteNodes(output);
+            Body.Body.WriteNodes(output,true,true);
         }
     }
 

@@ -149,6 +149,81 @@ namespace betteribttest.Dissasembler
             }
             return false;
         }
+        public bool SimplifyTernaryOperator(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            Debug.Assert(body.Contains(head));
+
+            ILExpression condExpr;
+            ILLabel trueLabel;
+            ILLabel falseLabel;
+           
+            ILExpression trueExpr;
+            ILLabel trueFall;
+            
+            ILExpression falseExpr;
+            ILLabel falseFall;
+
+            ILExpression finalFall;
+            ILLabel finalFalseFall;
+            ILLabel finalTrueFall;
+
+            if ((head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
+                head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel)) &&
+                labelGlobalRefCount[trueLabel] == 1 &&
+                labelGlobalRefCount[falseLabel] == 1 &&
+                labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
+                labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out falseExpr, out falseFall) &&
+                trueFall == falseFall &&
+                body.Contains(labelToBasicBlock[trueLabel]) &&
+                labelToBasicBlock[trueFall].MatchLastAndBr(GMCode.Bf, out finalFalseFall, out finalFall, out finalTrueFall) &&
+                (finalFall == null || finalFall.Code == GMCode.Pop)
+               )
+            {
+                ILValue falseLocVar = falseExpr.Code == GMCode.Constant ? falseExpr.Operand as ILValue : null;
+                ILValue trueLocVar = trueExpr.Code == GMCode.Constant ? trueExpr.Operand as ILValue : null;
+                ILExpression newExpr=null;
+                // a ? true : b    is equivalent to  a || b
+                // a ? b : true    is equivalent to  !a || b
+                // a ? b : false   is equivalent to  a && b
+                // a ? false : b   is equivalent to  !a && b
+               if (trueLocVar != null && trueLocVar.Type == GM_Type.Short && (trueLocVar == 0 || trueLocVar == 1))
+                {
+                    // It can be expressed as logical expression
+                    if (trueLocVar != 0)
+                    {
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, falseExpr);
+                    }
+                    else {
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, new ILExpression(GMCode.Not, null, condExpr), falseExpr);
+                    }
+                }
+                else if(falseLocVar != null && falseLocVar.Type == GM_Type.Short && (falseLocVar == 0 || falseLocVar == 1))
+                    {
+                    // It can be expressed as logical expression
+                    if (falseLocVar != 0)
+                    {
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, new ILExpression(GMCode.Not, null, condExpr), trueExpr);
+                    }
+                    else {
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, condExpr, trueExpr);
+                    }
+                }
+                Debug.Assert(newExpr != null);
+                // head.Body.RemoveTail(ILCode.Brtrue, ILCode.Br);
+                head.Body.RemoveRange(head.Body.Count - 2, 2);
+                head.Body.Add(new ILExpression(GMCode.Bf, finalFalseFall, newExpr));
+                head.Body.Add(new ILExpression(GMCode.B, finalTrueFall));
+
+                // Remove the inlined branch from scope
+               // body.RemoveOrThrow(nextBasicBlock);
+                // Remove the old basic blocks
+                body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
+                body.RemoveOrThrow(labelToBasicBlock[falseLabel]);
+                body.RemoveOrThrow(labelToBasicBlock[trueFall]);
+                return true;
+            }
+            return false;
+        }
         public bool FixOrShort(IList<ILNode> body, ILBasicBlock head, int pos)
         {
            
@@ -177,6 +252,7 @@ namespace betteribttest.Dissasembler
                     body.Contains(labelToBasicBlock[rightLabel]) &&
                      labelGlobalRefCount[rightLabel] == 2)
             {
+                Debug.Assert(rightLabel.Name != "L91" && leftLabel.Name != "L91");
                 ILBasicBlock fallthoughBlock = labelToBasicBlock[rightLabel];
                 ILExpression fallThoughBlockCondition;
                 ILLabel newTrueLabel, newFalseLabel;
@@ -203,6 +279,38 @@ namespace betteribttest.Dissasembler
             }
             return false;
         }
+        // Game maker AND/Or shorts are unoptimized.  It never seems to modify the condition EVER in ANY WAY
+        public bool SimplifyShortCircuitGGameMakerOr(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            ILExpression condExpr;
+            ILLabel trueLabel;
+            ILLabel falseLabel;
+            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel))
+            {
+                ILLabel nextLabel = trueLabel;
+                ILLabel otherLablel = falseLabel;
+                ILBasicBlock nextBasicBlock = labelToBasicBlock[nextLabel];
+                ILExpression nextCondExpr;
+                ILLabel nextTrueLablel;
+                ILLabel nextFalseLabel;
+                if (body.Contains(nextBasicBlock) &&
+                      nextBasicBlock != head &&
+                      labelGlobalRefCount[(ILLabel)nextBasicBlock.Body.First()] == 1 &&
+                      nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) &&
+                      (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
+                {
+                    // Create short cicuit branch
+                    ILExpression logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, nextCondExpr);
+                    head.Body.RemoveTail(GMCode.Bf, GMCode.B);
+                    head.Body.Add(new ILExpression(GMCode.Bf, nextFalseLabel, logicExpr));
+                    head.Body.Add(new ILExpression(GMCode.B, nextTrueLablel));
+                    // Remove the inlined branch from scope
+                    body.RemoveOrThrow(nextBasicBlock);
+                }
+                return true;
+            }
+            return false;
+        }
         public bool SimplifyShortCircuit(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
@@ -210,7 +318,8 @@ namespace betteribttest.Dissasembler
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
-            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel))
+            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
+                head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel)) // I saw this too
             {
                 for (int pass = 0; pass < 2; pass++)
                 {
@@ -228,7 +337,8 @@ namespace betteribttest.Dissasembler
                     if (body.Contains(nextBasicBlock) &&
                         nextBasicBlock != head &&
                         labelGlobalRefCount[(ILLabel)nextBasicBlock.Body.First()] == 1 &&
-                        nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) &&
+                        (nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) ||
+                        nextBasicBlock.MatchSingleAndBr(GMCode.Bt, out nextTrueLablel, out nextCondExpr, out nextFalseLabel) )&&
                         (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
                     {
                         // Create short cicuit branch
@@ -236,13 +346,16 @@ namespace betteribttest.Dissasembler
                         if (otherLablel == nextFalseLabel)
                         {
                             logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, negate ? new ILExpression(GMCode.Not, null, condExpr) : condExpr, nextCondExpr);
+                           
                         }
                         else {
                             logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, negate ? condExpr : new ILExpression(GMCode.Not, null, condExpr), nextCondExpr);
+
                         }
-                        head.Body.RemoveTail(GMCode.Bf, GMCode.B);
-                        head.Body.Add(new ILExpression(GMCode.Bt, nextTrueLablel, logicExpr));
-                        head.Body.Add(new ILExpression(GMCode.B, nextFalseLabel));
+                     //   head.Body.RemoveTail(GMCode.Bf, GMCode.B);
+                        head.Body.RemoveRange(head.Body.Count - 2, 2);
+                        head.Body.Add(new ILExpression(GMCode.Bf, nextFalseLabel, logicExpr));
+                        head.Body.Add(new ILExpression(GMCode.B, nextTrueLablel));
 
                         // Remove the inlined branch from scope
                         body.RemoveOrThrow(nextBasicBlock);
@@ -251,6 +364,7 @@ namespace betteribttest.Dissasembler
                     }
                 }
             }
+         
             return false;
         }
 
