@@ -119,6 +119,7 @@ namespace betteribttest.Dissasembler
                     throw new Exception("Cannot convert simple type");
             }
         }
+        bool dupPatternhack = false;
         /// <summary>
         /// This just removes pushes and gets the expresion from it
         /// </summary>
@@ -126,7 +127,7 @@ namespace betteribttest.Dissasembler
         /// <returns></returns>
         bool ExpressionIsSimple(ILExpression expr)
         {
-            return expr.Code == GMCode.Call || expr.Code == GMCode.Constant || expr.Code == GMCode.Var ||
+            return !dupPatternhack && expr.Code == GMCode.Call || expr.Code == GMCode.Constant || expr.Code == GMCode.Var ||
                                 (expr.Code.isExpression() && expr.Arguments.Count > 0);
         }
         bool NodeIsSimple(ILNode node, out ILExpression expr)
@@ -196,12 +197,15 @@ namespace betteribttest.Dissasembler
             return instance;// eveything else we just return as we cannot simplify it
         }
         // hack for right now
-        ILExpression DupVarFix(List<ILNode> nodes)
+        // Just wierd, I had this issue before, where the arguments become swapped when you use a dup 0
+        // is the dup 0 mean just to dup the var stack and not the expression stack?  I am suspecting yes
+        // this is JUST a hack till I find a better way to fix it
+        ILExpression DupVarFixHack(List<ILNode> nodes)
         {
             ILExpression e = nodes.Last() as ILExpression;
             if(e != null && e.Code == GMCode.Dup && (int)e.Operand == 0) // simple dup
             {
-                e=  nodes.ElementAt(nodes.Count - 2) as ILExpression;
+                e = nodes.LastOrDefault(x => x is ILExpression && (x as ILExpression).Code == GMCode.Push) as ILExpression;
             }
             return e;
         }
@@ -231,12 +235,15 @@ namespace betteribttest.Dissasembler
                 else
                 {
                     operand &= 0x1FFFFFFF;
-                    ILExpression e = DupVarFix(nodes); // Hack for some wierd non array vars?
-                    if (NodeIsSimple(e, out instance))
+                    //  ILExpression e = DupVarFixHack(nodes); // Hack for some wierd non array vars?
+                    // you know what, lets not resolve these here
+#if false
+                    if (NodeIsSimple(nodes.Last(), out instance))
                     {
                         v.Arguments.Add(InstanceToExpression(instance)); // instance
                         nodes.RemoveLast();
                     }
+#endif
                 }
             }
             return v;
@@ -373,7 +380,7 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Dup:
                         expr = new ILExpression(code, extra); // save the extra value for dups incase its dup eveything or just one
-                        HackDebug(i, _method.Values);
+                  //      HackDebug(i, _method.Values);
                         break;
                     case GMCode.Exit:
                         expr = new ILExpression(code, null);
@@ -420,8 +427,8 @@ namespace betteribttest.Dissasembler
                 {
                     arrayIndex = instance; // first push was index
                     if (!nodes.ElementAtOrDefault(--index).Match(GMCode.Push, out instance)) break; // we need this push for index
-                }
-                Debug.Assert(dupCount == 1);
+                } else // its a simple vairable, not an index
+              //  Debug.Assert(dupCount == 1);
                 instance = InstanceToExpression(instance); // try to resolve the instance
                 // We got all we needed, lets check the assignment
                 Debug.Assert(args[0].Code == GMCode.Var); // sanity check
