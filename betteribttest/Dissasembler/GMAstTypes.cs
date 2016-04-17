@@ -103,7 +103,54 @@ namespace betteribttest.Dissasembler
             }
         }
     }
-    public class ILValue : IEquatable<ILValue>
+    // We make this a seperate node so that it dosn't interfere with anything else
+    // We are not trying to optimize game maker code here:P
+    public class ILAssign : ILNode
+    {
+        public ILVariable Variable;
+        public ILNode Expression;
+
+        public override void WriteTo(ITextOutput output)
+        {
+            Variable.WriteTo(output);
+            output.Write(" = ");
+            Expression.WriteTo(output);
+        }
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            if (this.Variable != null)
+                yield return this.Variable;
+            if (this.Expression != null)
+                yield return this.Expression;
+        }
+    }
+    
+    public class ILCall : ILNode
+    {
+        public string Name;
+        public List<ILNode> Arguments = new List<ILNode>();
+        public GM_Type Type = GM_Type.NoType; // return type
+        public override void WriteTo(ITextOutput output)
+        {
+            output.Write(Name);
+            output.Write('(');
+            if (Arguments.Count > 0) Arguments[0].WriteTo(output);
+            if(Arguments.Count > 1) {
+                foreach (var a in Arguments.Skip(1))
+                {
+                    output.Write(',');
+                    a.WriteTo(output);
+                }
+            }
+            output.Write(')');
+        }
+        public override IEnumerable<ILNode> GetChildren()
+        {
+                return Arguments;
+        }
+    }
+
+    public class ILValue : ILNode, IEquatable<ILValue>
     {
         public object Value { get; private set; }
         public GM_Type Type { get; private set; }
@@ -155,6 +202,12 @@ namespace betteribttest.Dissasembler
             }
             else return Value.Equals(other.Value);
         }
+
+        public override void WriteTo(ITextOutput output)
+        {
+            output.Write(ToString());
+        }
+
         public static explicit operator int(ILValue c)
         {
             switch (c.Type)
@@ -223,34 +276,55 @@ namespace betteribttest.Dissasembler
             return Name.GetHashCode();
         }
     }
-    public class ILVariable
+    public class ILVariable : ILNode, IEquatable<ILVariable>
     {
         // Side note, we "could" make this a node
         // but in reality this is isolated 
         // Unless I ever get a type/var anyisys system up, its going to stay like this
         public string Name;
-        public ILExpression Instance = null; // We don't NEED this
+        public ILNode Instance = null; // We NEED this
         public string InstanceName;
-        public ILExpression Index = null; // not null if we have an index
-        public bool IsGenerated = false;
-        public Instruction Pinned = null;
+        public ILNode Index = null; // not null if we have an index
+        public bool isArray;
+        public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
         public GM_Type Type = GM_Type.NoType;
-        public override string ToString()
+        public override IEnumerable<ILNode> GetChildren()
         {
-            string ret = InstanceName + "." + Name;
-            if (Index != null) ret += '[' + Index.ToString() + ']';
-            return ret;
+            if (Instance != null) yield return Instance;
+            if (Index != null) yield return Index;
+        }
+        public bool Equals(ILVariable obj)
+        {
+            if (object.ReferenceEquals(obj, null)) return false;
+            if (object.ReferenceEquals(obj, this)) return true;
+            return obj.Name == Name && obj.InstanceName == InstanceName; 
         }
         public override bool Equals(object obj)
         {
             if (object.ReferenceEquals(obj, null)) return false;
             if (object.ReferenceEquals(obj, this)) return true;
             ILVariable test = obj as ILVariable;
-            return test != null && test.Name == Name && test.InstanceName == InstanceName;
+            return Equals(test);
         }
         public override int GetHashCode()
         {
             return Name.GetHashCode() ^ InstanceName.GetHashCode();
+        }
+
+        public override void WriteTo(ITextOutput output)
+        {
+            StringBuilder sb = new StringBuilder();
+            if (InstanceName != null) output.Write(InstanceName);
+            else if (Instance != null) Instance.WriteTo(output);
+            else output.Write("stack");
+            output.Write(".");
+            output.Write(Name);
+            if(isArray)
+            {
+                output.Write('[');
+                if (Index != null) Index.WriteTo(output);
+                output.Write(']');
+            }
         }
     }
    
@@ -328,6 +402,7 @@ namespace betteribttest.Dissasembler
     public class ILExpression : ILNode
     {
         public GMCode Code { get; set; }
+        public int Extra { get; set; }
         public object Operand { get; set; }
         public List<ILExpression> Arguments;
         // Mapping to the original instructions (useful for debugging)
@@ -413,6 +488,12 @@ namespace betteribttest.Dissasembler
                 case GMCode.Var:
                 case GMCode.Constant:
                     return false;
+                case GMCode.LogicOr: // hack to remove extra () around a bunch of logic ors
+                    if (e.Code == GMCode.LogicAnd) return true;
+                    else return false;
+                case GMCode.LogicAnd:
+                    if (e.Code == GMCode.LogicOr) return true;
+                    else return false;
                 default:
                     return true;
             }
@@ -442,7 +523,7 @@ namespace betteribttest.Dissasembler
         public void WriteArgument(ITextOutput output, int index, bool escapeString = true)
         {
             ILExpression arg = Arguments[index];
-            if (arg.Code == GMCode.Constant) arg.WriteOperand(output, escapeString);
+            if (arg.Code == GMCode.Constant|| arg.Code == GMCode.Var) arg.WriteOperand(output, escapeString);
             else arg.WriteTo(output); // don't know what it is
         }
         public void WriteArguments(ITextOutput output, int start)
@@ -461,7 +542,7 @@ namespace betteribttest.Dissasembler
             WriteArgumentOrPop(output, index);
             if (needParm) output.Write(')');
         }
-        public override void WriteTo(ITextOutput output)
+        public void WriteExpression(ITextOutput output)
         {
             int count = Code.getOpTreeCount(); // not a leaf
             if (count == 1)
@@ -476,6 +557,14 @@ namespace betteribttest.Dissasembler
                 output.Write(Code.getOpTreeString());
                 output.Write(' ');
                 WriteParm(output, 1);
+            }
+        }
+        public override void WriteTo(ITextOutput output)
+        {
+            if(Code.isExpression())
+            {
+                WriteExpression(output);
+             
             }
             else
             {
@@ -498,7 +587,8 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Call:
                         output.Write(Operand.ToString());
-                        WriteCommaArguments(output);
+                         WriteCommaArguments(output);
+
                         break;
                     case GMCode.Pop:
                         if (Arguments.Count > 0) Arguments[0].WriteTo(output);
@@ -514,8 +604,18 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Push:
                         output.Write("Push ");
-                        Debug.Assert(Operand == null);
-                        WriteArgumentOrPop(output, 0);
+                        if(Operand != null)
+                        {
+                            output.Write("(Operand=");
+                            WriteOperand(output, true);
+                            output.Write(")");
+                        }
+                        if (Arguments.Count >0)
+                        {
+                            output.Write("(Arguments=");
+                            WriteArgumentOrPop(output, 0);
+                            output.Write(")");
+                        }
                         break;
                     case GMCode.Dup:
                         output.Write("Dup ");

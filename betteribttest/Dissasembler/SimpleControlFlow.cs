@@ -9,13 +9,12 @@ namespace betteribttest.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
+        GMContext context;
+        //  TypeSystem typeSystem;
 
-       // DecompilerContext context;
-      //  TypeSystem typeSystem;
-
-        public SimpleControlFlow(ILBlock method)
+        public SimpleControlFlow(ILBlock method,GMContext context)
         {
-          //  this.context = context;
+            this.context = context;
           //  this.typeSystem = context.CurrentMethod.Module.TypeSystem;
 
             foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
@@ -29,6 +28,36 @@ namespace betteribttest.Dissasembler
                     labelToBasicBlock[label] = bb;
                 }
             }
+        }
+        // Soo, since I cannot be 100% sure where the start of a instance might be
+        // ( could be an expresion, complex var, etc)
+        // Its put somewhere in a block 
+        public bool PushEnviromentFix(IList<ILNode> body, ILBasicBlock head, int pos)
+        {
+            ILExpression expr;
+            ILLabel next;
+            ILLabel pushLabel;
+            ILLabel pushLabelNext;
+            if (head.MatchLastAndBr(GMCode.Push, out expr, out next)&&
+            //     labelGlobalRefCount[next] == 1 &&  // don't check this
+                body.Contains(labelToBasicBlock[next]) &&
+                labelToBasicBlock[next].MatchSingleAndBr(GMCode.Pushenv, out pushLabel, out pushLabelNext) 
+                )
+            {
+                ILBasicBlock pushBlock = labelToBasicBlock[next];
+                head.Body.RemoveAt(head.Body.Count - 2);// hackery, but sure, block should be removed in a flatten
+                if(expr.Code == GMCode.Constant)
+                {
+                    ILValue value = expr.Operand as ILValue;
+                    if(value.Value is int)
+                    {
+                        value.ValueText = context.InstanceToString((int)value.Value);
+                    }
+                }
+                (pushBlock.Body[pushBlock.Body.Count - 2] as ILExpression).Arguments.Add(expr);
+                return true;
+            }
+            return false;
         }
         // you know, this would be SOO much simpler with blocks..  Humm.. change after test
         public bool SwitchDetection(IList<ILNode> body, ILBasicBlock head, int pos)
@@ -70,89 +99,13 @@ namespace betteribttest.Dissasembler
 
             return false;
         }
-        public bool MakeSimplePushEnviroments(IList<ILNode> body, ILBasicBlock head, int pos)
-        { // We try to make as many simple push enviroments as we can
-            ILLabel pushlabel;
-            ILLabel nextLabel;
-            if (head.MatchLastAndBr(GMCode.Popenv, out pushlabel, out nextLabel) &&
-                pushlabel == nextLabel // This is not a break
-                )
-            {
-                ILExpression popExpression = head.Body[head.Body.Count - 2] as ILExpression;
-                Stack<ILExpression> pushExpresions = new Stack<ILExpression>(); // have to reverse the order
-                int i;
-                ILExpression e = null;
-                for (i = head.Body.Count - 3; i >= 0; i--)
-                {
-                    e = head.Body[i] as ILExpression;
-                    if (e == null) return false; // we ran into the label so we have a condition in here
-                    if(e.Code == GMCode.Pushenv) break;
-                    pushExpresions.Push(e);
-                }
-                e.Code = GMCode.SimplePushenv;
-                e.Operand = null; // be sure to remove the label so it dosn't get picked up anymore in the optimizer
-                foreach (var f in pushExpresions) { e.Arguments.Add(f); head.Body.Remove(f); }
-                head.Body.Remove(popExpression);
-                return true;
-            }
-            return false;
-        }
-        public bool FixAndShort(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
 
-            Debug.Assert(body.Contains(head));
-
-            ILExpression condExpr;
-            ILLabel trueLabel;
-            ILLabel falseLabel;
-            ILExpression leftExpr;
-            ILLabel leftLabel;
-            ILExpression rightExpr;
-            ILLabel rightLabel;
-
-            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) &&
-                labelGlobalRefCount[trueLabel] == 1 &&
-                labelGlobalRefCount[falseLabel] == 1 &&
-                body.Contains(labelToBasicBlock[trueLabel]) &&
-                body.Contains(labelToBasicBlock[falseLabel]) &&
-                labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out leftExpr, out leftLabel) &&
-                labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out rightExpr, out rightLabel) &&
-                 rightLabel == leftLabel &&
-                    body.Contains(labelToBasicBlock[rightLabel]) &&
-                     labelGlobalRefCount[rightLabel] == 2)
-            {
-                ILBasicBlock fallthoughBlock = labelToBasicBlock[rightLabel];
-                ILExpression fallThoughBlockCondition;
-                ILLabel newTrueLabel, newFalseLabel;
-                if (fallthoughBlock.MatchLastAndBr(GMCode.Bf, out newFalseLabel, out fallThoughBlockCondition, out newTrueLabel))
-                {
-                    Debug.Assert(fallThoughBlockCondition.Code == GMCode.Pop);
-                    // usally its an expr else 0 or maybe a expr else 1, so lets test true first
-                    ILValue trueConstant;
-                    if (rightExpr.Match(GMCode.Constant, out trueConstant) && trueConstant == 0)
-                    { // This is a logic AND lets make it as such
-                        // now the trick, there are ALOT OF LABELS in here that we have to move around, makes it so much
-                        // easier using RemoveReducdentCode so don't worry to much about it, just modify the eixting block
-                        head.Body.RemoveTail(GMCode.Bf, GMCode.B);
-                        head.Body.Add(new ILExpression(GMCode.Bf, newFalseLabel, new ILExpression(GMCode.LogicAnd, null, condExpr, leftExpr)));
-                        head.Body.Add(new ILExpression(GMCode.B, newTrueLabel));
-                        // Remove the old basic blocks since the were only used once.  Need to find a more than 2 compound LogicAnds
-                        body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
-                        body.RemoveOrThrow(labelToBasicBlock[falseLabel]);
-                        body.RemoveOrThrow(fallthoughBlock);
-                        return true;
-                    }
-                }
-                Debug.Assert(false); // god help me
-                                     // ANYTHING ELSE IS ASSERTED
-                                     // I have not seen many shorts so if we find a wierd one, it should pop up here
-            }
-            return false;
-        }
         public bool SimplifyTernaryOperator(List<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
-
+        //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
+       //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
+            
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
@@ -176,11 +129,13 @@ namespace betteribttest.Dissasembler
                 trueFall == falseFall &&
                 body.Contains(labelToBasicBlock[trueLabel]) &&
                 labelToBasicBlock[trueFall].MatchLastAndBr(GMCode.Bf, out finalFalseFall, out finalFall, out finalTrueFall) &&
-                (finalFall == null || finalFall.Code == GMCode.Pop)
-               )
+                finalFall.Code == GMCode.Pop
+               ) // (finalFall == null || finalFall.Code == GMCode.Pop)
             {
+                Debug.Assert(finalFall.Arguments.Count != 2);
                 ILValue falseLocVar = falseExpr.Code == GMCode.Constant ? falseExpr.Operand as ILValue : null;
                 ILValue trueLocVar = trueExpr.Code == GMCode.Constant ? trueExpr.Operand as ILValue : null;
+                Debug.Assert(falseLocVar != null || trueLocVar != null);
                 ILExpression newExpr=null;
                 // a ? true : b    is equivalent to  a || b
                 // a ? b : true    is equivalent to  !a || b
@@ -191,10 +146,10 @@ namespace betteribttest.Dissasembler
                     // It can be expressed as logical expression
                     if (trueLocVar != 0)
                     {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, falseExpr);
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, condExpr, falseExpr);
                     }
                     else {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, new ILExpression(GMCode.Not, null, condExpr), falseExpr);
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, new ILExpression(GMCode.Not, null, condExpr), falseExpr);
                     }
                 }
                 else if(falseLocVar != null && falseLocVar.Type == GM_Type.Short && (falseLocVar == 0 || falseLocVar == 1))
@@ -202,10 +157,10 @@ namespace betteribttest.Dissasembler
                     // It can be expressed as logical expression
                     if (falseLocVar != 0)
                     {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, new ILExpression(GMCode.Not, null, condExpr), trueExpr);
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, new ILExpression(GMCode.Not, null, condExpr), trueExpr);
                     }
                     else {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, condExpr, trueExpr);
+                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, trueExpr);
                     }
                 }
                 Debug.Assert(newExpr != null);
@@ -224,102 +179,19 @@ namespace betteribttest.Dissasembler
             }
             return false;
         }
-        public bool FixOrShort(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
-           
-            Debug.Assert(body.Contains(head));
-
-            ILExpression condExpr;
-            ILLabel trueLabel;
-            ILLabel falseLabel;
-            ILExpression leftExpr;
-            ILLabel leftLabel;
-            ILExpression rightExpr;
-            ILLabel rightLabel;
-            // SOOO fucked up
-            // Seriously, why does the compiler even DO this
-            // OOOH now I see why.  When the compiler compiles the code, it does its best NOT
-            // to fuck around with the conditions, even if the bytecode looks freaking wierd.
-            // I don't think the gamemaker bytecode does any kind of real optimizations then humm
-            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
-                labelGlobalRefCount[trueLabel] == 1 &&
-                labelGlobalRefCount[falseLabel] == 1 &&
-                body.Contains(labelToBasicBlock[trueLabel]) &&
-                body.Contains(labelToBasicBlock[falseLabel]) &&
-                labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out leftExpr, out leftLabel) &&
-                labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out rightExpr, out rightLabel) &&
-                 rightLabel == leftLabel &&
-                    body.Contains(labelToBasicBlock[rightLabel]) &&
-                     labelGlobalRefCount[rightLabel] == 2)
-            {
-                Debug.Assert(rightLabel.Name != "L91" && leftLabel.Name != "L91");
-                ILBasicBlock fallthoughBlock = labelToBasicBlock[rightLabel];
-                ILExpression fallThoughBlockCondition;
-                ILLabel newTrueLabel, newFalseLabel;
-                if (fallthoughBlock.MatchLastAndBr(GMCode.Bf, out newFalseLabel, out fallThoughBlockCondition, out newTrueLabel))
-                {
-                    Debug.Assert(fallThoughBlockCondition.Code == GMCode.Pop);
-                    // usally its an expr else 0 or maybe a expr else 1, so lets test true first
-                    ILValue trueConstant;
-                    if (leftExpr.Match(GMCode.Constant, out trueConstant) && trueConstant == 1)
-                    { // This is a logic OR lets make it as such
-                        // now the trick, there are ALOT OF LABELS in here that we have to move around, makes it so much
-                        // easier using RemoveReducdentCode so don't worry to much about it, just modify the eixting block
-                        head.Body.RemoveTail(GMCode.Bt, GMCode.B);
-                        head.Body.Add(new ILExpression(GMCode.Bf, newFalseLabel, new ILExpression(GMCode.LogicOr, null, condExpr, rightExpr)));
-                        head.Body.Add(new ILExpression(GMCode.B, newTrueLabel));
-                        // Remove the old basic blocks since the were only used once.  Need to find a more than 2 compound LogicAnds
-                        body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
-                        body.RemoveOrThrow(labelToBasicBlock[falseLabel]);
-                        body.RemoveOrThrow(fallthoughBlock);
-                        return true;
-                    }
-                }
-                Debug.Assert(false);
-            }
-            return false;
-        }
-        // Game maker AND/Or shorts are unoptimized.  It never seems to modify the condition EVER in ANY WAY
-        public bool SimplifyShortCircuitGGameMakerOr(List<ILNode> body, ILBasicBlock head, int pos)
-        {
-            ILExpression condExpr;
-            ILLabel trueLabel;
-            ILLabel falseLabel;
-            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel))
-            {
-                ILLabel nextLabel = trueLabel;
-                ILLabel otherLablel = falseLabel;
-                ILBasicBlock nextBasicBlock = labelToBasicBlock[nextLabel];
-                ILExpression nextCondExpr;
-                ILLabel nextTrueLablel;
-                ILLabel nextFalseLabel;
-                if (body.Contains(nextBasicBlock) &&
-                      nextBasicBlock != head &&
-                      labelGlobalRefCount[(ILLabel)nextBasicBlock.Body.First()] == 1 &&
-                      nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) &&
-                      (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
-                {
-                    // Create short cicuit branch
-                    ILExpression logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, nextCondExpr);
-                    head.Body.RemoveTail(GMCode.Bf, GMCode.B);
-                    head.Body.Add(new ILExpression(GMCode.Bf, nextFalseLabel, logicExpr));
-                    head.Body.Add(new ILExpression(GMCode.B, nextTrueLablel));
-                    // Remove the inlined branch from scope
-                    body.RemoveOrThrow(nextBasicBlock);
-                }
-                return true;
-            }
-            return false;
-        }
         public bool SimplifyShortCircuit(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
-
+           // Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
-            if (head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
-                head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel)) // I saw this too
+            // Ok, since we have not changed out all the Bf's to Bt like in ILSpy, we have to do them seperately
+            // as I am getting bugs in my wahhoo about it
+            if ((head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
+                head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel)) &&
+                condExpr.Code != GMCode.Pop // its a terrtery so ignore it?
+                ) // I saw this too
             {
                 for (int pass = 0; pass < 2; pass++)
                 {
@@ -339,8 +211,10 @@ namespace betteribttest.Dissasembler
                         labelGlobalRefCount[(ILLabel)nextBasicBlock.Body.First()] == 1 &&
                         (nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) ||
                         nextBasicBlock.MatchSingleAndBr(GMCode.Bt, out nextTrueLablel, out nextCondExpr, out nextFalseLabel) )&&
+                        nextCondExpr.Code != GMCode.Pop && // ugh
                         (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
                     {
+                   //     Debug.Assert(nextCondExpr.Arguments.Count != 2);
                         // Create short cicuit branch
                         ILExpression logicExpr;
                         if (otherLablel == nextFalseLabel)
@@ -362,7 +236,9 @@ namespace betteribttest.Dissasembler
 
                         return true;
                     }
+                    
                 }
+                
             }
          
             return false;

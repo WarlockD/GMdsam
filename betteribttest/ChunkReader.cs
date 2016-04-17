@@ -72,14 +72,14 @@ namespace betteribttest
         public int size;
         public GMK_Code(ChunkEntry e) : base(e) { }
     }
-    class GMK_Image : GMK_Data
+    public class GMK_Image : GMK_Data
     {
         public string filename {  get { return Name; } set { Name = value; } }
         public Bitmap image;
         public GMK_Image(ChunkEntry e) : base(e) { }
      
     }
-    class GMK_String : GMK_Data
+    public class GMK_String : GMK_Data
     {
         public int index;
         public string str;
@@ -103,7 +103,7 @@ namespace betteribttest
             return base.ToString() + " String: " + escapedString;
         }
     }
-    class GMK_ScriptIndex : GMK_Data, IComparable<GMK_ScriptIndex>
+    public class GMK_ScriptIndex : GMK_Data, IComparable<GMK_ScriptIndex>
     {
         public string script_name="";
         public int script_index=-1;
@@ -122,7 +122,7 @@ namespace betteribttest
             return script_index;
         }
     }
-    class GMK_FuncOffset : GMK_Data
+    public class GMK_FuncOffset : GMK_Data
     {
         public string func_name = "";
         public int func_offset = -1;
@@ -133,7 +133,7 @@ namespace betteribttest
             return "{ func_name = " + func_name + ", func_offset = " + func_offset + ", code_other = " + code_offset + " }" + base.ToString();
         }
     }
-    class GMK_Audio : GMK_Data
+    public class GMK_Audio : GMK_Data
     {
         public int audioType;
         public string extension;
@@ -160,7 +160,7 @@ namespace betteribttest
         }
     }
 
-    class GMK_Object: GMK_Data
+    public class GMK_Object : GMK_Data
     { // HUMM We have 12 allarms!  EACH ALLARM IS A 1 DIMENIONAL ARRAY! WOO!
       //  public int[] header; // first 20 bytes, last byte seems to be a size
       //  public byte[] data;
@@ -230,8 +230,8 @@ namespace betteribttest
         }
 
     }
- 
-    class GMK_Sprite : GMK_Data // mabye this is from object?
+
+    public class GMK_Sprite : GMK_Data // mabye this is from object?
     {
         public int width;
         public int height;
@@ -241,7 +241,7 @@ namespace betteribttest
         public Bitmap mask;
         public GMK_Sprite(ChunkEntry e) : base(e) { }
     }
-    class GMK_SpritePosition : GMK_Data
+    public class GMK_SpritePosition : GMK_Data
     {
         public Rectangle rect;
         public Point offset;
@@ -271,15 +271,15 @@ namespace betteribttest
             return String.Format("SpriteData:  Rect = {0}, TextureID = {1} ", rect, textureId);
         }
     }
-  
-    class GMK_Background : GMK_Data
+
+    public class GMK_Background : GMK_Data
     {
         public int[] stuff; // 3 ints of stuff
         // after this there is an offset to this data
         public GMK_SpritePosition pos;
         public GMK_Background(ChunkEntry e) : base(e) { }
     }
-    class GMK_FontGlyph : GMK_Data
+    public class GMK_FontGlyph : GMK_Data
     {
         public char c; // int16
         public short x;
@@ -293,7 +293,7 @@ namespace betteribttest
             return "{ char= '" + c + "' , x=" + x + ", y=" + y + ", widht=" + width + ", height=" + height+ ", char_offset=" + char_offset + "}";
         }
     }
-    class GMK_Font : GMK_Data
+    public class GMK_Font : GMK_Data
     {
         public List<GMK_FontGlyph> glyphs= new List<GMK_FontGlyph>(); // note sure what ANY of this stuff is except for font_size
         public Dictionary<char, GMK_FontGlyph> map = new Dictionary<char, GMK_FontGlyph>();
@@ -316,7 +316,7 @@ namespace betteribttest
         }
         // System.Diagnostics.Debug.WriteLine(String.Format("'{0}': {1,-4}{2,-4}{3,-4}{4,-4}{5,-4}", c,cb, x1, y1, x2, y2));
     }
-    class ChunkReader
+    public class ChunkReader
     {
         class Chunk
         {

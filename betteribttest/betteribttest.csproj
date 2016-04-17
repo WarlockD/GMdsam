@@ -73,6 +73,7 @@
     <Compile Include="Dissasembler\PaternMatching.cs" />
     <Compile Include="Dissasembler\GMAstTypes.cs" />
     <Compile Include="Dissasembler\SimpleControlFlow.cs" />
+    <Compile Include="GMContext.cs" />
     <Compile Include="Instruction.cs" />
     <Compile Include="ITextOutput.cs" />
     <Compile Include="LinkedHashSet.cs" />

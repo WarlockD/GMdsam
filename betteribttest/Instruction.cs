@@ -335,6 +335,8 @@ namespace betteribttest
         {
             switch (i)
             {
+                case GMCode.LogicAnd:
+                case GMCode.LogicOr:
                 case GMCode.Neg:
                 case GMCode.Not:
                 case GMCode.Add:

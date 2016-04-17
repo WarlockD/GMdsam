@@ -199,10 +199,19 @@ namespace betteribttest.Dissasembler
             object filler;
             return bb.MatchSingleAndBr<object>(code, out filler, out arg, out brLabel);
         }
+
         public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
         {
-            ILExpression arg;
-            return bb.MatchSingleAndBr(code, out operand, out arg, out brLabel);
+            {
+                if (bb.Body.Count == 3 &&
+           bb.Body[0] is ILLabel &&
+           bb.Body[1].Match(code, out operand) &&
+           bb.Body[2].Match(GMCode.B, out brLabel))
+                    return true;
+            }
+            operand = default(T);
+            brLabel = null;
+            return false;
         }
         public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILExpression arg, out ILLabel brLabel)
         {
@@ -226,6 +235,17 @@ namespace betteribttest.Dissasembler
                 return true;
             }
             operand = default(T);
+            brLabel = null;
+            return false;
+        }
+        public static bool MatchLastAndBr(this ILBasicBlock bb, GMCode code, out ILExpression arg, out ILLabel brLabel)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out arg) &&
+              bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
+            {
+                return true;
+            }
+            arg = default(ILExpression);
             brLabel = null;
             return false;
         }
