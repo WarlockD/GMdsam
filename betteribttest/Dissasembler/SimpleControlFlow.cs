@@ -193,6 +193,7 @@ namespace betteribttest.Dissasembler
                 condExpr.Code != GMCode.Pop // its a terrtery so ignore it?
                 ) // I saw this too
             {
+                GMCode code = (head.Body[head.Body.Count - 2] as ILExpression).Code;
                 for (int pass = 0; pass < 2; pass++)
                 {
 
@@ -201,7 +202,7 @@ namespace betteribttest.Dissasembler
                     ILLabel nextLabel = (pass == 0) ? trueLabel : falseLabel;
                     ILLabel otherLablel = (pass == 0) ? falseLabel : trueLabel;
                     bool negate = (pass == 1);
-
+                    negate = GMCode.Bt == code ? !negate : negate;
                     ILBasicBlock nextBasicBlock = labelToBasicBlock[nextLabel];
                     ILExpression nextCondExpr;
                     ILLabel nextTrueLablel;
@@ -214,7 +215,7 @@ namespace betteribttest.Dissasembler
                         nextCondExpr.Code != GMCode.Pop && // ugh
                         (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
                     {
-                   //     Debug.Assert(nextCondExpr.Arguments.Count != 2);
+                        //     Debug.Assert(nextCondExpr.Arguments.Count != 2);
                         // Create short cicuit branch
                         ILExpression logicExpr;
                         if (otherLablel == nextFalseLabel)
