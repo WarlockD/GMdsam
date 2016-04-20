@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using betteribttest.Dissasembler;
+using System.IO;
 
 namespace betteribttest
 {
@@ -160,7 +161,7 @@ namespace betteribttest
         static AssignRightValueLookup PushFix = new AssignRightValueLookup();
         static void Instructions()
         {
-            Console.WriteLine("Useage <exe> data.win <-asm> search_term");
+            Console.WriteLine("Useage <exe> data.win <-asm> [-s search_term] [-all (objects|scripts)");
             Console.WriteLine("search_term will search all scripts or object names for the text and save that file as a *.cpp");
             Console.WriteLine("-asm will also write the bytecode dissasembly");
             Console.WriteLine("There will be some wierd gotos/labels in case statements.  Ignore them, I am still trying to find that bug");
@@ -244,6 +245,7 @@ namespace betteribttest
 
             filename_to_test = "gml_Object_OBJ_WRITERCREATOR_Create_0";
         }
+    
         static void BadExit(int i)
         {
             Instructions();
@@ -253,6 +255,10 @@ namespace betteribttest
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
+        static void DecompileBlock(ILBlock block, string filename)
+        {
+
+        }
         static void Main(string[] args)
         {
             string dataWinFileName = args.ElementAtOrDefault(0);
@@ -278,11 +284,34 @@ namespace betteribttest
             FunctionReplacement();
             GMContext context = new GMContext() { cr = cr, InstanceList = InstanceList, scriptList = scriptList };
             bool doAsm = false;
-            string toSearch = args.ElementAtOrDefault(1);
-            if (toSearch == "-asm")
+            bool all = false;
+            string toSearch = null;
+           int pos = 1;
+            while(pos < args.Length)
             {
-                doAsm = true;
-                toSearch = args.ElementAtOrDefault(2);
+                switch (args[pos])
+                {
+                    case "-s":
+                        pos++;
+                        toSearch = args.ElementAtOrDefault(pos);
+                        pos++;
+                        break;
+                    case "-all":
+                        all = true;
+                        pos++;
+                        toSearch = args.ElementAtOrDefault(pos);
+                        pos++;
+                        break;
+                    case "-asm":
+                        doAsm = true;
+                        pos++;
+                        break;
+                    default:
+                        Console.WriteLine("Bad argument " + args[pos]);
+                        BadExit(1);
+                        break;
+                }
+                if (toSearch != null) break;
             }
             if (toSearch == null)
             {
@@ -290,25 +319,56 @@ namespace betteribttest
                 BadExit(1);
             }
             List<string> FilesFound = new List<string>();
-            foreach (var files in cr.GetCodeStreams(toSearch))
+            if (all)
             {
-                //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
+                
+                if (toSearch == "objects") {
+                    foreach(var a in cr.GetAllObjectCode())
+                    {
+                        var info = Directory.CreateDirectory(a.ObjectName);
+                        foreach (var files in a.Streams)
+                        {
+                            var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
+                            if (doAsm)
+                            {
+                                string asm_filename = Path.Combine(info.FullName, files.ScriptName + ".asm");
+                                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+                            }
+                            ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+                            FunctionFix.FixCalls(block);
+                            PushFix.FixCalls(block);
+                            string code_name = Path.Combine(info.FullName, files.ScriptName + ".cpp");
+                            FilesFound.Add(code_name);
+                            block.DebugSave(code_name, "// ScriptName: " + files.ScriptName);
+                            Console.WriteLine("Written: " + files.ScriptName + ".cpp");
+                        }
+                    }
+                }
+            } else
+            {
+                
+                foreach (var files in cr.GetCodeStreams(toSearch))
+                {
+                    //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
 
-                var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                if (doAsm) betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + ".asm");
-                ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
-                //   block.Body.WriteNodes
-                FunctionFix.FixCalls(block);
-                PushFix.FixCalls(block);
-                FilesFound.Add(files.ScriptName);
-                // block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
+                    var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
+                    if (doAsm) betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + ".asm");
+                    ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+                    //   block.Body.WriteNodes
+                    // block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
+                    FunctionFix.FixCalls(block);
+                    PushFix.FixCalls(block);
+                    FilesFound.Add(files.ScriptName);
+                    // block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
 #if DEBUG
-                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, "debug.asm");
-                block.DebugSave("debug.cpp", "// ScriptName: " + files.ScriptName);
-                block.DebugSave(files.ScriptName + ".cpp", "// ScriptName: " + files.ScriptName);
+                    betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, "debug.asm");
+                    block.DebugSave("debug.cpp", "// ScriptName: " + files.ScriptName);
+                    block.DebugSave(files.ScriptName + ".cpp", "// ScriptName: " + files.ScriptName);
 #endif
-                Console.WriteLine("Written: " + files.ScriptName + ".cpp");
+                    Console.WriteLine("Written: " + files.ScriptName + ".cpp");
+                }
             }
+
             if(FilesFound.Count==0)
             {
                 Console.WriteLine("No scripts or objects found with '" + toSearch + "' in the name");

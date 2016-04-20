@@ -44,7 +44,7 @@ namespace betteribttest.Dissasembler
             }
             return modified;
         }
-
+    
         public static bool IsConditionalControlFlow(this ILNode node)
         {
             ILExpression expr = node as ILExpression;
@@ -263,13 +263,17 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
+
+    
+
+
         /// <summary>
-		/// Removes redundatant Br, Nop, Dup, Pop
-		/// Ignore arguments of 'leave'
-		/// </summary>
-		/// <param name="method"></param>
-		
-#region SimplifyLogicNot
+        /// Removes redundatant Br, Nop, Dup, Pop
+        /// Ignore arguments of 'leave'
+        /// </summary>
+        /// <param name="method"></param>
+
+        #region SimplifyLogicNot
         public static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
         {
             bool modified = false;

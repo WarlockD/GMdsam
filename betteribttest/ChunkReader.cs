@@ -893,14 +893,36 @@ namespace betteribttest
             foreach (GMK_Code c in codeList)
             {
                 System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
-                //System.Diagnostics.Debug.Assert("gml_Object_obj_finalfroggit_Alarm_6" != c.Name);
                 ChunkStream ms = getReturnStream();
                 yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
             }
         }
+        public IEnumerable<CodeData> GetObjectCode(ref string objectName)
+        {
+            objectName = objectName.ToLower();
+            if (objectName.IndexOf("obj_") != 0) objectName = "obj_" + objectName;
+            var lookup = this.nameMap[objectName] as GMK_Object;
+            var list = GetCodeStreams(lookup.Name).ToList();
+            return list;
+        }
+        public class ObjectCodeReturn
+        {
+            public List<CodeData> Streams;
+            public string ObjectName;
+        }
+        public IEnumerable<ObjectCodeReturn> GetAllObjectCode()
+        {
+            foreach(GMK_Object o in nameMap.Values.OfType<GMK_Object>())
+            {
+                string name = o.Name;
+                ObjectCodeReturn ret = new ObjectCodeReturn();
+                ret.Streams = GetObjectCode(ref name).ToList();
+                ret.ObjectName = name;
+                yield return ret;
+            }
+        }
         public IEnumerable<CodeData> GetCodeStreams(string code_name)
         {
-            code_name = code_name.ToLower();
             foreach (GMK_Code c in codeList)
             {
                 if (c.Name.ToLower().IndexOf(code_name) != -1)

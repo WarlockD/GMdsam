@@ -253,17 +253,8 @@ namespace betteribttest.Dissasembler
                         expr = new ILExpression(GMCode.B, ConvertLabel(i.Operand as Label));
                         break;
                     case GMCode.Bt:
-                    case GMCode.Bf: // we could try converting all Bf to Bt here, but Bt's seem to only be used in special shorts or switch/case, so save that info here
-                        {
-                            expr = new ILExpression(code, ConvertLabel(i.Operand as Label));
-                            ILExpression push;
-                            if (NodeIsSimple(nodes.Last(), out push))
-                                nodes.RemoveAt(nodes.Count - 1);
-                            else // We must have a fake push so the patern matching works
-                                push = new ILExpression(GMCode.Pop, null);
-                            expr.Arguments.Add(push);
-                            //  Debug.Assert(code == GMCode.Bt || expr.Arguments.Count == 1);
-                        }
+                    case GMCode.Bf: 
+                         expr = new ILExpression(code, ConvertLabel(i.Operand as Label), new ILExpression(GMCode.Pop, null));
                         break;
                     case GMCode.Dup:
                         expr = new ILExpression(code, extra); // save the extra value for dups incase its dup eveything or just one
@@ -426,183 +417,9 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
-        void ProcessVar(ILVariable v, Stack<ILNode> stack)
-        {
-            if (v.isResolved) return; // nothing to do
-            ILValue value = v.Instance as ILValue;
-            Debug.Assert(value.Value is int); // means the value is an int
-            int instance = (int)value;
-            Debug.Assert(instance == 0);  // it should be a stack value at this point
-            if (v.isArray) v.Index = stack.Pop();  // get the index first
-            v.Instance = stack.Pop(); // get the instance
-            value = v.Instance as ILValue;
-            if (value != null && value.Value is int) // constant?
-            {
-                instance = (int)value;
-                v.InstanceName =  context.InstanceToString(instance);
-            }
-            else v.InstanceName = null;
-            v.isResolved = true;
-        }
-        ILExpression NodeToExpresion(ILNode n)
-        {
-            if (n is ILValue) return new ILExpression(GMCode.Constant, n as ILValue);
-            else if (n is ILVariable) return new ILExpression(GMCode.Var, n as ILVariable);
+      
 
-            else if (n is ILExpression) return n as ILExpression;
-            else if (n is ILCall) return new ILExpression(GMCode.Call, n);
-            else throw new Exception("Should not happen here");
-        }
-        void CheckList(List<ILNode> node)
-        {
-            for(int i=0;i< node.Count; i++)
-            {
-                ILExpression e = node[i] as ILExpression;
-                if (e == null) continue;
-                switch(e.Code)
-                {
-                    case GMCode.Pop:
-                        Debug.Assert(false);
-                        break;
-                    case GMCode.Push:
-                        Debug.Assert(i == (node.Count -2) && node.LastOrDefault().Match(GMCode.B));
-                        break;
-
-                }
-                // all variables MUST be resolved, no exception
-                var list = e.GetSelfAndChildrenRecursive<ILVariable>(x => !x.isResolved).ToList();
-                Debug.Assert(list.Count == 0);
-            }
-        }
-        bool ProcessExpressionsInBlock(ILBasicBlock block)
-        {
-            ILLabel label = block.Body[0] as ILLabel;
-      //      Debug.Assert(label.Name != "Block_0");
-         //   Debug.Assert(label.Name != "L16");
-            List<ILNode> list = new List<ILNode>(); // New body
-            Stack<ILNode> stack = new Stack<ILNode>();
-            ILValue tempValue;
-            ILVariable tempVar;
-            bool Dup1Seen = false;
-            int oldCount = block.Body.Count;
-            for (int i = 0; i < oldCount; i++)
-            {
-                ILExpression e = block.Body[i] as ILExpression;
-                ILNode nexpr = null;
-                if (e == null) {
-                    list.Add(block.Body[i]);
-                    continue; // skip  labels or wierd stuff
-                }
-                switch (e.Code)
-                {
-                    case GMCode.Push:
-                        tempValue = e.Operand as ILValue;
-                        if (tempValue != null) { stack.Push(tempValue); break; }
-                        tempVar = e.Operand as ILVariable;
-                        if(tempVar != null)
-                        {
-                            ProcessVar(tempVar, stack);
-                            stack.Push(tempVar);
-                            
-                        } else { // block comes back as a push expression
-                            Debug.Assert(e.Arguments.Count > 0);
-                            stack.Push(e.Arguments[0]);
-                        }
-                        break;
-                    case GMCode.Pop: // convert to an assign
-                        tempVar = e.Operand as ILVariable;
-                        Debug.Assert(tempVar != null);
-                        ProcessVar(tempVar, stack);
-                        e.Code = GMCode.Assign;
-                        e.Operand = null;
-                        e.Arguments.Add(NodeToExpresion(tempVar));
-                        e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                        nexpr = e;
-                        Dup1Seen = false;
-                        break;
-                    case GMCode.Call:
-                        {
-                            if (e.Extra == -1)
-                            {
-                                nexpr = e;
-                                break;
-                            } // its already resolved
-                            //ILExpression call = new ILExpression(GMCode.Call, )
-                            //ILCall call = new ILCall() { Name = e.Operand as string };
-                            //for (int j = 0; j < e.Extra; j++) call.Arguments.Add(stack.Pop());
-                            if(e.Extra > 0)
-                                for (int j = 0; j < e.Extra; j++) e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                            e.Extra = -1;
-                            stack.Push(e);
-                        }
-                        break;
-                    case GMCode.Popz:
-                        {
-                            ILExpression call = stack.Peek() as ILExpression;
-                            if (call != null && call.Code == GMCode.Call) {
-                                nexpr = call;
-                                stack.Pop();
-                            }
-                            else nexpr = e; // else, ignore for switch
-                        } 
-                        break;
-                    case GMCode.Bf:
-                    case GMCode.Bt:
-                        if(stack.Count > 0)
-                        {
-                            Debug.Assert(stack.Count == 1);
-                            e.Arguments[0] = NodeToExpresion(stack.Pop());
-                        }
-                        nexpr = e;
-                        break;
-                    case GMCode.B:
-                    case GMCode.Exit:
-                            if (stack.Count > 0)
-                            {
-                                // we should only have ONE item left on the stack per block, and thats in wierd tertory shorts
-                                Debug.Assert(stack.Count == 1);
-                                list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(stack.Pop())));
-                            }
-                            
-                        nexpr = e;
-                        break; // end of block, process at bottom
-                    case GMCode.Ret:
-                        throw new Exception("first return I have EVER seen");
-                        // try to resolve, if not ignore as its handled latter
-                     
-                    case GMCode.Dup:
-                        // ok now we get into the meat of the issue, 
-                        // be sure we run switch detection BEFORE this function, otherwise, you will have a bad time:P
-                        if ((int)e.Operand == 0) stack.Push(stack.Peek()); // simple case
-                        else
-                        {
-                            // this is usally on an expression that uses a var multipual times so the instance and index is copyed
-                            // HOWEVER the stack may need to be swaped
-                            Dup1Seen = true; // hack for now
-                            foreach (var n in stack.ToArray()) stack.Push(n); // copy the entire stack
-                        }
-                        break;
-                    default: // ok we handle an expression
-                        if(e.Code.isExpression())
-                        {
-                            for (int j = 0; j < e.Code.GetPopDelta(); j++)
-                                e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                            e.Arguments.Reverse(); // till I fix it latter, sigh
-                            stack.Push(e); // push expressions back
-                        } else nexpr = e; // fall though
-                        break;
-                }
-                if(nexpr != null) list.Add(nexpr);
-            }
-            // now the trick, if we still have stuff on the stack, put it back on the list
-            CheckList(list);
-            block.Body = list; // replace the list
-            return oldCount != list.Count;
-        }
-        public bool ProcessExpressions(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
-            return ProcessExpressionsInBlock(head);
-        }
+     
         public void RunOptimizations(ILBlock method, params Func<List<ILNode>, ILBasicBlock, int, bool>[] optimizations)
         {
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
@@ -615,39 +432,87 @@ namespace betteribttest.Dissasembler
                 } while (modified);
             }
         }
-        GMContext context;
-        public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        void DebugBasicBlocks(ILBlock method)
         {
-            if (code.Count == 0) return new ILBlock();
-                this.context = context;
-
-            //variables = new Dictionary<string, VariableDefinition>();
-            _method = code;
-            this.optimize = optimize;
-            List<ILNode> ast = BuildPreAst();
-            
-         //   DoPattern(ast, FixPopZandCheckDUP);
-            DoPattern(ast, MatchDupPatern);
-            // DoPattern(ast, SimplfyPushEnviroments);
-            ILBlock method = new ILBlock();
-            method.Body = ast;
-            betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
-            foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
-                Optimize.SplitToBasicBlocks(block);
-#if DEBUG
-            RunOptimizations(method, ProcessExpressions, new SimpleControlFlow(method, context).PushEnviromentFix);
-            method.DebugSave("basic_blocks.txt");
-            RunOptimizations(method, ProcessExpressions, new SimpleControlFlow(method, context).SimplifyTernaryOperator, new SimpleControlFlow(method, context).JoinBasicBlocks);
-            method.DebugSave("basic_blocks2.txt");
-
-#endif
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 bool modified;
                 do
                 {
                     modified = false;
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SwitchDetection);
+                //    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SwitchDetection);
+                //    modified |= block.RunOptimization(Optimize.ProcessExpressions);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).PushEnviromentFix);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
+                } while (modified);
+            }
+           
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                bool modified;
+                do
+                {
+                    modified = false;
+                 //   modified |= block.RunOptimization(new SimpleControlFlow(method, context).SwitchDetection);
+                 //   modified |= block.RunOptimization(Optimize.ProcessExpressions);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).PushEnviromentFix);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
+
+
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
+                    modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
+                } while (modified);
+            }
+            
+        }
+        GMContext context;
+        public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        {
+            if (code.Count == 0) return new ILBlock();
+                this.context = context;
+
+
+            _method = code;
+            this.optimize = optimize;
+            List<ILNode> ast = BuildPreAst();
+
+            ILBlock method = new ILBlock();
+            method.Body = ast;
+            betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
+            foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
+                Optimize.SplitToBasicBlocks(block);
+#if DEBUG
+            //   DebugBasicBlocks(method);
+            method.DebugSave("basic_blocks.txt");
+            new BuildFullAst(method, context).ProcessAllExpressions(method);
+            method.DebugSave("basic_blocks2.txt");
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                bool modified;
+                do
+                {
+                    modified = false;
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).PushEnviromentFix);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
+
+
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
+                    modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
+                } while (modified);
+            }
+
+
+#else
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                bool modified;
+                do
+                {
+                    modified = false;
+            
+                   // modified |= block.RunOptimization(new SimpleControlFlow(method, context).SwitchDetection);
                     modified |= block.RunOptimization(ProcessExpressions);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).PushEnviromentFix);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
@@ -658,6 +523,7 @@ namespace betteribttest.Dissasembler
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
                 } while (modified);
             }
+#endif
             method.DebugSave("basic_blocks_nice.txt");
             method.DebugSave("before_loop.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())

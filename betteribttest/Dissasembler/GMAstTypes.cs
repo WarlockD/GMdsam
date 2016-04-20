@@ -591,8 +591,8 @@ namespace betteribttest.Dissasembler
 
                         break;
                     case GMCode.Pop:
-                        if (Arguments.Count > 0) Arguments[0].WriteTo(output);
-                        else output.Write(POPDefaultString);
+                        output.Write("Pop: ");
+                        WriteOperand(output, false);// generic, string name
                         break;
                     case GMCode.Assign:
                         WriteArgumentOrPop(output, 0, false);

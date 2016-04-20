@@ -315,25 +315,7 @@ namespace betteribttest.Dissasembler
             if (a.Count < count) a.Clear();
             else a.RemoveRange(a.Count - count, count);
         }
-        public static bool MatchCaseBlockStart(this ILBasicBlock bb, out ILExpression switchCondition, out ILExpression caseCondition, out ILLabel caseLabel, out ILLabel nextCase)
-        {
-            int dupType = 0;
-            int len = bb.Body.Count;
-            ILExpression pushSeq;
-            ILExpression btExpresion;
-            if (bb.Body[0] is ILLabel &&
-                bb.Body.ElementAtOrDefault(len - 6).Match(GMCode.Push, out switchCondition) &&
-                bb.Body.ElementAtOrDefault(len - 5).Match(GMCode.Dup, out dupType) &&
-                dupType == 0 &&
-                bb.Body.ElementAtOrDefault(len - 4).Match(GMCode.Push, out caseCondition) &&
-                bb.Body.ElementAtOrDefault(len-3).Match(GMCode.Push, out pushSeq) &&
-                pushSeq.Code == GMCode.Seq &&
-                bb.MatchLastAndBr(GMCode.Bt, out caseLabel, out btExpresion, out nextCase)
-                ) return true;
-            switchCondition = caseCondition = default(ILExpression);
-            caseLabel = nextCase = default(ILLabel);
-            return false;
-        }
+
         public static bool MatchCaseBlock(this ILBasicBlock bb, out ILExpression caseCondition, out ILLabel caseLabel, out ILLabel nextCase)
         {
             int dupType = 0;
@@ -344,8 +326,7 @@ namespace betteribttest.Dissasembler
                 bb.Body[1].Match(GMCode.Dup, out dupType) &&
                 dupType == 0 &&
                 bb.Body[2].Match(GMCode.Push, out caseCondition) &&
-                 bb.Body[3].Match(GMCode.Push, out pushSeq) &&
-                pushSeq.Code == GMCode.Seq &&
+                 bb.Body[3].Match(GMCode.Seq) &&
                 bb.MatchLastAndBr(GMCode.Bt, out caseLabel, out btExpresion, out nextCase)
                 ) return true;
             caseCondition = default(ILExpression);
