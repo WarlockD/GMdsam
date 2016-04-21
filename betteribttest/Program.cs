@@ -321,28 +321,89 @@ namespace betteribttest
             List<string> FilesFound = new List<string>();
             if (all)
             {
-                
-                if (toSearch == "objects") {
-                    foreach(var a in cr.GetAllObjectCode())
-                    {
-                        var info = Directory.CreateDirectory(a.ObjectName);
-                        foreach (var files in a.Streams)
+                switch (toSearch)
+                {
+                    case "objects":
                         {
-                            var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                            if (doAsm)
+                            var errorinfo = Directory.CreateDirectory("error");
+                            StreamWriter errorWriter = null;
+                            foreach (var a in cr.GetAllObjectCode())
                             {
-                                string asm_filename = Path.Combine(info.FullName, files.ScriptName + ".asm");
-                                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+                                var info = Directory.CreateDirectory(a.ObjectName);
+                                foreach (var files in a.Streams)
+                                {
+                                    var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
+                                    if (doAsm)
+                                    {
+                                        string asm_filename = Path.Combine(info.FullName, files.ScriptName + ".asm");
+                                        betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+                                    }
+                                    string code_name = Path.Combine(info.FullName, files.ScriptName + ".cpp");
+                                    try
+                                    {
+                                        ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+                                        FunctionFix.FixCalls(block);
+                                        PushFix.FixCalls(block);
+
+                                        FilesFound.Add(code_name);
+                                        block.DebugSave(code_name, "// ScriptName: " + files.ScriptName);
+                                        Console.WriteLine("Written: " + files.ScriptName + ".cpp");
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        if (errorWriter == null) errorWriter = new StreamWriter("error_objects.txt");
+                                        string message = string.Format("Object: {0}  Error: {1}", files.ScriptName, e.Message);
+                                        errorWriter.WriteLine(message);
+                                        Console.WriteLine("Error: " + message);
+                                    }
+                                }
                             }
-                            ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
-                            FunctionFix.FixCalls(block);
-                            PushFix.FixCalls(block);
-                            string code_name = Path.Combine(info.FullName, files.ScriptName + ".cpp");
-                            FilesFound.Add(code_name);
-                            block.DebugSave(code_name, "// ScriptName: " + files.ScriptName);
-                            Console.WriteLine("Written: " + files.ScriptName + ".cpp");
                         }
-                    }
+                        break;
+                    case "scripts":
+                        {
+                            var errorinfo = Directory.CreateDirectory("error");
+                            var info = Directory.CreateDirectory("scripts");
+                            StreamWriter errorWriter = null;
+                            foreach (var files in cr.GetAllScripts())
+                            {
+                                string code_name = Path.Combine(info.FullName, files.ScriptName + ".cpp");
+                                context.CurrentScript = files.ScriptName;
+                                var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
+                                if (doAsm)
+                                {
+                                    string asm_filename = Path.Combine(info.FullName, files.ScriptName + ".asm");
+                                    betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+                                }
+#if !DEBUG
+                                try
+                                {
+#endif
+                                Console.WriteLine("Writing: " + files.ScriptName + ".cpp");
+                                    ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+                                    FunctionFix.FixCalls(block);
+                                    PushFix.FixCalls(block);
+
+                                    FilesFound.Add(code_name);
+                                    block.DebugSave(code_name, "// ScriptName: " + files.ScriptName);
+                                
+#if !DEBUG
+                                }
+                                catch (Exception e)
+                                {
+                                    if (errorWriter == null) errorWriter = new StreamWriter("error_scripts.txt");
+                                    string message = string.Format("Script: {0}  Error: {1}", files.ScriptName, e.Message);
+                                    errorWriter.WriteLine(message);
+                                    Console.WriteLine("Error: " + message);
+                                }
+#endif
+                            }
+                        }
+                        break;
+                    default:
+                        Console.WriteLine("Unkonwn -all specifiyer");
+                        BadExit(1);
+                        break;
                 }
             } else
             {

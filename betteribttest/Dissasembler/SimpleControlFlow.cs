@@ -50,63 +50,7 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
-#if false
-        public bool CollectCasees(IList<ILNode> body, ILBasicBlock switchStart, int pos)
-        {
-            ILExpression switchCondition = null;
-            object caseConditionRaw;
-            //ILExpression caseCondition;
-            ILLabel caseLabel;
-            ILLabel nextLabel;
-            Debug.Assert((head.Body[0] as ILLabel).Name != "Block_0");
 
-            int dupType = 0;
-            int len = head.Body.Count;
-            ILExpression pushSeq;
-            ILExpression btExpresion;
-            if (head.Body.ElementAtOrDefault(len - 6).Match(GMCode.Push) &&
-                head.Body.ElementAtOrDefault(len - 5).Match(GMCode.Dup, out dupType) &&
-                dupType == 0 &&
-                head.Body.ElementAtOrDefault(len - 4).Match(GMCode.Push, out caseConditionRaw) &&
-                head.Body.ElementAtOrDefault(len - 3).Match(GMCode.Seq) &&
-                head.MatchLastAndBr(GMCode.Bt, out caseLabel, out btExpresion, out nextLabel)
-                )
-            {
-                // We need to process all expressions in this block
-                ILExpression caseCondition = null;
-                // We match the start of the case block
-                List<ILBasicBlock> toRemove = new List<ILBasicBlock>();
-                List<ILLabel> caseLabels = new List<ILLabel>();
-                List<ILExpression> caseExpressions = new List<ILExpression>();
-                caseExpressions.Add(switchCondition); // wish I had another place to put this
-                ILBasicBlock current = head;
-                do
-                {
-                    caseLabels.Add(caseLabel);
-                    caseExpressions.Add(new ILExpression(GMCode.Case, caseLabel, caseCondition)); // add the first one
-                    toRemove.Add(current);
-                    current = labelToBasicBlock[nextLabel];
-                } while (current.MatchCaseBlock(out caseCondition, out caseLabel, out nextLabel));
-                // we should be stopped on the block that jumps to the end of the case
-                ILLabel fallLabel;
-                if (!current.MatchSingle(GMCode.B, out fallLabel)) throw new Exception("Bad case fail case?");
-                // This is SOO much easyer in basicblocks, I understand why you break them up now
-                ILBasicBlock fallBlock = labelToBasicBlock[fallLabel];
-                if (!fallBlock.MatchAt(1, GMCode.Popz)) throw new Exception("Bad block  fail case?");
-                fallBlock.Body.RemoveAt(1); // remove the popZ for the switch condition
-
-                head.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Push, GMCode.Bt, GMCode.B); // better to just rewrite it?
-                head.Body.Add(new ILExpression(GMCode.Switch, caseLabels.ToArray(), caseExpressions));
-                head.Body.Add(new ILExpression(GMCode.B, fallLabel));
-                foreach (var b in toRemove) body.Remove(b);
-                body.Add(head); // put the head back on
-                return true;
-            }
-
-            return false;
-        }
-
-#endif
 
         // Soo, since I cannot be 100% sure where the start of a instance might be
         // ( could be an expresion, complex var, etc)

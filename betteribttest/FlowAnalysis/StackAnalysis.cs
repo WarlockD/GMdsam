@@ -252,6 +252,9 @@ namespace betteribttest.Dissasembler
                     case GMCode.B:
                         expr = new ILExpression(GMCode.B, ConvertLabel(i.Operand as Label));
                         break;
+                    case GMCode.Ret:
+                        expr = new ILExpression(code, null, new ILExpression(GMCode.Pop, null));
+                        break;
                     case GMCode.Bt:
                     case GMCode.Bf: 
                          expr = new ILExpression(code, ConvertLabel(i.Operand as Label), new ILExpression(GMCode.Pop, null));
@@ -273,112 +276,7 @@ namespace betteribttest.Dissasembler
             return nodes;
         }
   
-        public bool MatchDupPatern(int start, List<ILNode> nodes)
-        {
-            /* Pattern is
-                Push instance
-                Push arrayIndex
-                Dup 1 // I THINK this copys the entire stack
-                %POP%.msg[%POP%] = %POP%.msg[%POP%] + something
-                I beleve this can be rolled into the assignAdd code
-            */
-            do
-            {
-                int index = start;
-                IList<ILExpression> args;
-                if (!nodes[index--].Match(GMCode.Assign, out args)) break; // try to match a assign first
-                int dupCount;
-                if (!nodes.ElementAtOrDefault(index--).Match(GMCode.Dup, out dupCount)) break;
-                Debug.Assert(dupCount == 0 || dupCount == 1); // only seen these two
-                ILExpression instance = null;
-                ILExpression arrayIndex = null;
-
-                if (!nodes.ElementAtOrDefault(index).Match(GMCode.Push, out instance)) break; // we need this push
-                if (dupCount == 1)
-                {
-                    arrayIndex = instance; // first push was index
-                    if (!nodes.ElementAtOrDefault(--index).Match(GMCode.Push, out instance)) break; // we need this push for index
-                } else // its a simple vairable, not an index
-              //  Debug.Assert(dupCount == 1);
-                instance = context.InstanceToExpression(instance); // try to resolve the instance
-                // We got all we needed, lets check the assignment
-                Debug.Assert(args[0].Code == GMCode.Var); // sanity check
-                // Need to make copies so the parrents are all happy
-                args[0].Arguments.Add(new ILExpression(instance));
-                if (arrayIndex != null) args[0].Arguments.Add(new ILExpression(arrayIndex));
-                // now the left hand of the expresson for assgment
-                args[1].Arguments[0].Arguments.Add(new ILExpression(instance));
-                if (arrayIndex != null) args[1].Arguments[0].Arguments.Add(new ILExpression(arrayIndex));
-                // DONE! lets clean up being sure not to remove the assign we just modified
-                nodes.RemoveRange(index, start - index);
-                return true;
-            } while (false);
-            return false;
-        }
-        // match all function calls that ignore the return and remove the popz
-        // also, to save on looping we also throw if there are any dup's left
-        // this much be run at the end
-        public bool FixPopZandCheckDUP(int start, List<ILNode> nodes)
-        {
-            do
-            {
-               // if (nodes[start].Match(GMCode.Dup) &&) throw new Exception("We Missed a Dup");
-                if (!nodes[start].Match(GMCode.Call) 
-                     || !nodes.ElementAtOrDefault(start + 1).Match(GMCode.Popz)) break;
-                nodes.RemoveAt(start+1); // remove it
-                return true;
-            } while (false);
-            return false;
-        }
-        // We try to resolve simple push enviroments here
-        public bool SimplfyPushEnviroments(int start, List<ILNode> nodes)
-        {
-            /* A simple push envorment is
-                // pushenv object
-                // single statement, var assign or call
-                // pop L393
-                // L393:
-                We don't want to remove the label as it might be used by other things
-                This will simplify graph making as the only time the graph will care
-                Is when the pop enviroment breaks
-                Be sure to run all the optimziers first BEFORE this or put this in a big loop
-                till eveything is fixed and optimized
-            */
-            do
-            {
-                ILExpression pushEnv = nodes[start] as ILExpression; // make sure its resolved and a push
-                if (pushEnv == null || pushEnv.Code != GMCode.Pushenv || pushEnv.Arguments[0].Code == GMCode.Pop) break;
-                ILExpression popEnv = nodes.ElementAtOrDefault(start+2) as ILExpression;
-                ILBlock block = new ILBlock();
-                int index = start+1;
-                bool nope = false;
-                while ((popEnv = nodes.ElementAtOrDefault(index++) as ILExpression) != null) {
-                    Debug.Assert(popEnv.Code != GMCode.Pushenv); // ugh, this will be annoying if I run into it
-                    if (popEnv.Code == GMCode.Popenv) break;
-                    else if(popEnv.IsBranch()) { nope = true; break; }
-                    else block.Body.Add(popEnv);
-                }
-                if (popEnv == null || nope) break; // There are labels and/or ifstatements in here
-                Debug.Assert((popEnv.Operand as ILLabel) == (pushEnv.Operand as ILLabel)); // they should exit the same
-                nodes[start] = new ILWithStatement() { Enviroment = pushEnv.Arguments[0], Body = block };
-                int count = index - start - 1;
-                nodes.RemoveRange(start + 1, count);
-                return true; 
-                // we will want to remove the extra label statements that arn't used as well
-                // but that princess is in another castle
-
-            } while (false);
-            return false;
-        }
-        public void DoPattern<T>(List<T> nodes, Func<int, List<T>, bool> pred) where T : ILNode
-        {
-            bool modified;
-            do
-            {
-                modified = false;
-                for (int i = 0; i < nodes.Count; i++) modified |= pred(i, nodes);
-            } while (modified);
-        }
+    
         void FlattenBasicBlocks(ILNode node)
         {
             ILBlock block = node as ILBlock;
@@ -479,6 +377,7 @@ namespace betteribttest.Dissasembler
 
             ILBlock method = new ILBlock();
             method.Body = ast;
+            method.DebugSave("raw_body.txt");
             betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
             foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
                 Optimize.SplitToBasicBlocks(block);
@@ -502,7 +401,7 @@ namespace betteribttest.Dissasembler
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
                 } while (modified);
             }
-
+            method.DebugSave("basic_blocks3.txt");
 
 #else
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
@@ -524,7 +423,6 @@ namespace betteribttest.Dissasembler
                 } while (modified);
             }
 #endif
-            method.DebugSave("basic_blocks_nice.txt");
             method.DebugSave("before_loop.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
@@ -541,6 +439,7 @@ namespace betteribttest.Dissasembler
             Optimize.RemoveRedundantCode(method);
             new GotoRemoval().RemoveGotos(method);
             Optimize.RemoveRedundantCode(method);
+          //  Debug.Assert(context.CurrentScript != "gml_Script_scr_phonename");
             new GotoRemoval().RemoveGotos(method);
             //List<ByteCode> body = StackAnalysis(method);
             GotoRemoval.RemoveRedundantCode(method);

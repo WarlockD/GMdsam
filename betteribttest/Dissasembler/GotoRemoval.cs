@@ -50,7 +50,7 @@ namespace betteribttest.Dissasembler
         {
             // Remove dead lables and nops
             HashSet<ILLabel> liveLabels = new HashSet<ILLabel>(method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()));
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+           foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 block.Body = block.Body.Where(n => !n.Match(GMCode.BadOp) && !(n is ILLabel && !liveLabels.Contains((ILLabel)n))).ToList();
             }
@@ -91,6 +91,7 @@ namespace betteribttest.Dissasembler
                         }
                     }
                 }
+                // fix case block
 
                 var defaultCase = ilSwitch.CaseBlocks.SingleOrDefault(cb => cb.Values == null);
                 // If there is no default block, remove empty case blocks
@@ -98,6 +99,7 @@ namespace betteribttest.Dissasembler
                 {
                     ilSwitch.CaseBlocks.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
                 }
+
             }
 
             // Remove redundant return at the end of method

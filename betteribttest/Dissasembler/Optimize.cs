@@ -183,7 +183,6 @@ namespace betteribttest.Dissasembler
                 for (int i = 0; i < body.Count; i++)
                 {
                     ILLabel target;
-                    ILExpression popExpr;
                     if (body[i].Match(GMCode.B, out target) && i + 1 < body.Count && body[i + 1] == target)
                     {
                         // Ignore the branch
@@ -193,10 +192,6 @@ namespace betteribttest.Dissasembler
                     else if (body[i].Match(GMCode.BadOp))
                     {
                         // Ignore nop
-                    }
-                    else if (body[i].Match(GMCode.Pop, out popExpr))
-                    {
-                        foreach (var t in popExpr.Arguments) if (t.Code == GMCode.Pop) throw new Exception("We should have NO pop expresions insde of a pop expression");
                     }
                     else {
                         ILLabel label = body[i] as ILLabel;

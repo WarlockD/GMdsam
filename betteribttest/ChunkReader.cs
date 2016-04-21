@@ -892,24 +892,38 @@ namespace betteribttest
         {
             foreach (GMK_Code c in codeList)
             {
-                System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
                 ChunkStream ms = getReturnStream();
                 yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
             }
         }
-        public IEnumerable<CodeData> GetObjectCode(ref string objectName)
+        public IEnumerable<CodeData> GetCodeStreams(string search)
         {
-            objectName = objectName.ToLower();
-            if (objectName.IndexOf("obj_") != 0) objectName = "obj_" + objectName;
-            var lookup = this.nameMap[objectName] as GMK_Object;
-            var list = GetCodeStreams(lookup.Name).ToList();
-            return list;
+            foreach (GMK_Code c in codeList.Where(x => x.Name.Contains(search)))
+            {
+                ChunkStream ms = getReturnStream();
+                yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
+            }
+        }
+        // silly wrapper
+        public IEnumerable<CodeData> GetAllScripts()
+        {
+            return GetCodeStreams("gml_Script");
         }
         public class ObjectCodeReturn
         {
             public List<CodeData> Streams;
             public string ObjectName;
         }
+        public IEnumerable<CodeData> GetObjectCode(ref string objectName)
+        {
+            objectName = objectName.ToLower();
+            if (objectName.IndexOf("obj_") != 0) objectName = "obj_" + objectName;
+            GMK_Data lookup;
+            if (!nameMap.TryGetValue(objectName, out lookup)) return new List<CodeData>();
+            //GMK_Object obj = lookup as GMK_Object;
+            return GetCodeStreams(lookup.Name).ToList();
+        }
+      
         public IEnumerable<ObjectCodeReturn> GetAllObjectCode()
         {
             foreach(GMK_Object o in nameMap.Values.OfType<GMK_Object>())
@@ -921,19 +935,7 @@ namespace betteribttest
                 yield return ret;
             }
         }
-        public IEnumerable<CodeData> GetCodeStreams(string code_name)
-        {
-            foreach (GMK_Code c in codeList)
-            {
-                if (c.Name.ToLower().IndexOf(code_name) != -1)
-                {
-                    System.Diagnostics.Debug.WriteLine("Processing script {0}", c.Name);
-                    //System.Diagnostics.Debug.Assert("gml_Object_obj_finalfroggit_Alarm_6" != c.Name);
-                    ChunkStream ms = getReturnStream();
-                    yield return new CodeData() { ScriptName= c.Name, stream= new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
-                }
-            }
-        }
+      
         void doSCPT(int chunkStart, int chunkLimit)
         {
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);

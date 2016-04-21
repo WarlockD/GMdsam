@@ -132,66 +132,7 @@ namespace betteribttest.Dissasembler
             return new ControlFlowGraph(cfNodes.ToArray());
         }
 
-
-        List<ILNode> FindWiths(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
-        {
-            List<ILNode> result = new List<ILNode>();
-
-            // Do not modify entry data
-            scope = new HashSet<ControlFlowNode>(scope);
-            Queue<ControlFlowNode> agenda = new Queue<ControlFlowNode>();
-            agenda.Enqueue(entryPoint);
-            while (agenda.Count > 0)
-            {
-                ControlFlowNode node = agenda.Dequeue();
-                // Find a block that represents a simple condition
-                if (scope.Contains(node))
-                {
-                    ILBasicBlock head = (ILBasicBlock)node.UserData;
-                    ILLabel pushlabel;
-                    ILLabel nextLabel;
-                    if (head.MatchLastAndBr(GMCode.Popenv, out pushlabel, out nextLabel) &&
-                        pushlabel == nextLabel // This is not a break
-                        )
-                    {
-                        scope.RemoveOrThrow(node);
-                        // alright we do this like we did the simple
-                        ILExpression popExpression = head.Body[head.Body.Count - 2] as ILExpression;
-                       
-                        Stack<ILNode> pushExpresions = new Stack<ILNode>(); // have to reverse the order
-                        int i;
-                        ILExpression e = null;
-                        for (i = head.Body.Count - 3; i >= 0; i--)
-                        {
-                            ILNode n = head.Body[i];
-                            Debug.Assert(!(n is ILLabel)); // We need to handle a break then
-                            e = n as ILExpression;
-                            if (e != null && e.Code == GMCode.Pushenv) break;
-                            pushExpresions.Push(n);
-                        }
-                        ILWithStatement stmt = new ILWithStatement();
-                        stmt.Enviroment = e.Arguments[0];
-                        foreach (var f in pushExpresions) { stmt.Body.Body.Add(f); head.Body.Remove(f); }
-                        head.Body.Remove(popExpression);
-                        head.Body[i] = stmt;
-                        e.Code = GMCode.SimplePushenv;                        
-                    }
-                }
-                // Using the dominator tree should ensure we find the the widest loop first
-                foreach (var child in node.DominatorTreeChildren)
-                {
-                    agenda.Enqueue(child);
-                }
-            }
-
-            // Add whatever is left
-            foreach (var node in scope)
-            {
-                result.Add((ILNode)node.UserData);
-            }
-
-            return result;
-        }
+        
             List<ILNode> FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
         {
             List<ILNode> result = new List<ILNode>();
@@ -417,7 +358,10 @@ namespace betteribttest.Dissasembler
                                         });
                                     }
                                 }
-                                caseBlock.Values.Add(cases[i].Arguments[0]);
+                                if (cases[i].Code != GMCode.DefaultCase)
+                                    caseBlock.Values.Add(cases[i].Arguments[0]);
+                                else
+                                    caseBlock.Values.Add(new ILExpression(GMCode.DefaultCase, null));
                             }
 
                             // Heuristis to determine if we want to use fallthough as default case

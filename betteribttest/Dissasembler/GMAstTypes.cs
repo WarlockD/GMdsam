@@ -500,7 +500,8 @@ namespace betteribttest.Dissasembler
         }
         void WriteOperand(ITextOutput output,bool escapeString=true)
         {
-            if (Operand is ILLabel) output.Write((Operand as ILLabel).Name);
+            if (Operand == null) output.Write("%NULL_OPERAND%");
+            else if (Operand is ILLabel) output.Write((Operand as ILLabel).Name);
             else if (escapeString)
             {
                 if (Operand is string)
@@ -591,8 +592,15 @@ namespace betteribttest.Dissasembler
 
                         break;
                     case GMCode.Pop:
-                        output.Write("Pop: ");
-                        WriteOperand(output, false);// generic, string name
+                        if(Operand == null) output.Write(POPDefaultString);
+                        else {
+                            output.Write("Pop(");
+                            WriteOperand(output, false);// generic, string name
+                            output.Write(" = ");
+                            output.Write(POPDefaultString);
+                            output.Write(")");
+                        }
+                        
                         break;
                     case GMCode.Assign:
                         WriteArgumentOrPop(output, 0, false);
@@ -667,6 +675,10 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.LoopContinue:
                         output.Write("continue");
+                        break;
+                    case GMCode.DefaultCase:
+                        output.Write("default: goto ");
+                        WriteOperand(output);
                         break;
                     case GMCode.Case:
                         output.Write("case ");

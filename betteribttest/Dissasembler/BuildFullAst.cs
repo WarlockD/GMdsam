@@ -11,6 +11,7 @@ namespace betteribttest.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
+        
         GMContext context;
         ILBlock method;
         //  TypeSystem typeSystem;
@@ -31,6 +32,18 @@ namespace betteribttest.Dissasembler
                 {
                     labelToBasicBlock[label] = bb;
                 }
+            }
+        }
+        Dictionary<ILLabel, ILBasicBlock> labelToNextBlock;
+        void BuildNextBlockData()
+        {
+            labelToNextBlock = new Dictionary<ILLabel, ILBasicBlock>();
+            for(int i=0;i < method.Body.Count-1; i++)
+            {
+                ILBasicBlock bb = method.Body[i] as ILBasicBlock;
+                ILBasicBlock next = method.Body[i+1] as ILBasicBlock;
+                ILLabel label = (bb.Body.First() as ILLabel);
+                labelToNextBlock[label] = next;
             }
         }
         void ProcessVar(ILVariable v, Stack<ILNode> stack)
@@ -155,7 +168,8 @@ namespace betteribttest.Dissasembler
                     {
                         if (stack.Count == 0)
                         {
-                            Debug.Assert(false);
+                            list.Add(e);
+                          //  Debug.Assert(false);
                             return Status.ChangedAdded;
                         }
                         else
@@ -172,10 +186,15 @@ namespace betteribttest.Dissasembler
                     }
                 case GMCode.Bf:
                 case GMCode.Bt:
+                case GMCode.Ret:
                     if (stack.Count > 0)
                     {
-                        Debug.Assert(stack.Count == 1);
+                       // Debug.Assert(stack.Count == 1);
                         e.Arguments[0] = NodeToExpresion(stack.Pop());
+                        if(stack.Count >0)
+                        {
+                            foreach (var n in stack) list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(n)));
+                        }
                         list.Add(e);
                         return Status.ChangedAdded;
                     } else
@@ -183,16 +202,11 @@ namespace betteribttest.Dissasembler
                         list.Add(e);
                         return Status.NoChangeAdded;
                     }
-                case GMCode.Ret:
                 case GMCode.B:
                 case GMCode.Exit:
                     if (stack.Count > 0)
                     {
                         foreach (var n in stack) list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(n)));
-
-                        // we should only have ONE item left on the stack per block, and thats in wierd tertory shorts
-                        Debug.Assert(stack.Count == 1);
-                        // be sure to push eveything on the block first do be handled ladder 
                     }
                     list.Add(e);
                     return Status.ChangedAdded;
@@ -215,7 +229,13 @@ namespace betteribttest.Dissasembler
                     if (e.Code.isExpression())
                     {
                         for (int j = 0; j < e.Code.GetPopDelta(); j++)
-                            e.Arguments.Add(NodeToExpresion(stack.Pop()));
+                        {
+                            if (stack.Count > 0)
+                                e.Arguments.Add(NodeToExpresion(stack.Pop()));
+                            else
+                                e.Arguments.Add(new ILExpression(GMCode.Pop, null));
+                        }
+                            
                         e.Arguments.Reverse(); // till I fix it latter, sigh
                         stack.Push(e); // push expressions back
                         return Status.AddedToStack;
@@ -257,6 +277,7 @@ namespace betteribttest.Dissasembler
                     head.MatchAt(i + 3, GMCode.Bt))
                 {
                     // we are in a case block, check if its the first block
+
                     List<ILBasicBlock> caseBlocks = new List<ILBasicBlock>();
                     List<ILLabel> caseLabels = new List<ILLabel>();
                     ILExpression switchExpression = new ILExpression(GMCode.Switch, null);
@@ -275,22 +296,50 @@ namespace betteribttest.Dissasembler
                         body.Remove(current);
                         current = labelToBasicBlock[nextCase];
                     }
-                    body.Insert(0, head);
-                    switchExpression.Operand = caseLabels.ToArray();
+                    body.Insert(pos, head);
+
+                    var lastBlock = current;
+
+
                     ILLabel fallLabel;
-                    if (!current.MatchSingle(GMCode.B, out fallLabel)) throw new Exception("fix");
+                    if (!lastBlock.MatchSingle(GMCode.B, out fallLabel)) throw new Exception("fix");
+                    current = labelToBasicBlock[fallLabel];
+                    if (!current.MatchAt(1, GMCode.Popz))
+                    { // has a default case
+                      // Side note, the LoopAndConditions figures out if we have a default case by checking
+                      // if the ending branch is linked to all the other case branches
+                      // so we don't need to do anything here
+                      // All this code is JUST for finding that popz that pops the condition out of the switch
+                      // if you don't care about it, you could just search though all the expresions and remove any and all
+                      // popz's  I am beggining to think this is the right way to do it as I don't see any other uses
+                      // of popz's
+                      //  Debug.Assert(false);
+                        BuildNextBlockData(); // build block chain, we need this for default and mabye case lookups
+                                              // ok, this is why we DON'T want to remove redundent code as there is this empty
+                                              // useless goto RIGHt after this that has the link to the finale case
+                        ILLabel nextBlockLabel = lastBlock.Body.First() as ILLabel;
+                        var uselessBlock = this.labelToNextBlock[nextBlockLabel];
+                        ILLabel newFallLabel;
+                        if (!uselessBlock.MatchSingle(GMCode.B, out newFallLabel)) throw new Exception("fix");
+                        current = labelToBasicBlock[newFallLabel];
+
+                        if (!current.MatchAt(1, GMCode.Popz)) throw new Exception("I have no idea where the popz is for this switch");
+                    }
+                    current.Body.RemoveAt(1);
+                    ILLabel lastBlockLabel = lastBlock.Body.First() as ILLabel;
+                    if (this.labelGlobalRefCount[lastBlockLabel] == 1) body.Remove(lastBlockLabel);
+                    switchExpression.Operand = caseLabels.ToArray();
+
                     list.Add(switchExpression);
                     list.Add(new ILExpression(GMCode.B, fallLabel));
-                    current = labelToBasicBlock[fallLabel];
-                    if (!current.MatchAt(1, GMCode.Popz)) throw new Exception("fix");
-                    current.Body.RemoveAt(1); // remove the pop z
+
 
                     break; // we are done with this block
                 }
                 else
                 {
-                    Status s = ProcessExpression(list,head, i, stack);
-                    
+                    Status s = ProcessExpression(list, head, i, stack);
+
                 }
             }
         

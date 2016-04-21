@@ -75,9 +75,7 @@ namespace betteribttest
         Case = 0xfa,
         Constant = 0xfb, 
         Assign,
-        // filler used when a push is VERY simple, no breaks
-        // it makes the graph builder not puke as much
-        SimplePushenv, 
+        DefaultCase,
     }
     public static class GMCodeUtil
     {

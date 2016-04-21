@@ -12,6 +12,7 @@ namespace betteribttest
         public ChunkReader cr;
         public List<string> InstanceList;
         public List<string> scriptList;
+        public string CurrentScript = null;
         public string LookupString(int index, bool escape = false)
         {
             index &= 0x1FFFFF;
