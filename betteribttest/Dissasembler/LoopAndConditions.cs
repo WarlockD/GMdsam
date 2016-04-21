@@ -159,7 +159,8 @@ namespace betteribttest.Dissasembler
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchSingleAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) || 
+                    if (basicBlock.MatchSingleAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
+                      //  basicBlock.MatchSingleAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
                         basicBlock.MatchSingleAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel)) // built it the same way
                     {
                         bool ispushEnv = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code == GMCode.Pushenv; 

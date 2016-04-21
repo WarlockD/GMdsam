@@ -192,6 +192,7 @@ namespace betteribttest.Dissasembler
                     else if (body[i].Match(GMCode.BadOp))
                     {
                         // Ignore nop
+                        
                     }
                     else {
                         ILLabel label = body[i] as ILLabel;

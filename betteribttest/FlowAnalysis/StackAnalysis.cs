@@ -377,15 +377,14 @@ namespace betteribttest.Dissasembler
 
             ILBlock method = new ILBlock();
             method.Body = ast;
-            method.DebugSave("raw_body.txt");
+            if (context.Debug) method.DebugSave("raw_body.txt");
             betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
             foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
                 Optimize.SplitToBasicBlocks(block);
-#if DEBUG
-            //   DebugBasicBlocks(method);
-            method.DebugSave("basic_blocks.txt");
+            if(context.Debug) method.DebugSave("basic_blocks.txt");
+  
             new BuildFullAst(method, context).ProcessAllExpressions(method);
-            method.DebugSave("basic_blocks2.txt");
+            if(context.Debug) method.DebugSave("basic_blocks2.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 bool modified;
@@ -401,52 +400,29 @@ namespace betteribttest.Dissasembler
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
                 } while (modified);
             }
-            method.DebugSave("basic_blocks3.txt");
-
-#else
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
-            {
-                bool modified;
-                do
-                {
-                    modified = false;
-            
-                   // modified |= block.RunOptimization(new SimpleControlFlow(method, context).SwitchDetection);
-                    modified |= block.RunOptimization(ProcessExpressions);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).PushEnviromentFix);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
-
-
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
-                    modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
-                } while (modified);
-            }
-#endif
-            method.DebugSave("before_loop.txt");
+            if (context.Debug) method.DebugSave("before_loop.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions().FindLoops(block);
             }
-            method.DebugSave("before_conditions.txt");
+            if (context.Debug) method.DebugSave("before_conditions.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions().FindConditions(block);
             }
 
             FlattenBasicBlocks(method);
-            method.DebugSave("before_gotos.txt");
+            if (context.Debug) method.DebugSave("before_gotos.txt");
             Optimize.RemoveRedundantCode(method);
             new GotoRemoval().RemoveGotos(method);
             Optimize.RemoveRedundantCode(method);
-          //  Debug.Assert(context.CurrentScript != "gml_Script_scr_phonename");
+
             new GotoRemoval().RemoveGotos(method);
-            //List<ByteCode> body = StackAnalysis(method);
+
             GotoRemoval.RemoveRedundantCode(method);
+            new GotoRemoval().RemoveGotos(method);
 
-            // We don't have a fancy
-
-
+            if (context.Debug) method.DebugSave("final.cpp");
             return method;
 
         }

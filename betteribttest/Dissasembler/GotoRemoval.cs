@@ -48,11 +48,11 @@ namespace betteribttest.Dissasembler
 
         public static void RemoveRedundantCode(ILBlock method)
         {
-            // Remove dead lables and nops
+            // Remove dead lables and nops and any popzs left
             HashSet<ILLabel> liveLabels = new HashSet<ILLabel>(method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()));
            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                block.Body = block.Body.Where(n => !n.Match(GMCode.BadOp) && !(n is ILLabel && !liveLabels.Contains((ILLabel)n))).ToList();
+                block.Body = block.Body.Where(n => !n.Match(GMCode.BadOp) && !n.Match(GMCode.Popz) && !(n is ILLabel && !liveLabels.Contains((ILLabel)n))).ToList();
             }
 
             // Remove redundant continue
@@ -101,7 +101,7 @@ namespace betteribttest.Dissasembler
                 }
 
             }
-
+ 
             // Remove redundant return at the end of method
             if (method.Body.Count > 0 && (method.Body.Last().Match(GMCode.Ret)|| method.Body.Last().Match(GMCode.Exit) )&& ((ILExpression)method.Body.Last()).Arguments.Count == 0)
             {

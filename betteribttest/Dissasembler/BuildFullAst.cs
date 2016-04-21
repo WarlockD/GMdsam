@@ -11,7 +11,7 @@ namespace betteribttest.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
-        
+
         GMContext context;
         ILBlock method;
         //  TypeSystem typeSystem;
@@ -38,10 +38,10 @@ namespace betteribttest.Dissasembler
         void BuildNextBlockData()
         {
             labelToNextBlock = new Dictionary<ILLabel, ILBasicBlock>();
-            for(int i=0;i < method.Body.Count-1; i++)
+            for (int i = 0; i < method.Body.Count - 1; i++)
             {
                 ILBasicBlock bb = method.Body[i] as ILBasicBlock;
-                ILBasicBlock next = method.Body[i+1] as ILBasicBlock;
+                ILBasicBlock next = method.Body[i + 1] as ILBasicBlock;
                 ILLabel label = (bb.Body.First() as ILLabel);
                 labelToNextBlock[label] = next;
             }
@@ -56,7 +56,7 @@ namespace betteribttest.Dissasembler
             if (v.isArray) v.Index = stack.Pop();  // get the index first
             v.Instance = stack.Pop(); // get the instance
             value = v.Instance as ILValue;
-            if(value != null && value.Value is int)
+            if (value != null && value.Value is int)
             {
                 v.InstanceName = context.InstanceToString((int)value);
             }
@@ -93,13 +93,13 @@ namespace betteribttest.Dissasembler
                 Debug.Assert(list.Count == 0);
             }
         }
-      
+
         enum Status
         {
             DetectedPosableCase,
             NoChangeAdded,
             ChangedAdded,
-            AddedToStack,  
+            AddedToStack,
             DupStack0,
             DupStack1
         }
@@ -119,7 +119,7 @@ namespace betteribttest.Dissasembler
                 case GMCode.Push:
                     tempValue = e.Operand as ILValue;
                     tempVar = e.Operand as ILVariable;
-                    if (tempValue != null)stack.Push(tempValue);
+                    if (tempValue != null) stack.Push(tempValue);
                     else if (tempVar != null)
                     {
                         ProcessVar(tempVar, stack);
@@ -136,15 +136,15 @@ namespace betteribttest.Dissasembler
                         tempVar = e.Operand as ILVariable;
                         Debug.Assert(tempVar != null);
                         ILExpression expr = null;
-                        if(Dup1Seen) expr=  NodeToExpresion(stack.Pop()); // have to swap the assignment if a dup 1 was done
+                        if (Dup1Seen) expr = NodeToExpresion(stack.Pop()); // have to swap the assignment if a dup 1 was done
                         ProcessVar(tempVar, stack);
                         e.Code = GMCode.Assign;
                         e.Operand = null;
                         e.Arguments.Add(NodeToExpresion(tempVar));
-                        if(!Dup1Seen) expr = NodeToExpresion(stack.Pop());
+                        if (!Dup1Seen) expr = NodeToExpresion(stack.Pop());
                         e.Arguments.Add(expr);
 
-                   
+
                         list.Add(e);
                         return Status.ChangedAdded;
                     }
@@ -169,7 +169,7 @@ namespace betteribttest.Dissasembler
                         if (stack.Count == 0)
                         {
                             list.Add(e);
-                          //  Debug.Assert(false);
+                            //  Debug.Assert(false);
                             return Status.ChangedAdded;
                         }
                         else
@@ -189,15 +189,16 @@ namespace betteribttest.Dissasembler
                 case GMCode.Ret:
                     if (stack.Count > 0)
                     {
-                       // Debug.Assert(stack.Count == 1);
+                        // Debug.Assert(stack.Count == 1);
                         e.Arguments[0] = NodeToExpresion(stack.Pop());
-                        if(stack.Count >0)
+                        if (stack.Count > 0)
                         {
                             foreach (var n in stack) list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(n)));
                         }
                         list.Add(e);
                         return Status.ChangedAdded;
-                    } else
+                    }
+                    else
                     {
                         list.Add(e);
                         return Status.NoChangeAdded;
@@ -224,7 +225,7 @@ namespace betteribttest.Dissasembler
                         Dup1Seen = true; // usally this is on an assignment += -= of an array or such
                         return Status.DupStack1;
                     }
-                    
+
                 default: // ok we handle an expression
                     if (e.Code.isExpression())
                     {
@@ -235,11 +236,12 @@ namespace betteribttest.Dissasembler
                             else
                                 e.Arguments.Add(new ILExpression(GMCode.Pop, null));
                         }
-                            
+
                         e.Arguments.Reverse(); // till I fix it latter, sigh
                         stack.Push(e); // push expressions back
                         return Status.AddedToStack;
-                    } else
+                    }
+                    else
                     {
                         list.Add(e);
                         return Status.NoChangeAdded;
@@ -262,12 +264,153 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
+        void CreateSwitchExpresion(ILNode condition, List<ILNode> list, List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            // we are in a case block, check if its the first block
 
+            List<ILBasicBlock> caseBlocks = new List<ILBasicBlock>();
+            List<ILLabel> caseLabels = new List<ILLabel>();
+            ILExpression switchExpression = new ILExpression(GMCode.Switch, null);
+            switchExpression.Arguments.Add(NodeToExpresion(condition)); // pop the switch condition
+            ILBasicBlock current = head;
+            ILLabel nextCase;
+            ILLabel caseTrue;
+            ILExpression fakeArgument;
+            while (current.MatchLastAndBr(GMCode.Bt, out caseTrue, out fakeArgument, out nextCase))
+            {
+                ILNode operand;
+                if (!current.MatchAt(current.Body.Count - 4, GMCode.Push, out operand)) throw new Exception("fix");
+                if (!(operand is ILValue)) throw new Exception("Can only handle constants right now");
+                switchExpression.Arguments.Add(new ILExpression(GMCode.Case, caseTrue, NodeToExpresion(operand)));
+                caseLabels.Add(caseTrue);
+                body.Remove(current);
+                current = labelToBasicBlock[nextCase];
+            }
+            body.Insert(pos, head);
+
+            var lastBlock = current;
+
+
+            ILLabel fallLabel;
+            if (!lastBlock.MatchSingle(GMCode.B, out fallLabel)) throw new Exception("fix");
+            current = labelToBasicBlock[fallLabel];
+            if (!current.MatchAt(1, GMCode.Popz))
+            { // has a default case
+              // Side note, the LoopAndConditions figures out if we have a default case by checking
+              // if the ending branch is linked to all the other case branches
+              // so we don't need to do anything here
+              // All this code is JUST for finding that popz that pops the condition out of the switch
+              // if you don't care about it, you could just search though all the expresions and remove any and all
+              // popz's  I am beggining to think this is the right way to do it as I don't see any other uses
+              // of popz's
+              //  Debug.Assert(false);
+                BuildNextBlockData(); // build block chain, we need this for default and mabye case lookups
+                                      // ok, this is why we DON'T want to remove redundent code as there is this empty
+                                      // useless goto RIGHt after this that has the link to the finale case
+                ILLabel nextBlockLabel = lastBlock.Body.First() as ILLabel;
+                var uselessBlock = this.labelToNextBlock[nextBlockLabel];
+                ILLabel newFallLabel;
+                if (!uselessBlock.MatchSingle(GMCode.B, out newFallLabel)) throw new Exception("fix");
+                current = labelToBasicBlock[newFallLabel];
+
+                if (!current.MatchAt(1, GMCode.Popz)) throw new Exception("I have no idea where the popz is for this switch");
+            }
+            current.Body.RemoveAt(1);
+            ILLabel lastBlockLabel = lastBlock.Body.First() as ILLabel;
+            if (this.labelGlobalRefCount[lastBlockLabel] == 1) body.Remove(lastBlockLabel);
+            switchExpression.Operand = caseLabels.ToArray();
+
+            list.Add(switchExpression);
+            list.Add(new ILExpression(GMCode.B, fallLabel));
+        }
+        int generated_var_count = 0;
+        int loop_junk_block = 0;
+        ILVariable NewGeneratedVar()
+        {
+            return new ILVariable() { Name = "gen_" + generated_var_count++, Instance = new ILValue(-1), InstanceName = "self", isResolved = true };
+        }
+        ILLabel NewJunkLoop()
+        {
+            return new ILLabel() { Name = "gen_block_" + loop_junk_block++ };
+        }
+        void TestAndFixWierdLoop(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            object uvalue1;
+            ILValue value2;
+            ILLabel endLoop;
+            ILLabel startLoop;
+            ILExpression filler;
+            //Debug.Assert((head.Body[0] as ILLabel).Name != "L36");
+            // Wierd one here.  I ran accross this a few times and I think this is generated code
+            // for events.  Basicly, it pushes a constant on the stack and uses a repeat loop
+            // however since I am not doing ANY kind of real stack/temporary analysis.  I would have
+            // to rewrite and add a bunch of code to get that to work and right now its only a few functions
+            // Its easyer to build a while loop out of it and let the decompiler handle it rather than 
+            // build a more robust stack anilizer
+            // ugh have to make a new block for it too, meh
+            int headLen = head.Body.Count;
+            if (head.MatchAt(headLen - 6, GMCode.Push, out uvalue1) &&
+                head.MatchAt(headLen - 5, GMCode.Dup) &&
+                head.MatchAt(headLen - 4, GMCode.Push, out value2) &&
+
+                head.MatchAt(headLen-3, GMCode.Sle) &&
+                head.MatchLastAndBr(GMCode.Bt, out endLoop, out filler, out startLoop))
+            {
+                // ok, lets rewrite the head so it makes sence
+                ILLabel newLoopStart = NewJunkLoop();
+                ILVariable genVar = NewGeneratedVar();
+                List<ILNode> newHead = new List<ILNode>();
+                for (int ii = 0; ii <= headLen - 7; ii++) newHead.Add(head.Body[ii]); // add the front of it including the sub part
+                newHead.Add(new ILExpression(GMCode.Push, uvalue1));
+                newHead.Add(new ILExpression(GMCode.Pop, genVar));
+                newHead.Add(new ILExpression(GMCode.B, newLoopStart));
+                ILBasicBlock newLoopBlock = new ILBasicBlock();
+                newLoopBlock.Body.Add(newLoopStart);
+                newLoopBlock.Body.Add(new ILExpression(GMCode.Push, genVar));
+                newLoopBlock.Body.Add(new ILExpression(GMCode.Push, new ILValue(0))); 
+               
+                newLoopBlock.Body.Add(new ILExpression(GMCode.Sgt,null));
+                newLoopBlock.Body.Add(new ILExpression(GMCode.Bf, endLoop, new ILExpression(GMCode.Pop, null)));
+                newLoopBlock.Body.Add(new ILExpression(GMCode.B, startLoop));
+                head.Body = newHead;
+                body.Add(newLoopBlock);
+                // Now the hard part, we have to find the end bit
+                for (int j = pos; j < body.Count; j++)
+                {
+                    ILBasicBlock bj = body[j] as ILBasicBlock;
+                    ILLabel testEnd, testStart;
+                    ILValue subPart;
+                    int len = bj.Body.Count;
+                //    Debug.Assert((bj.Body[0] as ILLabel).Name != "L114");
+                    if (bj.MatchLastAndBr(GMCode.Bt, out testStart, out filler, out testEnd) &&
+                        testEnd == endLoop && testStart == startLoop &&
+                        bj.MatchAt(len - 3, GMCode.Dup) &&
+                        bj.MatchAt(len - 4, GMCode.Sub) &&
+                        bj.MatchAt(len - 5, GMCode.Push, out subPart)
+                        )
+                    {
+                        List<ILNode> list2 = new List<ILNode>();
+                        for (int ii = 0; ii <= len - 6; ii++) list2.Add(bj.Body[ii]); // add the front of it including the sub part
+                        list2.Add(new ILExpression(GMCode.Push, genVar));
+                        list2.Add(bj.Body[len - 5]); // add the sub part
+                        list2.Add(bj.Body[len - 4]); // add the sub part
+                        list2.Add(new ILExpression(GMCode.Pop, genVar)); // assign it
+                        list2.Add(new ILExpression(GMCode.B, newLoopStart)); // branch back to the start
+                        bj.Body = list2; // replace
+                        break; // all done, let it continue
+                    }
+                }
+              //  Debug.Assert(false); // coudln't find the end block
+            }
+        }
         void ProcessExpressions(List<ILNode> body, ILBasicBlock head, int pos)
         {
             Stack<ILNode> stack = new Stack<ILNode>();
             List<ILNode> list = new List<ILNode>();
             Dup1Seen = false;
+            TestAndFixWierdLoop(body, head, pos);
+
+
             for (int i = 0; i < head.Body.Count; i++)
             {
                 if (stack.Count == 1 &&
@@ -276,62 +419,7 @@ namespace betteribttest.Dissasembler
                     head.MatchAt(i + 2, GMCode.Seq) &&
                     head.MatchAt(i + 3, GMCode.Bt))
                 {
-                    // we are in a case block, check if its the first block
-
-                    List<ILBasicBlock> caseBlocks = new List<ILBasicBlock>();
-                    List<ILLabel> caseLabels = new List<ILLabel>();
-                    ILExpression switchExpression = new ILExpression(GMCode.Switch, null);
-                    switchExpression.Arguments.Add(NodeToExpresion(stack.Pop())); // pop the switch condition
-                    ILBasicBlock current = head;
-                    ILLabel nextCase;
-                    ILLabel caseTrue;
-                    ILExpression fakeArgument;
-                    while (current.MatchLastAndBr(GMCode.Bt, out caseTrue, out fakeArgument, out nextCase))
-                    {
-                        ILNode operand;
-                        if (!current.MatchAt(current.Body.Count - 4, GMCode.Push, out operand)) throw new Exception("fix");
-                        if (!(operand is ILValue)) throw new Exception("Can only handle constants right now");
-                        switchExpression.Arguments.Add(new ILExpression(GMCode.Case, caseTrue, NodeToExpresion(operand)));
-                        caseLabels.Add(caseTrue);
-                        body.Remove(current);
-                        current = labelToBasicBlock[nextCase];
-                    }
-                    body.Insert(pos, head);
-
-                    var lastBlock = current;
-
-
-                    ILLabel fallLabel;
-                    if (!lastBlock.MatchSingle(GMCode.B, out fallLabel)) throw new Exception("fix");
-                    current = labelToBasicBlock[fallLabel];
-                    if (!current.MatchAt(1, GMCode.Popz))
-                    { // has a default case
-                      // Side note, the LoopAndConditions figures out if we have a default case by checking
-                      // if the ending branch is linked to all the other case branches
-                      // so we don't need to do anything here
-                      // All this code is JUST for finding that popz that pops the condition out of the switch
-                      // if you don't care about it, you could just search though all the expresions and remove any and all
-                      // popz's  I am beggining to think this is the right way to do it as I don't see any other uses
-                      // of popz's
-                      //  Debug.Assert(false);
-                        BuildNextBlockData(); // build block chain, we need this for default and mabye case lookups
-                                              // ok, this is why we DON'T want to remove redundent code as there is this empty
-                                              // useless goto RIGHt after this that has the link to the finale case
-                        ILLabel nextBlockLabel = lastBlock.Body.First() as ILLabel;
-                        var uselessBlock = this.labelToNextBlock[nextBlockLabel];
-                        ILLabel newFallLabel;
-                        if (!uselessBlock.MatchSingle(GMCode.B, out newFallLabel)) throw new Exception("fix");
-                        current = labelToBasicBlock[newFallLabel];
-
-                        if (!current.MatchAt(1, GMCode.Popz)) throw new Exception("I have no idea where the popz is for this switch");
-                    }
-                    current.Body.RemoveAt(1);
-                    ILLabel lastBlockLabel = lastBlock.Body.First() as ILLabel;
-                    if (this.labelGlobalRefCount[lastBlockLabel] == 1) body.Remove(lastBlockLabel);
-                    switchExpression.Operand = caseLabels.ToArray();
-
-                    list.Add(switchExpression);
-                    list.Add(new ILExpression(GMCode.B, fallLabel));
+                    CreateSwitchExpresion(stack.Pop(), list, body, head, pos);
 
 
                     break; // we are done with this block
@@ -342,159 +430,8 @@ namespace betteribttest.Dissasembler
 
                 }
             }
-        
-        
             head.Body = list;
-        }
-        public bool ProcessExpressions2(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
 
-            ILLabel label = head.Body[0] as ILLabel;
-            //      Debug.Assert(label.Name != "Block_0");
-            //   Debug.Assert(label.Name != "L16");
-            List<ILNode> list = new List<ILNode>(); // New body
-            Stack<ILNode> stack = new Stack<ILNode>();
-            ILValue tempValue;
-            ILVariable tempVar;
-            bool Dup1Seen = false;
-            bool possableCase = false;
-            int oldCount = head.Body.Count;
-            for (int i = 0; i < oldCount; i++)
-            {
-                ILExpression e = head.Body[i] as ILExpression;
-                ILNode nexpr = null;
-                if (e == null)
-                {
-                    list.Add(head.Body[i]);
-                    continue; // skip  labels or wierd stuff
-                }
-                switch (e.Code)
-                {
-                    case GMCode.Push:
-                        tempValue = e.Operand as ILValue;
-                        if (tempValue != null) { stack.Push(tempValue); break; }
-                        tempVar = e.Operand as ILVariable;
-                        if (tempVar != null)
-                        {
-                            ProcessVar(tempVar, stack);
-                            stack.Push(tempVar);
-
-                        }
-                        else
-                        { // block comes back as a push expression
-                            Debug.Assert(e.Arguments.Count > 0);
-                            stack.Push(e.Arguments[0]);
-                        }
-                        break;
-                    case GMCode.Pop: // convert to an assign
-                        tempVar = e.Operand as ILVariable;
-                        Debug.Assert(tempVar != null);
-                        ProcessVar(tempVar, stack);
-                        e.Code = GMCode.Assign;
-                        e.Operand = null;
-                        e.Arguments.Add(NodeToExpresion(tempVar));
-                        e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                        nexpr = e;
-                        Dup1Seen = false;
-                        break;
-                    case GMCode.Call:
-                        {
-                            if (e.Extra == -1)
-                            {
-                                nexpr = e;
-                                break;
-                            } // its already resolved
-                              //ILExpression call = new ILExpression(GMCode.Call, )
-                              //ILCall call = new ILCall() { Name = e.Operand as string };
-                              //for (int j = 0; j < e.Extra; j++) call.Arguments.Add(stack.Pop());
-                            if (e.Extra > 0)
-                                for (int j = 0; j < e.Extra; j++) e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                            e.Extra = -1;
-                            stack.Push(e);
-                        }
-                        break;
-                    case GMCode.Popz:
-                        {
-                            if (stack.Count == 0) nexpr = e; // else, ignore for switch
-                            else
-                            {
-                                ILExpression call = stack.Peek() as ILExpression;
-                                if (call != null && call.Code == GMCode.Call)
-                                {
-                                    nexpr = call;
-                                    stack.Pop();
-                                }
-                                else nexpr = e; // else, ignore for switch
-                            }
-                        }
-                        break;
-                    case GMCode.Bf:
-                    case GMCode.Bt:
-
-                        if (stack.Count > 0 && e.Arguments.Count != 1)
-                        {
-                            Debug.Assert(stack.Count == 1);
-                            e.Arguments[0] = NodeToExpresion(stack.Pop());
-                        }
-                        nexpr = e;
-                        break;
-                    case GMCode.B:
-                    case GMCode.Exit:
-                        if (stack.Count > 0)
-                        {
-                            // we should only have ONE item left on the stack per block, and thats in wierd tertory shorts
-                            Debug.Assert(stack.Count == 1);
-                            list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(stack.Pop())));
-                        }
-
-                        nexpr = e;
-                        break; // end of block, process at bottom
-                    case GMCode.Ret:
-                        throw new Exception("first return I have EVER seen");
-                    // try to resolve, if not ignore as its handled latter
-
-                    case GMCode.Dup:
-                        if (stack.Count == 0) possableCase = true;
-                        if (possableCase)
-                        {
-                            nexpr = e;
-                            break; // break this and handle outside
-                        }
-                        // ok now we get into the meat of the issue, 
-                        // be sure we run switch detection BEFORE this function, otherwise, you will have a bad time:P
-                        if ((int)e.Operand == 0) stack.Push(stack.Peek()); // simple case
-                        else
-                        {
-                            // this is usally on an expression that uses a var multipual times so the instance and index is copyed
-                            // HOWEVER the stack may need to be swaped
-                            Dup1Seen = true; // hack for now
-                            foreach (var n in stack.ToArray()) stack.Push(n); // copy the entire stack
-                        }
-                        break;
-                    default: // ok we handle an expression
-                        if (e.Code.isExpression())
-                        {
-                            for (int j = 0; j < e.Code.GetPopDelta(); j++)
-                                e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                            e.Arguments.Reverse(); // till I fix it latter, sigh
-                            stack.Push(e); // push expressions back
-                        }
-                        else nexpr = e; // fall though
-                        break;
-                }
-                if (nexpr != null) list.Add(nexpr);
-            }
-            // this is going
-
-            // now the trick, if we still have stuff on the stack, put it back on the list
-
-            CheckList(list);
-            if (list.Count == 0) return false;
-            else
-            {
-                head.Body = list; // replace the list
-                return true;
-            }
         }
     }
 }

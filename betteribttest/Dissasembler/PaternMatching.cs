@@ -76,8 +76,11 @@ namespace betteribttest.Dissasembler
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code && expr.Arguments.Count == 0)
             {
-                operand = (T)expr.Operand;
-                return true;
+                if(expr.Operand is T)
+                {
+                    operand = (T)expr.Operand;
+                    return true;
+                }
             }
             operand = default(T);
             return false;

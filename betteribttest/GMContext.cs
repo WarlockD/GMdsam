@@ -13,6 +13,7 @@ namespace betteribttest
         public List<string> InstanceList;
         public List<string> scriptList;
         public string CurrentScript = null;
+        public bool Debug = false;
         public string LookupString(int index, bool escape = false)
         {
             index &= 0x1FFFFF;

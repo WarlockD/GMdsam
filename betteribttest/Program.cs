@@ -282,9 +282,10 @@ namespace betteribttest
             InstanceList = cr.objList.Select(x => x.Name).ToList();
             scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
             FunctionReplacement();
-            GMContext context = new GMContext() { cr = cr, InstanceList = InstanceList, scriptList = scriptList };
+            GMContext context = new GMContext() { cr = cr, InstanceList = InstanceList, scriptList = scriptList, Debug = false };
             bool doAsm = false;
             bool all = false;
+           
             string toSearch = null;
            int pos = 1;
             while(pos < args.Length)
@@ -295,6 +296,10 @@ namespace betteribttest
                         pos++;
                         toSearch = args.ElementAtOrDefault(pos);
                         pos++;
+                        break;
+                    case "-debug":
+                        pos++;
+                        context.Debug = true;
                         break;
                     case "-all":
                         all = true;
