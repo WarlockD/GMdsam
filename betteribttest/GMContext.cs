@@ -9,15 +9,52 @@ namespace betteribttest
 {
     public class GMContext
     {
-        public ChunkReader cr;
-        public List<string> InstanceList;
-        public List<string> scriptList;
-        public string CurrentScript = null;
+        struct StringInfo
+        {
+            public string str;
+            public string escaped;
+        }
+        public bool doLua = false;
+        public bool doAsm = false;
+        string[] instanceList;
+        string[] scriptList;
+        string[] fontList;
+        string[] spriteList;
+        string[] audioList;
+        StringInfo[] stringList;
+       
         public bool Debug = false;
+        public GMContext(ChunkReader cr) {
+            stringList = cr.stringList.Select(x => new StringInfo() { escaped = x.escapedString, str = x.str }).ToArray();
+            instanceList = cr.objList.Select(x => x.Name).ToArray();
+            scriptList = cr.scriptIndex.Select(x => x.script_name).ToArray();
+            fontList = cr.resFonts.Select(x => x.Name).ToArray();
+            spriteList = cr.spriteList.Select(x => x.Name).ToArray();
+            audioList = cr.audioList.Select(x => x.Name).ToArray();
+        }
+        public string IndexToSpriteName(int index)
+        {
+            index &= 0x1FFFFF;
+            return spriteList[index];
+        }
+        public string IndexToAudioName(int index)
+        {
+            index &= 0x1FFFFF;
+            return audioList[index];
+        }
+        public string IndexToScriptName(int index)
+        {
+            index &= 0x1FFFFF;
+            return scriptList[index];
+        }
+        public string IndexToFontName(int index)
+        {
+            return fontList[index];
+        }
         public string LookupString(int index, bool escape = false)
         {
             index &= 0x1FFFFF;
-            return escape ? cr.stringList[index].escapedString : cr.stringList[index].str;
+            return escape ? stringList[index].escaped : stringList[index].str;
         }
         public string InstanceToString(int instance)
         {
@@ -28,9 +65,9 @@ namespace betteribttest
                     return instanceName;
 
             }
-            else if (InstanceList != null && instance > 0 && instance < InstanceList.Count)
+            else if (instanceList != null && instance > 0 && instance < instanceList.Length)
             {
-                return InstanceList[instance];
+                return instanceList[instance];
             }
             // fallback
             return '$' + instance.ToString() + '$';
@@ -44,9 +81,9 @@ namespace betteribttest
                     return new ILExpression(GMCode.Constant, instanceName);
 
             }
-            else if (InstanceList != null && instance > 0 && instance < InstanceList.Count)
+            else if (instanceList != null && instance > 0 && instance < instanceList.Length)
             {
-                return new ILExpression(GMCode.Constant, InstanceList[instance]);
+                return new ILExpression(GMCode.Constant, instanceList[instance]);
             }
             // fallback
             return new ILExpression(GMCode.Constant, instance);

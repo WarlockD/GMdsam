@@ -16,6 +16,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Xml;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 /*
 Side note to the Disam potion.
 To map variables and function names to the asembley REQUIRES some kind of emulation.  The dissassembler needs context to traslate
@@ -374,24 +375,7 @@ namespace betteribttest
             }
             WriteDebug("Offset: {0} not in chunk", offset);
         }
-        void DebugFindBetweenOFfsets(int offset)
-        {
-            debugLocateOffsetInChunk(offset);
-            var e = offsetMap.GetEnumerator();
-            e.MoveNext();
-            var last = e.Current;
-            while (e.MoveNext())
-            {
-                if (offset > last.Key && offset < e.Current.Key)
-                {
-                    WriteDebug("Not Found but between: {0,-8}", offset);
-                    WriteDebug("this({0,-8}): {1}", last.Value.FilePosition.Position, last.ToString());
-                    WriteDebug("that({0,-8}): {1}", e.Current.Value.FilePosition.Position, last.ToString());
-                    return;
-                }
-                last = e.Current;
-            }
-        }
+
       
         public List<GMK_Object> objList = new List<GMK_Object>();
         public Dictionary<int, GMK_Object> objMap = new Dictionary<int, GMK_Object>();
@@ -426,15 +410,8 @@ namespace betteribttest
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
-        bool testIfRef(int value)
-        {
-            return testIfRef(value, r.BaseStream.Length);
-        }
-        bool testIfRef(int value, long chumkLimit)
-        {
-            if ((value % 4) == 0 && value < chumkLimit) return true;
-            else return false;
-        }
+
+
         string readFixedString(int len)
         {
             byte[] bytes = r.ReadBytes(len);
@@ -747,24 +724,13 @@ namespace betteribttest
                 GMK_Image gi = new GMK_Image(e);
                 int dummy = r.ReadInt32(); // Always 1?  Does this mean its in the file?
                 int new_offset = r.ReadInt32();
-                gi.image = new Bitmap(r.StreamFromPosition(new_offset));
+              //  gi.image = new Bitmap(r.StreamFromPosition(new_offset));
                 AddData(gi);
                 filesImage.Add(gi);
             }
         }
-        Bitmap readBitmapfromTPNG(GMK_SpritePosition p)
-        {
-            return null;
-        }
-        void SaveSpritePng(string filename, GMK_SpritePosition p)
-        {
-            Bitmap texture = filesImage[p.textureId].image;
-            Bitmap sprite = new Bitmap(p.original.Width,p.original.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            Graphics g = Graphics.FromImage(sprite);
-            g.DrawImage(texture, p.offset.X,p.offset.Y, p.rect, GraphicsUnit.Pixel);
-            if (filename.IndexOf('.') == -1) filename += ".png";
-            sprite.Save(filename);
-        }
+
+
         // We are doing this enough freaking times that a function helps with it
         GMK_SpritePosition[] readFrames()
         {
@@ -830,11 +796,13 @@ namespace betteribttest
                 int[] extra = r.ReadInt32(7);
                 spr.frames = readFrames();
                 int have_mask = r.ReadInt32();
+#if false
                 if (have_mask != 0) {
                     int mask_width = spr.width;
                     int mask_height = spr.height;
                     spr.mask = readMask(mask_width, mask_height);
                 } 
+#endif
                 /*
                 if (spr.Name.IndexOf("frog") > -1) // frog  spr_froghead
                 {
@@ -854,18 +822,6 @@ namespace betteribttest
                 spriteList.Add(spr);
             }
 
-        }
-        string EscapeString(string s)
-        {
-            // http://stackoverflow.com/questions/323640/can-i-convert-a-c-sharp-string-value-to-an-escaped-string-literal
-                using (var writer = new StringWriter())
-                {
-                    using (var provider = System.CodeDom.Compiler.CodeDomProvider.CreateProvider("CSharp"))
-                    {
-                        provider.GenerateCodeFromExpression(new System.CodeDom.CodePrimitiveExpression(s), writer, null);
-                        return writer.ToString();
-                    }
-            }
         }
         void doStrings(int chunkStart, int chunkLimit)
         {
@@ -914,14 +870,23 @@ namespace betteribttest
             public List<CodeData> Streams;
             public string ObjectName;
         }
-        public IEnumerable<CodeData> GetObjectCode(ref string objectName)
+
+        public IEnumerable<CodeData> GetObjectCode(string objectName)
         {
-            objectName = objectName.ToLower();
-            if (objectName.IndexOf("obj_") != 0) objectName = "obj_" + objectName;
-            GMK_Data lookup;
-            if (!nameMap.TryGetValue(objectName, out lookup)) return new List<CodeData>();
-            //GMK_Object obj = lookup as GMK_Object;
-            return GetCodeStreams(lookup.Name).ToList();
+            
+            foreach (GMK_Code c in codeList.Where(x => x.Name.Contains(objectName)))
+            {
+                string name = c.Name;
+                int index = name.IndexOf(objectName) + objectName.Length;
+                char test = name[index + 1];
+                if (test == char.ToLower(test))
+                    continue;
+                ChunkStream ms = getReturnStream();
+                // we need to make it a binary stream
+                ms.Position = c.startPosition;
+                byte[] data = ms.ReadBytes(c.size);
+                yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new MemoryStream(data, false)) };
+            }
         }
       
         public IEnumerable<ObjectCodeReturn> GetAllObjectCode()
@@ -930,7 +895,7 @@ namespace betteribttest
             {
                 string name = o.Name;
                 ObjectCodeReturn ret = new ObjectCodeReturn();
-                ret.Streams = GetObjectCode(ref name).ToList();
+                ret.Streams = GetObjectCode(name).ToList();
                 ret.ObjectName = name;
                 yield return ret;
             }
@@ -971,11 +936,6 @@ namespace betteribttest
             }
         }
         public List<GMK_Audio> audioList;
-        class RawAudiodata
-        {
-            public int size;
-            public int index;
-        }
         void doAudio(int chunkStart, int chunkLimit)
         {
             Chunk rawData = chunks["AUDO"]; // raw data
@@ -1002,6 +962,8 @@ namespace betteribttest
                 audio.maybe_offset = r.ReadInt32();
                 // Debug.WriteLineIf(audio.audioType == 101, "Audio file : " + audio.filename + " index? " + audio.maybe_offset); // I suspect this is in the audo list
                 //Debug.WriteLineIf(audio.audioType == 100, "Audio file : " + audio.filename + " index? " + audio.maybe_offset); // not sure what the offset is for here?
+                // this is eating a BIG chunk of memory, don't need it for the decompiler
+#if false
                 if (audio.audioType == 101)
                 {
                     var offset = rawDataEntries[audio.maybe_offset];
@@ -1010,6 +972,7 @@ namespace betteribttest
                     audio.data = r.ReadBytes(size);
                     r.PopPosition();
                 }
+#endif
            //     audio.SaveAudio();
                 AddData(audio);
                 audioList.Add(audio);
@@ -1021,83 +984,7 @@ namespace betteribttest
             return '{' + x + "," + y + '}';
         }
     
-        public void SaveNewTextureFormat(string path)
-        {
-            PListDict plist = new PListDict();
-            PListArray plist_textures = plist.AddArray("textures");
-            PListDict plist_sprites = plist.AddDictonary("sprites");
-            for (int i = 0; i < filesImage.Count; i++)
-            {
-                string filename =  "undertale_texture_" + i + ".png";
-              //  filesImage[i].image.Save(path + filename);
-                plist_textures.Add(filename);
-            }
-            foreach (var sprite in spriteList)
-            {
-                if (sprite.frames == null || sprite.frames.Length == 0) throw new Exception("This shouldn't happen");
-                PListArray frames = plist_sprites.AddArray(sprite.Name);
-                foreach (var p in sprite.frames)
-                {
-
-                    PListDict frame = frames.AddDictonary();
-                    frame["x"] = p.rect.X;
-                    frame["y"] = p.rect.Y;
-                    frame["width"] = p.rect.Width;
-                    frame["height"] = p.rect.Height;
-                    frame["offsetX"] = p.offset.X;
-                    frame["offsetY"] = p.offset.Y;
-                    frame["originalWidth"] = p.original.Width;  //p.width0;
-                    frame["originalHeight"] = p.original.Height; //p.height0;
-                    frame["cropWidth"] = p.crop.Width;  //p.width0;
-                    frame["cropHeight"] = p.crop.Height; //p.height0;
-                    frame["textureIndex"] = p.textureId; //p.height0;
-                }
-            }
-           // plist.WritePlist(path + "undertale_sprites.plist");
-        }
-        public void SaveTexturePacker(string pngTexture,string packerFilename, int textureIndex)
-        {
-            List<GMK_SpritePosition> sprites = new List<GMK_SpritePosition>();
-            XmlWriterSettings settings = new XmlWriterSettings();
-            
-            /*
-            settings.Indent = true;
-            Bitmap bmp = filesImage[textureIndex].image;
-            PListDict plist = new PListDict();
-            PListDict meta = plist.AddDictonary("metadata");
-            PListDict frames = plist.AddDictonary("frames");
-            PListDict newframes = plist.AddDictonary("newframes");
-            // bare minimum settings for cosco
-            meta["format"] = 0; // really simple format till I get some more data
-            meta["size"] = bmp.Size;
-            meta["textureFileName"] = pngTexture;
-            foreach (var sprite in spriteList)
-            {
-                bool first = true;
-                PListArray frameArray = newframes.AddArray(sprite.Name);
-                foreach (var p in sprite.frames)
-                {
-                    if (p.textureId != textureIndex)  continue;
-                    PListDict frameDict = frameArray.AddDictonary();
-                    PListDict frame = frames.AddDictonary();
-                    frame["x"] = p.rect.X;
-                    frame["y"] = p.rect.Y;
-                    frame["width"] = p.rect.Width;
-                    frame["height"] = p.rect.Height;
-                    frame["offsetX"] = p.offset.X;
-                    frame["offsetY"] = p.offset.Y;
-                    frame["originalWidth"] = p.original.Width;  //p.width0;
-                    frame["originalHeight"] = p.original.Height; //p.height0;
-                    frame["cropWidth"] = p.crop.Width;  //p.width0;
-                    frame["cropHeight"] = p.crop.Height; //p.height0;
-                    frame["textureIndex"] = p.textureId; //p.height0;
-                    if (first) { frames[sprite.Name] = frameDict; first = false; }
-                }
-            }
-            plist.WritePlist(packerFilename);
-            bmp.Save(pngTexture);
-            */
-        }
+      
         // Ok, this is stupid, but I get it
         // All the vars and function names are on a link list from one to another that tie to the name
         // to make this much easyer for the disassembler, we are going to change all these refrences

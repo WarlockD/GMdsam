@@ -51,6 +51,7 @@ namespace betteribttest.Dissasembler
         }
 
         public abstract void WriteTo(ITextOutput output);
+        public abstract void WriteToLua(ITextOutput output);
     }
     public class ILBasicBlock : ILNode
     {
@@ -63,8 +64,13 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-          //  output.Write("/* Basic Block */");
-            Body.WriteNodes(output, true,true);
+            //  output.Write("/* Basic Block */");
+            Body.WriteNodes(output, true, true);
+        }
+        public override void WriteToLua(ITextOutput output)
+        {
+            //  output.Write("/* Basic Block */");
+            Body.WriteLuaNodes(output, true);
         }
     }
     public class ILBlock : ILNode
@@ -87,19 +93,36 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-            Body.WriteNodes(output, true,true);
+            Body.WriteNodes(output, true, true);
+        }
+        public override void WriteToLua(ITextOutput output)
+        {
+            //  output.Write("/* Basic Block */");
+            Body.WriteLuaNodes(output, true);
         }
         public void WriteBlock(ITextOutput output, string BlockTitle = null)
         {
-            if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine(BlockTitle);
+            if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine("\\" + BlockTitle);
             WriteTo(output);
             output.WriteLine(); // extra line
         }
-        public void DebugSave(string filename,string fileHeader=null)
+        public void WriteBlockLua(ITextOutput output, string BlockTitle = null)
+        {
+            if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine("--" + BlockTitle);
+            Body.WriteLuaNodes(output, false);
+        }
+        public void DebugSave(string filename, string fileHeader = null)
         {
             using (PlainTextOutput pto = new PlainTextOutput(new System.IO.StreamWriter(filename)))
             {
                 WriteBlock(pto, fileHeader);
+            }
+        }
+        public void DebugSaveLua(string filename, string fileHeader = null)
+        {
+            using (PlainTextOutput pto = new PlainTextOutput(new System.IO.StreamWriter(filename)))
+            {
+                WriteBlockLua(pto, fileHeader);
             }
         }
     }
@@ -116,6 +139,12 @@ namespace betteribttest.Dissasembler
             output.Write(" = ");
             Expression.WriteTo(output);
         }
+        public override void WriteToLua(ITextOutput output)
+        {
+            Variable.WriteTo(output);
+            output.Write(" = ");
+            Expression.WriteTo(output);
+        }
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.Variable != null)
@@ -124,7 +153,7 @@ namespace betteribttest.Dissasembler
                 yield return this.Expression;
         }
     }
-    
+
     public class ILCall : ILNode
     {
         public string Name;
@@ -135,7 +164,8 @@ namespace betteribttest.Dissasembler
             output.Write(Name);
             output.Write('(');
             if (Arguments.Count > 0) Arguments[0].WriteTo(output);
-            if(Arguments.Count > 1) {
+            if (Arguments.Count > 1)
+            {
                 foreach (var a in Arguments.Skip(1))
                 {
                     output.Write(',');
@@ -146,7 +176,12 @@ namespace betteribttest.Dissasembler
         }
         public override IEnumerable<ILNode> GetChildren()
         {
-                return Arguments;
+            return Arguments;
+        }
+
+        public override void WriteToLua(ITextOutput output)
+        {
+            WriteTo(output);
         }
     }
 
@@ -163,9 +198,10 @@ namespace betteribttest.Dissasembler
         public ILValue(double i) { this.Value = i; Type = GM_Type.Double; }
         public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
         public ILValue(short i) { this.Value = (int)i; Type = GM_Type.Short; }
-        public ILValue(object o, GM_Type type) {
+        public ILValue(object o, GM_Type type)
+        {
             if (o is short) this.Value = (int)((short)o);
-            else if(type == GM_Type.String) this.ValueText = GMCodeUtil.EscapeString(o as string);
+            else if (type == GM_Type.String) this.ValueText = GMCodeUtil.EscapeString(o as string);
             else this.Value = o;
             Type = type;
         }
@@ -207,7 +243,10 @@ namespace betteribttest.Dissasembler
         {
             output.Write(ToString());
         }
-
+        public override void WriteToLua(ITextOutput output)
+        {
+            output.Write(ToString());
+        }
         public static explicit operator int(ILValue c)
         {
             switch (c.Type)
@@ -218,11 +257,11 @@ namespace betteribttest.Dissasembler
                     throw new Exception("Cannot convert type " + c.Type.ToString() + " to int ");
             }
         }
-        public static bool operator!=(ILValue c, int v)
+        public static bool operator !=(ILValue c, int v)
         {
             return !(c == v);
         }
-        public static bool operator==(ILValue c, int v)
+        public static bool operator ==(ILValue c, int v)
         {
             switch (c.Type)
             {
@@ -232,7 +271,7 @@ namespace betteribttest.Dissasembler
             }
         }
     }
-        
+
     public static class ILNode_Helpers
     {
         public static bool TryParse(this ILValue node, out int value)
@@ -247,7 +286,7 @@ namespace betteribttest.Dissasembler
             return false;
         }
     }
-  
+
 
     public class ILLabel : ILNode, IEquatable<ILLabel>
     {
@@ -259,7 +298,10 @@ namespace betteribttest.Dissasembler
         {
             output.WriteDefinition(Name + ":", this);
         }
-
+        public override void WriteToLua(ITextOutput output)
+        {
+            WriteTo(output);
+        }
         public bool Equals(ILLabel other)
         {
             return other.Name == Name;
@@ -297,7 +339,7 @@ namespace betteribttest.Dissasembler
         {
             if (object.ReferenceEquals(obj, null)) return false;
             if (object.ReferenceEquals(obj, this)) return true;
-            return obj.Name == Name && obj.InstanceName == InstanceName; 
+            return obj.Name == Name && obj.InstanceName == InstanceName;
         }
         public override bool Equals(object obj)
         {
@@ -319,15 +361,18 @@ namespace betteribttest.Dissasembler
             else output.Write("stack");
             output.Write(".");
             output.Write(Name);
-            if(isArray)
+            if (isArray)
             {
                 output.Write('[');
                 if (Index != null) Index.WriteTo(output);
                 output.Write(']');
             }
         }
+        public override void WriteToLua(ITextOutput output)
+        {
+            WriteTo(output);
+        }
     }
-   
     public struct ILRange
     {
         public readonly int From;
@@ -417,7 +462,7 @@ namespace betteribttest.Dissasembler
             this.Code = i.Code;
             this.Operand = i.Operand; // don't need to worry about this
             this.Arguments = new List<ILExpression>(i.Arguments.Count);
-            if(i.Arguments.Count!=0) foreach (var n in i.Arguments) this.Arguments.Add(new ILExpression(n));
+            if (i.Arguments.Count != 0) foreach (var n in i.Arguments) this.Arguments.Add(new ILExpression(n));
             this.ILRanges = new List<ILRange>(range ?? i.ILRanges);
         }
         public ILExpression(GMCode code, object operand, List<ILExpression> args)
@@ -453,7 +498,7 @@ namespace betteribttest.Dissasembler
             return this.Operand is ILLabel || this.Operand is ILLabel[];
         }
         // better preformance
-       
+
         public IEnumerable<ILLabel> GetBranchTargets()
         {
             if (this.Operand is ILLabel)
@@ -471,9 +516,9 @@ namespace betteribttest.Dissasembler
         void WriteCommaArguments(ITextOutput output)
         {
             output.Write('(');
-            for(int i=0;i < Arguments.Count; i++)
+            for (int i = 0; i < Arguments.Count; i++)
             {
-                if (i!=0) output.Write(", ");
+                if (i != 0) output.Write(", ");
                 WriteArgument(output, i, true);
             }
             output.Write(')');
@@ -498,7 +543,7 @@ namespace betteribttest.Dissasembler
                     return true;
             }
         }
-        void WriteOperand(ITextOutput output,bool escapeString=true)
+        void WriteOperand(ITextOutput output, bool escapeString = true)
         {
             if (Operand == null) output.Write("%NULL_OPERAND%");
             else if (Operand is ILLabel) output.Write((Operand as ILLabel).Name);
@@ -513,7 +558,8 @@ namespace betteribttest.Dissasembler
                     else output.Write(val.ToString());
                 }
                 else output.Write(Operand.ToString());
-            } else output.Write(Operand.ToString());
+            }
+            else output.Write(Operand.ToString());
         }
         /// <summary>
         /// This makes sure when we write an argument, the string looks right
@@ -524,20 +570,21 @@ namespace betteribttest.Dissasembler
         public void WriteArgument(ITextOutput output, int index, bool escapeString = true)
         {
             ILExpression arg = Arguments[index];
-            if (arg.Code == GMCode.Constant|| arg.Code == GMCode.Var) arg.WriteOperand(output, escapeString);
+            if (arg.Code == GMCode.Constant || arg.Code == GMCode.Var) arg.WriteOperand(output, escapeString);
             else arg.WriteTo(output); // don't know what it is
         }
         public void WriteArguments(ITextOutput output, int start)
         {
-            Arguments.WriteNodes(output, start,true,true);
+            Arguments.WriteNodes(output, start, true, true);
         }
         static readonly string POPDefaultString = "%POP%";
         public void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
         {
             if (index < Arguments.Count) WriteArgument(output, index, escapeString);
-            else output.Write(POPDefaultString);    
+            else output.Write(POPDefaultString);
         }
-        public void WriteParm(ITextOutput output, int index) {
+        public void WriteParm(ITextOutput output, int index)
+        {
             bool needParm = CheckParm(index);
             if (needParm) output.Write('(');
             WriteArgumentOrPop(output, index);
@@ -560,12 +607,16 @@ namespace betteribttest.Dissasembler
                 WriteParm(output, 1);
             }
         }
+        public override void WriteToLua(ITextOutput output)
+        {
+            WriteTo(output); // not sure if I have to worry to much about here
+        }
         public override void WriteTo(ITextOutput output)
         {
-            if(Code.isExpression())
+            if (Code.isExpression())
             {
                 WriteExpression(output);
-             
+
             }
             else
             {
@@ -588,11 +639,11 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Call:
                         output.Write(Operand.ToString());
-                         WriteCommaArguments(output);
+                        WriteCommaArguments(output);
 
                         break;
                     case GMCode.Pop:
-                        if(Operand == null) output.Write(POPDefaultString);
+                        if (Operand == null) output.Write(POPDefaultString);
                         else {
                             output.Write("Pop(");
                             WriteOperand(output, false);// generic, string name
@@ -600,7 +651,7 @@ namespace betteribttest.Dissasembler
                             output.Write(POPDefaultString);
                             output.Write(")");
                         }
-                        
+
                         break;
                     case GMCode.Assign:
                         WriteArgumentOrPop(output, 0, false);
@@ -612,13 +663,13 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Push:
                         output.Write("Push ");
-                        if(Operand != null)
+                        if (Operand != null)
                         {
                             output.Write("(Operand=");
                             WriteOperand(output, true);
                             output.Write(")");
                         }
-                        if (Arguments.Count >0)
+                        if (Arguments.Count > 0)
                         {
                             output.Write("(Arguments=");
                             WriteArgumentOrPop(output, 0);
@@ -721,7 +772,17 @@ namespace betteribttest.Dissasembler
             if (this.BodyBlock != null)
                 yield return this.BodyBlock;
         }
-
+        public override void WriteToLua(ITextOutput output)
+        {
+            output.Write("while ");
+            if (this.Condition != null)
+                this.Condition.WriteToLua(output);
+            else
+                output.Write("true");
+            output.WriteLine(" do");
+            this.BodyBlock.WriteToLua(output);
+            output.Write("end");
+        }
         public override void WriteTo(ITextOutput output)
         {
             output.Write("while(");
@@ -749,20 +810,33 @@ namespace betteribttest.Dissasembler
             if (this.FalseBlock != null)
                 yield return this.FalseBlock;
         }
+        public override void WriteToLua(ITextOutput output)
+        {
+            output.Write("if ");
+            Condition.WriteToLua(output);
+            output.WriteLine(" then ");
+            if (TrueBlock.Body.Count == 0) output.WriteLine(" [[-- Empty Block --]] ");
+            else TrueBlock.Body.WriteLuaNodes(output, true);
+            if (FalseBlock != null)
+            {
+                output.WriteLine("else");
+                FalseBlock.Body.WriteLuaNodes(output, true);
+            }
+            output.Write("end");
+        }
 
         public override void WriteTo(ITextOutput output)
         {
-            output.Write("if(");
+            output.Write("if (");
             Condition.WriteTo(output);
-            output.Write(") ");
-            if (TrueBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
-            else TrueBlock.Body.WriteNodes(output,true,true);
+            output.Write(" ) ");
+            if (TrueBlock.Body.Count == 0) output.Write(" [[-- Empty Block --]] ");
+            else TrueBlock.Body.WriteNodes(output, true, true);
             if (FalseBlock != null)
             {
-                output.WriteLine(); // some of these conditions get to long so put a line here
-                output.Write("else ");
+                output.Write("else");
                 if (FalseBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
-                else FalseBlock.Body.WriteNodes(output,true,true);
+                else FalseBlock.Body.WriteNodes(output, true, true);
             }
         }
     }
@@ -804,7 +878,68 @@ namespace betteribttest.Dissasembler
                 yield return caseBlock;
             }
         }
-
+        public void WriteToLuaCaseBlock(CaseBlock block, ITextOutput output)
+        {
+            // hack so that it goes into lua easier and I don't have to remove breaks
+            output.WriteLine("repeat");
+            output.Indent();
+            for(int i=0;i < block.Body.Count;i++)
+            {
+                var n = block.Body[i];
+                if(i == (block.Body.Count - 1))
+                {
+                    ILExpression e = n as ILExpression;
+                    if (e != null && e.Code == GMCode.LoopOrSwitchBreak) break; // skip last break
+                }
+                n.WriteToLua(output);
+                output.WriteLine();
+            }
+            output.Unindent();
+            output.WriteLine("until true");
+        }
+        public override void WriteToLua(ITextOutput output)
+        { // you don't have case statements in lua, so we have to make a crap tone of if stattements
+          // going to have to change this in
+          // the decompiler and remove the switchmangle
+          // for right now though lets hack it
+            int last = this.CaseBlocks.Count - 1;
+            CaseBlock defaultBlock = null;
+            for (int i = 0; i < this.CaseBlocks.Count; i++)
+            {
+                var caseblock = this.CaseBlocks[i];
+                if(caseblock.Values == null)
+                {
+                    Debug.Assert(defaultBlock == null);
+                    defaultBlock = caseblock;
+                    continue;
+                }
+                output.Write(i == 0 ? "if " : "elseif ");
+                Condition.WriteToLua(output);
+                output.Write(" == ");
+                caseblock.Values[0].WriteToLua(output);
+                if (caseblock.Values.Count > 1) {
+                    for (int j = 1; j < caseblock.Values.Count; j++) {
+                        output.Write(" or ");
+                        Condition.WriteToLua(output);
+                        output.Write(" == ");
+                        caseblock.Values[j].WriteToLua(output);
+                    }
+                }
+            
+                output.WriteLine(" then ");
+                output.Indent();
+                WriteToLuaCaseBlock(caseblock, output);
+                output.Unindent();
+            }
+            if (defaultBlock != null)
+            {
+                output.WriteLine("else");
+                output.Indent();
+                WriteToLuaCaseBlock(defaultBlock, output);
+                output.Unindent();
+            }
+            output.Write("end");
+        }
         public override void WriteTo(ITextOutput output)
         {
             output.Write("switch (");
@@ -819,6 +954,7 @@ namespace betteribttest.Dissasembler
 
     public class ILWithStatement : ILNode
     {
+        static int lua_with_func = 0;
         public ILBlock Body = new ILBlock();
         public ILExpression Enviroment;
         public override IEnumerable<ILNode> GetChildren()
@@ -827,13 +963,22 @@ namespace betteribttest.Dissasembler
             if (this.Body != null)
                 yield return this.Body;
         }
+        // workaround.  Its hacky but I don't have ot modify much
+        public override void WriteToLua(ITextOutput output)
+        {
+            string env = Enviroment.ToString();
+            string funname = "with_" + env + "_" + lua_with_func;
 
+            output.WriteLine("local " + funname + " = function(self)");
+            Body.Body.WriteLuaNodes(output, true);
+            output.Write("end");
+        }
         public override void WriteTo(ITextOutput output)
         {
             output.Write("with(");
             Enviroment.WriteTo(output);
             output.Write(") ");
-            Body.Body.WriteNodes(output,true,true);
+            Body.Body.WriteNodes(output, true, true);
         }
     }
 
@@ -843,6 +988,7 @@ namespace betteribttest.Dissasembler
         public class CatchBlock : ILBlock
         {
             public ILVariable ExceptionVariable;
+
 
             public override void WriteTo(ITextOutput output)
             {
@@ -907,5 +1053,11 @@ namespace betteribttest.Dissasembler
                 output.Write("}");
             }
         }
+
+        public override void WriteToLua(ITextOutput output)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
+

@@ -9,6 +9,18 @@ namespace betteribttest.Dissasembler
 {
     public static class PatternMatching
     {
+        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool ident= true) where T : ILNode
+        {
+           // output.WriteLine();
+            if(ident) output.Indent();
+            for (; start < count; start++)
+            {
+                ILNode n = nodes[start];
+                n.WriteToLua(output);
+                output.WriteLine();
+            }
+            if (ident) output.Unindent();
+        }
         public static bool WriteNodes<T>(this IList<T> nodes,  ITextOutput output, int start, int count, bool endingSemiColon, bool withBrackets) where T : ILNode
         {
             // Generic method to print a list of nodes
@@ -43,6 +55,14 @@ namespace betteribttest.Dissasembler
         public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, bool endingSemiColon, bool withBrackets) where T : ILNode
         {
             return nodes.WriteNodes(output, 0, nodes.Count, endingSemiColon, withBrackets);
+        }
+        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, bool ident = true) where T : ILNode
+        {
+            nodes.WriteLuaNodes(output, start, nodes.Count - start, ident);
+        }
+        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, bool ident=true) where T : ILNode
+        {
+            nodes.WriteLuaNodes(output, 0, nodes.Count, ident);
         }
         public static void CollectLabels(this ILExpression node, HashSet<ILLabel> labels)
         {

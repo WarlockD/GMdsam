@@ -29,7 +29,7 @@ namespace betteribttest.Dissasembler
                 graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-                graph.ExportGraph().Save("loop_graph.dot");
+                //graph.ExportGraph().Save("loop_graph.dot");
                 block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
             }
         }
@@ -65,7 +65,7 @@ namespace betteribttest.Dissasembler
                 graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-                graph.ExportGraph().Save("condition_graph.dot");
+              //  graph.ExportGraph().Save("condition_graph.dot");
                 block.Body = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
             }
         }

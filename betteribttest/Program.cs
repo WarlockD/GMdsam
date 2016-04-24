@@ -4,35 +4,62 @@ using System.Diagnostics;
 using System.Linq;
 using betteribttest.Dissasembler;
 using System.IO;
+using System.Text;
+using System.Threading;
 
 namespace betteribttest
 {
     static class Program
     {
-        static ChunkReader cr;
-        static List<string> InstanceList;
-        static List<string> scriptList;
+      
+        static GMContext context;
+        static ILValue CheckConstant(ILExpression expr)
+        {
+            if (expr.Code == GMCode.Constant)
+            {
+                ILValue arg = expr.Operand as ILValue;
+                if (arg != null) return arg;
+            }
+            return null;
+        }
         static void spriteArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
-                if (arg.TryParse(out instance) && (instance > 0 && instance < cr.spriteList.Count))
+                if (arg.TryParse(out instance))
                 {
-                    arg.ValueText = "\"" + cr.spriteList[instance].Name + "\"";
+                    arg.ValueText = "\"" + context.IndexToSpriteName(instance) + "\"";
                 }
             }
         }
+        static void ordArgument(ILExpression expr)
+        {
+            if (expr.Code == GMCode.Constant)
+            {
+                ILValue arg = expr.Operand as ILValue;
+                int instance;
+                if (arg.TryParse(out instance))
+                {
+                    char c = (char)instance;
+                    if (char.IsControl(c))
+                        arg.ValueText = "\'\\x" + instance.ToString("X2") + "\'";
+                    else
+                        arg.ValueText = "\'" + c + "\'";
+                }
+            }
+        }
+        
         static void soundArgument(ILExpression expr)
         {
             if (expr.Code == GMCode.Constant)
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
-                if (arg.TryParse(out instance) && (instance > 0 && instance < cr.audioList.Count))
+                if (arg.TryParse(out instance))
                 {
-                    arg.ValueText = "\"" + cr.audioList[instance].Name + "\"";
+                    arg.ValueText = "\"" + context.IndexToAudioName(instance) + "\"";
                 }
             }
         }
@@ -42,9 +69,9 @@ namespace betteribttest
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
-                if (arg.TryParse(out instance) && (instance > 0 && instance < InstanceList.Count))
+                if (arg.TryParse(out instance))
                 {
-                    arg.ValueText = "\"" + InstanceList[instance] + "\"";
+                    arg.ValueText = "\"" + context.InstanceToString(instance) + "\"";
                 }
             }
         }
@@ -54,9 +81,9 @@ namespace betteribttest
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
-                if (arg.TryParse(out instance) && (instance > 0 && instance < cr.resFonts.Count))
+                if (arg.TryParse(out instance) )
                 {
-                    arg.ValueText = "\"" + cr.resFonts[instance].Name + "\"";
+                    arg.ValueText = "\"" + context.IndexToFontName(instance) + "\"";
                 }
             }
         }
@@ -82,9 +109,9 @@ namespace betteribttest
             {
                 ILValue arg = expr.Operand as ILValue;
                 int instance;
-                if (arg.TryParse(out instance) && (instance > 0 && instance < cr.scriptIndex.Count))
+                if (arg.TryParse(out instance))
                 {
-                    arg.ValueText = "\"" + cr.scriptIndex[instance].script_name + "\"";
+                    arg.ValueText = "\"" + context.IndexToScriptName(instance) + "\"";
 
                 }
             }
@@ -196,6 +223,49 @@ namespace betteribttest
                 Debug.Assert(l.Count == 1);
                 colorArgument(l[0]);
             });
+            FunctionFix.Add("keyboard_key_press", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
+            FunctionFix.Add("keyboard_key_release", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            }); 
+
+            FunctionFix.Add("keyboard_check", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
+            FunctionFix.Add("keyboard_check_direct", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
+            FunctionFix.Add("keyboard_check_released", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
+            FunctionFix.Add("keyboard_check_pressed", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
+            FunctionFix.Add("keyboard_clear", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
+
+
+            FunctionFix.Add("ord", (string funcname, List<ILExpression> l) =>
+            {
+                Debug.Assert(l.Count == 1);
+                ordArgument(l[0]);
+            });
             PushFix.Add("self.sym_s", spriteArgument);
             PushFix.Add("self.mycolor", colorArgument);
             PushFix.Add("self.myfont", fontArgument);
@@ -204,10 +274,8 @@ namespace betteribttest
         static void DebugMain()
         {
             // before I properly set up Main
-            cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
-            List<string> stringList = cr.stringList.Select(x => x.str).ToList();
-            InstanceList = cr.objList.Select(x => x.Name).ToList();
-            scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
+            //cr = new ChunkReader("D:\\Old Undertale\\files\\data.win", false); // main pc
+
             //  cr.DumpAllObjects("objects.txt");
             // cr = new ChunkReader("Undertale\\UNDERTALE.EXE", false);
             // cr = new ChunkReader("C:\\Undertale\\UndertaleOld\\data.win", false); // alienware laptop
@@ -245,7 +313,7 @@ namespace betteribttest
 
             filename_to_test = "gml_Object_OBJ_WRITERCREATOR_Create_0";
         }
-    
+
         static void BadExit(int i)
         {
             Instructions();
@@ -255,12 +323,37 @@ namespace betteribttest
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void DecompileBlock(ILBlock block, string filename)
+        static void DecompileBlock(GMContext context, Stream code, string filename, string header = null)
         {
+            var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(code, context);
+            if (context.doAsm)
+            {
+                string asm_filename = filename + ".asm";
+                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+            }
+            string raw_filename = Path.GetFileName(filename);
+            ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+            FunctionFix.FixCalls(block);
+            PushFix.FixCalls(block);
+
+            if (context.doLua)
+            {
+                filename += ".lua";
+                block.DebugSaveLua(filename, header);
+            }
+            else
+            {
+                filename += ".cpp";
+                block.DebugSave(filename, header);
+            }
+                
+           // Console.WriteLine("Writing: "+ filename);
 
         }
+  
         static void Main(string[] args)
         {
+            ChunkReader cr=null;
             string dataWinFileName = args.ElementAtOrDefault(0);
             if (string.IsNullOrWhiteSpace(dataWinFileName))
             {
@@ -278,14 +371,10 @@ namespace betteribttest
                 BadExit(1);
             }
 
-            List<string> stringList = cr.stringList.Select(x => x.str).ToList();
-            InstanceList = cr.objList.Select(x => x.Name).ToList();
-            scriptList = cr.scriptIndex.Select(x => x.script_name).ToList();
             FunctionReplacement();
-            GMContext context = new GMContext() { cr = cr, InstanceList = InstanceList, scriptList = scriptList, Debug = false };
-            bool doAsm = false;
+            context = new GMContext(cr);
+ 
             bool all = false;
-           
             string toSearch = null;
            int pos = 1;
             while(pos < args.Length)
@@ -307,8 +396,12 @@ namespace betteribttest
                         toSearch = args.ElementAtOrDefault(pos);
                         pos++;
                         break;
+                    case "-lua":
+                        context.doLua = true;
+                        pos++;
+                        break;
                     case "-asm":
-                        doAsm = true;
+                        context.doAsm = true;
                         pos++;
                         break;
                     default:
@@ -324,84 +417,81 @@ namespace betteribttest
                 BadExit(1);
             }
             List<string> FilesFound = new List<string>();
+            var errorinfo = Directory.CreateDirectory("error");
+            StreamWriter errorWriter = null;
+            Action<string> WriteErrorLine = (string msg) =>
+            {
+                if (errorWriter == null) errorWriter = new StreamWriter("error_" + toSearch + ".txt");
+                StringBuilder sb = new StringBuilder();
+                sb.Append(DateTime.Now.ToString("MM-dd-yy HH:mm:ss.ffff"));
+                sb.Append(": ");
+                sb.Append(msg);
+                lock (errorWriter) errorWriter.WriteLine(sb.ToString());
+                lock (Console.Out) Console.WriteLine(sb.ToString());
+                //lock (Debug.) Debug.WriteLine(sb.ToString());
+            };
             if (all)
             {
                 switch (toSearch)
                 {
                     case "objects":
                         {
-                            var errorinfo = Directory.CreateDirectory("error");
-                            StreamWriter errorWriter = null;
                             foreach (var a in cr.GetAllObjectCode())
                             {
                                 var info = Directory.CreateDirectory(a.ObjectName);
+#if DEBUG
+                                foreach (ChunkReader.CodeData files in a.Streams)
+                                {
+                                    FilesFound.Add(files.ScriptName);
+                                    new System.Threading.Thread((object o) =>
+                                    {
+                                        Thread.CurrentThread.IsBackground = true;
+                                        ChunkReader.CodeData data = (ChunkReader.CodeData)o;
+                                        string filename = Path.Combine(info.FullName, data.ScriptName);
+                                        try
+                                        {
+                                            DecompileBlock(context, data.stream.BaseStream, filename, "ScriptName: " + data.ScriptName);
+                                        }
+                                        catch (Exception e)
+                                        {
+                                            WriteErrorLine(string.Format("Object: {0}  Error: {1}", data.ScriptName, e.Message));
+                                        }
+                                    }).Start(files);
+                                }
+#else
                                 foreach (var files in a.Streams)
                                 {
-                                    var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                                    if (doAsm)
-                                    {
-                                        string asm_filename = Path.Combine(info.FullName, files.ScriptName + ".asm");
-                                        betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
-                                    }
-                                    string code_name = Path.Combine(info.FullName, files.ScriptName + ".cpp");
+                                    string filename = Path.Combine(info.FullName, files.ScriptName);
                                     try
                                     {
-                                        ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
-                                        FunctionFix.FixCalls(block);
-                                        PushFix.FixCalls(block);
-
-                                        FilesFound.Add(code_name);
-                                        block.DebugSave(code_name, "// ScriptName: " + files.ScriptName);
-                                        Console.WriteLine("Written: " + files.ScriptName + ".cpp");
+                                        DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.ScriptName);
+                                        FilesFound.Add(files.ScriptName);
                                     }
                                     catch (Exception e)
-                                    {
-                                        if (errorWriter == null) errorWriter = new StreamWriter("error_objects.txt");
-                                        string message = string.Format("Object: {0}  Error: {1}", files.ScriptName, e.Message);
-                                        errorWriter.WriteLine(message);
-                                        Console.WriteLine("Error: " + message);
+                                    { 
+                                        WriteErrorLine(string.Format("Object: {0}  Error: {1}", files.ScriptName, e.Message));
                                     }
                                 }
+#endif
                             }
                         }
                         break;
                     case "scripts":
                         {
-                            var errorinfo = Directory.CreateDirectory("error");
                             var info = Directory.CreateDirectory("scripts");
-                            StreamWriter errorWriter = null;
                             foreach (var files in cr.GetAllScripts())
                             {
-                                string code_name = Path.Combine(info.FullName, files.ScriptName + ".cpp");
-                                context.CurrentScript = files.ScriptName;
-                                var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                                if (doAsm)
-                                {
-                                    string asm_filename = Path.Combine(info.FullName, files.ScriptName + ".asm");
-                                    betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
-                                }
-#if !DEBUG
+
+                                string filename = Path.Combine(info.FullName, files.ScriptName);
                                 try
                                 {
-#endif
-                                Console.WriteLine("Writing: " + files.ScriptName + ".cpp");
-                                    ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
-                                    FunctionFix.FixCalls(block);
-                                    PushFix.FixCalls(block);
-
-                                    FilesFound.Add(code_name);
-                                    block.DebugSave(code_name, "// ScriptName: " + files.ScriptName);
-                                
-#if !DEBUG
+                                    DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.ScriptName);
+                                    FilesFound.Add(files.ScriptName);
                                 }
                                 catch (Exception e)
                                 {
-                                    if (errorWriter == null) errorWriter = new StreamWriter("error_scripts.txt");
-                                    string message = string.Format("Script: {0}  Error: {1}", files.ScriptName, e.Message);
-                                    errorWriter.WriteLine(message);
-                                    Console.WriteLine("Error: " + message);
+                                    WriteErrorLine(string.Format("Script: {0}  Error: {1}", files.ScriptName, e.Message));
                                 }
-#endif
                             }
                         }
                         break;
@@ -416,22 +506,17 @@ namespace betteribttest
                 foreach (var files in cr.GetCodeStreams(toSearch))
                 {
                     //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
-
-                    var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(files.stream.BaseStream, stringList, InstanceList);
-                    if (doAsm) betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, files.ScriptName + ".asm");
-                    ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
-                    //   block.Body.WriteNodes
-                    // block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
-                    FunctionFix.FixCalls(block);
-                    PushFix.FixCalls(block);
-                    FilesFound.Add(files.ScriptName);
-                    // block.DebugSave("bytecode_test.cpp", "// ScriptName: " + files.ScriptName);
-#if DEBUG
-                    betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, "debug.asm");
-                    block.DebugSave("debug.cpp", "// ScriptName: " + files.ScriptName);
-                    block.DebugSave(files.ScriptName + ".cpp", "// ScriptName: " + files.ScriptName);
-#endif
-                    Console.WriteLine("Written: " + files.ScriptName + ".cpp");
+                    string filename = files.ScriptName;
+                    try
+                    {
+                        DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.ScriptName);
+                        FilesFound.Add(files.ScriptName);
+                    
+                    }
+                    catch (Exception e)
+                    {
+                        WriteErrorLine(string.Format("Script: {0}  Error: {1}", files.ScriptName, e.Message));
+                    }
                 }
             }
 

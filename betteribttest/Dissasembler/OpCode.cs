@@ -317,17 +317,18 @@ namespace betteribttest.Dissasembler
             }
             return ret;
         }
-        public static SortedList<int, Instruction> Dissasemble(Stream stream, List<string> StringList, List<string> InstanceList = null)
+      
+        public static SortedList<int, Instruction> Dissasemble(Stream stream, GMContext context)
         {
             if (stream == null) throw new ArgumentNullException("stream");
             if (!stream.CanRead) throw new IOException("Cannot read stream");
             if(!stream.CanSeek) throw new IOException("Cannot seak stream");
             stream.Position = 0;
             BinaryReader r = new BinaryReader(stream);
-            return Dissasemble(r, stream.Length, StringList, InstanceList);
+            return Dissasemble(r, stream.Length, context);
         }
         // I had multipul passes on this so trying to combine it all to do one pass
-        public static  SortedList<int,Instruction> Dissasemble(BinaryReader r, long length, List<string> StringList, List < string> InstanceList=null)
+        public static  SortedList<int,Instruction> Dissasemble(BinaryReader r, long length, GMContext context)
         {
             if (r == null) throw new ArgumentNullException("stream");
             if (r.BaseStream.CanRead != true) throw new IOException("Cannot read stream");
@@ -393,27 +394,27 @@ namespace betteribttest.Dissasembler
                         {
                             // i.Operand = StringList[(int)i.Operand]; Don't want to touch as it might 
                             sb.Clear();
-                            sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
+                            sb.Append(context.InstanceToString(i.Extra));
                             sb.Append('.');
-                            sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
+                            sb.Append(context.LookupString((int)i.Operand & 0xFFFFF));
                             i.OperandText = sb.ToString();
                         }
                         else if (i.Types[0] == GM_Type.String)
                         {
-                            i.Operand = StringList[(int)i.Operand];
+                            i.Operand = context.LookupString((int)i.Operand & 0xFFFFF);
                             i.OperandText = GMCodeUtil.EscapeString(i.Operand as string);
                         }
                         break;
                     case GMCode.Pop: // technicaly pop is always a var, but eh
                                      //i.Operand = StringList[(int)i.Operand]; Don't do it this wa as we might need to find out of its an array
                         sb.Clear();
-                        sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
+                        sb.Append(context.InstanceToString(i.Extra));
                         sb.Append('.');
-                        sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
+                        sb.Append(context.LookupString((int)i.Operand & 0xFFFFF));
                         i.OperandText = sb.ToString();
                         break;
                     case GMCode.Call:
-                        i.OperandText = StringList[(int)i.Operand];
+                        i.OperandText = context.LookupString((int)i.Operand & 0xFFFFF);
                         i.Operand = i.OperandText;
                         break;
 
