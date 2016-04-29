@@ -365,6 +365,86 @@ namespace betteribttest.Dissasembler
             
         }
         GMContext context;
+        /// <summary>
+        /// Combines all the if statements to an elseif chain.
+        /// </summary>
+        /// <param name="block">The Block to combine</param>
+        /// <param name="minCombine">The minimum amount of if statments to combine</param>
+        public static void CombineIfStatements(ILBlock method, int minCombine)
+        {
+            int start = -1;
+            ILElseIfChain chain = null;
+            string v = null;
+            Func<ILCondition,string> GetVarInCondition = (ILCondition c)=>{
+                if(c.Condition.Arguments.Count == 1)
+                {
+                    if (c.Condition.Arguments[0].Code == GMCode.Call)
+                        return c.Condition.Operand as string; // combine all function calls
+                }
+                if(c.Condition.Arguments.Count == 2)
+                {
+                    if (c.Condition.Arguments[0].Code == GMCode.Var && c.Condition.Arguments[1].Code == GMCode.Constant)
+                        return c.Condition.Arguments[0].ToString();
+                    else if (c.Condition.Arguments[0].Code == GMCode.Constant && c.Condition.Arguments[1].Code == GMCode.Var)
+                        return c.Condition.Arguments[1].ToString();
+                }
+                return null;
+            };
+            Func<ILBlock, bool> InsertChain = (ILBlock block) =>
+             {
+                 if (chain.Conditions.Count < minCombine) return false;
+                 ILCondition last = chain.Conditions.Last();
+                 // if (chain.Conditions.Take(chain.Conditions.Count - 1).Any(x => x.FalseBlock != null && x != last)) break;
+                 if (chain.Conditions.Any(x => x.FalseBlock != null && x != last)) return false;
+                 if (last.FalseBlock != null) // we have an else here
+                 {
+                     chain.Else = last.FalseBlock;
+                     last.FalseBlock = null;
+                 }
+                 Debug.Assert("self.gx" != v);
+                 //    foreach (var a in chain.Conditions) block.Body.Remove(a);
+                 block.Body.RemoveRange(start + 1, chain.Conditions.Count - 1);
+                 block.Body[start] = chain;
+                 return true;
+             };
+            foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+
+                for (int i = 0; i < block.Body.Count; i++)
+                {
+                    ILCondition c = block.Body[i] as ILCondition;
+                    if (c != null)
+                    {
+                        if (v == null)
+                        {
+                            v = GetVarInCondition(c);
+                            if (v == null) continue;
+                            start = i;
+                            chain = new ILElseIfChain();
+                            chain.Conditions.Add(c);
+                        }
+                        else
+                        {
+                            string cv = GetVarInCondition(c);
+                            if (cv != v) {
+                                if (InsertChain(block))
+                                    i = start;
+                                chain = null;
+                                v = null;   
+                            }
+                            else chain.Conditions.Add(c);
+                        }
+                    }
+                    if(chain != null) {
+                        if (InsertChain(block))
+                            i = start;
+                        chain = null;
+                        v = null;
+                    }
+                }
+            }
+           
+        }
         public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
         {
             if (code.Count == 0) return new ILBlock();
@@ -403,25 +483,26 @@ namespace betteribttest.Dissasembler
             if (context.Debug) method.DebugSave("before_loop.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                new LoopsAndConditions().FindLoops(block);
+                new LoopsAndConditions(context).FindLoops(block);
             }
             if (context.Debug) method.DebugSave("before_conditions.txt");
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                new LoopsAndConditions().FindConditions(block);
+                new LoopsAndConditions(context).FindConditions(block);
             }
 
             FlattenBasicBlocks(method);
             if (context.Debug) method.DebugSave("before_gotos.txt");
             Optimize.RemoveRedundantCode(method);
-            new GotoRemoval().RemoveGotos(method);
+            new GotoRemoval(context).RemoveGotos(method);
             Optimize.RemoveRedundantCode(method);
 
-            new GotoRemoval().RemoveGotos(method);
+            new GotoRemoval(context).RemoveGotos(method);
 
-            GotoRemoval.RemoveRedundantCode(method);
-            new GotoRemoval().RemoveGotos(method);
+            GotoRemoval.RemoveRedundantCode(context,method);
+            new GotoRemoval(context).RemoveGotos(method);
 
+            if (context.doLua) CombineIfStatements(method, 3);
             if (context.Debug) method.DebugSave("final.cpp");
             return method;
 

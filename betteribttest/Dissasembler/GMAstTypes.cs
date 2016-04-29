@@ -330,6 +330,12 @@ namespace betteribttest.Dissasembler
         public bool isArray;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
         public GM_Type Type = GM_Type.NoType;
+
+        public bool isFixedVar {  get
+            {
+                return Index is ILValue;
+            }
+        }
         public override IEnumerable<ILNode> GetChildren()
         {
             if (Instance != null) yield return Instance;
@@ -355,7 +361,6 @@ namespace betteribttest.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-            StringBuilder sb = new StringBuilder();
             if (InstanceName != null) output.Write(InstanceName);
             else if (Instance != null) Instance.WriteTo(output);
             else output.Write("stack");
@@ -446,6 +451,7 @@ namespace betteribttest.Dissasembler
 
     public class ILExpression : ILNode
     {
+        public string Comment = null;
         public GMCode Code { get; set; }
         public int Extra { get; set; }
         public object Operand { get; set; }
@@ -610,6 +616,7 @@ namespace betteribttest.Dissasembler
         public override void WriteToLua(ITextOutput output)
         {
             WriteTo(output); // not sure if I have to worry to much about here
+            if (Comment != null) output.Write("--[[ " + Comment + "--]]");
         }
         public override void WriteTo(ITextOutput output)
         {
@@ -627,14 +634,22 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Var:  // should be ILVariable
                         if (Arguments.Count > 0) WriteArgument(output, 0, false);
-                        else output.Write("stack");
-                        output.Write(".");
-                        WriteOperand(output, false);// generic, string name
-                        if (Arguments.Count > 1) // its an array
+                        else
                         {
-                            output.Write('[');
-                            WriteArgument(output, 1, false);
-                            output.Write(']');
+                            ILVariable v = Operand as ILVariable;
+                            if (v.isResolved) v.WriteTo(output);
+                            else
+                            {
+                                output.Write("stack");
+                                output.Write(".");
+                                WriteOperand(output, false);// generic, string name
+                                if (Arguments.Count > 1) // its an array
+                                {
+                                    output.Write('[');
+                                    WriteArgument(output, 1, false);
+                                    output.Write(']');
+                                }
+                            }
                         }
                         break;
                     case GMCode.Call:
@@ -757,6 +772,8 @@ namespace betteribttest.Dissasembler
                         throw new Exception("Not Implmented! ugh");
                 }
             }
+            //   if (Comment != null) output.Write("*/ " + Comment + " */");
+            if (Comment != null) output.Write("--[[ " + Comment + "--]]");
         }
     }
 
@@ -794,13 +811,68 @@ namespace betteribttest.Dissasembler
             this.BodyBlock.WriteTo(output);
         }
     }
+    // mainly for lua, we chain if statements together to make an ElseIf chain
+    public class ILElseIfChain : ILNode
+    {
+        public List<ILCondition> Conditions = new List<ILCondition>();
+        public ILBlock Else = null;
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            foreach (var c in Conditions) yield return c;
+            if (Else != null) yield return Else;
+        }
 
-    public class ILCondition : ILNode
+        public override void WriteTo(ITextOutput output)
+        {
+            for (int i = 0; i < Conditions.Count; i++)
+            {
+                ILCondition condition = Conditions[i];
+                if (i == 0) output.Write("if("); // starting if
+                else output.Write("else if( ");
+                condition.WriteToLua(output);
+                output.WriteLine(" )");
+                if (condition.TrueBlock.Body.Count == 0) output.WriteLine(" /* Empty Block */ ");
+                else condition.TrueBlock.Body.WriteNodes(output,true,true);
+                Debug.Assert(condition.FalseBlock == null); // if not we fucked up somewhere
+            }
+            if (Else != null)
+            {
+                output.WriteLine("else");
+                if (Else.Body.Count == 0) output.WriteLine(" /* Empty Block */ ");
+                else Else.Body.WriteNodes(output, true, true);
+            }
+          //  output.WriteLine("end");
+        }
+
+        public override void WriteToLua(ITextOutput output)
+        {
+            for(int i=0;i < Conditions.Count; i++)
+            {
+                ILCondition condition = Conditions[i];
+                if (i==0) output.Write("if "); // starting if
+                else output.Write("elseif ");
+                condition.WriteToLua(output);
+                output.WriteLine(" then");
+                if (condition.TrueBlock.Body.Count == 0) output.WriteLine(" [[-- Empty Block --]] ");
+                else condition.TrueBlock.Body.WriteLuaNodes(output, true);
+                Debug.Assert(condition.FalseBlock == null); // if not we fucked up somewhere
+            }
+            if(Else != null)
+            {
+                output.WriteLine("else");
+                if (Else.Body.Count == 0) output.WriteLine(" [[-- Empty Block --]] ");
+                else Else.Body.WriteLuaNodes(output, true);
+            }
+            output.WriteLine("end");
+        }
+
+    }
+        public class ILCondition : ILNode
     {
         public ILExpression Condition;
         public ILBlock TrueBlock;   // Branch was taken
         public ILBlock FalseBlock;  // Fall-though
-
+        
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.Condition != null)
@@ -858,11 +930,33 @@ namespace betteribttest.Dissasembler
                         output.Write(": ");
                     }
                 }
-                else {
+                else
+                {
                     output.Write("default: ");
                 }
                 // make sure there is a writeline
                 if (!base.Body.WriteNodes(output, true, false)) output.WriteLine();
+
+
+            }
+            public override void WriteToLua(ITextOutput output)
+            {
+                output.Indent();
+
+                for (int i = 0; i < Body.Count - 1; i++)
+                {
+                    ILNode n = Body[i];
+                    n.WriteToLua(output);
+                    output.WriteLine();
+                }
+                ILExpression e = Body.Last() as ILExpression;
+                if (e == null || e.Code != GMCode.LoopOrSwitchBreak) // don't print the last break
+                {
+                    Body.Last().WriteToLua(output);
+                    output.WriteLine();
+                }
+                output.Unindent();
+
             }
         }
 
@@ -878,6 +972,8 @@ namespace betteribttest.Dissasembler
                 yield return caseBlock;
             }
         }
+#if false
+        // Old case convert code
         public void WriteToLuaCaseBlock(CaseBlock block, ITextOutput output)
         {
             // hack so that it goes into lua easier and I don't have to remove breaks
@@ -939,6 +1035,36 @@ namespace betteribttest.Dissasembler
                 output.Unindent();
             }
             output.Write("end");
+        }
+#endif
+        public override void WriteToLua(ITextOutput output)
+        {
+            for(int i=0; i< CaseBlocks.Count;i++)
+            {
+                CaseBlock c = CaseBlocks[i];
+                if (c.Values == null) output.WriteLine("else"); // default
+                else
+                {
+                    if (i == 0) output.Write("if ");
+                    else output.Write("elseif ");
+                    Condition.WriteToLua(output);
+                    output.Write(" == ");
+                    c.Values[0].WriteToLua(output);
+                    if(c.Values.Count > 1)
+                    {
+                        for (int j = 1; j < c.Values.Count; j++)
+                        {
+                            output.Write(" and ");
+                            Condition.WriteToLua(output);
+                            output.Write(" == ");
+                            c.Values[j].WriteToLua(output);
+                        }
+                    }
+                    output.WriteLine(" then");
+                }
+                c.WriteToLua(output);
+            }
+            output.WriteLine("end");
         }
         public override void WriteTo(ITextOutput output)
         {

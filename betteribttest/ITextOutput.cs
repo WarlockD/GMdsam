@@ -394,17 +394,23 @@ namespace betteribttest
         public void Write(string text)
         {
             WriteIndent();
+            char prev = default(char);
             foreach(var c in text)
             {
-                if (c == '\n')
+                if (c == '\n' || c == '\r')
+                {
+                    prev = c;
+                    continue;
+                }
+                if (prev == '\n' || prev == '\r')
                 {
                     WriteLine();
                     WriteIndent();
+                    if((c == '\n' || prev == '\r') && prev != c) continue; // skip
                 }
-                else {
-                    writer.Write(c);
+                 writer.Write(c);
                     column++;
-                }
+                prev = default(char);
             }
            // column += text.Length;
         }

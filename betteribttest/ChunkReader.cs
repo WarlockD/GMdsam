@@ -165,6 +165,61 @@ namespace betteribttest
     { // HUMM We have 12 allarms!  EACH ALLARM IS A 1 DIMENIONAL ARRAY! WOO!
       //  public int[] header; // first 20 bytes, last byte seems to be a size
       //  public byte[] data;
+        public class Event
+        {
+            public int SubType;
+            public string SubTypeName;
+            public Action[] Actions;
+        }
+        public class Action
+        {
+            public int LibID;
+            public int ID;
+            public int Kind;
+            public bool UseRelative;
+            public bool IsQuestion;
+            public bool UseApplyTo;
+            public int ExeType;
+            public string Name;
+            public int CodeOffset;
+            //    public int ArgumentCount;
+            public int Who;
+            public bool Relative;
+            public bool IsNot;
+
+            public Action(ChunkStream r)
+            {
+                LibID = r.ReadInt32();
+                ID = r.ReadInt32(); // address?
+                                    //   string test = r.readStringFromOffset(ID);
+                Kind = r.ReadInt32();
+                //  int[] test = r.ReadInt32(6);
+
+                UseRelative = r.readIntBool();
+                IsQuestion = r.readIntBool();
+                UseApplyTo = r.readIntBool();
+                ExeType = r.ReadInt32();
+                int string_offset = r.ReadInt32();
+                Name = r.readCacheString(string_offset);
+                Debug.Assert(Name == "");
+                CodeOffset = r.ReadInt32();
+                int ArgumentCount = r.ReadInt32();
+
+                Who = r.ReadInt32();
+                Relative = r.readIntBool();
+
+                IsNot = r.readIntBool();
+                int zero_cause_its_compiled = r.ReadInt32();
+
+
+                Debug.Assert(zero_cause_its_compiled == 0);
+            }
+        }
+        public struct PhysicsVert
+        {
+            public float X;
+            public float Y;
+        }
         public int ObjectIndex = -1;
         public int SpriteIndex = 0;
         public bool Solid = false;
@@ -184,52 +239,122 @@ namespace betteribttest
         public float PhysicsObjectFriction = 0.0f;
         public bool PhysicsObjectAwake = false;
         public bool PhysicsObjectKinematic = false;
-      //  public List<PointF> PhysicsShapeVertices = null;
+        //  public List<PointF> PhysicsShapeVertices = null;
         public string ParentName = null;
         public string SpriteName = null;
-        public int[] alarm_offsets = null; // hummmm!
-
+        public PhysicsVert[] PhysicisVertexs;
+        public int[] eventOffsets = new int[12]; // hummmm!
+        public Event[][] Events;
         public GMK_Object(ChunkEntry e) : base(e) { }
-        
-        public GMK_Object(ChunkEntry e, ChunkStream r, int ObjectIndex) : base(e) {
+
+        public GMK_Object(ChunkEntry e, ChunkStream r, int ObjectIndex) : base(e)
+        {
             this.ObjectIndex = ObjectIndex;
             this.Name = r.readStringFromOffset();
-            this.SpriteIndex= r.ReadInt32();
-            this.Visible= r.readIntBool();
-            this.Solid= r.readIntBool();
-            this.Depth= r.ReadInt32();
-            this.Persistent= r.readIntBool();
-            this.Parent= r.ReadInt32();
-            this.Mask= r.ReadInt32();
-            this.PhysicsObject= r.readIntBool();
-         
-            this.PhysicsObjectSensor= r.readIntBool();
-            this.PhysicsObjectShape= r.ReadInt32();
-            this.PhysicsObjectDensity= r.ReadSingle();
-            this.PhysicsObjectRestitution= r.ReadSingle();
-            this.PhysicsObjectGroup= r.ReadInt32();
-            this.PhysicsObjectLinearDamping= r.ReadSingle();
-            this.PhysicsObjectAngularDamping= r.ReadSingle();
-            this.PhysicsObjectFriction= r.ReadSingle();
-
-
-            //    this.PhysicsObjectAwake= r.readIntBool();  this came out as a single with undertale, version diffrences?
-            //       this.PhysicsObjectKinematic= r.readIntBool();
-
-            // PhysicsShapeVertices // X and Y singles
-            // events, not sure we will ever use this here
-         //   System.Diagnostics.Debug.Assert(this.PhysicsObject == true);
+            this.SpriteIndex = r.ReadInt32();
+            this.Visible = r.readIntBool();
+            this.Solid = r.readIntBool();
+            this.Depth = r.ReadInt32();
+            this.Persistent = r.readIntBool();
+            this.Parent = r.ReadInt32();
+            this.Mask = r.ReadInt32();
+            this.PhysicsObject = r.readIntBool();
+            this.PhysicsObjectSensor = r.readIntBool();
+            this.PhysicsObjectShape = r.ReadInt32();
+            this.PhysicsObjectDensity = r.ReadSingle();
+            this.PhysicsObjectRestitution = r.ReadSingle();
+            this.PhysicsObjectGroup = r.ReadInt32();
+            this.PhysicsObjectLinearDamping = r.ReadSingle();
+            this.PhysicsObjectAngularDamping = r.ReadSingle();
+            int verts = r.ReadInt32();
+            this.PhysicsObjectFriction = r.ReadSingle();
+            this.PhysicsObjectAwake = r.readIntBool(); // this came out as a single with undertale, version diffrences?
+            this.PhysicsObjectKinematic = r.readIntBool();
+            if (verts > 0)
+            {
+                this.PhysicisVertexs = new PhysicsVert[verts];
+                for (int i = 0; i < verts; i++) this.PhysicisVertexs[i] = new PhysicsVert() { X = r.ReadSingle(), Y = r.ReadSingle() };
+            }
+            else this.PhysicisVertexs = new PhysicsVert[0];
+            // eventOffsets = r.ReadInt32(12);// the next 12 are the events.  Each event offset has even more information
+            // do it manualy
+            int count = r.ReadInt32();
+            Debug.Assert(count == 12); // should have 12?
+            int[] mainEvents = r.ReadInt32(count);
+            Events = new Event[12][];
+            for (int i = 0; i < mainEvents.Length; i++)
+            {
+                ChunkEntries eventList = new ChunkEntries(r, mainEvents[i], e.Limit);
+                if (eventList.Count == 0) continue;
+                List<Event> list = new List<Event>();
+                foreach (var eo in eventList)
+                {
+                    Event ev = new Event();
+                    ev.SubType = r.ReadInt32();
+                    ev.SubTypeName = GMContext.EventToString(i, ev.SubType);
+                    ChunkEntries actionList = new ChunkEntries(r, e.Limit);
+                    if (actionList.Count == 0) { ev.Actions = new Action[0]; continue; } // shouldn't happen
+                    List<Action> actions = new List<Action>();
+                    foreach (var ao in actionList)
+                    {
+                        Action a = new Action(r);
+                        actions.Add(a);
+                    }
+                    ev.Actions = actions.ToArray();
+                    list.Add(ev);
+                }
+                Events[i] = list.ToArray();
+            }
         }
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("Name = ");
             sb.AppendFormat("Name = {0,-30}", this.Name);
-            if(this.ParentName != null) sb.AppendFormat("  Parrent = {0,-30}", this.ParentName);
+            if (this.ParentName != null) sb.AppendFormat("  Parrent = {0,-30}", this.ParentName);
             if (this.SpriteName != null) sb.AppendFormat("  Sprite = {0,-30}", this.SpriteName);
             return sb.ToString();
         }
-
+        public void DebugLuaObject(ITextOutput sw,bool outputRawEvents)
+        {
+            sw.WriteLine("self.index = {0}", ObjectIndex);
+            sw.WriteLine("self.name = {0}", this.Name);
+            if (this.Parent >= 0) sw.WriteLine("self.parent = {0}", this.Parent);
+            sw.WriteLine("self.sprite_index = {0}", this.SpriteIndex);
+            sw.WriteLine("self.visible = {0}", this.Visible ? "true" : "false");
+            sw.WriteLine("self.solid = {0}", this.Solid ? "true" : "false");
+            sw.WriteLine("self.persistent = {0}", this.Persistent ? "true" : "false");
+            sw.WriteLine("self.depth = {0}", this.Depth);
+            if (outputRawEvents)
+            {
+                for (int i = 0; i < Events.Length; i++)
+                {
+                    Event[] eo = Events[i];
+                    if (eo == null) continue;
+                    foreach (var e in eo)
+                    {
+                        sw.WriteLine("self.Raw_{0} = {{}}", e.SubTypeName);
+                        sw.Write("table.insert(self.{0},{");
+                        foreach (var a in e.Actions)
+                        {
+                            sw.Write("LibID = {0},", a.LibID);
+                            sw.Write("ID = {0},", a.ID);
+                            sw.Write("Kind = {0},", a.Kind);
+                            sw.Write("UseRelative = {0},", a.UseRelative ? "true" : "false");
+                            sw.Write("IsQuestion = {0},", a.IsQuestion ? "true" : "false");
+                            sw.Write("UseApplyTo = {0},", a.UseApplyTo ? "true" : "false");
+                            sw.Write("ExeType = {0},", a.ExeType);
+                            sw.Write("Name = \"{0}\",", a.Name);
+                            sw.Write("CodeOffset = {0},", a.CodeOffset);
+                            sw.Write("Who = {0},", a.Who);
+                            sw.Write("Relative = {0},", a.Relative ? "true" : "false");
+                            sw.Write("IsNot = {0},", a.IsNot ? "true" : "false");
+                        }
+                        sw.WriteLine("})");
+                    }
+                }
+            }
+        }
     }
 
     public class GMK_Sprite : GMK_Data // mabye this is from object?
@@ -828,10 +953,13 @@ namespace betteribttest
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
             foreach (ChunkEntry e in entries)
             {
+                
                 int string_size = r.ReadInt32() ; //size 
                 GMK_String str = new GMK_String(new ChunkEntry(e.Position + 4, e.Position + 4 + string_size, string_size)); // The strings are looked up by other functions by the offset
                 byte[] bstr = r.ReadBytes(string_size);
                 str.str = System.Text.Encoding.UTF8.GetString(bstr, 0, string_size);
+                r.AddToCache(e.Position, str.str);
+                r.AddToCache(e.Position+4, str.str); // in case it asks for either the postion at the string or before it
                 str.index = stringList.Count;
                 stringList.Add(str);
                 AddData(str);
@@ -839,9 +967,27 @@ namespace betteribttest
         }
         public List<GMK_ScriptIndex> scriptIndex = new List<GMK_ScriptIndex>();
         public Dictionary<int, GMK_ScriptIndex> scriptMap = new Dictionary<int, GMK_ScriptIndex>();
+        public enum CodeDataType
+        {
+            Unkonwn,
+            Script,
+            Create,
+            Draw,
+            Step,
+            Alarm,
+            Other,
+            Collision,
+            Keyboard,
+            Destroy,
+            Mouse,
+            KeyPress,
+        }
+
         public struct CodeData
         {
-            public string ScriptName;
+            public string Name;
+            public CodeDataType Type;
+            public int TypeIndex;
             public BinaryReader stream;
         }
         public IEnumerable<CodeData> GetCodeStreams()
@@ -849,16 +995,25 @@ namespace betteribttest
             foreach (GMK_Code c in codeList)
             {
                 ChunkStream ms = getReturnStream();
-                yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
+                yield return new CodeData() { Name = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
             }
+        }
+        public CodeData GetCodeStreamAtIndex(int index)
+        {
+            GMK_Code c = codeList[index];
+            ChunkStream ms = getReturnStream();
+            return new CodeData() { Name = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
         }
         public IEnumerable<CodeData> GetCodeStreams(string search)
         {
-            foreach (GMK_Code c in codeList.Where(x => x.Name.Contains(search)))
+            List<CodeData> list;
+            if (search.IndexOf("obj_") == 0) list= GetObjectCode(search).ToList();
+            else
             {
                 ChunkStream ms = getReturnStream();
-                yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
+                list = codeList.Where(x => x.Name.Contains(search)).Select(x => new CodeData() { Name = x.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, x.startPosition, x.size)) }).ToList();
             }
+            return list;
         }
         // silly wrapper
         public IEnumerable<CodeData> GetAllScripts()
@@ -869,32 +1024,66 @@ namespace betteribttest
         {
             public List<CodeData> Streams;
             public string ObjectName;
+            public GMK_Object Obj = null;
         }
-
+     
+        public bool ObjectNameMatch(string[] sname, string[] objsplit)
+        {
+            int j = 3;
+            for (int i = 0; i < sname.Length; i++, j++)
+                if (sname[i] != objsplit[j]) return false;
+            // check to see if we are at the end of object split
+            j += 2;
+            if (objsplit.Length != j)
+                return false;
+            return true;
+        }
         public IEnumerable<CodeData> GetObjectCode(string objectName)
         {
-            
+            int index = objectName.IndexOf("obj_");
+            if (index == 0) objectName = objectName.Remove(0, "obj_".Length);
+            string[] sname = objectName.Split('_');
             foreach (GMK_Code c in codeList.Where(x => x.Name.Contains(objectName)))
             {
-                string name = c.Name;
-                int index = name.IndexOf(objectName) + objectName.Length;
-                char test = name[index + 1];
-                if (test == char.ToLower(test))
-                    continue;
+                string[] split = c.Name.Split('_');
+                if (!ObjectNameMatch(sname, split)) continue; // not a name match
+                CodeData data = new CodeData() { Name = c.Name };
+                switch (split[split.Length-2])
+                {
+                    case "Create": data.Type = CodeDataType.Create; break;
+                    case "Other": data.Type = CodeDataType.Other; break;
+                    case "Alarm": data.Type = CodeDataType.Alarm; break;
+                    case "Step": data.Type = CodeDataType.Step; break;
+                    case "Draw": data.Type = CodeDataType.Draw; break;
+                    case "KeyPress":
+                        data.Type = CodeDataType.KeyPress; break;
+                    case "Collision": data.Type = CodeDataType.Collision; break;
+                    case "Destroy": data.Type = CodeDataType.Destroy; break;
+                    case "Keyboard": data.Type = CodeDataType.Keyboard; break;
+                    case "Mouse": data.Type = CodeDataType.Mouse; break;
+                    default:
+                        data.Type = CodeDataType.Unkonwn;
+                        break;
+                }
+                data.TypeIndex = int.Parse(split.Last());
                 ChunkStream ms = getReturnStream();
                 // we need to make it a binary stream
                 ms.Position = c.startPosition;
-                byte[] data = ms.ReadBytes(c.size);
-                yield return new CodeData() { ScriptName = c.Name, stream = new BinaryReader(new MemoryStream(data, false)) };
+                byte[] bdata = ms.ReadBytes(c.size);
+              
+                data.stream = new BinaryReader(new MemoryStream(bdata));
+                yield return data;
             }
         }
-      
+
+        
         public IEnumerable<ObjectCodeReturn> GetAllObjectCode()
         {
             foreach(GMK_Object o in nameMap.Values.OfType<GMK_Object>())
             {
                 string name = o.Name;
                 ObjectCodeReturn ret = new ObjectCodeReturn();
+                ret.Obj = o;
                 ret.Streams = GetObjectCode(name).ToList();
                 ret.ObjectName = name;
                 yield return ret;

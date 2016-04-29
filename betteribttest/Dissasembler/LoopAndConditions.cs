@@ -12,13 +12,13 @@ namespace betteribttest.Dissasembler
     {
         Dictionary<ILLabel, ControlFlowNode> labelToCfNode = new Dictionary<ILLabel, ControlFlowNode>();
 
-        // readonly DecompilerContext context;
+        readonly GMContext context;
 
         uint nextLabelIndex = 0;
 
-        public LoopsAndConditions()//DecompilerContext context)
+        public LoopsAndConditions(GMContext context)//DecompilerContext context)
         {
-            // this.context = context;
+            this.context = context;
         }
 
         public void FindLoops(ILBlock block)
@@ -299,7 +299,7 @@ namespace betteribttest.Dissasembler
                         //    Debug.Assert(fallLabel == endBlock); // this should be true
                             switchCondition = cases[0]; // thats the switch arg
                             cases.RemoveAt(0); // remove the switch condition
-
+                        
                             // Replace the switch code with ILSwitch
                             ILSwitch ilSwitch = new ILSwitch() { Condition = switchCondition };
                             block.Body.RemoveTail(GMCode.Switch, GMCode.B);
@@ -359,10 +359,7 @@ namespace betteribttest.Dissasembler
                                         });
                                     }
                                 }
-                                if (cases[i].Code != GMCode.DefaultCase)
-                                    caseBlock.Values.Add(cases[i].Arguments[0]);
-                                else
-                                    caseBlock.Values.Add(new ILExpression(GMCode.DefaultCase, null));
+                                caseBlock.Values.Add(cases[i].Arguments[0]);
                             }
 
                             // Heuristis to determine if we want to use fallthough as default case

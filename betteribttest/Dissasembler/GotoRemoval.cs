@@ -11,7 +11,11 @@ namespace betteribttest.Dissasembler
     {
         Dictionary<ILNode, ILNode> parent = new Dictionary<ILNode, ILNode>();
         Dictionary<ILNode, ILNode> nextSibling = new Dictionary<ILNode, ILNode>();
-
+        GMContext context;
+        public GotoRemoval(GMContext context)
+        {
+            this.context = context;
+        }
         public void RemoveGotos(ILBlock method)
         {
             // Build the navigation data
@@ -43,10 +47,10 @@ namespace betteribttest.Dissasembler
                 }
             } while (modified);
 
-            RemoveRedundantCode(method);
+            RemoveRedundantCode(context,method);
         }
 
-        public static void RemoveRedundantCode(ILBlock method)
+        public static void RemoveRedundantCode(GMContext context,ILBlock method)
         {
             // Remove dead lables and nops and any popzs left
             HashSet<ILLabel> liveLabels = new HashSet<ILLabel>(method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()));
@@ -99,7 +103,6 @@ namespace betteribttest.Dissasembler
                 {
                     ilSwitch.CaseBlocks.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
                 }
-
             }
  
             // Remove redundant return at the end of method
@@ -134,7 +137,7 @@ namespace betteribttest.Dissasembler
             if (modified)
             {
                 // More removals might be possible
-                new GotoRemoval().RemoveGotos(method);
+                new GotoRemoval(context).RemoveGotos(method);
             }
         }
 

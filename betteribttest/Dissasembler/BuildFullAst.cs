@@ -403,6 +403,41 @@ namespace betteribttest.Dissasembler
               //  Debug.Assert(false); // coudln't find the end block
             }
         }
+        // lua dosn't have switch expressions, so we are changing this to one big if statement
+        // it would proberly look beter if we made some kind of "ifelse" code, but right now
+        // this is good enough
+        void LuaConvertSwitchExpression(ILNode condition, List<ILNode> list,  List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            // we are in a case block, check if its the first block
+            ILBasicBlock current = head;
+            ILLabel nextCase;
+            ILLabel caseTrue;
+            ILExpression fakeArgument;
+            while (current.MatchLastAndBr(GMCode.Bt, out caseTrue, out fakeArgument, out nextCase))
+            {
+                int len = current.Body.Count;
+                ILNode operand;
+                if (!current.MatchAt(len - 4, GMCode.Push, out operand)) throw new Exception("fix");
+                if (!(operand is ILValue)) throw new Exception("Can only handle constants right now");
+                // ok, lets replace the dup with the expression, change to a bf, then swap the labels
+                // First do the labels as the indexes will screw up
+                ILExpression convert = current.Body.Last() as ILExpression;
+                convert.Operand = caseTrue;
+                convert = current.Body[len - 2] as ILExpression;
+                convert.Operand = nextCase;
+                convert.Code = GMCode.Bf;
+                convert = current.Body[len - 5] as ILExpression;
+                if (current == head)
+                    current.Body.RemoveAt(len - 5); // if its the current head, we don't need to change the dup
+                else
+                {
+                    convert.Code = GMCode.Push;
+                    convert.Operand = condition;
+                }
+                current = labelToBasicBlock[nextCase];
+            }
+            // eveything else should be cleared out by all the removals
+        }
         void ProcessExpressions(List<ILNode> body, ILBasicBlock head, int pos)
         {
             Stack<ILNode> stack = new Stack<ILNode>();
@@ -419,16 +454,15 @@ namespace betteribttest.Dissasembler
                     head.MatchAt(i + 2, GMCode.Seq) &&
                     head.MatchAt(i + 3, GMCode.Bt))
                 {
-                    CreateSwitchExpresion(stack.Pop(), list, body, head, pos);
-
-
-                    break; // we are done with this block
+                  //  if (context.doLua)
+                 //       LuaConvertSwitchExpression(stack.Pop(), list, body, head, pos); // fall though to finish the block
+                //    else
+                  //  {
+                        CreateSwitchExpresion(stack.Pop(), list, body, head, pos);
+                        break; // we are done with this block
+                   // }
                 }
-                else
-                {
-                    Status s = ProcessExpression(list, head, i, stack);
-
-                }
+                Status s = ProcessExpression(list, head, i, stack);
             }
             head.Body = list;
 

@@ -340,7 +340,11 @@ namespace betteribttest
         Stack<int> posStack = new Stack<int>();
         // used on reading strings so we don't go creating a new one for thousands of things
         Dictionary<int, string> stringCache = new Dictionary<int, string>(); 
-
+        public void AddToCache(int position, string str)
+        {
+            if(!stringCache.ContainsKey(position))
+                stringCache.Add(position, str);
+        }
         public byte[] ChunkData { get; private set; }
         public ChunkStream(Stream s) : base(s) { DebugPosition = false; ChunkData = null;  }
         public ChunkStream(Stream s, Encoding e) : base(s,e) { DebugPosition = false; ChunkData = null; }
@@ -458,13 +462,45 @@ namespace betteribttest
             byte[] bytes = ReadBytes(count);
             return System.Text.Encoding.UTF8.GetString(bytes);
         }
-        public string readStringFromOffset()
+        public string readStringWithLength(int offset)
+        {
+            PushSeek(offset);
+            string str;
+            int posStart = this.Position;
+            if (stringCache.TryGetValue(posStart, out str)) return str;
+            int size = this.ReadInt32();
+            if (size != 0)
+            {
+                byte[] bytes = this.ReadBytes(size);
+                str = System.Text.Encoding.UTF8.GetString(bytes);
+            }
+            else str = "";
+            stringCache[posStart] = str;
+            PopPosition();
+            return str;
+        }
+        public string readStringWithLength()
         {
             int offset = this.ReadInt32();
+            return readStringWithLength(offset);
+        }
+        public string readCacheString(int pos)
+        {
+            string str;
+            if (stringCache.TryGetValue(pos, out str)) return str;
+            else throw new Exception("FUUUCK");
+        }
+        public string readStringFromOffset(int offset)
+        {
             PushSeek(offset);
             string s = ReadVString();
             PopPosition();
             return s;
+        }
+        public string readStringFromOffset()
+        {
+            int offset = this.ReadInt32();
+            return readStringFromOffset(offset);
         }
         string ReadVString() // We shouldn't throw here
         {
