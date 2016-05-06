@@ -74,7 +74,11 @@ namespace betteribttest.Dissasembler
                     ILValue value = expr.Operand as ILValue;
                     if(value.Value is int)
                     {
-                        value.ValueText = context.InstanceToString((int)value.Value);
+                        int ivalue = (int) value.Value;
+                        if (ivalue == 0)
+                            value.ValueText = "stack"; // hack for now, some of these methods do this humm
+                        else
+                            value.ValueText = context.InstanceToString(ivalue);
                     }
                 }
                 (pushBlock.Body[pushBlock.Body.Count - 2] as ILExpression).Arguments.Add(expr);

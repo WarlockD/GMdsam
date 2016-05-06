@@ -7,6 +7,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 namespace betteribttest
 {
@@ -14,172 +15,139 @@ namespace betteribttest
     {
 
         static GMContext context;
-        static ILValue CheckConstant(ILExpression expr)
+        static void spriteArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
-            {
-                ILValue arg = expr.Operand as ILValue;
-                if (arg != null) return arg;
-            }
-            return null;
+            ILValue arg;
+            if (expr.MatchIntConstant(out arg))
+                arg.ValueText = "\"" + context.IndexToSpriteName((int)arg.Value) + "\"";
+
         }
-        static void spriteArgument(ILExpression expr)
+        static void ordArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
+            ILValue arg;
+            if (expr.MatchIntConstant( out arg))
             {
-                ILValue arg = expr.Operand as ILValue;
-                int instance;
-                if (arg.TryParse(out instance))
-                {
-                    arg.ValueText = "\"" + context.IndexToSpriteName(instance) + "\"";
-                }
-            }
-        }
-        static void ordArgument(ILExpression expr)
-        {
-            if (expr.Code == GMCode.Constant)
-            {
-                ILValue arg = expr.Operand as ILValue;
-                int instance;
-                if (arg.TryParse(out instance))
-                {
-                    char c = (char) instance;
-                    if (char.IsControl(c))
-                        arg.ValueText = "\'\\x" + instance.ToString("X2") + "\'";
-                    else
-                        arg.ValueText = "\'" + c + "\'";
-                }
+                char c = (char) (int) arg.Value;
+                if (char.IsControl(c))
+                    arg.ValueText = "\'\\x" + ((int)arg.Value).ToString("X2") + "\'";
+                else
+                    arg.ValueText = "\'" + c + "\'";
             }
         }
 
-        static void soundArgument(ILExpression expr)
+        static void soundArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
+
+            ILValue arg;
+            if (expr.MatchIntConstant(out arg))
             {
-                ILValue arg = expr.Operand as ILValue;
-                int instance;
-                if (arg.TryParse(out instance))
-                {
-                    arg.ValueText = "\"" + context.IndexToAudioName(instance) + "\"";
-                }
+                int instance = (int) arg.Value;
+                arg.ValueText = "\"" + context.IndexToAudioName(instance) + "\"";
             }
         }
-        static void instanceArgument(ILExpression expr)
+        static void instanceArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
-            {
-                ILValue arg = expr.Operand as ILValue;
-                int instance;
-                if (arg.TryParse(out instance))
-                {
-                    arg.ValueText = "\"" + context.InstanceToString(instance) + "\"";
-                }
-            }
+            ILValue arg;
+            if (expr.MatchIntConstant(out arg))
+                arg.ValueText = "\"" + context.InstanceToString((int) arg.Value) + "\"";
         }
-        static void fontArgument(ILExpression expr)
+        static void fontArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
-            {
-                ILValue arg = expr.Operand as ILValue;
-                int instance;
-                if (arg.TryParse(out instance))
-                {
-                    arg.ValueText = "\"" + context.IndexToFontName(instance) + "\"";
-                }
-            }
+            ILValue arg;
+            if (expr.MatchIntConstant(out arg))
+                arg.ValueText = "\"" + context.IndexToFontName((int) arg.Value) + "\"";
+
         }
         // This just makes color look easyer to read
-        static void colorArgument(ILExpression expr)
+        static void colorArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
+            ILValue arg;
+            if (expr.MatchIntConstant(out arg))
             {
-                ILValue arg = expr.Operand as ILValue;
-                int color;
-                if (arg.TryParse(out color))
-                {
-                    byte red = (byte) (color & 0xFF);
-                    byte green = (byte) (color >> 8 & 0xFF);
-                    byte blue = (byte) (color >> 16 & 0xFF);
-                    arg.ValueText = "Red=" + red + " ,Green=" + green + " ,Blue=" + blue;
-                }
+                int color = (int) arg.Value;
+                byte red = (byte) (color & 0xFF);
+                byte green = (byte) (color >> 8 & 0xFF);
+                byte blue = (byte) (color >> 16 & 0xFF);
+                arg.ValueText = "{ " + red + ", " + green + ", " + blue + " }";  
             }
         }
-        static void scriptArgument(ILExpression expr)
+        static void scriptArgument(ILNode expr)
         {
-            if (expr.Code == GMCode.Constant)
+            ILValue arg;
+            if (expr.MatchIntConstant(out arg))
+                arg.ValueText = "\"" + context.IndexToScriptName((int) arg.Value) + "\"";
+        }
+        static void scriptExecuteFunction(ILCall call)
+        {
+            // Fancy footwork for lua as we have to send self
+            int arg;
+            string scriptName = null;
+            if (!call.Arguments[0].MatchIntConstant(out arg) || (scriptName = context.IndexToScriptName(arg)) == null) return;
+         //   call.Enviroment = "self";
+            call.Name = scriptName; // change it to the script name
+            call.Arguments[0] = new ILVariable() { Name = "self", isLocal = true, isResolved = true }; // change the first argument to self
+            // now check for undertale scripts and make those nice
+            switch (scriptName)
             {
-                ILValue arg = expr.Operand as ILValue;
-                int instance;
-                if (arg.TryParse(out instance))
-                {
-                    arg.ValueText = "\"" + context.IndexToScriptName(instance) + "\"";
-
-                }
+                case "SCR_TEXTSETUP": // not sure why we have this, you run it agenst OBJ_WRITER
+                    fontArgument(call.Arguments[1]);
+                    colorArgument(call.Arguments[2]);
+                    break;
             }
         }
-        static void scriptExecuteFunction(string n, List<ILExpression> l)
+        static void instanceCreateFunction(ILCall call)
         {
-            Debug.Assert(l.Count > 0);
-            scriptArgument(l[0]);
+            Debug.Assert(call.Arguments.Count == 3);
+            instanceArgument(call.Arguments[2]);
         }
-        static void instanceCreateFunction(string n, List<ILExpression> l)
+        static void draw_spriteExisits(ILCall call)
         {
-            Debug.Assert(l.Count == 3);
-            instanceArgument(l[2]);
-        }
-        static void draw_spriteExisits(string n, List<ILExpression> l)
-        {
-            Debug.Assert(l.Count > 1);
-            spriteArgument(l[0]);
+            Debug.Assert(call.Arguments.Count > 1);
+            spriteArgument(call.Arguments[0]);
         }
 
-        static void instanceExisits(string n, List<ILExpression> l)
+        static void instanceExisits(ILCall call)
         {
-            Debug.Assert(l.Count == 1);
-            instanceArgument(l[0]);
+            Debug.Assert(call.Arguments.Count == 1);
+            instanceArgument(call.Arguments[0]);
         }
-        static void instanceCollision_line(string n, List<ILExpression> l)
+        static void instanceCollision_line(ILCall call)
         {
-            Debug.Assert(l.Count > 4);
-            instanceArgument(l[3]);
+            Debug.Assert(call.Arguments.Count > 4);
+            instanceArgument(call.Arguments[3]);
         }
-        static void soundPlayStop(string n, List<ILExpression> l)
+        static void soundPlayStop(ILCall call)
         {
-            Debug.Assert(l.Count > 4);
-            instanceArgument(l[0]);
+            Debug.Assert(call.Arguments.Count > 4);
+            instanceArgument(call.Arguments[0]);
         }
         public class CallFunctionLookup
         {
-            public delegate void FunctionToText(string funcname, List<ILExpression> arguments);
-            public delegate void FunctionToComment(string funcname, ILExpression expr);
+            public delegate void FunctionToText(ILCall call);
             Dictionary<string, FunctionToText> _lookup = new Dictionary<string, FunctionToText>();
-            Dictionary<string, FunctionToComment> _functionComment = new Dictionary<string, FunctionToComment>();
             public void Add(string funcname, FunctionToText func) { _lookup.Add(funcname, func); }
-            public void Add(string funcname, FunctionToComment func) { _functionComment.Add(funcname, func); }
-            public void FixCalls(ILBlock block)
+             public void FixCalls(ILBlock block)
             {
-                foreach (var call in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Call))
+                foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Call))
                 {
-                    string funcName = call.Operand.ToString();
+                    ILCall call = e.Operand as ILCall;
                     FunctionToText func;
-                    if (_lookup.TryGetValue(funcName, out func)) func(funcName, call.Arguments);
-                    FunctionToComment funcCom;
-                    if (_functionComment.TryGetValue(funcName, out funcCom)) funcCom(funcName, call);
+                    if (_lookup.TryGetValue(call.Name, out func)) func(call);
                 }
             }
         }
         public class AssignRightValueLookup
         {
-            public delegate void ArgumentToText(ILExpression argument);
+            public delegate void ArgumentToText(ILNode argument);
             Dictionary<string, ArgumentToText> _lookup = new Dictionary<string, ArgumentToText>();
             public void Add(string varName, ArgumentToText func) { _lookup.Add(varName, func); }
             public void FixCalls(ILBlock block)
             {
                 // Check for assigns
-                foreach (var push in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Assign))
+                foreach (var push in block.GetSelfAndChildrenRecursive<ILAssign>())
                 {
-                    ArgumentToText func;
-                    if (_lookup.TryGetValue(push.Arguments[0].ToString(), out func)) func(push.Arguments[0]);
+                    ArgumentToText func; 
+                    if (_lookup.TryGetValue(push.Variable.FullName, out func)) func(push.Expression);
                 }
                 // Check for equality
                 foreach (var condition in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Seq || x.Code == GMCode.Sne))
@@ -207,69 +175,46 @@ namespace betteribttest
             FunctionFix.Add("script_execute", scriptExecuteFunction);
             FunctionFix.Add("draw_sprite", draw_spriteExisits);
             FunctionFix.Add("draw_sprite_ext", draw_spriteExisits);
-            FunctionFix.Add("snd_stop", (string name, List<ILExpression> l) =>
+            FunctionFix.Add("snd_stop", (ILCall call) =>
             {
-                Debug.Assert(l.Count > 0);
-                soundArgument(l[0]);
+                Debug.Assert(call.Arguments.Count > 0);
+                instanceArgument(call.Arguments[0]);
             });
-            FunctionFix.Add("snd_play", (string name, List<ILExpression> l) =>
+            FunctionFix.Add("snd_play", (ILCall call) =>
             {
-                Debug.Assert(l.Count > 0);
-                soundArgument(l[0]);
+                Debug.Assert(call.Arguments.Count > 0);
+                instanceArgument(call.Arguments[0]);
+            });
+            FunctionFix.Add("string", (ILCall call) =>
+            {
+                Debug.Assert(call.Arguments.Count == 1);
+                call.Name = "tostring"; // lua uses two string
+            });
+            FunctionFix.Add("real", (ILCall call) =>
+            {
+                Debug.Assert(call.Arguments.Count ==1);
+                call.Name = "tonumber"; // lua uses two string
             });
 
 
-            FunctionFix.Add("draw_set_font", (string funcname, List<ILExpression> l) =>
+            FunctionFix.Add("draw_set_font", (ILCall call) =>
             {
-                Debug.Assert(l.Count == 1);
-                fontArgument(l[0]);
+                Debug.Assert(call.Arguments.Count == 1);
+                fontArgument(call.Arguments[0]);
             });
-            FunctionFix.Add("draw_set_color", (string funcname, List<ILExpression> l) =>
+            FunctionFix.Add("draw_set_color", (ILCall call) =>
             {
-                Debug.Assert(l.Count == 1);
-                colorArgument(l[0]);
+                Debug.Assert(call.Arguments.Count == 1);
+                colorArgument(call.Arguments[0]);
+
             });
-            CallFunctionLookup.FunctionToComment keyboard_help = (string funcname, ILExpression expr)=> 
+            FunctionFix.Add("merge_color", (ILCall call) =>
             {
-                Debug.Assert(expr.Arguments.Count == 1);
-                ILExpression arg = expr.Arguments[0];
-                if (arg.Code == GMCode.Constant)
-                { // this was never changed to ILValue?
-                    do
-                    {
-                        int key = 0;
-                        if (arg.Operand is ILValue)
-                        {
-                            if (!(arg.Operand as ILValue).TryParse(out key)) break;
-                        }
-                        else if (arg.Operand is int)
-                        {
-                            key = (int) arg.Operand;
-                        }
-                        else break;
-
-
-                        expr.Comment = GMContext.KeyToString(key);
-
-                    } while (false);
-                }
-               
-            };
-            FunctionFix.Add("keyboard_key_press", keyboard_help);
-            FunctionFix.Add("keyboard_key_release", keyboard_help);
-            FunctionFix.Add("keyboard_check", keyboard_help);
-            FunctionFix.Add("keyboard_check_direct", keyboard_help);
-            FunctionFix.Add("keyboard_check_released", keyboard_help);
-            FunctionFix.Add("keyboard_multicheck", keyboard_help);
-            FunctionFix.Add("keyboard_check_pressed", keyboard_help);
-            FunctionFix.Add("keyboard_clear", keyboard_help);
-
-
-            FunctionFix.Add("ord", (string funcname, List<ILExpression> l) =>
-            {
-                Debug.Assert(l.Count == 1);
-                ordArgument(l[0]);
+                Debug.Assert(call.Arguments.Count == 3);
+                colorArgument(call.Arguments[0]);
+                colorArgument(call.Arguments[1]);
             });
+
             PushFix.Add("self.sym_s", spriteArgument);
             PushFix.Add("self.mycolor", colorArgument);
             PushFix.Add("self.myfont", fontArgument);
@@ -323,11 +268,12 @@ namespace betteribttest
             Instructions();
             Environment.Exit(i);
         }
+        
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
 
-        static ILBlock DecompileBlock(GMContext context, Stream code, string filename, string header = null)
+        static ILBlock DecompileBlock(GMContext context, Stream code, string filename=null, string header = null)
         {
             var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(code, context);
             if (context.doAsm)
@@ -339,23 +285,30 @@ namespace betteribttest
             ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
             FunctionFix.FixCalls(block);
             PushFix.FixCalls(block);
-
-            if (context.doLua)
+            if(filename != null)
             {
-                filename += ".lua";
-                block.DebugSaveLua(filename, header);
+                if (context.doLua)
+                {
+                    filename += ".lua";
+                    block.DebugSaveLua(filename, header);
+                }
+                else
+                {
+                    filename += ".cpp";
+                    block.DebugSave(filename, header);
+                }
             }
-            else
-            {
-                filename += ".cpp";
-                block.DebugSave(filename, header);
-            }
+            
 
             // Console.WriteLine("Writing: "+ filename);
             return block;
         }
-
         static string DecompileBlockLua(GMContext context, Stream code, string filename, bool debugSave = true)
+        {
+            ILBlock method;
+            return DecompileBlockLua(context, code, filename, out method, debugSave);
+        }
+        static string DecompileBlockLua(GMContext context, Stream code, string filename, out ILBlock block, bool debugSave = true)
         {
             var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(code, context);
             if (context.doAsm)
@@ -364,7 +317,7 @@ namespace betteribttest
                 betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
             }
             string raw_filename = Path.GetFileName(filename);
-            ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+            block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
             FunctionFix.FixCalls(block);
             PushFix.FixCalls(block);
             filename += ".lua";
@@ -560,26 +513,9 @@ namespace betteribttest
         }
         static void objectHeadder(ITextOutput output, GMK_Object obj)
         {
-            // output.WriteLine("if !_objects then _objects = {} end");
-            //   output.WriteLine("if !_instances then _instances = {} end");
-            output.WriteLine("local G = this");
             output.WriteLine("function new_{0}(self)", obj.Name);
             output.Indent();
-            output.WriteLine("table.insert(_instances,obj)");
             output.WriteLine("function event_user(v) self.UserEvent[v]() end");
-            output.WriteLine("function create_instance(x,y,name)");
-            output.Indent();
-            output.WriteLine("local func = _objects[name]");
-            output.WriteLine("if func then ");
-            output.Indent();
-            output.WriteLine("local obj = func(__NEWGAMEOBJECT())");
-            output.WriteLine("return obj");
-            output.Unindent();
-            output.WriteLine("end");
-            output.Unindent();
-            output.WriteLine("end");
-            output.WriteLine("function destroy_instance() G.destroy_instance(self) end");
-            output.WriteLine("self.destroy_instance =  destroy_instance -- for with statements");
             output.WriteLine();
 
         }
@@ -592,15 +528,90 @@ namespace betteribttest
             output.WriteLine("_objects[\"{0}\"] = new_{0}", obj.Name);
             output.WriteLine("_objects[{1}] = new_{0}", obj.Name,obj.ObjectIndex); // put it in both to make sure we can look it up by both
         }
+        class LuaVarCheckCashe
+        {
+            public class VarInfo : IEquatable<VarInfo>
+            {
+                public string Name;
+                public string Instance = null;
+                public string FullText;
+                public bool isGlobal { get { return Instance == "global"; } }
+                public bool isArray = false;
+                public bool Equals(VarInfo o)
+                {
+                    return o.Name == Name && o.Instance == Instance;
+                }
+                public override bool Equals(object obj)
+                {
+                    if (object.ReferenceEquals(obj, null)) return false;
+                    if (object.ReferenceEquals(obj, this)) return true;
+                    VarInfo v = obj as VarInfo;
+                    return v != null && Equals(v);
+                }
+
+                public override int GetHashCode()
+                {
+                    return  Name.GetHashCode();
+                }
+                public override string ToString()
+                {
+                    if (Instance != null) return Instance + '.' + Name;
+                    else return Name;
+                }
+            }
+            Dictionary<string, VarInfo> allvars = new Dictionary<string, VarInfo>();
+
+            HashSet<VarInfo> allvarsset = new HashSet<VarInfo>();
+            HashSet<VarInfo> allpinned = new HashSet<VarInfo>();
+
+            public void AddVar(ILVariable v)
+            {
+                string name = v.FullName;
+                if (allvars.ContainsKey(name)) return;
+                VarInfo vi = new VarInfo();
+                vi.Name = v.Name;
+                if (!v.isLocal) vi.Instance = v.InstanceName ?? v.Instance.ToString();
+
+                vi.isArray = v.Index != null;
+                allvars.Add(name, vi);
+                allvarsset.Add(vi);
+            }
+            public void AddVars(ILBlock method)
+            { // what we do here is make sure
+                foreach (var v in method.GetSelfAndChildrenRecursive<ILVariable>()) AddVar(v);
+                foreach (var a in method.GetSelfAndChildrenRecursive<ILAssign>())
+                {
+                    string name = a.Variable.FullName;
+                    var v = allvars[name];
+                    allpinned.Add(v);
+                }
+            }
+            public IEnumerable<VarInfo> GetAll()
+            {
+                return allvarsset;
+            }
+            public IEnumerable<VarInfo> GetAll(Func<VarInfo, bool> pred)
+            {
+                return GetAll().Where(pred);
+            }
+            public IEnumerable<VarInfo> GetAllUnpinned()
+            {
+                return allvarsset.Except(allpinned);
+            }
+            public IEnumerable<VarInfo> GetAllUnpinned(Func<VarInfo,bool> pred)
+            {
+                return GetAllUnpinned().Where(pred);
+            }
+        }
         public static void MakeObject(GMContext context, ChunkReader cr, GMK_Object obj)
         {
+         //   ILVariable.WriteSelfOnTextOut = false;
             HashSet<string> SawEvent = new HashSet<string>();
-            using (StreamWriter sw = new StreamWriter(obj.Name + ".lua"))
+            LuaVarCheckCashe cache = new LuaVarCheckCashe();
+            string objectcode = null;
+            using (StringWriter sw = new StringWriter()) 
             {
                 PlainTextOutput ptext = new PlainTextOutput(sw);
-                objectHeadder(ptext, obj);
-                obj.DebugLuaObject(ptext,false);
-                ptext.WriteLine("self.events = {}");
                 for (int i = 0; i < obj.Events.Length; i++)
                 {
                     if (obj.Events[i] == null) continue;
@@ -611,9 +622,16 @@ namespace betteribttest
                         foreach (var a in e.Actions)
                         {
                             var codeData = cr.GetCodeStreamAtIndex(a.CodeOffset);
-                            string code = DecompileBlockLua(context, codeData.stream.BaseStream, codeData.Name, false);
+                            if (context.Debug)
+                            {
+                                Debug.WriteLine("Name: " + codeData.Name + " Event: " + GMContext.EventToString(i, e.SubType));
+                            }
+                            ILBlock method;
+                            string code = DecompileBlockLua(context, codeData.stream.BaseStream, codeData.Name, out method, false);
+                            cache.AddVars(method);
                             StringBuilder sb = new StringBuilder(code);
                             code = sb.ToString();
+                        
                             ptext.WriteLine("function {0}()", codeData.Name);
                             ptext.Indent();
                             // dosn't handle line endings well
@@ -690,6 +708,23 @@ namespace betteribttest
                             break;
                     }
                 }
+                objectcode = sw.ToString();
+            }
+
+            using (StreamWriter sw = new StreamWriter(obj.Name + ".lua"))
+            {
+                // ok try to pin some global array values first
+                foreach(var v in  cache.GetAll(x=> x.isGlobal && x.isArray))
+                    sw.WriteLine("{0} = {0} or {{}}", v.ToString()); // bunch of null correlesing
+                sw.WriteLine();
+                PlainTextOutput ptext = new PlainTextOutput(sw);
+                objectHeadder(ptext, obj);
+
+                obj.DebugLuaObject(ptext, false);
+                ptext.WriteLine("self.events = {}");
+                foreach (var v in cache.GetAll(x => !x.isGlobal && x.isArray))
+                    sw.WriteLine("{0} = {0} or {{}}", v.ToString()); // bunch of null correlesing
+                ptext.WriteLine(objectcode);
                 objectFooter(ptext, obj);
             }
         }
@@ -714,6 +749,41 @@ namespace betteribttest
            // Task.WaitAll(tasks.ToArray());
 
          //   threads
+        }
+        static Regex ScriptArgRegex = new Regex(@"self\.argument(\d+)", RegexOptions.Compiled);
+        static void WriteScript(GMContext context, ChunkReader.CodeData data, TextWriter tw, string header = null)
+        {
+            ILBlock block = DecompileBlock(context, data.stream.BaseStream);
+            string scriptName = data.Name.Remove(0, "gml_Script_".Length);
+            context.DebugName = scriptName; // in case of debug
+            int arguments = 0;
+            //   Debug.Assert(scriptName != "SCR_TEXTSETUP");
+            foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>())
+            {
+                Match match = ScriptArgRegex.Match(v.FullName);
+                if (match != null && match.Success)
+                {
+                    int arg = int.Parse(match.Groups[1].Value) + 1; // we want the count
+                    if (arg > arguments) arguments = arg;
+                    v.isLocal = true; // arguments are 100% local
+                }
+            }
+            PlainTextOutput ptext = new PlainTextOutput(tw);
+            if (context.doLua)
+            {
+                ptext.WriteLine("-- ScriptName: {0} ", data.Name);
+                if (header != null) ptext.WriteLine("-- {0}", header);
+                ptext.Write("function {0}(self", scriptName);
+                for (int i = 0; i < arguments; i++) ptext.Write(",argument{0}", i);
+                ptext.WriteLine(")");
+                ptext.Indent();
+                block.Body.WriteLuaNodes(ptext, true);
+                ptext.Unindent();
+                ptext.WriteLine("end");
+            } else
+            {
+                throw new Exception("Not supported yet");
+            }
         }
 
         static void Main(string[] args)
@@ -839,7 +909,6 @@ namespace betteribttest
                             foreach (var a in cr.GetAllObjectCode())
                             {
                                 var info = Directory.CreateDirectory(a.ObjectName);
-#if DEBUG
                                 foreach (ChunkReader.CodeData files in a.Streams)
                                 {
                                     FilesFound.Add(files.Name);
@@ -858,44 +927,18 @@ namespace betteribttest
                                         }
                                     }).Start(files);
                                 }
-#else
-                                foreach (var files in a.Streams)
-                                {
-                                    string filename = Path.Combine(info.FullName, files.ScriptName);
-                                    try
-                                    {
-                                        DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.ScriptName);
-                                        FilesFound.Add(files.ScriptName);
-                                    }
-                                    catch (Exception e)
-                                    { 
-                                        WriteErrorLine(string.Format("Object: {0}  Error: {1}", files.ScriptName, e.Message));
-                                    }
-                                }
-#endif
                             }
                         }
                         break;
                     case "scripts":
                         {
                             var info = Directory.CreateDirectory("scripts");
+                            Regex argMatch = new Regex(@"self\.argument(\d+)", RegexOptions.Compiled);
                             foreach (var files in cr.GetAllScripts())
                             {
-
                                 string filename = Path.Combine(info.FullName, files.Name);
-#if !DEBUG
-                                try
-                                {
-#endif
-                                    DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.Name);
-                                    FilesFound.Add(files.Name);
-#if !DEBUG
-                                }
-                                catch (Exception e)
-                                {
-                                    WriteErrorLine(string.Format("Script: {0}  Error: {1}", files.ScriptName, e.Message));
-                                }
-#endif
+                                using (StreamWriter sw = new StreamWriter(filename + ".lua"))
+                                    WriteScript(context, files, sw);
                             }
                         }
                         break;
@@ -906,29 +949,21 @@ namespace betteribttest
                 }
             } else
             {
-                
+
                 foreach (var files in cr.GetCodeStreams(toSearch))
                 {
-               
-                    //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
-                    string filename = files.Name;
-                    if(context.doLuaObject)
-                    {
-                        
-                    } else
-                    {
-                        try
-                        {
-                            DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.Name);
-                            FilesFound.Add(files.Name);
+                    string filename = Path.ChangeExtension(files.Name, context.doLua ? ".lua" : ".js");
 
-                        }
-                        catch (Exception e)
-                        {
-                            WriteErrorLine(string.Format("Script: {0}  Error: {1}", files.Name, e.Message));
-                        }
+                    if (files.Name.Contains("gml_Script_"))// its a script
+                    {
+                        using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, files, sw);
                     }
-                   
+                    else // its an object
+                    {
+                        DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.Name);
+                        FilesFound.Add(files.Name);
+                    }
+                    //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
                 }
             }
 

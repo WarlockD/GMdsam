@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using betteribttest.Dissasembler;
+using System.IO;
 
 namespace betteribttest
 {
@@ -18,6 +19,17 @@ namespace betteribttest
         public bool doLua = false;
         public bool doAsm = false;
         public bool doLuaObject = false;
+        public string DebugName = null;
+        public string MakeDebugFileName(string file)
+        {
+            if (DebugName != null)
+            {
+                string filename = Path.GetFileNameWithoutExtension(file);
+                filename = DebugName + "_" + filename + Path.GetExtension(file);
+                return file.Replace(Path.GetFileName(file), filename); // so we keep any path information
+            }
+            else return file;
+        }
         string[] instanceList;
         string[] scriptList;
         string[] fontList;

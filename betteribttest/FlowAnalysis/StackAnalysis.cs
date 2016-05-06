@@ -212,6 +212,7 @@ namespace betteribttest.Dissasembler
                  labels.Add(l.Address, lookup);
                  return lookup;
              };
+            ILExpression prev = null;
             foreach (var i in _method.Values)
             {
           //      Debug.Assert(nodes.Count != 236);
@@ -223,6 +224,14 @@ namespace betteribttest.Dissasembler
                 switch (code)
                 {
                     case GMCode.Conv:
+                     //   Debug.Assert(prev.Code != GMCode.Call);
+                        Debug.Assert(prev.Code != GMCode.Pop);
+                        //   prev
+                        if (prev != null && prev.Code == GMCode.Push || prev.Code == GMCode.Call || prev.Code == GMCode.Pop || prev.Code == GMCode.Dup)
+                        {
+                            prev.InferredType = i.Types[1];
+                            prev.Conv = i.Types;
+                        }
                         continue; // ignore all Conv for now
                     case GMCode.Call:
                         // Since we have to resolve calls seperately and need 
@@ -272,6 +281,7 @@ namespace betteribttest.Dissasembler
                 }
                 expr.ILRanges.Add(new ILRange(i.Address, i.Address));
                 nodes.Add(expr);
+                prev = expr;
             }
             return nodes;
         }
@@ -401,7 +411,7 @@ namespace betteribttest.Dissasembler
                      chain.Else = last.FalseBlock;
                      last.FalseBlock = null;
                  }
-                 Debug.Assert("self.gx" != v);
+             //    Debug.Assert("self.gx" != v);
                  //    foreach (var a in chain.Conditions) block.Body.Remove(a);
                  block.Body.RemoveRange(start + 1, chain.Conditions.Count - 1);
                  block.Body[start] = chain;
@@ -457,14 +467,14 @@ namespace betteribttest.Dissasembler
 
             ILBlock method = new ILBlock();
             method.Body = ast;
-            if (context.Debug) method.DebugSave("raw_body.txt");
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("raw_body.txt"));
             betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
             foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
                 Optimize.SplitToBasicBlocks(block);
-            if(context.Debug) method.DebugSave("basic_blocks.txt");
+            if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks.txt"));
   
             new BuildFullAst(method, context).ProcessAllExpressions(method);
-            if(context.Debug) method.DebugSave("basic_blocks2.txt");
+            if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks2.txt"));
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 bool modified;
@@ -477,22 +487,30 @@ namespace betteribttest.Dissasembler
 
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
+
+
+
+                    
+                    modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
+                    modified |= block.RunOptimization(Optimize.ReplaceWithAssignStatements);
+                   
+                    
                 } while (modified);
             }
-            if (context.Debug) method.DebugSave("before_loop.txt");
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions(context).FindLoops(block);
             }
-            if (context.Debug) method.DebugSave("before_conditions.txt");
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_conditions.txt"));
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions(context).FindConditions(block);
             }
 
             FlattenBasicBlocks(method);
-            if (context.Debug) method.DebugSave("before_gotos.txt");
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_gotos.txt"));
             Optimize.RemoveRedundantCode(method);
             new GotoRemoval(context).RemoveGotos(method);
             Optimize.RemoveRedundantCode(method);
@@ -503,7 +521,13 @@ namespace betteribttest.Dissasembler
             new GotoRemoval(context).RemoveGotos(method);
 
             if (context.doLua) CombineIfStatements(method, 3);
-            if (context.Debug) method.DebugSave("final.cpp");
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("final.cpp"));
+
+
+            // cleanup functions
+            Optimize.ReplaceExpressionsWithCalls(method);
+
+
             return method;
 
         }

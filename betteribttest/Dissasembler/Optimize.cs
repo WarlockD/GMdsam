@@ -259,9 +259,95 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
+        // replace with assign statments as in lua we need to concat strings or in other engines
+        // we might have to change the way we assign stuff, ie self.x = 4 changes to self:setX(4)
+        public static bool ReplaceWithAssignStatements(IList<ILNode> body, ILBasicBlock head, int pos)
+        {
+            bool modified = false;
+            for(int i =0; i < head.Body.Count; i++)
+            {
+                ILExpression e = head.Body[i] as ILExpression;
+                if(e != null && e.Code == GMCode.Assign)
+                {
+                    Debug.Assert(e.Arguments[0].Operand is ILVariable);
+                    ILAssign assign = new ILAssign() { Variable = e.Arguments[0].Operand as ILVariable, Expression = e.Arguments[1] };
+                    head.Body[i] = assign;
+                    modified |= true;
+                }
+            }
+            return false;
+        }
+        // we move all the calls to a ICall Node so we can see them easier.  We convert all the ILExpression bits as most
+        // calls have constants anyway, makes it easeir to process
+        public static void ReplaceExpressionsWithCalls(ILBlock method)
+        {
+            bool modified;
+            do
+            {
+                modified = false;
+                foreach (var expr in method.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Call && x.Operand is string))
+                {
+                    ILCall call = new ILCall() { Name = expr.Operand as string };
+                    foreach (var arg in expr.Arguments)
+                    {
+                        switch (arg.Code)
+                        {
+                            case GMCode.Constant:
+                                call.Arguments.Add(arg.Operand as ILValue);
+                                break;
+                            case GMCode.Var:
+                                call.Arguments.Add(arg.Operand as ILVariable);
+                                break;
+                            case GMCode.Call:
+                                if (arg.Operand is string) goto default; // not processed yet
+                                call.Arguments.Add(arg.Operand as ILCall);
+                                break;
+                            default:
+                                call.Arguments.Add(arg);
+                                break;
+                        }
+                    }
+                    expr.Operand = call;
+                    expr.Arguments.Clear();
+                    call.Type = expr.InferredType;
+                    modified = true;
+                }
+            } while (modified);
+        }
+        // GM uses 1 and 0 as bool but uses conv to convert them so lets fix calls
+        // like check() == 1 and change them to just check()
 
-    
+        public static bool SimplifyBoolTypes(ILExpression expr)
+        {
+            ILExpression call;
+            int constant;
+            if ((expr.Code == GMCode.Seq || expr.Code == GMCode.Sne) &&
+                (expr.Arguments[0].MatchCall(GM_Type.Bool, out call) ||
+                expr.Arguments[1].MatchCall(GM_Type.Bool, out call)) &&
+                (expr.Arguments[0].MatchIntConstant(out constant) ||
+                expr.Arguments[1].MatchIntConstant(out constant))
+                )
+            {
+                if ((expr.Code == GMCode.Seq && constant == 0) || constant == 1) // have ot invert it
+                    call = new ILExpression(GMCode.Not, null, call);
+                expr.Replace(call);
+                return true;
+            }
+            return false;
+        }
 
+        public static bool SimplifyBoolTypes(List<ILNode> body, ILExpression expr, int pos)
+        {
+            bool modified = false;
+            if (expr.Code == GMCode.Push || expr.Code.isBranch())
+            {
+                foreach(var e in expr.GetSelfAndChildrenRecursive<ILExpression>(x=>x.Code == GMCode.Seq || x.Code == GMCode.Sne))
+                {
+                    modified |= SimplifyBoolTypes(e);
+                }
+            }
+            return modified;
+        }
 
         /// <summary>
         /// Removes redundatant Br, Nop, Dup, Pop
@@ -277,45 +363,7 @@ namespace betteribttest.Dissasembler
             Debug.Assert(expr == null);
             return modified;
         }
-        static bool SimplifyLogicNot(ref ILExpression expr)
-        {
-            bool modified = false;
-            var newExpr = SimplifyLogicNot(expr, ref modified);
-            if (newExpr != null) expr = newExpr;
-            return modified;
-        }
-        static void FixAllIfStatements(ILBlock expr)
-        {
-            bool modified=false;
-            do
-            {
-                modified = false;
-                var list = expr.GetSelfAndChildrenRecursive<ILCondition>().ToList();
-                foreach (var ifs in list) modified |= SimplifyLogicNot(ref ifs.Condition);
-            } while (modified);
-            do
-            {
-                modified = false;
-                var list = expr.GetSelfAndChildrenRecursive<ILWhileLoop>().ToList();
-                foreach (var loop in list) modified |= SimplifyLogicNot(ref loop.Condition);
-            } while (modified);
-          //  return;
-            do
-            {
-                modified = false;
-              
-                // combine ifstatements to logic ands
-                List<ILCondition> test = expr.GetSelfAndChildrenRecursive<ILCondition>(x => x.FalseBlock == null && x.TrueBlock.Body.Count == 1 && x.TrueBlock.Body[0] is ILCondition).ToList();
-                if (test == null || test.Count > 0) modified = true;
-                foreach (var ifs in test)
-                {
-                    var leftIf = (ifs.TrueBlock.Body[0] as ILCondition);
-                    ifs.TrueBlock = leftIf.TrueBlock;
-                    ifs.Condition = new ILExpression(GMCode.LogicAnd, null, ifs.Condition, leftIf.Condition);
-                }
-            }
-            while (modified);
-        }
+     
         // This will negate a condition and optimize it
         static ILExpression NegateCondition(ILExpression expr)
         {
@@ -363,6 +411,9 @@ namespace betteribttest.Dissasembler
                 modified = true;
             }
 #endif
+            if(expr.Code == GMCode.Push && expr.Arguments.Count > 0)
+                return SimplifyLogicNot(expr.Arguments[0], ref modified);
+
             ILExpression res = null;
             while (expr.Code == GMCode.Not)
             {

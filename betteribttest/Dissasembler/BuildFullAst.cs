@@ -116,6 +116,9 @@ namespace betteribttest.Dissasembler
             ILVariable tempVar;
             switch (e.Code)
             {
+                case GMCode.Conv:
+                    // expr.InferredType
+                    break;
                 case GMCode.Push:
                     tempValue = e.Operand as ILValue;
                     tempVar = e.Operand as ILVariable;
@@ -215,6 +218,7 @@ namespace betteribttest.Dissasembler
                     if ((int)e.Operand == 0)
                     {
                         stack.Push(stack.Peek()); // simple case
+                        Dup1Seen = true; // usally this is on an assignment += -= of an array or such
                         return Status.DupStack0;
                     }
                     else
@@ -229,15 +233,24 @@ namespace betteribttest.Dissasembler
                 default: // ok we handle an expression
                     if (e.Code.isExpression())
                     {
+
                         for (int j = 0; j < e.Code.GetPopDelta(); j++)
                         {
+
                             if (stack.Count > 0)
                                 e.Arguments.Add(NodeToExpresion(stack.Pop()));
                             else
                                 e.Arguments.Add(new ILExpression(GMCode.Pop, null));
                         }
-
                         e.Arguments.Reverse(); // till I fix it latter, sigh
+                                               // specal case for lua as he have to change two strings add to concats
+                        if (context.doLua && 
+                            e.Code == GMCode.Add &&
+                           ( e.Arguments[0].MatchConstant(GM_Type.String) ||
+                            e.Arguments[1].MatchConstant(GM_Type.String)))
+                        {
+                            e.Code = GMCode.Concat;
+                        }
                         stack.Push(e); // push expressions back
                         return Status.AddedToStack;
                     }

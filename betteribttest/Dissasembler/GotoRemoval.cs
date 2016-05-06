@@ -25,6 +25,8 @@ namespace betteribttest.Dissasembler
                 ILNode previousChild = null;
                 foreach (ILNode child in node.GetChildren())
                 {
+                    if (child is ILValue || child is ILVariable) continue; // we want to skip these.
+                    // Added them as nodes so I don't have to dick with them latter with another AST
                     if (parent.ContainsKey(child))
                         throw new Exception("The following expression is linked from several locations: " + child.ToString());
                     parent[child] = node;
@@ -215,6 +217,11 @@ namespace betteribttest.Dissasembler
             {
                 return Exit(label, visitedNodes);
             }
+            ILAssign assign = node as ILAssign;
+            if (assign != null)
+            {
+                return Exit(assign, visitedNodes);
+            }
 
             ILExpression expr = node as ILExpression;
             if (expr != null)
@@ -258,7 +265,7 @@ namespace betteribttest.Dissasembler
                         return null;
                     }
                 }
-                else if (expr.Code == GMCode.BadOp)
+                else if (expr.Code == GMCode.BadOp  || expr.Code == GMCode.Constant || expr.Code == GMCode.Var)
                 {
                     return Exit(expr, visitedNodes);
                 }

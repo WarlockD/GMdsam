@@ -76,6 +76,7 @@ namespace betteribttest
         Constant = 0xfb, 
         Assign,
         DefaultCase,
+        Concat // -- filler for lua or string math
     }
     public static class GMCodeUtil
     {
@@ -108,6 +109,7 @@ namespace betteribttest
             {  (GMCode)0x16, 2 },
             { GMCode.LogicAnd, 2 },
             { GMCode.LogicOr, 2 },
+            { GMCode.Concat, 2 },
         };
         public static uint toUInt(this GMCode t, int operand)
         {
@@ -175,6 +177,7 @@ namespace betteribttest
             {  (GMCode)0x16, ">" },
               { GMCode.LogicAnd, "&&" },
             { GMCode.LogicOr, "||" },
+            { GMCode.Concat, ".." },
         };
         public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
         {
@@ -333,6 +336,7 @@ namespace betteribttest
         {
             switch (i)
             {
+                case GMCode.Concat:
                 case GMCode.LogicAnd:
                 case GMCode.LogicOr:
                 case GMCode.Neg:

@@ -318,8 +318,12 @@ namespace betteribttest
         public void DebugLuaObject(ITextOutput sw,bool outputRawEvents)
         {
             sw.WriteLine("self.index = {0}", ObjectIndex);
-            sw.WriteLine("self.name = {0}", this.Name);
-            if (this.Parent >= 0) sw.WriteLine("self.parent = {0}", this.Parent);
+            sw.WriteLine("self.name = \"{0}\"", this.Name);
+            if (this.Parent >= 0)
+            {
+                sw.WriteLine("self.parent_index = {0}", this.Parent);
+                sw.WriteLine("self.parent_name = \"{0}\"", this.ParentName);
+            }
             sw.WriteLine("self.sprite_index = {0}", this.SpriteIndex);
             sw.WriteLine("self.visible = {0}", this.Visible ? "true" : "false");
             sw.WriteLine("self.solid = {0}", this.Solid ? "true" : "false");

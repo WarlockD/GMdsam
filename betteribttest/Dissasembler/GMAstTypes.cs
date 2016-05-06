@@ -15,6 +15,8 @@ namespace betteribttest.Dissasembler
 
     public abstract class ILNode
     {
+        // hack
+        public static string EnviromentOverride = null;
         // removed ILList<T>
         // I originaly wanted to make a list class that could handle parent and child nodes automaticly
         // but in the end it was adding to much managment where just a very few parts of the
@@ -130,20 +132,30 @@ namespace betteribttest.Dissasembler
     // We are not trying to optimize game maker code here:P
     public class ILAssign : ILNode
     {
+        public string TextToReplace = null;
         public ILVariable Variable;
         public ILNode Expression;
 
         public override void WriteTo(ITextOutput output)
         {
-            Variable.WriteTo(output);
-            output.Write(" = ");
-            Expression.WriteTo(output);
+            if (TextToReplace == null)
+            {
+                Variable.WriteTo(output);
+                output.Write(" = ");
+                Expression.WriteTo(output);
+            }
+            else output.Write(TextToReplace);
         }
         public override void WriteToLua(ITextOutput output)
         {
-            Variable.WriteTo(output);
-            output.Write(" = ");
-            Expression.WriteTo(output);
+            if (TextToReplace == null)
+            {
+                Variable.WriteTo(output);
+                output.Write(" = ");
+                Expression.WriteTo(output);
+            }
+            else output.Write(TextToReplace);
+            
         }
         public override IEnumerable<ILNode> GetChildren()
         {
@@ -157,11 +169,25 @@ namespace betteribttest.Dissasembler
     public class ILCall : ILNode
     {
         public string Name;
+        public string Enviroment = null;
+        public string FunctionNameOverride = null;
         public List<ILNode> Arguments = new List<ILNode>();
         public GM_Type Type = GM_Type.NoType; // return type
         public override void WriteTo(ITextOutput output)
         {
-            output.Write(Name);
+            if (EnviromentOverride != null)
+            {
+                output.Write(EnviromentOverride);
+                output.Write('.');
+            } else if (Enviroment != null)
+            {
+                output.Write(Enviroment);
+                output.Write('.');
+            }
+            if (FunctionNameOverride != null)
+                output.Write(FunctionNameOverride);
+            else
+                output.Write(Name);
             output.Write('(');
             if (Arguments.Count > 0) Arguments[0].WriteTo(output);
             if (Arguments.Count > 1)
@@ -181,7 +207,31 @@ namespace betteribttest.Dissasembler
 
         public override void WriteToLua(ITextOutput output)
         {
-            WriteTo(output);
+            if (EnviromentOverride != null)
+            {
+                output.Write(EnviromentOverride);
+                output.Write(':');
+            }
+            else if (Enviroment != null)
+            {
+                output.Write(Enviroment);
+                output.Write(':');
+            }
+            if (FunctionNameOverride != null)
+                output.Write(FunctionNameOverride);
+            else
+                output.Write(Name);
+            output.Write('(');
+            if (Arguments.Count > 0) Arguments[0].WriteToLua(output);
+            if (Arguments.Count > 1)
+            {
+                foreach (var a in Arguments.Skip(1))
+                {
+                    output.Write(',');
+                    a.WriteToLua(output);
+                }
+            }
+            output.Write(')');
         }
     }
 
@@ -320,17 +370,26 @@ namespace betteribttest.Dissasembler
     }
     public class ILVariable : ILNode, IEquatable<ILVariable>
     {
+        // hack
         // Side note, we "could" make this a node
         // but in reality this is isolated 
         // Unless I ever get a type/var anyisys system up, its going to stay like this
+        public bool isLocal = false; // used when we 100% know self is not used
         public string Name;
         public ILNode Instance = null; // We NEED this
-        public string InstanceName;
+        public string InstanceName=null;
         public ILNode Index = null; // not null if we have an index
-        public bool isArray;
+        public bool isArray=false;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
         public GM_Type Type = GM_Type.NoType;
-
+        public string FullName
+        {
+            get
+            {
+                if (isLocal) return Name;
+                else return  (InstanceName ?? Instance.ToString()) + '.' +   Name;
+            }
+        }
         public bool isFixedVar {  get
             {
                 return Index is ILValue;
@@ -356,15 +415,34 @@ namespace betteribttest.Dissasembler
         }
         public override int GetHashCode()
         {
-            return Name.GetHashCode() ^ InstanceName.GetHashCode();
+            return Name.GetHashCode();
         }
 
         public override void WriteTo(ITextOutput output)
         {
-            if (InstanceName != null) output.Write(InstanceName);
-            else if (Instance != null) Instance.WriteTo(output);
-            else output.Write("stack");
-            output.Write(".");
+          
+            if (!isLocal)
+            {
+                Debug.Assert(Instance != null);
+                do
+                {
+                    if (EnviromentOverride != null)
+                    {
+                        int instance;
+                        if (InstanceName == "self" || Instance.Match(GMCode.Constant, out instance) &&
+                            instance == -1)
+                        {
+                            output.Write(EnviromentOverride);
+                            output.Write(".");
+                            break;
+                        }
+                    }
+                    if (InstanceName != null) output.Write(InstanceName);
+                    else if (Instance != null) Instance.WriteTo(output);
+                    else output.Write("stack");
+                    output.Write(".");
+                } while (false);
+            }
             output.Write(Name);
             if (isArray)
             {
@@ -451,6 +529,7 @@ namespace betteribttest.Dissasembler
 
     public class ILExpression : ILNode
     {
+    
         public string Comment = null;
         public GMCode Code { get; set; }
         public int Extra { get; set; }
@@ -458,11 +537,23 @@ namespace betteribttest.Dissasembler
         public List<ILExpression> Arguments;
         // Mapping to the original instructions (useful for debugging)
         public List<ILRange> ILRanges { get; set; }
-
+        public GM_Type[] Conv = null;
         public GM_Type ExpectedType { get; set; }
         public GM_Type InferredType { get; set; }
 
         public static readonly object AnyOperand = new object();
+
+        // hacky but it works
+        public void Replace(ILExpression i)
+        {
+            this.Code = i.Code;
+            this.Operand = i.Operand; // don't need to worry about this
+            this.Arguments = new List<ILExpression>(i.Arguments.Count);
+            if (i.Arguments.Count != 0) foreach (var n in i.Arguments) this.Arguments.Add(new ILExpression(n));
+            this.ILRanges = new List<ILRange>(i.ILRanges);
+            InferredType = i.InferredType;
+            ExpectedType = i.ExpectedType;
+        }
         public ILExpression(ILExpression i, List<ILRange> range = null) // copy it
         {
             this.Code = i.Code;
@@ -470,6 +561,8 @@ namespace betteribttest.Dissasembler
             this.Arguments = new List<ILExpression>(i.Arguments.Count);
             if (i.Arguments.Count != 0) foreach (var n in i.Arguments) this.Arguments.Add(new ILExpression(n));
             this.ILRanges = new List<ILRange>(range ?? i.ILRanges);
+            InferredType = i.InferredType;
+            ExpectedType = i.ExpectedType;
         }
         public ILExpression(GMCode code, object operand, List<ILExpression> args)
         {
@@ -480,6 +573,8 @@ namespace betteribttest.Dissasembler
             this.Operand = operand;
             this.Arguments = new List<ILExpression>(args);
             this.ILRanges = new List<ILRange>(1);
+            InferredType = GM_Type.NoType;
+            ExpectedType = GM_Type.NoType;
         }
 
         public ILExpression(GMCode code, object operand, params ILExpression[] args)
@@ -491,12 +586,15 @@ namespace betteribttest.Dissasembler
             this.Operand = operand;
             this.Arguments = new List<ILExpression>(args);
             this.ILRanges = new List<ILRange>(1);
+            InferredType = GM_Type.NoType;
+            ExpectedType = GM_Type.NoType;
         }
 
 
         public override IEnumerable<ILNode> GetChildren()
         {
-            return Arguments;
+            if (Operand is ILValue || Operand is ILVariable || Operand is ILCall) yield return Operand as ILNode;
+            foreach (var e in Arguments) yield return e;
         }
 
         public bool IsBranch()
@@ -529,25 +627,48 @@ namespace betteribttest.Dissasembler
             }
             output.Write(')');
         }
+        // all this does is just check to see if the next tree is equal to the last tree of precidence
+        // that is (4- 3) +3, the parms don't matter so don't print them, otherwise we need them
+        static int Precedence(GMCode code)
+        {
+            switch(code){
+                case GMCode.Not:
+                case GMCode.Neg:
+                    return 7;
+                case GMCode.Mul:
+                case GMCode.Div:
+                case GMCode.Mod:
+                    return 6;
+                case GMCode.Add:
+                case GMCode.Sub:
+                    return 5;
+                // case GMCode.Pow: // not in gm
+                case GMCode.Concat:
+                    return 4;
+                case GMCode.Seq:
+                case GMCode.Sge:
+                case GMCode.Slt:
+                case GMCode.Sgt:
+                case GMCode.Sne:
+                case GMCode.Sle:
+                    return 3;
+                case GMCode.LogicAnd:
+                    return 2;
+                case GMCode.LogicOr:
+                    return 1;
+                default:
+                    return 8;
+            }
+        }
         bool CheckParm(int index)
         {
+            int ours = Precedence(Code);
             ILExpression e = Arguments.ElementAtOrDefault(index);
             if (e == null) return false;
-            switch (e.Code)
-            {
-                case GMCode.Call:
-                case GMCode.Var:
-                case GMCode.Constant:
-                    return false;
-                case GMCode.LogicOr: // hack to remove extra () around a bunch of logic ors
-                    if (e.Code == GMCode.LogicAnd) return true;
-                    else return false;
-                case GMCode.LogicAnd:
-                    if (e.Code == GMCode.LogicOr) return true;
-                    else return false;
-                default:
-                    return true;
-            }
+            int theirs = Precedence(e.Code);
+            if (theirs == 8) return false; // its a constant or something dosn't need a parm
+            if (theirs < ours) return true;
+            else return false;
         }
         void WriteOperand(ITextOutput output, bool escapeString = true)
         {
@@ -596,6 +717,36 @@ namespace betteribttest.Dissasembler
             WriteArgumentOrPop(output, index);
             if (needParm) output.Write(')');
         }
+        public void WriteExpressionLua(ITextOutput output)
+        {
+            int count = Code.getOpTreeCount(); // not a leaf
+            string operation = Code.getOpTreeString();
+            if (count == 1)
+            {
+                if (operation == "!") operation = "not ";
+                output.Write(operation);
+                WriteParm(output, 0);
+            }
+            else if (count == 2)
+            {
+                if (operation == "&&") operation = " and ";
+                else if (operation == "||") operation = " or ";
+                else if (operation == "!=") operation = "~=";
+                ILValue constant;
+                if(Code == GMCode.Add && 
+                    (Arguments.ElementAtOrDefault(0).Match(GMCode.Constant, out constant) ||
+                    Arguments.ElementAtOrDefault(1).Match(GMCode.Constant, out constant)) &&
+                    constant.Type == GM_Type.String)
+                {
+                    operation = " .. "; // change to concat
+                }
+                WriteParm(output, 0);
+                output.Write(' ');
+                output.Write(Code.getOpTreeString());
+                output.Write(' ');
+                WriteParm(output, 1);
+            }
+        }
         public void WriteExpression(ITextOutput output)
         {
             int count = Code.getOpTreeCount(); // not a leaf
@@ -613,167 +764,203 @@ namespace betteribttest.Dissasembler
                 WriteParm(output, 1);
             }
         }
+        void InternalWriteTo(ITextOutput output)
+        {
+            switch (Code)
+            {
+                case GMCode.Constant: // primitive c# type
+                    WriteOperand(output);
+                    break;
+                case GMCode.Var:  // should be ILVariable
+                    if (Arguments.Count > 0) WriteArgument(output, 0, false);
+                    else
+                    {
+                        ILVariable v = Operand as ILVariable;
+                        if (v.isResolved) v.WriteTo(output);
+                        else
+                        {
+                            output.Write("stack");
+                            output.Write(".");
+                            WriteOperand(output, false);// generic, string name
+                            if (Arguments.Count > 1) // its an array
+                            {
+                                output.Write('[');
+                                WriteArgument(output, 1, false);
+                                output.Write(']');
+                            }
+                        }
+                    }
+                    break;
+            
+                case GMCode.Pop:
+                    if (Operand == null) output.Write(POPDefaultString);
+                    else
+                    {
+                        output.Write("Pop(");
+                        WriteOperand(output, false);// generic, string name
+                        output.Write(" = ");
+                        output.Write(POPDefaultString);
+                        output.Write(")");
+                    }
+
+                    break;
+                case GMCode.Assign:
+                    WriteArgumentOrPop(output, 0, false);
+                    output.Write(" = ");
+                    WriteArgumentOrPop(output, 1, true);
+                    break;
+                case GMCode.Popz:
+                    output.Write("Popz");
+                    break;
+                case GMCode.Push:
+                    output.Write("Push ");
+                    if (Operand != null)
+                    {
+                        output.Write("(Operand=");
+                        WriteOperand(output, true);
+                        output.Write(")");
+                    }
+                    if (Arguments.Count > 0)
+                    {
+                        output.Write("(Arguments=");
+                        WriteArgumentOrPop(output, 0);
+                        output.Write(")");
+                    }
+                    break;
+                case GMCode.Dup:
+                    output.Write("Dup ");
+                    output.Write(Operand.ToString());
+                    break;
+                case GMCode.B: // this is where the magic happens...woooooooooo
+                    output.Write("goto ");
+                    WriteOperand(output);
+                    break;
+                case GMCode.Bf:
+                    if (Arguments.Count > 0)
+                    {
+                        output.Write("Push(");
+                        Arguments[0].WriteTo(output);
+                        output.Write(")");
+                    }
+                    output.Write("Branch IfFalse ");
+                    WriteOperand(output);
+                    break;
+                case GMCode.Bt:
+                    if (Arguments.Count > 0)
+                    {
+                        output.Write("Push(");
+                        Arguments[0].WriteTo(output);
+                        output.Write(")");
+                    }
+                    output.Write("BranchIfTrue ");
+                    WriteOperand(output);
+                    break;
+                case GMCode.Pushenv:
+                    output.Write("PushEnviroment(");
+                    WriteArgumentOrPop(output, 0, false);
+                    output.Write(") : ");
+                    WriteOperand(output, false);
+                    break;
+                case GMCode.Popenv:
+                    output.Write("PopEnviroment ");
+                    WriteOperand(output);
+                    break;
+                case GMCode.Exit: // exit without
+                    output.Write("return; // exit");
+                    return;
+                case GMCode.Ret:
+                    output.Write("return ");
+                    WriteArgumentOrPop(output, 0);
+                    break;
+                case GMCode.LoopOrSwitchBreak:
+                    output.Write("break");
+                    break;
+                case GMCode.LoopContinue:
+                    output.Write("continue");
+                    break;
+                case GMCode.DefaultCase:
+                    output.Write("default: goto ");
+                    WriteOperand(output);
+                    break;
+                case GMCode.Case:
+                    output.Write("case ");
+                    WriteArgumentOrPop(output, 0);
+                    output.Write(": goto ");
+                    WriteOperand(output);
+                    break;
+                case GMCode.Switch: // debug print of the created switch statement
+                    output.Write("switch(");
+                    WriteArgument(output, 0);
+                    output.Write(") {");
+                    output.WriteLine();
+                    output.Indent();
+                    for (int i = 1; i < Arguments.Count; i++)
+                    {
+                        WriteArgument(output, i);
+                        output.Write(';');
+                        output.WriteLine();
+                    }
+                    output.Unindent();
+                    output.Write("}");
+                    output.WriteLine();
+                    break;
+             
+                default:
+                    throw new Exception("Not Implmented! ugh");
+            }
+        }
         public override void WriteToLua(ITextOutput output)
         {
-            WriteTo(output); // not sure if I have to worry to much about here
+            if (Code.isExpression())
+                WriteExpressionLua(output);
+            else
+            {
+                switch(Code)
+                {
+                    case GMCode.Call:
+                        {
+                            ILCall call = Operand as ILCall;
+                            if (call != null) call.WriteToLua(output);
+                            else
+                            {
+                                output.Write(Operand.ToString());
+                                WriteCommaArguments(output);
+                            }
+                        }
+                            break;
+                    default:
+                        InternalWriteTo(output);
+                        break;
+                }
+            }
             if (Comment != null) output.Write("--[[ " + Comment + "--]]");
         }
         public override void WriteTo(ITextOutput output)
         {
             if (Code.isExpression())
-            {
                 WriteExpression(output);
-
-            }
             else
             {
                 switch (Code)
                 {
-                    case GMCode.Constant: // primitive c# type
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Var:  // should be ILVariable
-                        if (Arguments.Count > 0) WriteArgument(output, 0, false);
-                        else
+                    case GMCode.Call:
                         {
-                            ILVariable v = Operand as ILVariable;
-                            if (v.isResolved) v.WriteTo(output);
+                            ILCall call = Operand as ILCall;
+                            if (call != null) call.WriteTo(output);
                             else
                             {
-                                output.Write("stack");
-                                output.Write(".");
-                                WriteOperand(output, false);// generic, string name
-                                if (Arguments.Count > 1) // its an array
-                                {
-                                    output.Write('[');
-                                    WriteArgument(output, 1, false);
-                                    output.Write(']');
-                                }
+                                output.Write(Operand.ToString());
+                                WriteCommaArguments(output);
                             }
                         }
                         break;
-                    case GMCode.Call:
-                        output.Write(Operand.ToString());
-                        WriteCommaArguments(output);
-
-                        break;
-                    case GMCode.Pop:
-                        if (Operand == null) output.Write(POPDefaultString);
-                        else {
-                            output.Write("Pop(");
-                            WriteOperand(output, false);// generic, string name
-                            output.Write(" = ");
-                            output.Write(POPDefaultString);
-                            output.Write(")");
-                        }
-
-                        break;
-                    case GMCode.Assign:
-                        WriteArgumentOrPop(output, 0, false);
-                        output.Write(" = ");
-                        WriteArgumentOrPop(output, 1, true);
-                        break;
-                    case GMCode.Popz:
-                        output.Write("Popz");
-                        break;
-                    case GMCode.Push:
-                        output.Write("Push ");
-                        if (Operand != null)
-                        {
-                            output.Write("(Operand=");
-                            WriteOperand(output, true);
-                            output.Write(")");
-                        }
-                        if (Arguments.Count > 0)
-                        {
-                            output.Write("(Arguments=");
-                            WriteArgumentOrPop(output, 0);
-                            output.Write(")");
-                        }
-                        break;
-                    case GMCode.Dup:
-                        output.Write("Dup ");
-                        output.Write(Operand.ToString());
-                        break;
-                    case GMCode.B: // this is where the magic happens...woooooooooo
-                        output.Write("goto ");
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Bf:
-                        if (Arguments.Count > 0)
-                        {
-                            output.Write("Push(");
-                            Arguments[0].WriteTo(output);
-                            output.Write(")");
-                        }
-                        output.Write("Branch IfFalse ");
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Bt:
-                        if (Arguments.Count > 0)
-                        {
-                            output.Write("Push(");
-                            Arguments[0].WriteTo(output);
-                            output.Write(")");
-                        }
-                        output.Write("BranchIfTrue ");
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Pushenv:
-                        output.Write("PushEnviroment(");
-                        WriteArgumentOrPop(output, 0, false);
-                        output.Write(") : ");
-                        WriteOperand(output, false);
-                        break;
-                    case GMCode.Popenv:
-                        output.Write("PopEnviroment ");
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Exit: // exit without
-                        output.Write("return; // exit");
-                        return;
-                    case GMCode.Ret:
-                        output.Write("return ");
-                        WriteArgumentOrPop(output, 0);
-                        break;
-                    case GMCode.LoopOrSwitchBreak:
-                        output.Write("break");
-                        break;
-                    case GMCode.LoopContinue:
-                        output.Write("continue");
-                        break;
-                    case GMCode.DefaultCase:
-                        output.Write("default: goto ");
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Case:
-                        output.Write("case ");
-                        WriteArgumentOrPop(output, 0);
-                        output.Write(": goto ");
-                        WriteOperand(output);
-                        break;
-                    case GMCode.Switch: // debug print of the created switch statement
-                        output.Write("switch(");
-                        WriteArgument(output, 0);
-                        output.Write(") {");
-                        output.WriteLine();
-                        output.Indent();
-                        for (int i = 1; i < Arguments.Count; i++)
-                        {
-                            WriteArgument(output, i);
-                            output.Write(';');
-                            output.WriteLine();
-                        }
-                        output.Unindent();
-                        output.Write("}");
-                        output.WriteLine();
-                        break;
                     default:
-                        throw new Exception("Not Implmented! ugh");
+                        InternalWriteTo(output);
+                        break;
                 }
             }
-            //   if (Comment != null) output.Write("*/ " + Comment + " */");
-            if (Comment != null) output.Write("--[[ " + Comment + "--]]");
+ 
+            if (Comment != null) output.Write("/* " + Comment + " */");
         }
     }
 
@@ -1080,7 +1267,7 @@ namespace betteribttest.Dissasembler
 
     public class ILWithStatement : ILNode
     {
-        static int lua_with_func = 0;
+        public static int withScope = 0;
         public ILBlock Body = new ILBlock();
         public ILExpression Enviroment;
         public override IEnumerable<ILNode> GetChildren()
@@ -1092,12 +1279,31 @@ namespace betteribttest.Dissasembler
         // workaround.  Its hacky but I don't have ot modify much
         public override void WriteToLua(ITextOutput output)
         {
+            // This is a bit hacky but it sort of works
+            // identing it to show that it is a with
+            // and we are making it in a block so the locals don't screw up
             string env = Enviroment.ToString();
-            string funname = "with_" + env + "_" + lua_with_func;
-
-            output.WriteLine("local " + funname + " = function(self)");
-            Body.Body.WriteLuaNodes(output, true);
-            output.Write("end");
+            string old_enviroment = EnviromentOverride;
+            // output.WriteLine("with({0}) {{", env);
+            if (Enviroment.Code == GMCode.Constant || Enviroment.Code == GMCode.Var)
+            {
+                EnviromentOverride = env; // simple case
+                Body.Body.WriteLuaNodes(output, false);
+            } else
+            { // more complex as it might be a return
+                string local_env = "with_" + withScope++;
+                EnviromentOverride = local_env;
+                output.WriteLine("repeat");
+                output.Indent();
+                output.WriteLine("local {0} = {1}", local_env, env);
+                output.WriteLine("if not {0} then break end", local_env);
+                Body.Body.WriteLuaNodes(output, false);
+                output.Unindent();
+                output.WriteLine("until false");
+                withScope--;
+            }
+            EnviromentOverride = old_enviroment;
+           
         }
         public override void WriteTo(ITextOutput output)
         {

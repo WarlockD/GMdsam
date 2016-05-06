@@ -9,10 +9,10 @@ namespace betteribttest.Dissasembler
 {
     public static class PatternMatching
     {
-        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool ident= true) where T : ILNode
+        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool ident = true) where T : ILNode
         {
-           // output.WriteLine();
-            if(ident) output.Indent();
+            // output.WriteLine();
+            if (ident) output.Indent();
             for (; start < count; start++)
             {
                 ILNode n = nodes[start];
@@ -21,7 +21,7 @@ namespace betteribttest.Dissasembler
             }
             if (ident) output.Unindent();
         }
-        public static bool WriteNodes<T>(this IList<T> nodes,  ITextOutput output, int start, int count, bool endingSemiColon, bool withBrackets) where T : ILNode
+        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool endingSemiColon, bool withBrackets) where T : ILNode
         {
             // Generic method to print a list of nodes
             if (nodes.Count == 0 || count == 0) return false;
@@ -60,7 +60,7 @@ namespace betteribttest.Dissasembler
         {
             nodes.WriteLuaNodes(output, start, nodes.Count - start, ident);
         }
-        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, bool ident=true) where T : ILNode
+        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, bool ident = true) where T : ILNode
         {
             nodes.WriteLuaNodes(output, 0, nodes.Count, ident);
         }
@@ -85,6 +85,112 @@ namespace betteribttest.Dissasembler
             expr.ILRanges.AddRange(ilranges);
             return expr;
         }
+        public static bool MatchConstant(this ILNode node, GM_Type type, out ILValue value)
+        {
+            ILValue ret;
+            if(node.MatchConstant(out ret) && ret.Type == type)
+            {
+                value = ret;
+                return true;
+            }
+            value = default(ILValue);
+            return false;
+        }
+        public static bool MatchConstant(this ILNode node,  out ILValue value)
+        {
+            ILValue ret = node as ILValue;
+            if (ret == null && !node.Match(GMCode.Constant, out ret))
+            {
+                value = default(ILValue);
+                return false;
+            }
+            value = ret;
+            return true;
+        }
+        public static bool MatchCall(this ILNode node, GM_Type type, out ILExpression call)
+        {
+            ILCall c = node as ILCall;
+            if(c != null && c.Type == type)
+            {
+                call = new ILExpression(GMCode.Call, c);
+                return true;
+            }
+            ILExpression e = node as ILExpression;
+            if(e != null && e.Code == GMCode.Call)
+            {
+                c = e.Operand as ILCall;
+                if (c != null && c.Type == type)
+                {
+                    call = new ILExpression(GMCode.Call, c);
+                    return true;
+                } else if(e.Operand is string && e.InferredType == type)
+                {
+                    call = e;
+                    return true;
+                }
+            }
+            call = default(ILExpression);
+            return false;
+        }
+        public static bool MatchCall(this ILNode node, GM_Type type)
+        {
+            ILExpression call;
+            return node.MatchCall(type, out call);
+        }
+        public static bool MatchConstant(this ILNode node, GM_Type type)
+        {
+            ILValue ret;
+            if(node.MatchConstant(type,out ret) || node.MatchCall(type)) // try to match it on a call
+            {
+                return true;
+            }
+            return false;
+        }
+        public static bool MatchConstant<T>(this ILNode node, GM_Type type, out T value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(type, out ret) && ret.Value is T)
+            {
+                value = (T) ret.Value;
+                return true;
+            }
+            value = default(T);
+            return false;
+        }
+
+        public static bool MatchIntConstant(this ILNode node, out ILValue value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(out ret) && (ret.Type == GM_Type.Short || ret.Type == GM_Type.Int))
+            {
+                value = ret;
+                return true;
+            }
+            value = default(ILValue);
+            return false;
+        }
+        public static bool MatchIntConstant(this ILNode node, out int value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(out ret) && (ret.Type == GM_Type.Short || ret.Type == GM_Type.Int))
+            {
+                value = (int)ret.Value;
+                return true;
+            }
+            value = default(int);
+            return false;
+        }
+        public static bool MatchConstant<T>(this ILNode node, out T value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(out ret) && ret.Value is T)
+            {
+                value = (T)ret.Value;
+                return true;
+            }
+            value = default(T);
+            return false;
+        }
         public static bool Match(this ILNode node, GMCode code)
         {
             ILExpression expr = node as ILExpression;
@@ -96,9 +202,16 @@ namespace betteribttest.Dissasembler
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code && expr.Arguments.Count == 0)
             {
-                if(expr.Operand is T)
+                if (expr.Operand is T)
                 {
-                    operand = (T)expr.Operand;
+                    operand = (T) expr.Operand;
+                    return true;
+                }
+                // special case.  Tired of doing Match(code,ivalue) ivlaue is etc
+                ILValue v = expr.Operand as ILValue;
+                if (v.Value is T) 
+                {
+                    operand = (T) v.Value;
                     return true;
                 }
             }

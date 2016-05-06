@@ -325,7 +325,12 @@ namespace betteribttest.Dissasembler
             if(!stream.CanSeek) throw new IOException("Cannot seak stream");
             stream.Position = 0;
             BinaryReader r = new BinaryReader(stream);
-            return Dissasemble(r, stream.Length, context);
+            var list = Dissasemble(r, stream.Length, context); 
+            if(context.Debug)
+            {
+                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(list.Values, "debug.asm");
+            }
+            return list;
         }
         // I had multipul passes on this so trying to combine it all to do one pass
         public static  SortedList<int,Instruction> Dissasemble(BinaryReader r, long length, GMContext context)
@@ -352,6 +357,7 @@ namespace betteribttest.Dissasembler
             while(r.BaseStream.Position < length)
             {
                 Instruction i = DissasembleFromReader(pc, r);
+             //   Debug.WriteLine(i.ToString());
                 pc += i.Size;
                 switch (i.Code)
                 {
