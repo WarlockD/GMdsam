@@ -230,13 +230,15 @@ namespace betteribttest.Dissasembler
                         if (prev != null && prev.Code == GMCode.Push || prev.Code == GMCode.Call || prev.Code == GMCode.Pop || prev.Code == GMCode.Dup)
                         {
                             prev.InferredType = i.Types[1];
-                            prev.Conv = i.Types;
+                            prev.Conv = prev.Conv.Concat(i.Types).ToArray();
                         }
                         continue; // ignore all Conv for now
                     case GMCode.Call:
                         // Since we have to resolve calls seperately and need 
                         expr = new ILExpression(GMCode.Call, operand as string);
                         expr.Extra = extra; // need to know how many arguments we have
+                        expr.ExpectedType = i.Types[0];
+                        expr.Conv = i.Types;
                         break;
                     case GMCode.Popz:
                         expr = new ILExpression(code, null);
@@ -244,6 +246,8 @@ namespace betteribttest.Dissasembler
                     case GMCode.Pop: // var define, so lets define it
                         expr = new ILExpression(GMCode.Pop, BuildVar((int)operand, extra));
                         expr.Extra = extra;
+                        expr.ExpectedType = i.Types[0];
+                        expr.Conv = i.Types;
                         break;
                     case GMCode.Push:
                         if (i.Types[0] != GM_Type.Var)
@@ -251,6 +255,8 @@ namespace betteribttest.Dissasembler
                         else
                             expr = new ILExpression(GMCode.Push, BuildVar((int)operand, extra));  // try to figure out the var);
                         expr.Extra = extra;
+                        expr.ExpectedType = i.Types[0];
+                        expr.Conv = i.Types;
                         break;
                     case GMCode.Pushenv: // the asembler converted the positions to labels at the end of the push/pop enviroments
                         expr = new ILExpression(GMCode.Pushenv, ConvertLabel(i.Operand as Label));
@@ -263,6 +269,7 @@ namespace betteribttest.Dissasembler
                         break;
                     case GMCode.Ret:
                         expr = new ILExpression(code, null, new ILExpression(GMCode.Pop, null));
+                        expr.Conv = i.Types;
                         break;
                     case GMCode.Bt:
                     case GMCode.Bf: 
@@ -271,12 +278,14 @@ namespace betteribttest.Dissasembler
                     case GMCode.Dup:
                         expr = new ILExpression(code, extra); // save the extra value for dups incase its dup eveything or just one
                                                               //      HackDebug(i, _method.Values);
+                        expr.Conv = i.Types;
                         break;
                     case GMCode.Exit:
                         expr = new ILExpression(code, null);
                         break;
                     default:
                         expr = new ILExpression(code, null);
+                        expr.Conv = i.Types;
                         break;
                 }
                 expr.ILRanges.Add(new ILRange(i.Address, i.Address));
@@ -483,8 +492,9 @@ namespace betteribttest.Dissasembler
                     modified = false;
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).PushEnviromentFix);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
+           
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
-
+                  
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
 
@@ -494,8 +504,12 @@ namespace betteribttest.Dissasembler
                     modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
                     modified |= block.RunOptimization(Optimize.ReplaceWithAssignStatements);
-                   
-                    
+                    // This SHOULD work as the root expression would check the rest of it and
+                    // the byte code should of made sure they are all add statements anyway
+                    //  if(context.doLua)  modified |= block.RunOptimization(Optimize.FixLuaStringAddExpression);
+                    if (context.doLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
+
+
                 } while (modified);
             }
             if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_loop.txt"));

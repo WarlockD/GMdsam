@@ -303,51 +303,34 @@ namespace betteribttest
             // Console.WriteLine("Writing: "+ filename);
             return block;
         }
-        static string DecompileBlockLua(GMContext context, Stream code, string filename, bool debugSave = true)
+        static string LuaCodeText(GMContext context, ILBlock block)
         {
-            ILBlock method;
-            return DecompileBlockLua(context, code, filename, out method, debugSave);
-        }
-        static string DecompileBlockLua(GMContext context, Stream code, string filename, out ILBlock block, bool debugSave = true)
-        {
-            var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(code, context);
-            if (context.doAsm)
-            {
-                string asm_filename = filename + ".asm";
-                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
-            }
-            string raw_filename = Path.GetFileName(filename);
-            block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
-            FunctionFix.FixCalls(block);
-            PushFix.FixCalls(block);
-            filename += ".lua";
-            block.DebugSaveLua(filename, "-- LuaFile : " + filename);
-            string ret;
+            string code;
             using (StringWriter sw = new StringWriter())
             {
-                PlainTextOutput to = new PlainTextOutput(sw);
-                block.Body.WriteLuaNodes(to, false);
-                StringBuilder sb = new StringBuilder();
-                sb.Append(sw.ToString());
-                // fix some bugs
-                sb.Replace(" && ", " and ");
-                sb.Replace(" || ", " or ");
-                sb.Replace("stack.self", "self");
-                sb.Replace("!=", "~=");
-                sb.Replace("\r\n\r\n", "\r\n");
-                ret = sb.ToString();
+                PlainTextWriter ptext = new PlainTextWriter(sw);
+                block.Body.WriteLuaNodes(ptext); // remember this is already idented
+                code = sw.ToString();
+                code = CleanLuaText(code); // god I need to fix this, maybe I have to build custom ast's afterall
             }
-            if (debugSave)
-            {
-                using (StreamWriter sw = new StreamWriter(filename))
-                {
-                    sw.WriteLine("-- LuaFile : " + Path.GetFileName(filename));
-                    sw.WriteLine(ret);
-                }
-            }
-
-            return ret;
+            return code;
         }
+        static void CleanLuaText(StringBuilder sb)
+        {
+            // fix some bugs
+            sb.Replace(" && ", " and ");
+            sb.Replace(" || ", " or ");
+            sb.Replace("stack.self", "self");
+            sb.Replace("!=", "~=");
+            sb.Replace("\r\n\r\n", "\r\n");
+        }
+        static string CleanLuaText(string text)
+        {
+            StringBuilder sb = new StringBuilder(text);
+            CleanLuaText(sb);
+            return sb.ToString();
+        }
+     
         static void DoFuncList(ITextOutput sb, string tableName, string partname, Dictionary<int, string> codes, bool keypresses = false)
         {
             if (codes.Count > 0)
@@ -383,129 +366,16 @@ namespace betteribttest
             }
             else sb.WriteLine("-- No " + partname);
         }
-        static void MakeLuaObject(GMContext context, GMK_Object gobj, ChunkReader.CodeData[] codeData, string path)
-        {
-            string createObject = null;
-            string drawObject = null;
-            Dictionary<int, string> alarms = new Dictionary<int, string>();
-            Dictionary<int, string> steps = new Dictionary<int, string>();
-            Dictionary<int, string> keypresses = new Dictionary<int, string>();
-            Dictionary<int, string> others = new Dictionary<int, string>();
-            List<Thread> threads = new List<Thread>();
-            List<string> errors = new List<string>();
-            int number = -1;
-            ChunkReader.CodeData o = new ChunkReader.CodeData(); // to get rid of compiler message
-            Func<string, bool> ObjectPart = (string tosearch) =>
-            {
-                int index = o.Name.IndexOf(tosearch);
-                if (index != -1)
-                {
-                    index += tosearch.Length + 1;
-                    string sub = o.Name.Substring(index);
-                    number = int.Parse(sub);
-                    return true;
-                }
-                return false;
-            };
-            for (int i = 0; i < codeData.Length; i++) {
-
-                o = codeData[i];
-                ChunkReader.CodeData data = (ChunkReader.CodeData) o;
-                string filename = path + data.Name;
-                try
-                {
-                    string code = DecompileBlockLua(context, data.stream.BaseStream, filename, false);
-
-                    if (ObjectPart("Create"))   // check what part of an object it is
-                    { // create code
-                        Debug.Assert(createObject == null); // We should only have one of these
-                        createObject = code.ToString();
-                    }
-                    else if (ObjectPart("Draw"))   // check what part of an object it is
-                    { // create code
-                        Debug.Assert(drawObject == null); // We should only have one of these
-                        drawObject = code.ToString();
-                    }
-                    if (ObjectPart("Alarm"))
-                    {
-                        Debug.Assert(alarms[number] == null); // We should only have one of these
-                        alarms.Add(number, code.ToString());
-                    } else if (ObjectPart("KeyPress"))
-                    {
-                        keypresses.Add(number, code.ToString());
-
-                    } else if (ObjectPart("Step"))
-                    {
-                        Debug.Assert(steps[number] == null); // We should only have one of these
-                        steps.Add(number, code.ToString());
-                    }
-                    else if (ObjectPart("Other"))
-                    {
-                        others.Add(number, code.ToString());
-                    } else
-                    {
-                        Debug.Assert(false);
-                    }
-                }
-                catch (Exception e)
-                {
-                    string error = "-- " + string.Format("Object: {0}  Error: {1}", data.Name, e.Message);
-                    errors.Add(error);
-                }
-            }
-            using (PlainTextOutput sw = new PlainTextOutput(new StreamWriter(path + gobj.Name + ".lua")))
-            {
-                sw.WriteLine("-- Object:     " + gobj.Name);
-                sw.WriteLine("-- Parent:     " + gobj.ParentName);
-                sw.WriteLine("-- Persistent: " + gobj.Persistent);
-                sw.WriteLine("-- Depth:      " + gobj.Depth);
-                sw.WriteLine("-- Solid:      " + gobj.Solid);
-                sw.WriteLine("-- Visiable:   " + gobj.Visible);
-
-                sw.WriteLine(); // simple header
-                sw.Write(gobj.Name); sw.WriteLine(" = function(self)");
-                sw.Indent();
-                if (gobj.Parent > -1)
-                {
-                    sw.Write("self.parent="); sw.Write("\""); sw.Write(gobj.ParentName); sw.Write("\""); sw.WriteLine();
-                }
-
-                sw.Write("self.depth="); sw.Write(gobj.Depth.ToString()); sw.WriteLine();
-                sw.Write("self.solid="); sw.Write(gobj.Solid ? "true" : "false"); sw.WriteLine();
-                sw.Write("self.visiable="); sw.Write(gobj.Visible ? "true" : "false"); sw.WriteLine();
-                sw.Write("self.persistent="); sw.Write(gobj.Persistent ? "true" : "false"); sw.WriteLine();
-                sw.Write("self.sprite_index="); sw.Write(gobj.SpriteIndex.ToString()); sw.WriteLine();
-                sw.WriteLine("-- Start Create Code --");
-                if (createObject != null) sw.Write(createObject);
-                if (drawObject != null)
-                {
-                    sw.WriteLine("self.drawfunc = function()");
-                    sw.Indent();
-                    sw.Write(drawObject);
-                    sw.Unindent();
-                    sw.WriteLine("end");
-                }
-                sw.WriteLine("-- End Create Code --");
-                DoFuncList(sw, "stepfunc", "Step Code", steps);
-                DoFuncList(sw, "alarmfunc", "Alarm Code", alarms);
-                DoFuncList(sw, "otherfunc", "Other Code", others);
-                DoFuncList(sw, "keyfunc", "KeyPress Code", keypresses, true);
-                if (errors.Count > 0)
-                {
-                    sw.WriteLine("-- Errors:");
-                    foreach (var e in errors) sw.WriteLine(e);
-                }
-                sw.Unindent();
-                sw.WriteLine("end");
-            }
-        }
-        static void InsertIntoTable(ITextOutput output, string table, int index, string func)
+       
+        static void InsertIntoTable(ITextOutput output, string table, int index, string func,string eventName=null)
         {
             output.WriteLine("self.{0}[{1}] = {2}", table, index, func);
+            if (eventName != null) output.WriteLine("self.events[{0}] = {1}", eventName, func);
         }
-        static void InsertIntoTable(ITextOutput output, string table, string index, string func)
+        static void InsertIntoTable(ITextOutput output, string table, string index, string func, string eventName = null)
         {
             output.WriteLine("self.{0}[\"{1}\"] = {2}", table, index, func);
+            if (eventName != null) output.WriteLine("self.events[{0}] = {1}", eventName, func);
         }
         static void InsertIntoTable(ITextOutput output, string table, List<KeyValuePair<int, string>> actions) {
             output.WriteLine("self.{0} = {{}}", table);
@@ -603,15 +473,16 @@ namespace betteribttest
                 return GetAllUnpinned().Where(pred);
             }
         }
-        public static void MakeObject(GMContext context, ChunkReader cr, GMK_Object obj)
+        public static void MakeObject(GMContext context, ChunkReader cr, GMK_Object obj, TextWriter output)
         {
-         //   ILVariable.WriteSelfOnTextOut = false;
+            //   ILVariable.WriteSelfOnTextOut = false;
             HashSet<string> SawEvent = new HashSet<string>();
             LuaVarCheckCashe cache = new LuaVarCheckCashe();
             string objectcode = null;
-            using (StringWriter sw = new StringWriter()) 
+            PlainTextOutput ptext = null;
+            using (StringWriter sw = new StringWriter())
             {
-                PlainTextOutput ptext = new PlainTextOutput(sw);
+                ptext = new PlainTextOutput(sw);
                 for (int i = 0; i < obj.Events.Length; i++)
                 {
                     if (obj.Events[i] == null) continue;
@@ -621,22 +492,20 @@ namespace betteribttest
 
                         foreach (var a in e.Actions)
                         {
-                            var codeData = cr.GetCodeStreamAtIndex(a.CodeOffset);
+                            GMK_Code codeData = cr.codeList[a.CodeOffset];
                             if (context.Debug)
                             {
                                 Debug.WriteLine("Name: " + codeData.Name + " Event: " + GMContext.EventToString(i, e.SubType));
                             }
-                            ILBlock method;
-                            string code = DecompileBlockLua(context, codeData.stream.BaseStream, codeData.Name, out method, false);
+                            ILBlock method = DecompileBlock(context, new MemoryStream(codeData.data));
+                            string code = LuaCodeText(context, method); // auto indents it
                             cache.AddVars(method);
-                            StringBuilder sb = new StringBuilder(code);
-                            code = sb.ToString();
-                        
+
                             ptext.WriteLine("function {0}()", codeData.Name);
-                            ptext.Indent();
+                            // ptext.Indent();
                             // dosn't handle line endings well
                             ptext.Write(code);
-                            ptext.Unindent();
+                            // ptext.Unindent();
                             ptext.WriteLine();
                             ptext.WriteLine("end");
                             codeFunctions.Add(new KeyValuePair<int, string>(e.SubType, codeData.Name));
@@ -674,22 +543,29 @@ namespace betteribttest
                             break;
                         case 6: // joystick and mouse stuff here, not used much in undertale
                             ptext.WriteLine("self.{0} = {{}}", "ControlerEvents");
-                            foreach(var e in codeFunctions)
-                                InsertIntoTable(ptext, "ControlerEvents", GMContext.EventToString(i,e.Key), e.Value);
+                            foreach (var e in codeFunctions)
+                                InsertIntoTable(ptext, "ControlerEvents", GMContext.EventToString(i, e.Key), e.Value);
                             break;
                         case 7: // we only really care about user events
                             ptext.WriteLine("self.{0} = {{}}", "UserEvent");
 
                             foreach (var e in codeFunctions)
                             {
-                                Debug.Assert(e.Key > 9 && e.Key < 26);
-                                InsertIntoTable(ptext, "UserEvent", e.Key-10, e.Value);
+                                string @event = GMContext.EventToString(i, e.Key);
+                                if (e.Key > 9 && e.Key < 26)
+                                {
+                                    InsertIntoTable(ptext, "UserEvent", e.Key - 10, e.Value, @event);
+                                } else
+                                {
+                                    ptext.WriteLine("self.{0} = {1}", @event, e.Value);
+                                    ptext.WriteLine("self.events[{0}] = {1}", @event, e.Value);
+                                }
                             }
                             break;
                         case 8:
                             // special case, alot of diffrent draw events are here but undertale mainly just uses
                             // one, so we will figure out if we need a table or not
-                            if(codeFunctions.Count == 1) ptext.WriteLine("self.DrawEvent = {0}", codeFunctions[0].Value);
+                            if (codeFunctions.Count == 1) ptext.WriteLine("self.DrawEvent = {0}", codeFunctions[0].Value);
                             else
                             {
                                 ptext.WriteLine("self.{0} = {{}}", "DrawEvents");
@@ -710,23 +586,20 @@ namespace betteribttest
                 }
                 objectcode = sw.ToString();
             }
+            ptext = new PlainTextOutput(output);
+            // ok try to pin some global array values first
+            foreach (var v in cache.GetAll(x => x.isGlobal && x.isArray))
+                ptext.WriteLine("{0} = {0} or {{}}", v.ToString()); // bunch of null correlesing
+            ptext.WriteLine();
+            
+            objectHeadder(ptext, obj);
 
-            using (StreamWriter sw = new StreamWriter(obj.Name + ".lua"))
-            {
-                // ok try to pin some global array values first
-                foreach(var v in  cache.GetAll(x=> x.isGlobal && x.isArray))
-                    sw.WriteLine("{0} = {0} or {{}}", v.ToString()); // bunch of null correlesing
-                sw.WriteLine();
-                PlainTextOutput ptext = new PlainTextOutput(sw);
-                objectHeadder(ptext, obj);
-
-                obj.DebugLuaObject(ptext, false);
-                ptext.WriteLine("self.events = {}");
-                foreach (var v in cache.GetAll(x => !x.isGlobal && x.isArray))
-                    sw.WriteLine("{0} = {0} or {{}}", v.ToString()); // bunch of null correlesing
-                ptext.WriteLine(objectcode);
-                objectFooter(ptext, obj);
-            }
+            obj.DebugLuaObject(ptext, false);
+            ptext.WriteLine("self.events = {}");
+            foreach (var v in cache.GetAll(x => !x.isGlobal && x.isArray))
+                ptext.WriteLine("{0} = {0} or {{}}", v.ToString()); // bunch of null correlesing
+            ptext.WriteLine(objectcode);
+            objectFooter(ptext, obj);
         }
 
         static void MakeAllLuaObjects(ChunkReader cr, GMContext context)
@@ -734,10 +607,11 @@ namespace betteribttest
             List<Task> tasks = new List<Task>();
             foreach (var a in cr.GetAllObjectCode())
             {
-                
-               // var info = Directory.CreateDirectory(a.ObjectName);
-                ChunkReader.CodeData[] files = a.Streams.ToArray();
-                MakeLuaObject(context, a.Obj, files, "");
+
+                // var info = Directory.CreateDirectory(a.ObjectName);
+                using (StreamWriter sw = new StreamWriter(a.Name + ".lua")) MakeObject(context, cr, a,sw);
+
+
                 //  Thread t = new System.Threading.Thread(() => MakeLuaObject(context, a.Obj, files, info.FullName));
                 //  Task t = Task.Factory.StartNew(() => MakeLuaObject(context, a.Obj, files, info.FullName));
                 //  tasks.Add(t);
@@ -750,11 +624,20 @@ namespace betteribttest
 
          //   threads
         }
-        static Regex ScriptArgRegex = new Regex(@"self\.argument(\d+)", RegexOptions.Compiled);
-        static void WriteScript(GMContext context, ChunkReader.CodeData data, TextWriter tw, string header = null)
+        const string ObjectNameHeader = "gml_Object_";
+        static string GetObjectName(string name)
         {
-            ILBlock block = DecompileBlock(context, data.stream.BaseStream);
-            string scriptName = data.Name.Remove(0, "gml_Script_".Length);
+            if (!name.Contains(ObjectNameHeader)) return null;
+            name = name.Remove(0, ObjectNameHeader.Length);
+            name = name.Remove(0, name.LastIndexOf('_')); // number field
+            name = name.Remove(0, name.LastIndexOf('_')); // object event type
+            return name;
+        }
+        static Regex ScriptArgRegex = new Regex(@"self\.argument(\d+)", RegexOptions.Compiled);
+        static void WriteScript(GMContext context, string codeName, Stream codeStream, TextWriter tw, string header = null)
+        {
+            ILBlock block = DecompileBlock(context, codeStream);
+            string scriptName = codeName.Remove(0, "gml_Script_".Length);
             context.DebugName = scriptName; // in case of debug
             int arguments = 0;
             //   Debug.Assert(scriptName != "SCR_TEXTSETUP");
@@ -771,7 +654,7 @@ namespace betteribttest
             PlainTextOutput ptext = new PlainTextOutput(tw);
             if (context.doLua)
             {
-                ptext.WriteLine("-- ScriptName: {0} ", data.Name);
+                ptext.WriteLine("-- ScriptName: {0} ", codeName);
                 if (header != null) ptext.WriteLine("-- {0}", header);
                 ptext.Write("function {0}(self", scriptName);
                 for (int i = 0; i < arguments; i++) ptext.Write(",argument{0}", i);
@@ -843,7 +726,7 @@ namespace betteribttest
                                 Console.WriteLine("{0} is not an object", toSearch);
                                 Environment.Exit(1);
                             }
-                            MakeObject(context, cr, obj);
+                            using (StreamWriter sw = new StreamWriter(obj.Name + ".lua")) MakeObject(context, cr, obj, sw);
                             Environment.Exit(0);
                         }
                         pos++;
@@ -906,40 +789,30 @@ namespace betteribttest
                 {
                     case "objects":
                         {
-                            foreach (var a in cr.GetAllObjectCode())
+                            var info = Directory.CreateDirectory("objects");
+                            foreach (var files in cr.GetAllObjectCode())
                             {
-                                var info = Directory.CreateDirectory(a.ObjectName);
-                                foreach (ChunkReader.CodeData files in a.Streams)
-                                {
-                                    FilesFound.Add(files.Name);
-                                    new System.Threading.Thread((object o) =>
-                                    {
-                                        Thread.CurrentThread.IsBackground = true;
-                                        ChunkReader.CodeData data = (ChunkReader.CodeData)o;
-                                        string filename = Path.Combine(info.FullName, data.Name);
-                                        try
-                                        {
-                                            DecompileBlock(context, data.stream.BaseStream, filename, "ScriptName: " + data.Name);
-                                        }
-                                        catch (Exception e)
-                                        {
-                                            WriteErrorLine(string.Format("Object: {0}  Error: {1}", data.Name, e.Message));
-                                        }
-                                    }).Start(files);
-                                }
+                                string filename = Path.Combine(info.FullName, files.Name);
+                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, cr, files, sw);
                             }
                         }
                         break;
                     case "scripts":
                         {
+                            List<Task> tasks = new List<Task>();
                             var info = Directory.CreateDirectory("scripts");
                             Regex argMatch = new Regex(@"self\.argument(\d+)", RegexOptions.Compiled);
-                            foreach (var files in cr.GetAllScripts())
+                            foreach (var files in cr.codeList.Where(x => x.Name.Contains("gml_Script")))
                             {
                                 string filename = Path.Combine(info.FullName, files.Name);
-                                using (StreamWriter sw = new StreamWriter(filename + ".lua"))
-                                    WriteScript(context, files, sw);
+                                Task task = Task.Run(() =>
+                                {
+                                    using (StreamWriter sw = new StreamWriter(filename + ".lua"))
+                                        WriteScript(context, files.Name, new MemoryStream(files.data), sw);
+                                });
+                                tasks.Add(task);
                             }
+                            Task.WaitAll(tasks.ToArray());
                         }
                         break;
                     default:
@@ -947,24 +820,47 @@ namespace betteribttest
                         BadExit(1);
                         break;
                 }
-            } else
+            }
+            else
             {
-
-                foreach (var files in cr.GetCodeStreams(toSearch))
+                List<Task> tasks = new List<Task>();
+                HashSet<string> objects_done = new HashSet<string>();
+                foreach (var s in cr.nameMap.Values.Where(x => x.Name.Contains(toSearch)))
                 {
-                    string filename = Path.ChangeExtension(files.Name, context.doLua ? ".lua" : ".js");
+                    GMK_Object o = s as GMK_Object;
+                    if (o != null)
+                    {
+                        string filename = Path.ChangeExtension(o.Name, context.doLua ? ".lua" : ".js");
+                        if (context.Debug)
+                        {
+                            using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, cr, o, sw);
+                        }
+                        else
+                        {
+                            Task task = Task.Run(() =>
+                            {
+                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, cr, o, sw);
+                            });
+                            tasks.Add(task);
+                        }
+                        continue;
+                    } 
+                    else if (s.Name.Contains("gml_Script")) // its a script
+                    {
+                        GMK_Code c = s as GMK_Code;
+                        string codeName = c.Name.Replace("gml_Script_", "");
+                        string filename = Path.ChangeExtension(codeName, context.doLua ? ".lua" : ".js");
+                        Task task = Task.Run(() =>
+                        {
+                            MemoryStream ms = new MemoryStream(c.data);
+                            using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, codeName, ms, sw);
+                        }
+                        );
+                        tasks.Add(task);
 
-                    if (files.Name.Contains("gml_Script_"))// its a script
-                    {
-                        using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, files, sw);
                     }
-                    else // its an object
-                    {
-                        DecompileBlock(context, files.stream.BaseStream, filename, "ScriptName: " + files.Name);
-                        FilesFound.Add(files.Name);
-                    }
-                    //  Instruction.Instructions instructions = null;// Instruction.Create(files.stream, stringList, InstanceList);
                 }
+                Task.WaitAny(tasks.ToArray());
             }
 
             if(FilesFound.Count==0)

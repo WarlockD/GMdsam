@@ -15,6 +15,10 @@ namespace betteribttest.Dissasembler
 
     public abstract class ILNode
     {
+        public virtual ILNode Dup()
+        {
+            throw new Exception("Not implmented"); // We need this for dups
+        }
         // hack
         public static string EnviromentOverride = null;
         // removed ILList<T>
@@ -258,6 +262,10 @@ namespace betteribttest.Dissasembler
         public ILValue(ILVariable v) { this.Value = v; Type = GM_Type.Var; }
         public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
         public ILValue(ILExpression e) { this.Value = e; Type = GM_Type.ConstantExpression; }
+        public override ILNode Dup()
+        {
+            return new ILValue(this);
+        }
         public override string ToString()
         {
             return ValueText ?? Value.ToString();
@@ -382,6 +390,7 @@ namespace betteribttest.Dissasembler
         public bool isArray=false;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
         public GM_Type Type = GM_Type.NoType;
+
         public string FullName
         {
             get
@@ -395,11 +404,14 @@ namespace betteribttest.Dissasembler
                 return Index is ILValue;
             }
         }
+        /*
         public override IEnumerable<ILNode> GetChildren()
         {
+            //
             if (Instance != null) yield return Instance;
             if (Index != null) yield return Index;
         }
+        */
         public bool Equals(ILVariable obj)
         {
             if (object.ReferenceEquals(obj, null)) return false;

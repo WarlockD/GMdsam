@@ -25,10 +25,19 @@ namespace betteribttest.Dissasembler
                 ILNode previousChild = null;
                 foreach (ILNode child in node.GetChildren())
                 {
+                    ILExpression e = child as ILExpression;
+                    if (e != null && (e.Code == GMCode.Constant || e.Code == GMCode.Var || e.Code == GMCode.Call)) continue;
                     if (child is ILValue || child is ILVariable) continue; // we want to skip these.
                     // Added them as nodes so I don't have to dick with them latter with another AST
                     if (parent.ContainsKey(child))
+                    { // this throws on one single file and I don't know why the hell it does
+                        // its on obj_screen_Step_2  not sure why but its on an expression, so I am putting 
+                        // a hack to skip expressions that don't have any gotos in it.  Meh
+                        // debug, where the fuck is it
+                        var nodes = parent.Keys.Where(x => x == child);
                         throw new Exception("The following expression is linked from several locations: " + child.ToString());
+
+                    }
                     parent[child] = node;
                     if (previousChild != null)
                         nextSibling[previousChild] = child;

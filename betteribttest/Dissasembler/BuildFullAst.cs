@@ -11,6 +11,8 @@ namespace betteribttest.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
+        // no way around this, need to have stacks for eveything
+        Dictionary<ILLabel, Stack<ILNode>> labelToStack = new Dictionary<ILLabel, Stack<ILNode>>();
 
         GMContext context;
         ILBlock method;
@@ -25,6 +27,7 @@ namespace betteribttest.Dissasembler
             foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
+                labelToStack[target] = null; // make sure we got a default atleast
             }
             foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
             {
@@ -45,6 +48,12 @@ namespace betteribttest.Dissasembler
                 ILLabel label = (bb.Body.First() as ILLabel);
                 labelToNextBlock[label] = next;
             }
+        }
+        int tempVarIndex = 0;
+        ILVariable tempVariable(string name)
+        {
+            ILVariable v = new ILVariable() { Name = name + "_" + tempVarIndex++, InstanceName = "self", isArray = false, isLocal = true, isResolved = true };
+            return v;
         }
         void ProcessVar(ILVariable v, Stack<ILNode> stack)
         {
@@ -217,7 +226,13 @@ namespace betteribttest.Dissasembler
                 case GMCode.Dup:
                     if ((int)e.Operand == 0)
                     {
-                        stack.Push(stack.Peek()); // simple case
+                        ILNode top = stack.Peek();
+
+                        if(top.Match(GMCode.Call)) // hack on calls, ugh
+                        { // so, if its a call, we have to change it to a temp variable
+                            top = new ILExpression(top as ILExpression); // copy it ugh
+                        }
+                        stack.Push(top); // simple case
                         Dup1Seen = true; // usally this is on an assignment += -= of an array or such
                         return Status.DupStack0;
                     }
@@ -243,14 +258,6 @@ namespace betteribttest.Dissasembler
                                 e.Arguments.Add(new ILExpression(GMCode.Pop, null));
                         }
                         e.Arguments.Reverse(); // till I fix it latter, sigh
-                                               // specal case for lua as he have to change two strings add to concats
-                        if (context.doLua && 
-                            e.Code == GMCode.Add &&
-                           ( e.Arguments[0].MatchConstant(GM_Type.String) ||
-                            e.Arguments[1].MatchConstant(GM_Type.String)))
-                        {
-                            e.Code = GMCode.Concat;
-                        }
                         stack.Push(e); // push expressions back
                         return Status.AddedToStack;
                     }
@@ -456,12 +463,15 @@ namespace betteribttest.Dissasembler
             Stack<ILNode> stack = new Stack<ILNode>();
             List<ILNode> list = new List<ILNode>();
             Dup1Seen = false;
-            TestAndFixWierdLoop(body, head, pos);
+          //  TestAndFixWierdLoop(body, head, pos);
+            // fuck it, doing full stack block stuff, converting pushses to vars, etc
+            // I can't stand having one or two fail cases when I want the whole pie damnit
+
 
 
             for (int i = 0; i < head.Body.Count; i++)
             {
-                if (stack.Count == 1 &&
+                if (!context.doLua && stack.Count == 1 &&
                     head.MatchAt(i, GMCode.Dup) &&
                     head.MatchAt(i + 1, GMCode.Push) &&
                     head.MatchAt(i + 2, GMCode.Seq) &&

@@ -259,6 +259,67 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
+        public static bool FixLuaStringAddExpression(ILNode expr)
+        {
+            bool haveString = false; // check if we have a single string in the expression
+            var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
+            if (allNonAdds.Count ==0)
+            {
+                var allAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Add).ToList();
+                for (int i = 0; i < allAdds.Count; i++)
+                {
+                    var e = allAdds[i];
+                    if (haveString)
+                        e.Code = GMCode.Concat;
+                    else if (e.Arguments[0].MatchConstant(GM_Type.String) || e.Arguments[1].MatchConstant(GM_Type.String))
+                    {// if we match a string, they all have to be converted
+                        haveString = true;
+                        i = -1; // reset list
+                    }
+                }
+            }
+            return haveString;
+        } // 
+        public static bool FixLuaStringAddExpression(IList<ILNode> body, ILExpression expr, int pos)
+        {
+            bool haveString = false; // check if we have a single string in the expression
+            var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
+            if (allNonAdds.Count > 0)
+            {
+                var allAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Add).ToList();
+                for (int i = 0; i < allAdds.Count; i++)
+                {
+                    var e = allAdds[i];
+                    if (haveString)
+                        e.Code = GMCode.Concat;
+                    else if (e.MatchConstant(GM_Type.String))
+                    {// if we match a string, they all have to be converted
+                        haveString = true;
+                        i = 0; // reset list
+                    }
+                }
+            }
+            return haveString;
+        }
+        public static bool FixLuaStringAdd(IList<ILNode> body, ILBasicBlock head, int pos)
+        {
+            bool modified = false; // may need to optimzie this, can we just go though all the nodes?
+            // it makes sure where a concat can exisit it should, but we need to do a lot of refactoring
+            // on this latter
+            foreach(var a in head.GetSelfAndChildrenRecursive<ILAssign>())
+            {
+                modified |= FixLuaStringAddExpression(a);
+            }
+            foreach (var a in head.GetSelfAndChildrenRecursive<ILCall>())
+            {
+                foreach(var e in a.Arguments) modified |= FixLuaStringAddExpression(e);
+            }
+            foreach (var a in head.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Call))
+            {
+                foreach (var e in a.Arguments) modified |= FixLuaStringAddExpression(e);
+            }
+            return modified;
+        }
         // replace with assign statments as in lua we need to concat strings or in other engines
         // we might have to change the way we assign stuff, ie self.x = 4 changes to self:setX(4)
         public static bool ReplaceWithAssignStatements(IList<ILNode> body, ILBasicBlock head, int pos)
@@ -275,7 +336,7 @@ namespace betteribttest.Dissasembler
                     modified |= true;
                 }
             }
-            return false;
+            return modified;
         }
         // we move all the calls to a ICall Node so we can see them easier.  We convert all the ILExpression bits as most
         // calls have constants anyway, makes it easeir to process

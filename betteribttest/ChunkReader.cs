@@ -71,6 +71,7 @@ namespace betteribttest
     {
         public int startPosition;
         public int size;
+        public byte[] data = null;
         public GMK_Code(ChunkEntry e) : base(e) { }
     }
     public class GMK_Image : GMK_Data
@@ -518,6 +519,7 @@ namespace betteribttest
         public List<GMK_String> stringList = new List<GMK_String>();
 
 
+
         public void DumpAllObjects(string filename)
         {
             StreamWriter sw = new StreamWriter(filename);
@@ -558,19 +560,6 @@ namespace betteribttest
             throw new Exception("STRING NOT FOUND");
         }
 
-        void DoCode(int chunkStart, int chunkLimit)
-        {
-            ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit);
-            foreach(ChunkEntry e in entries)
-            {
-                GMK_Code code = new GMK_Code(e);
-                code.Name = readVarString(r.ReadInt32());
-                int code_size = r.ReadInt32();
-             //   code.code = r.ReadBytes(code_size);
-                codeList.Add(code);
-                AddData(code);
-            }
-        }
         void DoBackground(int chunkStart, int chunkLimit)
         {
             ChunkEntries entries = new ChunkEntries(r, chunkStart, chunkLimit); ; // only 14 bytes?
@@ -990,10 +979,13 @@ namespace betteribttest
         public struct CodeData
         {
             public string Name;
+            public string FixedName;
             public CodeDataType Type;
             public int TypeIndex;
+            public GMK_Object Obj;
             public BinaryReader stream;
         }
+       
         public IEnumerable<CodeData> GetCodeStreams()
         {
             foreach (GMK_Code c in codeList)
@@ -1008,90 +1000,43 @@ namespace betteribttest
             ChunkStream ms = getReturnStream();
             return new CodeData() { Name = c.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, c.startPosition, c.size)) };
         }
-        public IEnumerable<CodeData> GetCodeStreams(string search)
+
+        const string ObjectNameHeader = "gml_Object_";
+        const string ScriptNameHeader = "gml_Script_";
+        static string GetObjectName(string name)
         {
-            List<CodeData> list;
-            if (search.IndexOf("obj_") == 0) list= GetObjectCode(search).ToList();
-            else
+            if (!name.Contains(ObjectNameHeader)) return null;
+            name = name.Remove(0, ObjectNameHeader.Length);
+            name = name.Remove(0, name.LastIndexOf('_')); // number field
+            name = name.Remove(0, name.LastIndexOf('_')); // object event type
+            return name;
+        }
+        string FixCodeStringName(string[] split)
+        {
+            if (split[1] == "Script") return string.Concat(split.Skip(2));
+            else return string.Concat(split.Skip(2).Take(split.Length - 2));
+        }
+        string FixCodeStringName(string name)
+        {
+            return FixCodeStringName(name.Split('_'));
+        }
+        public IEnumerable<GMK_Object> GetObjectCode(string toSearch)
+        {
+            if (toSearch.IndexOf("obj_") != 0) toSearch = "obj_" + toSearch;
+            foreach (GMK_Code c in codeList.Where(x => x.Name.Contains(toSearch)))
             {
-                ChunkStream ms = getReturnStream();
-                list = codeList.Where(x => x.Name.Contains(search)).Select(x => new CodeData() { Name = x.Name, stream = new BinaryReader(new OffsetStream(ms.BaseStream, x.startPosition, x.size)) }).ToList();
-            }
-            return list;
-        }
-        // silly wrapper
-        public IEnumerable<CodeData> GetAllScripts()
-        {
-            return GetCodeStreams("gml_Script");
-        }
-        public class ObjectCodeReturn
-        {
-            public List<CodeData> Streams;
-            public string ObjectName;
-            public GMK_Object Obj = null;
-        }
-     
-        public bool ObjectNameMatch(string[] sname, string[] objsplit)
-        {
-            int j = 3;
-            for (int i = 0; i < sname.Length; i++, j++)
-                if (sname[i] != objsplit[j]) return false;
-            // check to see if we are at the end of object split
-            j += 2;
-            if (objsplit.Length != j)
-                return false;
-            return true;
-        }
-        public IEnumerable<CodeData> GetObjectCode(string objectName)
-        {
-            int index = objectName.IndexOf("obj_");
-            if (index == 0) objectName = objectName.Remove(0, "obj_".Length);
-            string[] sname = objectName.Split('_');
-            foreach (GMK_Code c in codeList.Where(x => x.Name.Contains(objectName)))
-            {
-                string[] split = c.Name.Split('_');
-                if (!ObjectNameMatch(sname, split)) continue; // not a name match
-                CodeData data = new CodeData() { Name = c.Name };
-                switch (split[split.Length-2])
-                {
-                    case "Create": data.Type = CodeDataType.Create; break;
-                    case "Other": data.Type = CodeDataType.Other; break;
-                    case "Alarm": data.Type = CodeDataType.Alarm; break;
-                    case "Step": data.Type = CodeDataType.Step; break;
-                    case "Draw": data.Type = CodeDataType.Draw; break;
-                    case "KeyPress":
-                        data.Type = CodeDataType.KeyPress; break;
-                    case "Collision": data.Type = CodeDataType.Collision; break;
-                    case "Destroy": data.Type = CodeDataType.Destroy; break;
-                    case "Keyboard": data.Type = CodeDataType.Keyboard; break;
-                    case "Mouse": data.Type = CodeDataType.Mouse; break;
-                    default:
-                        data.Type = CodeDataType.Unkonwn;
-                        break;
-                }
-                data.TypeIndex = int.Parse(split.Last());
-                ChunkStream ms = getReturnStream();
-                // we need to make it a binary stream
-                ms.Position = c.startPosition;
-                byte[] bdata = ms.ReadBytes(c.size);
-              
-                data.stream = new BinaryReader(new MemoryStream(bdata));
-                yield return data;
+                string objName =  FixCodeStringName(c.Name);
+                if (objName != toSearch) continue;
+                GMK_Object obj = nameMap[objName] as GMK_Object;
+                Debug.Assert(obj != null);
+                yield return obj;
             }
         }
 
         
-        public IEnumerable<ObjectCodeReturn> GetAllObjectCode()
+        public IEnumerable<GMK_Object> GetAllObjectCode()
         {
-            foreach(GMK_Object o in nameMap.Values.OfType<GMK_Object>())
-            {
-                string name = o.Name;
-                ObjectCodeReturn ret = new ObjectCodeReturn();
-                ret.Obj = o;
-                ret.Streams = GetObjectCode(name).ToList();
-                ret.ObjectName = name;
-                yield return ret;
-            }
+            return nameMap.Values.OfType<GMK_Object>();
         }
       
         void doSCPT(int chunkStart, int chunkLimit)
@@ -1387,6 +1332,8 @@ namespace betteribttest
                     }
                     else r.Position += 4;
                 }
+                r.Position = code.startPosition ;
+                code.data = r.ReadBytes(code.size);
             }
 
         }
