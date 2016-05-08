@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace betteribttest.Properties {
+namespace GameMaker.Properties {
     using System;
     
     

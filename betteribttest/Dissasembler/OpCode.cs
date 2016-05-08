@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public static class InstructionHelper {
         public static void ReLinkList(this IEnumerable<Instruction> list)
@@ -328,7 +328,7 @@ namespace betteribttest.Dissasembler
             var list = Dissasemble(r, stream.Length, context); 
             if(context.Debug)
             {
-                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(list.Values, "debug.asm");
+                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(list.Values, "debug.asm");
             }
             return list;
         }

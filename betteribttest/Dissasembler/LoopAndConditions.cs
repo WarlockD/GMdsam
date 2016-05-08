@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using betteribttest.FlowAnalysis;
+using GameMaker.FlowAnalysis;
 using System.Diagnostics;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public class LoopsAndConditions
     {

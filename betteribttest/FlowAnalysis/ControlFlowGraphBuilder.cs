@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 
-namespace betteribttest.FlowAnalysis
+namespace GameMaker.FlowAnalysis
 {
 
 	/// <summary>

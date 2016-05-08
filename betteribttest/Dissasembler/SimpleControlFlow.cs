@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public class ControlFlowLabelMap
     {

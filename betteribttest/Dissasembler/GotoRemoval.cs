@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public class GotoRemoval
     {

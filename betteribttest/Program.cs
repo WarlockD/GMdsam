@@ -2,14 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 
-namespace betteribttest
+namespace GameMaker
 {
     static class Program
     {
@@ -275,14 +275,14 @@ namespace betteribttest
 
         static ILBlock DecompileBlock(GMContext context, Stream code, string filename=null, string header = null)
         {
-            var instructionsNew = betteribttest.Dissasembler.Instruction.Dissasemble(code, context);
+            var instructionsNew = GameMaker.Dissasembler.Instruction.Dissasemble(code, context);
             if (context.doAsm)
             {
                 string asm_filename = filename + ".asm";
-                betteribttest.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
             }
             string raw_filename = Path.GetFileName(filename);
-            ILBlock block = new betteribttest.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+            ILBlock block = new GameMaker.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
             FunctionFix.FixCalls(block);
             PushFix.FixCalls(block);
             if(filename != null)
@@ -381,7 +381,7 @@ namespace betteribttest
             output.WriteLine("self.{0} = {{}}", table);
             foreach (var func in actions) InsertIntoTable(output,table, func.Key, func.Value);
         }
-        static void objectHeadder(ITextOutput output, GMK_Object obj)
+        static void objectHeadder(ITextOutput output, File.GObject obj)
         {
             output.WriteLine("function new_{0}(self)", obj.Name);
             output.Indent();
@@ -389,7 +389,7 @@ namespace betteribttest
             output.WriteLine();
 
         }
-        static void objectFooter(ITextOutput output, GMK_Object obj)
+        static void objectFooter(ITextOutput output, File.GObject obj)
         {
             output.Unindent();
             output.WriteLine("if  self.CreateEvent then  self.CreateEvent() end");
@@ -404,7 +404,6 @@ namespace betteribttest
             {
                 public string Name;
                 public string Instance = null;
-                public string FullText;
                 public bool isGlobal { get { return Instance == "global"; } }
                 public bool isArray = false;
                 public bool Equals(VarInfo o)
@@ -473,7 +472,7 @@ namespace betteribttest
                 return GetAllUnpinned().Where(pred);
             }
         }
-        public static void MakeObject(GMContext context, ChunkReader cr, GMK_Object obj, TextWriter output)
+        public static void MakeObject(GMContext context, File.GObject obj, TextWriter output)
         {
             //   ILVariable.WriteSelfOnTextOut = false;
             HashSet<string> SawEvent = new HashSet<string>();
@@ -492,12 +491,12 @@ namespace betteribttest
 
                         foreach (var a in e.Actions)
                         {
-                            GMK_Code codeData = cr.codeList[a.CodeOffset];
+                            File.Code codeData = File.Codes[a.CodeOffset];
                             if (context.Debug)
                             {
                                 Debug.WriteLine("Name: " + codeData.Name + " Event: " + GMContext.EventToString(i, e.SubType));
                             }
-                            ILBlock method = DecompileBlock(context, new MemoryStream(codeData.data));
+                            ILBlock method = DecompileBlock(context, codeData.Data);
                             string code = LuaCodeText(context, method); // auto indents it
                             cache.AddVars(method);
 
@@ -602,14 +601,14 @@ namespace betteribttest
             objectFooter(ptext, obj);
         }
 
-        static void MakeAllLuaObjects(ChunkReader cr, GMContext context)
+        static void MakeAllLuaObjects(GMContext context)
         {
             List<Task> tasks = new List<Task>();
-            foreach (var a in cr.GetAllObjectCode())
+            foreach (var a in File.Objects)
             {
 
                 // var info = Directory.CreateDirectory(a.ObjectName);
-                using (StreamWriter sw = new StreamWriter(a.Name + ".lua")) MakeObject(context, cr, a,sw);
+                using (StreamWriter sw = new StreamWriter(a.Name + ".lua")) MakeObject(context,  a,sw);
 
 
                 //  Thread t = new System.Threading.Thread(() => MakeLuaObject(context, a.Obj, files, info.FullName));
@@ -671,7 +670,6 @@ namespace betteribttest
 
         static void Main(string[] args)
         {
-            ChunkReader cr=null;
             string dataWinFileName = args.ElementAtOrDefault(0);
             if (string.IsNullOrWhiteSpace(dataWinFileName))
             {
@@ -682,7 +680,9 @@ namespace betteribttest
             try
             {
 #endif
-                cr = new ChunkReader(dataWinFileName, false); // main pc
+            File.LoadDataWin(dataWinFileName);
+            File.LoadEveything();
+           //     cr = new ChunkReader(dataWinFileName, false); // main pc
 #if !DEBUG
         }
             catch (Exception e)
@@ -693,7 +693,7 @@ namespace betteribttest
             }
 #endif
             FunctionReplacement();
-            context = new GMContext(cr);
+            context = new GMContext();
  
             bool all = false;
             string toSearch = null;
@@ -714,20 +714,17 @@ namespace betteribttest
                         context.doLua = true;
                         // DebugLuaObject
                         {
-                            GMK_Data data;
-                            if(!cr.nameMap.TryGetValue(toSearch,out data))
+                            File.GObject obj;
+                            if(File.TryLookup(toSearch,out obj))
+                            {
+                                using (StreamWriter sw = new StreamWriter(obj.Name + ".lua")) MakeObject(context,  obj, sw);
+                                Environment.Exit(0);
+                            } else
                             {
                                 Console.WriteLine("Could not find {0}", toSearch);
                                 Environment.Exit(1);
                             }
-                            GMK_Object obj = data as GMK_Object;
-                            if(obj == null)
-                            {
-                                Console.WriteLine("{0} is not an object", toSearch);
-                                Environment.Exit(1);
-                            }
-                            using (StreamWriter sw = new StreamWriter(obj.Name + ".lua")) MakeObject(context, cr, obj, sw);
-                            Environment.Exit(0);
+
                         }
                         pos++;
                         break;
@@ -749,10 +746,8 @@ namespace betteribttest
                         pos++;
                         context.doLua = true;
                         context.doLuaObject = true;
-                        MakeAllLuaObjects(cr, context);
+                        MakeAllLuaObjects(context);
                         return ;
-                        
-                        break;
                     case "-asm":
                         context.doAsm = true;
                         pos++;
@@ -790,10 +785,10 @@ namespace betteribttest
                     case "objects":
                         {
                             var info = Directory.CreateDirectory("objects");
-                            foreach (var files in cr.GetAllObjectCode())
+                            foreach (var obj in File.Objects)
                             {
-                                string filename = Path.Combine(info.FullName, files.Name);
-                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, cr, files, sw);
+                                string filename = Path.Combine(info.FullName, obj.Name);
+                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, obj, sw);
                             }
                         }
                         break;
@@ -802,13 +797,13 @@ namespace betteribttest
                             List<Task> tasks = new List<Task>();
                             var info = Directory.CreateDirectory("scripts");
                             Regex argMatch = new Regex(@"self\.argument(\d+)", RegexOptions.Compiled);
-                            foreach (var files in cr.codeList.Where(x => x.Name.Contains("gml_Script")))
+                            foreach (var s in File.Scripts)
                             {
-                                string filename = Path.Combine(info.FullName, files.Name);
+                                string filename = Path.Combine(info.FullName, s.Name);
                                 Task task = Task.Run(() =>
                                 {
                                     using (StreamWriter sw = new StreamWriter(filename + ".lua"))
-                                        WriteScript(context, files.Name, new MemoryStream(files.data), sw);
+                                        WriteScript(context, s.Name, s.Data, sw);
                                 });
                                 tasks.Add(task);
                             }
@@ -825,39 +820,38 @@ namespace betteribttest
             {
                 List<Task> tasks = new List<Task>();
                 HashSet<string> objects_done = new HashSet<string>();
-                foreach (var s in cr.nameMap.Values.Where(x => x.Name.Contains(toSearch)))
+                foreach (var s in File.Search(toSearch))
                 {
-                    GMK_Object o = s as GMK_Object;
+                    File.GObject o = s as File.GObject;
                     if (o != null)
                     {
                         string filename = Path.ChangeExtension(o.Name, context.doLua ? ".lua" : ".js");
                         if (context.Debug)
                         {
-                            using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, cr, o, sw);
+                            using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, o, sw);
                         }
                         else
                         {
                             Task task = Task.Run(() =>
                             {
-                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, cr, o, sw);
+                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, o, sw);
                             });
                             tasks.Add(task);
                         }
                         continue;
-                    } 
-                    else if (s.Name.Contains("gml_Script")) // its a script
+                    }
+                    File.Script os = s as File.Script;
+                    if(os != null)
                     {
-                        GMK_Code c = s as GMK_Code;
-                        string codeName = c.Name.Replace("gml_Script_", "");
+                        string codeName = os.Name.Replace("gml_Script_", "");
                         string filename = Path.ChangeExtension(codeName, context.doLua ? ".lua" : ".js");
                         Task task = Task.Run(() =>
                         {
-                            MemoryStream ms = new MemoryStream(c.data);
-                            using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, codeName, ms, sw);
+                            using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, codeName, os.Data, sw);
                         }
                         );
                         tasks.Add(task);
-
+                        continue;
                     }
                 }
                 Task.WaitAny(tasks.ToArray());

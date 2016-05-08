@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     class BuildFullAst
     {
@@ -13,7 +13,7 @@ namespace betteribttest.Dissasembler
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
         // no way around this, need to have stacks for eveything
         Dictionary<ILLabel, Stack<ILNode>> labelToStack = new Dictionary<ILLabel, Stack<ILNode>>();
-
+     
         GMContext context;
         ILBlock method;
         //  TypeSystem typeSystem;
@@ -38,6 +38,7 @@ namespace betteribttest.Dissasembler
             }
         }
         Dictionary<ILLabel, ILBasicBlock> labelToNextBlock;
+        
         void BuildNextBlockData()
         {
             labelToNextBlock = new Dictionary<ILLabel, ILBasicBlock>();
@@ -180,6 +181,7 @@ namespace betteribttest.Dissasembler
                     {
                         if (stack.Count == 0)
                         {
+                            throw new Exception("We NEED to have a stack");
                             list.Add(e);
                             //  Debug.Assert(false);
                             return Status.ChangedAdded;
@@ -187,10 +189,14 @@ namespace betteribttest.Dissasembler
                         else
                         {
                             ILExpression call = stack.Peek() as ILExpression;
-                            if (call != null && call.Code == GMCode.Call)
+                            if (call != null)
                             {
                                 stack.Pop();
-                                list.Add(call);
+                                if (call.Code == GMCode.Call) list.Add(call); // we want to show the void call
+                                // otherwise lets just drop the stack
+
+                                
+                               // throw new Exception("Ugh wierd optimize stuff");
                                 return Status.ChangedAdded;
                             }
                             else throw new Exception("popz on a non call?"); // return e; // else, ignore for switch
@@ -204,9 +210,6 @@ namespace betteribttest.Dissasembler
                         // Debug.Assert(stack.Count == 1);
                         e.Arguments[0] = NodeToExpresion(stack.Pop());
                         if (stack.Count > 0)
-                        {
-                            foreach (var n in stack) list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(n)));
-                        }
                         list.Add(e);
                         return Status.ChangedAdded;
                     }
@@ -217,22 +220,21 @@ namespace betteribttest.Dissasembler
                     }
                 case GMCode.B:
                 case GMCode.Exit:
-                    if (stack.Count > 0)
-                    {
-                        foreach (var n in stack) list.Add(new ILExpression(GMCode.Push, null, NodeToExpresion(n)));
-                    }
                     list.Add(e);
                     return Status.ChangedAdded;
                 case GMCode.Dup:
                     if ((int)e.Operand == 0)
                     {
-                        ILNode top = stack.Peek();
+                        ILExpression top = stack.Peek() as ILExpression;
 
-                        if(top.Match(GMCode.Call)) // hack on calls, ugh
+                        if (top != null) // hack on calls, ugh
                         { // so, if its a call, we have to change it to a temp variable
-                            top = new ILExpression(top as ILExpression); // copy it ugh
+                            top = new ILExpression(top); // copy it ugh
+                            stack.Push(top); // simple case
                         }
-                        stack.Push(top); // simple case
+                        else stack.Push(stack.Peek());
+
+
                         Dup1Seen = true; // usally this is on an assignment += -= of an array or such
                         return Status.DupStack0;
                     }
@@ -273,16 +275,32 @@ namespace betteribttest.Dissasembler
         // we cannot use RunOptimize as we need to go from
         // 1-count AND have to clear the case detecton on each block
         public void ProcessAllExpressions(ILBlock method)
-        {
-
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+        { // we want to run this in order
+            HashSet<ILBasicBlock> unresolvedBlocks = new HashSet<ILBasicBlock>(labelToBasicBlock.Values);
+            HashSet<ILBasicBlock> solvedBlocks = new HashSet<ILBasicBlock>();
+            /*
+            foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
             {
-                List<ILNode> body = block.Body;
-                for (int i = 0; i < body.Count; i++)
+                foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
                 {
-                    if (i < body.Count) ProcessExpressions(body, (ILBasicBlock)body[i], i);
+                    labelToBasicBlock[label] = bb;
                 }
             }
+            */
+            {
+                ILBasicBlock bb = method.Body[0] as ILBasicBlock;
+                labelToStack[bb.Body.First() as ILLabel] = new Stack<ILNode>(); // seed it
+                unresolvedBlocks.Remove(bb);
+                solvedBlocks.Add(bb);
+                StackAnalysis(bb);
+            }
+            do
+            {
+                foreach (var bb in unresolvedBlocks)
+                    if (StackAnalysis(bb)) solvedBlocks.Add(bb);
+                unresolvedBlocks.ExceptWith(solvedBlocks);
+            } while (unresolvedBlocks.Count>0); // fill all the stack data up
+            
         }
         void CreateSwitchExpresion(ILNode condition, List<ILNode> list, List<ILNode> body, ILBasicBlock head, int pos)
         {
@@ -458,37 +476,46 @@ namespace betteribttest.Dissasembler
             }
             // eveything else should be cleared out by all the removals
         }
+        bool StackAnalysis(ILBasicBlock head)
+        {
+            Stack<ILNode> stack;
+            ILLabel label = head.Body.First() as ILLabel;
+            if (labelToStack.TryGetValue(label, out stack) && stack !=null) {
+                List<ILNode> list = new List<ILNode>();
+                for (int i = 0; i < head.Body.Count; i++)
+                {
+                    Status s = ProcessExpression(list, head, i, stack);
+                }
+                ILExpression br = list[list.Count - 2] as ILExpression; // might not have a goto
+                ILExpression b = list[list.Count - 1] as ILExpression; // this is ALWAYS a goto
+                label = br != null ? br.Operand as ILLabel : null;
+                if (label != null) labelToStack[label] = new Stack<ILNode>(stack);
+                label = b != null ? b.Operand as ILLabel : null;
+                if (label != null) labelToStack[label] = new Stack<ILNode>(stack);
+                head.Body = list;
+                return true;
+            }
+            return false;
+
+        }
         void ProcessExpressions(List<ILNode> body, ILBasicBlock head, int pos)
         {
+            ProcessAllExpressions(null);
             Stack<ILNode> stack = new Stack<ILNode>();
             List<ILNode> list = new List<ILNode>();
             Dup1Seen = false;
-          //  TestAndFixWierdLoop(body, head, pos);
+            //  TestAndFixWierdLoop(body, head, pos);
             // fuck it, doing full stack block stuff, converting pushses to vars, etc
             // I can't stand having one or two fail cases when I want the whole pie damnit
+            // skipping switch building as lua dosn't do tha
+            // and you know, I can check for it latter
+            ILLabel label = head.Body.First() as ILLabel;
+            stack = labelToStack[label];
 
+            ILExpression br = list[list.Count - 2] as ILExpression; // might not have a goto
+            ILExpression b = list[list.Count - 1] as ILExpression; // this is ALWAYS a goto
 
-
-            for (int i = 0; i < head.Body.Count; i++)
-            {
-                if (!context.doLua && stack.Count == 1 &&
-                    head.MatchAt(i, GMCode.Dup) &&
-                    head.MatchAt(i + 1, GMCode.Push) &&
-                    head.MatchAt(i + 2, GMCode.Seq) &&
-                    head.MatchAt(i + 3, GMCode.Bt))
-                {
-                  //  if (context.doLua)
-                 //       LuaConvertSwitchExpression(stack.Pop(), list, body, head, pos); // fall though to finish the block
-                //    else
-                  //  {
-                        CreateSwitchExpresion(stack.Pop(), list, body, head, pos);
-                        break; // we are done with this block
-                   // }
-                }
-                Status s = ProcessExpression(list, head, i, stack);
-            }
             head.Body = list;
-
         }
     }
 }

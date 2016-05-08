@@ -8,11 +8,11 @@ using System.Collections.ObjectModel;
 using System.Collections;
 using System.Diagnostics;
 
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 using System.Text.RegularExpressions;
 using System.Globalization;
 
-namespace betteribttest
+namespace GameMaker
 {
 
 

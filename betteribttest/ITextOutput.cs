@@ -9,7 +9,7 @@ using System.IO;
 using System.Diagnostics.Contracts;
 using System.Diagnostics;
 
-namespace betteribttest
+namespace GameMaker
 {
     public class PlainTextWriter : TextWriter, ITextOutput
     {

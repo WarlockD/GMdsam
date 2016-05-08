@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.FlowAnalysis
+namespace GameMaker.FlowAnalysis
 {
     class OpCodeInfo
     {

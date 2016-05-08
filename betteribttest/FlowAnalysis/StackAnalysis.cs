@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
 
     public static class ILAstBuilderExtensions
@@ -477,7 +477,7 @@ namespace betteribttest.Dissasembler
             ILBlock method = new ILBlock();
             method.Body = ast;
             if (context.Debug) method.DebugSave(context.MakeDebugFileName("raw_body.txt"));
-            betteribttest.Dissasembler.Optimize.RemoveRedundantCode(method);
+            GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
             foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>())
                 Optimize.SplitToBasicBlocks(block);
             if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks.txt"));

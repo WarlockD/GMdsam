@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 using System.IO;
 
-namespace betteribttest
+namespace GameMaker
 {
     public class GMContext
     {
@@ -30,78 +30,83 @@ namespace betteribttest
             }
             else return file;
         }
-        string[] instanceList;
-        string[] scriptList;
-        string[] fontList;
-        string[] spriteList;
-        string[] audioList;
-        StringInfo[] stringList;
 
         public bool Debug = false;
-        public GMContext(ChunkReader cr)
+        public GMContext()
         {
-            stringList = cr.stringList.Select(x => new StringInfo() { escaped = x.escapedString, str = x.str }).ToArray();
-            instanceList = cr.objList.Select(x => x.Name).ToArray();
-            scriptList = cr.scriptIndex.Select(x => x.script_name).ToArray();
-            fontList = cr.resFonts.Select(x => x.Name).ToArray();
-            spriteList = cr.spriteList.Select(x => x.Name).ToArray();
-            audioList = cr.audioList.Select(x => x.Name).ToArray();
+        }
+        public static string EscapeChar(char v)
+        {
+            switch (v)
+            {
+                case '\a': return "\\a";
+                case '\n': return "\\n";
+                case '\r': return "\\r";
+                case '\t': return "\\t";
+                case '\v': return "\\v";
+                case '\\': return "\\\\";
+                case '\"': return "\\\"";
+                case '\'': return "\\\'";
+                //  case '[': return "\\[";
+                //   case ']': return "\\]";
+                default:
+                    if (char.IsControl(v)) return string.Format("\\{0}", (byte)v);
+                    else return v.ToString();
+            }
+        }
+        public static IEnumerable<string> InternalSimpleEscape(string s)
+        {
+            yield return "\"";
+            foreach (var c in s) yield return EscapeChar(c);
+            yield return "\"";
+        }
+        public static string EscapeString(string s)
+        {
+            return string.Concat(InternalSimpleEscape(s));
         }
         public string IndexToSpriteName(int index)
         {
             index &= 0x1FFFFF;
-            return spriteList[index];
+            return File.Sprites[index].Name;   
         }
         public string IndexToAudioName(int index)
         {
             index &= 0x1FFFFF;
-            return audioList[index];
+            return File.Sounds[index].Name;
         }
         public string IndexToScriptName(int index)
         {
             index &= 0x1FFFFF;
-            return scriptList[index];
+            return File.Codes[index].Name;
         }
         public string IndexToFontName(int index)
         {
-            return fontList[index];
+            return File.Fonts[index].Name;
         }
         public string LookupString(int index, bool escape = false)
         {
             index &= 0x1FFFFF;
-            return escape ? stringList[index].escaped : stringList[index].str;
+            return escape ? File.Strings[index] : EscapeString(File.Strings[index]);
         }
         public string InstanceToString(int instance)
         {
-            if (instance < 0)
+            switch (instance)
             {
-                string instanceName;
-                if (GMCodeUtil.instanceLookup.TryGetValue(instance, out instanceName))
-                    return instanceName;
-
+                case 0: return "stack";
+                case -1:
+                    return "self";
+                case -2:
+                    return "other";
+                case -3:
+                    return "all";
+                case -4:
+                    return "noone";
+                case -5:
+                    return "global";
+                default:
+                    return File.Objects[instance].Name;
+                    //   throw new Exception("Bad instance value");
             }
-            else if (instanceList != null && instance > 0 && instance < instanceList.Length)
-            {
-                return instanceList[instance];
-            }
-            // fallback
-            return '$' + instance.ToString() + '$';
-        }
-        public ILExpression InstanceToExpression(int instance)
-        {
-            if (instance < 0)
-            {
-                string instanceName;
-                if (GMCodeUtil.instanceLookup.TryGetValue(instance, out instanceName))
-                    return new ILExpression(GMCode.Constant, instanceName);
-
-            }
-            else if (instanceList != null && instance > 0 && instance < instanceList.Length)
-            {
-                return new ILExpression(GMCode.Constant, instanceList[instance]);
-            }
-            // fallback
-            return new ILExpression(GMCode.Constant, instance);
         }
         public ILExpression InstanceToExpression(ILExpression instance)
         {
