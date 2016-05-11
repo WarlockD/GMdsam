@@ -316,7 +316,7 @@ namespace GameMaker
         {
             return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.B;
         }
-        public static bool IsConditionalStatment(this GMCode code)
+        public static bool IsConditionalCode(this GMCode code)
         {
             switch (code)
             {
@@ -326,6 +326,9 @@ namespace GameMaker
                 case GMCode.Sle:
                 case GMCode.Sgt:
                 case GMCode.Slt:
+                case GMCode.Not:
+                case GMCode.LogicAnd:
+                case GMCode.LogicOr:
                     return true;
                 default:
                     return false;
@@ -376,7 +379,7 @@ namespace GameMaker
                     throw new Exception("Need more info for pop");
                 case GMCode.Popz:
                 case GMCode.Ret:
-                case GMCode.B:
+             
                 case GMCode.Bt:
                 case GMCode.Bf:
                 case GMCode.Neg:
@@ -401,6 +404,7 @@ namespace GameMaker
                     return 2;
                 case GMCode.Var:
                 case GMCode.Constant:
+                case GMCode.B:
                     return 0;
                 default:
                     throw new Exception("Unkonwn opcode");

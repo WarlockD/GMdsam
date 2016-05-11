@@ -48,7 +48,7 @@ namespace GameMaker.Dissasembler
         {
             yield break;
         }
-
+        
         public override string ToString()
         {
             StringWriter w = new StringWriter();
@@ -119,9 +119,25 @@ namespace GameMaker.Dissasembler
         }
         public void DebugSave(string filename, string fileHeader = null)
         {
-            using (PlainTextOutput pto = new PlainTextOutput(new System.IO.StreamWriter(filename)))
+            using (PlainTextOutput pto = new PlainTextOutput(new System.IO.StreamWriter(filename), 8))
             {
-                WriteBlock(pto, fileHeader);
+                if(fileHeader!= null) pto.RawWriteLine("Headder   : " + fileHeader);
+                pto.RawWriteLine("Filename : " + filename);
+                ILLabel last = null;
+                for(int i=0; i < Body.Count; i++)
+                {
+                    ILNode n = Body[i];
+                    ILLabel l = n as ILLabel;
+                    if (l != null) { last = l; pto.Header = ""; }
+                    else if (last != null) pto.Header = last.Name;
+
+                    ILExpression e = n as ILExpression;
+                    if (e != null)
+                        pto.Write(e.ToString()); // want to make sure we are using the debug
+                     else
+                        n.WriteTo(pto);
+                    pto.WriteLine();
+                }
             }
         }
         public void DebugSaveLua(string filename, string fileHeader = null)
@@ -348,6 +364,13 @@ namespace GameMaker.Dissasembler
 
     public class ILLabel : ILNode, IEquatable<ILLabel>
     {
+        static int generate_count = 0;
+        // generates a label, gurntess unique
+        public static ILLabel Generate(string name = "G")
+        {
+            name = string.Format("{0}_L{1}", name, generate_count++);
+            return new ILLabel() { Name = name };
+        }
         public string Name;
         public Label OldLabel = null;
         public object UserData = null; // usally old dsam label
@@ -378,6 +401,13 @@ namespace GameMaker.Dissasembler
     }
     public class ILVariable : ILNode, IEquatable<ILVariable>
     {
+        static int static_gen = 0;
+        // generates a variable, gurntees it unique
+        public static ILVariable GenerateTemp(string name = "gen")
+        {
+            name = string.Format("{0}_{1}", name, static_gen++);
+            return new ILVariable() { Name = name, isGenerated = true, isArray = false, isResolved = true };
+        }
         // hack
         // Side note, we "could" make this a node
         // but in reality this is isolated 
@@ -386,6 +416,7 @@ namespace GameMaker.Dissasembler
         public string Name;
         public ILNode Instance = null; // We NEED this
         public string InstanceName=null;
+        public bool isGenerated = false;
         public ILNode Index = null; // not null if we have an index
         public bool isArray=false;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
@@ -395,10 +426,11 @@ namespace GameMaker.Dissasembler
         {
             get
             {
-                if (isLocal) return Name;
+                if (isLocal || isGenerated) return Name;
                 else return  (InstanceName ?? Instance.ToString()) + '.' +   Name;
             }
         }
+
         public bool isFixedVar {  get
             {
                 return Index is ILValue;
@@ -433,7 +465,7 @@ namespace GameMaker.Dissasembler
         public override void WriteTo(ITextOutput output)
         {
           
-            if (!isLocal)
+            if (!isLocal && !isGenerated)
             {
                 Debug.Assert(Instance != null);
                 do
@@ -455,6 +487,7 @@ namespace GameMaker.Dissasembler
                     output.Write(".");
                 } while (false);
             }
+            if (!isResolved) output.Write('?');
             output.Write(Name);
             if (isArray)
             {
@@ -639,6 +672,7 @@ namespace GameMaker.Dissasembler
             }
             output.Write(')');
         }
+      
         // all this does is just check to see if the next tree is equal to the last tree of precidence
         // that is (4- 3) +3, the parms don't matter so don't print them, otherwise we need them
         static int Precedence(GMCode code)
@@ -681,6 +715,32 @@ namespace GameMaker.Dissasembler
             if (theirs == 8) return false; // its a constant or something dosn't need a parm
             if (theirs < ours) return true;
             else return false;
+        }
+        void ToStringOperand(StringBuilder sb,bool escapeString = true)
+        {
+            if (Operand != null)
+            {
+                if (Operand is ILLabel) sb.Append((Operand as ILLabel).Name);
+                else if (escapeString)
+                {
+                    if (Operand is string)
+                        sb.Append(GMCodeUtil.EscapeString((string) Operand));
+                    else if (Operand is ILValue)
+                    {
+                        ILValue val = Operand as ILValue;
+                        if (escapeString && val.Type == GM_Type.String) sb.Append(val.ValueText);
+                        else sb.Append(val.ToString());
+                    }
+                    else sb.Append(Operand.ToString());
+                }
+                else sb.Append(Operand.ToString());
+            }
+        }
+        string ToStringOperand(bool escapeString = true)
+        {
+            StringBuilder sb = new StringBuilder();
+            ToStringOperand(sb, escapeString);
+            return sb.ToString();
         }
         void WriteOperand(ITextOutput output, bool escapeString = true)
         {
@@ -776,6 +836,41 @@ namespace GameMaker.Dissasembler
                 WriteParm(output, 1);
             }
         }
+        // have to override due to issues with diffrent WriteTos
+        public void ToString(StringBuilder sb)
+        {
+            sb.Append(Code.ToString());
+            sb.Append(" ");
+            if (Operand != null)
+            {
+                sb.Append("(Operand= ");
+                ToStringOperand(sb, true);
+                sb.Append(") ");
+            }
+            if (Arguments.Count > 0)
+            {
+                sb.Append("(Arguments= ");
+                for (int i = 0; i < Arguments.Count; i++)
+                {
+                    if (i != 0) sb.Append(", ");
+                    Arguments[i].ToString(sb);
+                }
+                sb.Append(") ");
+            }
+        }
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder();
+            ToString(sb);
+            return sb.ToString();
+        }
+        public void DebugWriteTo(ITextOutput output)
+        {
+            output.Write(Code.ToString());
+            output.Write(" ");
+            if (Operand != null) WriteOperand(output, true);
+            if (Arguments.Count > 0) WriteCommaArguments(output);
+        }
         void InternalWriteTo(ITextOutput output)
         {
             switch (Code)
@@ -784,23 +879,9 @@ namespace GameMaker.Dissasembler
                     WriteOperand(output);
                     break;
                 case GMCode.Var:  // should be ILVariable
-                    if (Arguments.Count > 0) WriteArgument(output, 0, false);
-                    else
                     {
                         ILVariable v = Operand as ILVariable;
-                        if (v.isResolved) v.WriteTo(output);
-                        else
-                        {
-                            output.Write("stack");
-                            output.Write(".");
-                            WriteOperand(output, false);// generic, string name
-                            if (Arguments.Count > 1) // its an array
-                            {
-                                output.Write('[');
-                                WriteArgument(output, 1, false);
-                                output.Write(']');
-                            }
-                        }
+                         v.WriteTo(output);
                     }
                     break;
             
@@ -1279,9 +1360,10 @@ namespace GameMaker.Dissasembler
 
     public class ILWithStatement : ILNode
     {
-        public static int withScope = 0;
+        public static int withVars = 0;
         public ILBlock Body = new ILBlock();
         public ILExpression Enviroment;
+        public string EnviromentName = null;
         public override IEnumerable<ILNode> GetChildren()
         {
             if (Enviroment != null) yield return Enviroment;
@@ -1291,31 +1373,27 @@ namespace GameMaker.Dissasembler
         // workaround.  Its hacky but I don't have ot modify much
         public override void WriteToLua(ITextOutput output)
         {
-            // This is a bit hacky but it sort of works
-            // identing it to show that it is a with
-            // and we are making it in a block so the locals don't screw up
-            string env = Enviroment.ToString();
-            string old_enviroment = EnviromentOverride;
-            // output.WriteLine("with({0}) {{", env);
-            if (Enviroment.Code == GMCode.Constant || Enviroment.Code == GMCode.Var)
+            // UGH Now I see why you use withs
+            // This cycles though EACH object named in this instance, so it really IS a loop
+            string local_value = "w_" + withVars++;
+            string enviromentName;
+            if (EnviromentName != null) enviromentName = EnviromentName;
+            else
             {
-                EnviromentOverride = env; // simple case
-                Body.Body.WriteLuaNodes(output, false);
-            } else
-            { // more complex as it might be a return
-                string local_env = "with_" + withScope++;
-                EnviromentOverride = local_env;
-                output.WriteLine("repeat");
-                output.Indent();
-                output.WriteLine("local {0} = {1}", local_env, env);
-                output.WriteLine("if not {0} then break end", local_env);
-                Body.Body.WriteLuaNodes(output, false);
-                output.Unindent();
-                output.WriteLine("until false");
-                withScope--;
+                using (StringWriter w = new StringWriter())
+                {
+                    Enviroment.WriteToLua(new PlainTextOutput(w)); // hackery because of the ToString expression override
+                    enviromentName = w.ToString();
+                }
             }
+            output.WriteLine("for _,{0} in with({1}) do", local_value, enviromentName);
+            output.Indent();
+            string old_enviroment = EnviromentOverride;
+            EnviromentOverride = local_value; // override the enviroment name
+            Body.Body.WriteLuaNodes(output, false);
             EnviromentOverride = old_enviroment;
-           
+            output.Unindent();
+            output.WriteLine("end -- with({0}) end", enviromentName);           
         }
         public override void WriteTo(ITextOutput output)
         {

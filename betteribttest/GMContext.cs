@@ -20,6 +20,18 @@ namespace GameMaker
         public bool doAsm = false;
         public bool doLuaObject = false;
         public string DebugName = null;
+        public bool doThreads = false;
+
+        public StreamWriter MakeDebugStream(string file)
+        {
+            string filename = MakeDebugFileName(file);
+            return new StreamWriter(filename);
+        }
+        public ITextOutput MakeDebugFormatedStream(string file)
+        {
+            string filename = MakeDebugFileName(file);
+            return new PlainTextOutput(new StreamWriter(filename));
+        }
         public string MakeDebugFileName(string file)
         {
             if (DebugName != null)
@@ -86,7 +98,7 @@ namespace GameMaker
         public string LookupString(int index, bool escape = false)
         {
             index &= 0x1FFFFF;
-            return escape ? File.Strings[index] : EscapeString(File.Strings[index]);
+            return escape ? EscapeString(File.Strings[index]) : File.Strings[index] ;
         }
         public string InstanceToString(int instance)
         {
@@ -104,10 +116,53 @@ namespace GameMaker
                 case -5:
                     return "global";
                 default:
+
                     return File.Objects[instance].Name;
-                    //   throw new Exception("Bad instance value");
+                    // 
             }
         }
+        public string InstanceToString(ILExpression instance)
+        {
+            string ret = null;
+            if(instance.Code == GMCode.Constant)
+            {
+                ILValue value = instance.Operand as ILValue;
+                if (value.Type == GM_Type.Short || value.Type == GM_Type.Int)
+                {
+                    switch ((int) value)
+                    {
+                        case 0: ret = "stack"; break;
+                        case -1:
+                            ret = "self"; break;
+                        case -2:
+                            ret = "other"; break;
+                        case -3:
+                            ret = "all"; break;
+                        case -4:
+                            ret = "noone"; break;
+                        case -5:
+                            ret = "global"; break;
+                        default:
+                            ret = "\"" + File.Objects[(int) value].Name + "\"";
+                            break;
+                    }
+                }
+            } else if(instance.Code == GMCode.Var)
+            {
+                ILVariable value = instance.Operand as ILVariable;
+                ret = "(" + value.ToString() + ")";
+            } else
+            {
+                using (StringWriter w = new StringWriter())
+                {
+                    instance.WriteToLua(new PlainTextOutput(w)); // hackery because of the ToString expression override
+                    ret = "(" + w.ToString() + ")";
+                }
+            }
+            if(ret == null) ret = "(" + instance.ToString() + ")";
+            return ret;
+        }
+
         public ILExpression InstanceToExpression(ILExpression instance)
         {
             switch (instance.Code)

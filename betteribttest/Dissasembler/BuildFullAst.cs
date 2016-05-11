@@ -1,19 +1,36 @@
-﻿using System;
+﻿using GameMaker.FlowAnalysis;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace GameMaker.Dissasembler
 {
+    public static class StackExtensions
+    {
+        public static ILNode[] Backup(this Stack<ILNode> stack)
+        {
+            if (stack.Count == 0) return null;
+            ILNode[] backup = new ILNode[stack.Count];
+            stack.CopyTo(backup, 0);
+            return backup;
+        }
+        public static void Restore(this Stack<ILNode> stack, ILNode[] nodes)
+        {
+            stack.Clear();
+            if(nodes!=null) foreach (var n in nodes.Reverse()) stack.Push(n);
+        }
+    }
     class BuildFullAst
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
         // no way around this, need to have stacks for eveything
         Dictionary<ILLabel, Stack<ILNode>> labelToStack = new Dictionary<ILLabel, Stack<ILNode>>();
-     
+
         GMContext context;
         ILBlock method;
         //  TypeSystem typeSystem;
@@ -38,7 +55,7 @@ namespace GameMaker.Dissasembler
             }
         }
         Dictionary<ILLabel, ILBasicBlock> labelToNextBlock;
-        
+
         void BuildNextBlockData()
         {
             labelToNextBlock = new Dictionary<ILLabel, ILBasicBlock>();
@@ -53,89 +70,251 @@ namespace GameMaker.Dissasembler
         int tempVarIndex = 0;
         ILVariable tempVariable(string name)
         {
-            ILVariable v = new ILVariable() { Name = name + "_" + tempVarIndex++, InstanceName = "self", isArray = false, isLocal = true, isResolved = true };
+            ILVariable v = new ILVariable() { Name = name + "_" + tempVarIndex++, InstanceName = "self", isArray = false, isLocal = true, isResolved = true, isGenerated = true };
             return v;
         }
-        void ProcessVar(ILVariable v, Stack<ILNode> stack)
+        bool ProcessVar(ILVariable v, Stack<ILNode> stack)
         {
-            if (v.isResolved) return; // nothing to do
+
+            if (v.isResolved) return true; // nothing to do
             ILValue value = v.Instance as ILValue;
             Debug.Assert(value.Value is int); // means the value is an int
-            int instance = (int)value;
+            int instance = (int) value;
             Debug.Assert(instance == 0);  // it should be a stack value at this point
+            if (stack.Count < 1 || (v.isArray && stack.Count < 2)) return false;
             if (v.isArray) v.Index = stack.Pop();  // get the index first
             v.Instance = stack.Pop(); // get the instance
             value = v.Instance as ILValue;
             if (value != null && value.Value is int)
             {
-                v.InstanceName = context.InstanceToString((int)value);
+                v.InstanceName = context.InstanceToString((int) value);
             }
             else v.InstanceName = null;
             v.isResolved = true;
+            return true;
         }
         public ILExpression NodeToExpresion(ILNode n)
         {
             if (n is ILValue) return new ILExpression(GMCode.Constant, n as ILValue);
             else if (n is ILVariable) return new ILExpression(GMCode.Var, n as ILVariable);
 
-            else if (n is ILExpression) return n as ILExpression;
+            else if (n is ILExpression) return new ILExpression(n as ILExpression);
             else if (n is ILCall) return new ILExpression(GMCode.Call, n);
             else throw new Exception("Should not happen here");
-        }
-        void CheckList(List<ILNode> node)
-        {
-            for (int i = 0; i < node.Count; i++)
-            {
-                ILExpression e = node[i] as ILExpression;
-                if (e == null) continue;
-                switch (e.Code)
-                {
-                    case GMCode.Pop:
-                        Debug.Assert(false);
-                        break;
-                    case GMCode.Push:
-                        Debug.Assert(i == (node.Count - 2) && node.LastOrDefault().Match(GMCode.B));
-                        break;
-
-                }
-                // all variables MUST be resolved, no exception
-                var list = e.GetSelfAndChildrenRecursive<ILVariable>(x => !x.isResolved).ToList();
-                Debug.Assert(list.Count == 0);
-            }
         }
 
         enum Status
         {
-            DetectedPosableCase,
-            NoChangeAdded,
-            ChangedAdded,
-            AddedToStack,
-            DupStack0,
-            DupStack1
+            Resolved,
+            NonExpression,
+            EmptyStack,
+            StackHasData,
+            BlockNeedsStack
         }
-        bool Dup1Seen = false;
-        Status ProcessExpression(List<ILNode> list, ILBasicBlock head, int pos, Stack<ILNode> stack)
+        bool DupSeen = false;
+        List<ILNode> ProcessBlock(ILBasicBlock head, Stack<ILNode> stack)
+        {
+            List<ILNode> list = new List<ILNode>();
+            for (int i = 0; i < head.Body.Count; i++)
+            {
+                ProcessExpression(list, head, i, stack);
+            }
+
+
+
+
+            return list;
+        }
+        class BasicBlockInfo
+        {
+            public ILBasicBlock bb;
+            public Stack<ILNode> EndStack;
+            public bool DupSeen; // the stack may of been a result of a dup
+        }
+        void DebugBasicBlockInfo(ITextOutput output, IEnumerable<BasicBlockInfo> e)
+        {
+            foreach (var binfo in e)
+            {
+                output.WriteLine("===Block");
+                output.Indent();
+                foreach(var n in binfo.bb.Body)
+                {
+                    ILExpression expr = n as ILExpression;
+                    if (expr != null) expr.DebugWriteTo(output);
+                    else n.WriteTo(output);
+                    output.WriteLine();
+
+
+                }
+                output.Unindent();
+                if (binfo.EndStack.Count == 0)
+                    output.WriteLine("===EmptyStack");
+                else
+                {
+                    output.WriteLine("===Stack");
+                    output.Indent();
+                    var a = binfo.EndStack.ToArray();
+                    for (int i = 0; i < a.Length; i++)
+                    {
+                        output.Write("{0}: ");
+
+                        a[i].WriteToLua(output);
+                        output.WriteLine();
+                    }
+                    output.Unindent();
+                }
+                output.WriteLine();
+            }
+        }
+
+        void PreprocessBlocks(List<BasicBlockInfo> needStackData, List<BasicBlockInfo> hasStackData)
+        {
+            foreach (var bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
+            {
+                List<ILNode> list = new List<ILNode>();
+                Stack<ILNode> stack = new Stack<ILNode>();
+                bool exprAdded = true;
+                int pos = 0;
+                bool dupInline = false;
+                //Debug.Assert(bb.EntryLabel().Name != "L180");
+                while (pos < bb.Body.Count && (exprAdded = ProcessExpression(list, bb, pos++, stack))) dupInline |= DupSeen;
+                if (exprAdded)
+                {
+                    if (stack.Count > 0)
+                    {
+                        BasicBlockInfo binfo = new BasicBlockInfo() { bb = bb, DupSeen = dupInline, EndStack = stack };
+                        hasStackData.Add(binfo);
+                    }
+                    bb.Body = list; // block didn't have any drops so do it 
+                }
+                else
+                {   // we need a stack to do this block
+
+                    BasicBlockInfo binfo = new BasicBlockInfo() { bb = bb, DupSeen = dupInline, EndStack = new Stack<ILNode>() };
+                    needStackData.Add(binfo);
+                }
+            }
+        }
+        void DebugBlocks(List<BasicBlockInfo> needStackData, List<BasicBlockInfo> hasStackData, string filename)
+        {
+            using (var stream = context.MakeDebugStream(filename)) 
+            {
+                var output = new PlainTextOutput(stream);
+                output.WriteLine("DebugName: " + context.DebugName);
+                output.WriteLine("Needs Stack Data: {0}", needStackData.Count);
+                DebugBasicBlockInfo(output, needStackData);
+                output.WriteLine("Has Stack Data: {0}", hasStackData.Count);
+                DebugBasicBlockInfo(output, hasStackData);
+            }
+             method.DebugSave(context.MakeDebugFileName("block_" + filename));
+        }
+        void ProcessBranchPushes(List<BasicBlockInfo> needStackData, List<BasicBlockInfo> hasStackData)
+        {
+            HashSet<ILLabel> ignoreNeeds = new HashSet<ILLabel>();
+            List<BasicBlockInfo> toRemove = new List<BasicBlockInfo>();
+            foreach (var bi in hasStackData)
+            {
+                ILBasicBlock bb = bi.bb;
+                if (bb.Body.Count == 2 && bi.EndStack.Count == 1) // We only have a label, a goto and a push
+                {
+                    ignoreNeeds.Add(bb.GotoLabel());
+                    bb.Body.Insert(1, new ILExpression(GMCode.Push, null, NodeToExpresion(bi.EndStack.Pop())));
+                    toRemove.Add(bi); // process needstack and remove
+                } 
+            }
+            hasStackData.RemoveOrThrow(toRemove);
+            needStackData.RemoveAll(x => ignoreNeeds.Contains(x.bb.EntryLabel()));
+        }
+
+        void ResolveBlockData(List<BasicBlockInfo> needStackData, List<BasicBlockInfo> hasStackData)
+        {
+          
+            LoopsAndConditions landc = new LoopsAndConditions(context);
+            ControlFlowGraph graph = landc.BuildGraph(method.Body, method.EntryGoto.Operand as ILLabel);
+            graph.ComputeDominance();
+            graph.ComputeDominanceFrontier();
+            var export = graph.ExportGraph();
+            export.Save("test.dot");
+            foreach (var bi in hasStackData)
+            {
+                HashSet<ControlFlowNode> scope = new HashSet<ControlFlowNode>(graph.Nodes.Skip(2));
+                ControlFlowNode head = landc.LabelToNode(bi.bb.EntryLabel());
+               // scope.Remove(head)
+                var domnodes = LoopsAndConditions.FindDominatedNodes(scope, head);
+                // taking a chance here.  Again, as I stated before, I now know why you convert all the pushes to temp gemerated variables
+                // its becuase of optimization passes, if eveything is in one block, its ok, but once you break that block boundry, you don't know
+                // where the hell it will be used.  So you have to track that fucker around the world.  Like we are doing now
+                // only seems to happen in loops so thats good
+                domnodes.Remove(head); // ... fuck it lets hack this bitch, fix it with asserts
+                foreach (var sd in needStackData.ToList())
+                {
+                    var sn = domnodes.SingleOrDefault(x => x.UserData == sd.bb);
+                    if (sn == null) continue;
+                   
+                    var inner = LoopsAndConditions.FindDominatedNodes(scope, sn);
+                    Debug.Assert(!LoopsAndConditions.HasSingleEdgeEnteringBlock(sn));  // if it has more than one..ugh
+                    // OK here comes the magic
+                    List<ILNode> list = new List<ILNode>();
+                    Stack<ILNode> stack = new Stack<ILNode>(bi.EndStack);
+                    for(int i=0;i< sd.bb.Body.Count; i++)
+                    {
+                        
+                        Debug.Assert(ProcessExpression(list, sd.bb, i, stack));
+                    }
+                    if (stack.Count>0) {
+                      //  var viaBackEdges = head.Predecessors.Where(p => p.Dominates(sn));
+                        //Debug.Assert(stack.Count == 0);
+                        // ignore stacks now, mabye later put it back on the has stack data
+                    }
+                    sd.bb.Body = list;
+                    needStackData.Remove(sd); // remove it
+                }
+            }
+            hasStackData.Clear();
+        }
+        public void ProcessAllExpressions()
+        {
+            List<BasicBlockInfo> needStackData = new List<BasicBlockInfo>();
+            List<BasicBlockInfo> hasStackData = new List<BasicBlockInfo>();
+            PreprocessBlocks(needStackData, hasStackData);
+            if (needStackData.Count == 0 && hasStackData.Count == 0) return; // no extra processing required
+            if (context.Debug) DebugBlocks(needStackData, hasStackData, "pre_ast_block_info.txt");
+            ProcessBranchPushes(needStackData, hasStackData);// First we resolve any nodes that will be filedered by the teetery/short code
+            if (context.Debug) DebugBlocks(needStackData, hasStackData, "post_ast_block_info.txt");
+            ResolveBlockData(needStackData, hasStackData);// First we resolve any nodes that will be filedered by the teetery/short code
+
+            if (needStackData.Count == 0 && hasStackData.Count == 0) return; // no extra processing required
+            if (context.Debug) DebugBlocks(needStackData, hasStackData, "error_ast_block_info.txt");
+            Debug.Assert(false);
+        }
+        /// <summary>
+        /// Process an expression in an ILBasicBlock
+        /// </summary>
+        /// <param name="list"></param>
+        /// <param name="head"></param>
+        /// <param name="pos"></param>
+        /// <param name="stack"></param>
+        /// <returns>true if added to list, false if bad stack and not added to list</returns>
+        bool ProcessExpression(List<ILNode> list, ILBasicBlock head, int pos, Stack<ILNode> stack)
         {
             ILExpression e = head.Body[pos] as ILExpression;
             if (e == null)
             {
                 list.Add(head.Body[pos]);
-                return Status.NoChangeAdded;
+                return true; // label or other stuff
             }
             ILValue tempValue;
             ILVariable tempVar;
             switch (e.Code)
             {
-                case GMCode.Conv:
-                    // expr.InferredType
-                    break;
                 case GMCode.Push:
                     tempValue = e.Operand as ILValue;
                     tempVar = e.Operand as ILVariable;
                     if (tempValue != null) stack.Push(tempValue);
                     else if (tempVar != null)
                     {
-                        ProcessVar(tempVar, stack);
+                        if (!ProcessVar(tempVar, stack))
+                            return false;// hard fault
                         stack.Push(tempVar);
                     }
                     else
@@ -143,49 +322,50 @@ namespace GameMaker.Dissasembler
                         Debug.Assert(e.Arguments.Count > 0);
                         stack.Push(e.Arguments[0]);
                     }
-                    return Status.AddedToStack;
+                    break;
                 case GMCode.Pop: // convert to an assign
                     {
                         tempVar = e.Operand as ILVariable;
                         Debug.Assert(tempVar != null);
                         ILExpression expr = null;
-                        if (Dup1Seen) expr = NodeToExpresion(stack.Pop()); // have to swap the assignment if a dup 1 was done
-                        ProcessVar(tempVar, stack);
-                        e.Code = GMCode.Assign;
-                        e.Operand = null;
-                        e.Arguments.Add(NodeToExpresion(tempVar));
-                        if (!Dup1Seen) expr = NodeToExpresion(stack.Pop());
-                        e.Arguments.Add(expr);
+                        if (stack.Count == 0)
+                            return false; // hard fault, mabye we should throw here
+                        if (DupSeen) expr = NodeToExpresion(stack.Pop()); // have to swap the assignment if a dup 1 was done
+                        if (!ProcessVar(tempVar, stack))
+                            return false;// hard fault
+                        ILAssign assign = new ILAssign() { Variable = tempVar };
+                     //   e.Code = GMCode.Assign;
+                      //  e.Operand = null;
+                      //  e.Arguments.Add(NodeToExpresion(tempVar));
+                        if (!DupSeen) expr = NodeToExpresion(stack.Pop());
+                        assign.Expression = expr;
+                        //e.Arguments.Add(expr);
 
 
-                        list.Add(e);
-                        return Status.ChangedAdded;
+                        //list.Add(e);
+
+                        list.Add(assign);
+
                     }
+                    break;
                 case GMCode.Call:
                     {
-                        if (e.Extra == -1)
+                        if (e.Extra == -1) // hack done in the dissasembler.  if there is a popz right after the call, its just a call with no return
                         {
                             list.Add(e);
-                            return Status.NoChangeAdded;
-                        } // its already resolved
-                          //ILExpression call = new ILExpression(GMCode.Call, )
-                          //ILCall call = new ILCall() { Name = e.Operand as string };
-                          //for (int j = 0; j < e.Extra; j++) call.Arguments.Add(stack.Pop());
-                        if (e.Extra > 0)
-                            for (int j = 0; j < e.Extra; j++) e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                        e.Extra = -1;
-                        stack.Push(e);
+                        }
+                        else// its already resolved
+                        {
+                            if (e.Extra > 0)
+                                for (int j = 0; j < e.Extra; j++) e.Arguments.Add(NodeToExpresion(stack.Pop()));
+                            e.Extra = -1;
+                            stack.Push(e);
+                        }
                     }
-                    return Status.AddedToStack;
+                    break;
                 case GMCode.Popz:
                     {
-                        if (stack.Count == 0)
-                        {
-                            throw new Exception("We NEED to have a stack");
-                            list.Add(e);
-                            //  Debug.Assert(false);
-                            return Status.ChangedAdded;
-                        }
+                        if (stack.Count == 0) return false;// hard fault
                         else
                         {
                             ILExpression call = stack.Peek() as ILExpression;
@@ -193,115 +373,119 @@ namespace GameMaker.Dissasembler
                             {
                                 stack.Pop();
                                 if (call.Code == GMCode.Call) list.Add(call); // we want to show the void call
-                                // otherwise lets just drop the stack
+                                                                              // otherwise lets just drop the stack
 
-                                
-                               // throw new Exception("Ugh wierd optimize stuff");
-                                return Status.ChangedAdded;
+
+                                // throw new Exception("Ugh wierd optimize stuff");
                             }
-                            else throw new Exception("popz on a non call?"); // return e; // else, ignore for switch
+                            else
+                            {
+                                stack.Pop(); // juuust popit
+                             //   throw new Exception("popz on a non call?"); // return e; // else, ignore for switch
+                            }
                         }
                     }
+                    break;
                 case GMCode.Bf:
                 case GMCode.Bt:
                 case GMCode.Ret:
-                    if (stack.Count > 0)
                     {
-                        // Debug.Assert(stack.Count == 1);
-                        e.Arguments[0] = NodeToExpresion(stack.Pop());
-                        if (stack.Count > 0)
-                        list.Add(e);
-                        return Status.ChangedAdded;
+                        if (stack.Count == 0)
+                            return false;
+                        ILExpression expr = NodeToExpresion(stack.Pop());
+                        expr.Arguments.Clear(); // clear out the pop for now
+                        if (expr.Code.IsConditionalCode())
+                        {
+                            e.Arguments.Add(expr);
+                            // simple case
+                        }
+                        else if (expr.Code.isExpression())
+                        { // something wierd
+                            if ((expr.Arguments[0].Match(GMCode.Var, out tempVar) || expr.Arguments[1].Match(GMCode.Var, out tempVar)) &&
+                                tempVar.isGenerated)
+                            {
+                                ILExpression ge = new ILExpression(GMCode.Assign, null, NodeToExpresion(tempVar), expr);
+                                list.Add(ge); // add it
+                                e.Arguments[0] = new ILExpression(GMCode.Sne, null, NodeToExpresion(tempVar), NodeToExpresion(new ILValue((short) 0)));
+                            }
+
+                        }
+                        else if (expr.Code == GMCode.Call)
+                        {
+                            e.Arguments.Add(expr); // just goes here for calls
+
+                        }
+                        else throw new Exception("WAHH");
+                       // e.Arguments[0] = new ILExpression(GMCode.Sne, null, expr, NodeToExpresion(new ILValue((short) 0)));
                     }
-                    else
-                    {
-                        list.Add(e);
-                        return Status.NoChangeAdded;
-                    }
+                    list.Add(e);
+                    break;
                 case GMCode.B:
                 case GMCode.Exit:
                     list.Add(e);
-                    return Status.ChangedAdded;
+                    break;
                 case GMCode.Dup:
-                    if ((int)e.Operand == 0)
+                    if ((int) e.Operand == 0)
                     {
                         ILExpression top = stack.Peek() as ILExpression;
 
                         if (top != null) // hack on calls, ugh
                         { // so, if its a call, we have to change it to a temp variable
-                            top = new ILExpression(top); // copy it ugh
-                            stack.Push(top); // simple case
+                            if (top.Code == GMCode.Call)
+                            {
+                                var v = this.NewGeneratedVar();
+                                ILExpression ge = new ILExpression(GMCode.Assign, null, NodeToExpresion(v), NodeToExpresion(stack.Pop()));
+                                // generate an assign
+                                list.Add(ge); // add it
+                                stack.Push(v);
+                                stack.Push(v); // push it twice for the dup
+                            }
+                            else
+                            {
+                                top = new ILExpression(top); // copy it ugh
+                                stack.Push(top); // simple case
+                            }
                         }
                         else stack.Push(stack.Peek());
 
 
-                        Dup1Seen = true; // usally this is on an assignment += -= of an array or such
-                        return Status.DupStack0;
+                        DupSeen = true; // usally this is on an assignment += -= of an array or such
+                                        //   return Status.DupStack0;
                     }
                     else
                     {
                         // this is usally on an expression that uses a var multipual times so the instance and index is copyed
                         // HOWEVER the stack may need to be swaped
                         foreach (var n in stack.Reverse().ToArray()) stack.Push(n); // copy the entire stack
-                        Dup1Seen = true; // usally this is on an assignment += -= of an array or such
-                        return Status.DupStack1;
+                        DupSeen = true; // usally this is on an assignment += -= of an array or such
+                                        //  return Status.DupStack1;
                     }
-
+                    break;
                 default: // ok we handle an expression
                     if (e.Code.isExpression())
                     {
-
+                        int popDelta = e.Code.GetPopDelta();
+                        if (stack.Count < popDelta)
+                            return false; // bad stack
                         for (int j = 0; j < e.Code.GetPopDelta(); j++)
                         {
-
-                            if (stack.Count > 0)
-                                e.Arguments.Add(NodeToExpresion(stack.Pop()));
-                            else
-                                e.Arguments.Add(new ILExpression(GMCode.Pop, null));
+                            e.Arguments.Add(NodeToExpresion(stack.Pop()));
                         }
                         e.Arguments.Reverse(); // till I fix it latter, sigh
-                        stack.Push(e); // push expressions back
-                        return Status.AddedToStack;
+
+                            stack.Push(e); // push expressions back
                     }
                     else
                     {
                         list.Add(e);
-                        return Status.NoChangeAdded;
+                        Debug.WriteLine("Wierd Expression added?");
                     }
+                    break;
             }
-            throw new Exception("Shouldn't get here?");
+            return true;
         }
 
-        // we cannot use RunOptimize as we need to go from
-        // 1-count AND have to clear the case detecton on each block
-        public void ProcessAllExpressions(ILBlock method)
-        { // we want to run this in order
-            HashSet<ILBasicBlock> unresolvedBlocks = new HashSet<ILBasicBlock>(labelToBasicBlock.Values);
-            HashSet<ILBasicBlock> solvedBlocks = new HashSet<ILBasicBlock>();
-            /*
-            foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
-            {
-                foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
-                {
-                    labelToBasicBlock[label] = bb;
-                }
-            }
-            */
-            {
-                ILBasicBlock bb = method.Body[0] as ILBasicBlock;
-                labelToStack[bb.Body.First() as ILLabel] = new Stack<ILNode>(); // seed it
-                unresolvedBlocks.Remove(bb);
-                solvedBlocks.Add(bb);
-                StackAnalysis(bb);
-            }
-            do
-            {
-                foreach (var bb in unresolvedBlocks)
-                    if (StackAnalysis(bb)) solvedBlocks.Add(bb);
-                unresolvedBlocks.ExceptWith(solvedBlocks);
-            } while (unresolvedBlocks.Count>0); // fill all the stack data up
-            
-        }
+
         void CreateSwitchExpresion(ILNode condition, List<ILNode> list, List<ILNode> body, ILBasicBlock head, int pos)
         {
             // we are in a case block, check if its the first block
@@ -365,7 +549,7 @@ namespace GameMaker.Dissasembler
         int loop_junk_block = 0;
         ILVariable NewGeneratedVar()
         {
-            return new ILVariable() { Name = "gen_" + generated_var_count++, Instance = new ILValue(-1), InstanceName = "self", isResolved = true };
+            return new ILVariable() { Name = "gen_" + generated_var_count++, Instance = new ILValue(-1), InstanceName = "self", isResolved = true, isGenerated = true };
         }
         ILLabel NewJunkLoop()
         {
@@ -391,7 +575,7 @@ namespace GameMaker.Dissasembler
                 head.MatchAt(headLen - 5, GMCode.Dup) &&
                 head.MatchAt(headLen - 4, GMCode.Push, out value2) &&
 
-                head.MatchAt(headLen-3, GMCode.Sle) &&
+                head.MatchAt(headLen - 3, GMCode.Sle) &&
                 head.MatchLastAndBr(GMCode.Bt, out endLoop, out filler, out startLoop))
             {
                 // ok, lets rewrite the head so it makes sence
@@ -405,9 +589,9 @@ namespace GameMaker.Dissasembler
                 ILBasicBlock newLoopBlock = new ILBasicBlock();
                 newLoopBlock.Body.Add(newLoopStart);
                 newLoopBlock.Body.Add(new ILExpression(GMCode.Push, genVar));
-                newLoopBlock.Body.Add(new ILExpression(GMCode.Push, new ILValue(0))); 
-               
-                newLoopBlock.Body.Add(new ILExpression(GMCode.Sgt,null));
+                newLoopBlock.Body.Add(new ILExpression(GMCode.Push, new ILValue(0)));
+
+                newLoopBlock.Body.Add(new ILExpression(GMCode.Sgt, null));
                 newLoopBlock.Body.Add(new ILExpression(GMCode.Bf, endLoop, new ILExpression(GMCode.Pop, null)));
                 newLoopBlock.Body.Add(new ILExpression(GMCode.B, startLoop));
                 head.Body = newHead;
@@ -419,7 +603,7 @@ namespace GameMaker.Dissasembler
                     ILLabel testEnd, testStart;
                     ILValue subPart;
                     int len = bj.Body.Count;
-                //    Debug.Assert((bj.Body[0] as ILLabel).Name != "L114");
+                    //    Debug.Assert((bj.Body[0] as ILLabel).Name != "L114");
                     if (bj.MatchLastAndBr(GMCode.Bt, out testStart, out filler, out testEnd) &&
                         testEnd == endLoop && testStart == startLoop &&
                         bj.MatchAt(len - 3, GMCode.Dup) &&
@@ -438,13 +622,13 @@ namespace GameMaker.Dissasembler
                         break; // all done, let it continue
                     }
                 }
-              //  Debug.Assert(false); // coudln't find the end block
+                //  Debug.Assert(false); // coudln't find the end block
             }
         }
         // lua dosn't have switch expressions, so we are changing this to one big if statement
         // it would proberly look beter if we made some kind of "ifelse" code, but right now
         // this is good enough
-        void LuaConvertSwitchExpression(ILNode condition, List<ILNode> list,  List<ILNode> body, ILBasicBlock head, int pos)
+        void LuaConvertSwitchExpression(ILNode condition, List<ILNode> list, List<ILNode> body, ILBasicBlock head, int pos)
         {
             // we are in a case block, check if its the first block
             ILBasicBlock current = head;
@@ -475,47 +659,6 @@ namespace GameMaker.Dissasembler
                 current = labelToBasicBlock[nextCase];
             }
             // eveything else should be cleared out by all the removals
-        }
-        bool StackAnalysis(ILBasicBlock head)
-        {
-            Stack<ILNode> stack;
-            ILLabel label = head.Body.First() as ILLabel;
-            if (labelToStack.TryGetValue(label, out stack) && stack !=null) {
-                List<ILNode> list = new List<ILNode>();
-                for (int i = 0; i < head.Body.Count; i++)
-                {
-                    Status s = ProcessExpression(list, head, i, stack);
-                }
-                ILExpression br = list[list.Count - 2] as ILExpression; // might not have a goto
-                ILExpression b = list[list.Count - 1] as ILExpression; // this is ALWAYS a goto
-                label = br != null ? br.Operand as ILLabel : null;
-                if (label != null) labelToStack[label] = new Stack<ILNode>(stack);
-                label = b != null ? b.Operand as ILLabel : null;
-                if (label != null) labelToStack[label] = new Stack<ILNode>(stack);
-                head.Body = list;
-                return true;
-            }
-            return false;
-
-        }
-        void ProcessExpressions(List<ILNode> body, ILBasicBlock head, int pos)
-        {
-            ProcessAllExpressions(null);
-            Stack<ILNode> stack = new Stack<ILNode>();
-            List<ILNode> list = new List<ILNode>();
-            Dup1Seen = false;
-            //  TestAndFixWierdLoop(body, head, pos);
-            // fuck it, doing full stack block stuff, converting pushses to vars, etc
-            // I can't stand having one or two fail cases when I want the whole pie damnit
-            // skipping switch building as lua dosn't do tha
-            // and you know, I can check for it latter
-            ILLabel label = head.Body.First() as ILLabel;
-            stack = labelToStack[label];
-
-            ILExpression br = list[list.Count - 2] as ILExpression; // might not have a goto
-            ILExpression b = list[list.Count - 1] as ILExpression; // this is ALWAYS a goto
-
-            head.Body = list;
         }
     }
 }

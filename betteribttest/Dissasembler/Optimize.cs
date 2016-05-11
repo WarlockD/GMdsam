@@ -88,7 +88,10 @@ namespace GameMaker.Dissasembler
             if (!collection.Remove(item))
                 throw new Exception("The item was not found in the collection");
         }
-
+        public static void RemoveOrThrow<T>(this ICollection<T> collection, IEnumerable<T> items)
+        {
+            foreach (var i in items) collection.RemoveOrThrow(i);
+        }
         public static void RemoveOrThrow<K, V>(this IDictionary<K, V> collection, K key)
         {
             if (!collection.Remove(key))
@@ -105,6 +108,49 @@ namespace GameMaker.Dissasembler
                     return true;
             }
             return false;
+        }
+        // Clones the node to another expression or makes an expresson based off it
+        public static ILExpression ToExpresion(this ILNode n)
+        {
+            if (n == null) return null;
+            else if (n is ILValue) return new ILExpression(GMCode.Constant, n as ILValue);
+            else if (n is ILVariable) return new ILExpression(GMCode.Var, n as ILVariable);
+            else if (n is ILExpression) return new ILExpression(n as ILExpression);
+            else if (n is ILCall) return new ILExpression(GMCode.Call, n);
+            else throw new Exception("Should not happen here");
+        }
+
+
+        /// <summary>
+        /// Fixes an expression so that any extra Operand data is converted to an expresion
+        /// </summary>
+        /// <param name="n"></param>
+        /// <returns>True if its a push</returns>
+        public static bool FixPushExpression(this ILNode n)
+        {
+            ILExpression e = n as ILExpression;
+            if (e == null || e.Code != GMCode.Push) return false; // not an expresson or null
+            if (e.Operand != null) // already processed
+            {
+                ILExpression arg = null;
+                object o = e.Operand;
+                if (o is ILValue) arg = new ILExpression(GMCode.Constant, o as ILValue);
+                else if (o is ILVariable) arg = new ILExpression(GMCode.Var, o as ILVariable);
+                else if (o is ILCall) arg = new ILExpression(GMCode.Call, o);
+                Debug.Assert(arg != null);
+                e.Arguments.Clear(); // make sure
+                e.Arguments.Add(arg);
+                e.Operand = null;
+            }
+            return true;
+        }
+        // Returns argument off a an expression or throws.  This is WAY to common so I made it an extension
+        public static ILExpression MatchSingleArgument(this ILNode n)
+        {
+            ILExpression e = n as ILExpression;
+            if (e == null) throw new Exception("Not an expression");
+            if (e.Code == GMCode.Push) return e.Arguments.Single();
+            else return e;
         }
 
     }
@@ -193,7 +239,7 @@ namespace GameMaker.Dissasembler
                     {
                         // Ignore nop
                         
-                    }
+                    } 
                     else {
                         ILLabel label = body[i] as ILLabel;
                         if (label != null)
@@ -426,37 +472,7 @@ namespace GameMaker.Dissasembler
         }
      
         // This will negate a condition and optimize it
-        static ILExpression NegateCondition(ILExpression expr)
-        {
-            Debug.Assert(expr.Code != GMCode.Push); // We don't handle pushes
-            switch (expr.Code)
-            {
-                case GMCode.Not:
-                    return expr.Arguments.Single(); // VERY simple, remove the negate
-                case GMCode.Constant:
-                case GMCode.Var:
-                case GMCode.Call:
-                    return new ILExpression(GMCode.Not, null, expr); // VERY simple, add a not
-
-                case GMCode.Seq: expr.Code = GMCode.Sne; return expr;
-                case GMCode.Sne: expr.Code = GMCode.Seq; return expr;
-                case GMCode.Sgt: expr.Code = GMCode.Sle; return expr;
-                case GMCode.Sge: expr.Code = GMCode.Slt; return expr;
-                case GMCode.Slt: expr.Code = GMCode.Sge; return expr;
-                case GMCode.Sle: expr.Code = GMCode.Sgt; return expr;
-                // this is complcated as we have to negate the left and right side too
-                case GMCode.LogicAnd:
-                case GMCode.LogicOr:
-                    expr.Code = expr.Code == GMCode.LogicOr ? GMCode.LogicAnd : GMCode.LogicOr;
-                    expr.Arguments[0] = NegateCondition(expr.Arguments[0]);
-                    expr.Arguments[1] = NegateCondition(expr.Arguments[1]);
-                    return expr;
-                case GMCode.Neg:
-                    throw new Exception("Error, cannot logic negate a neg");
-                default:
-                    throw new Exception("Error, cannot logic negate a this code");
-            }
-        }
+      
             // Tis will simplify negates that get out of control
             static ILExpression SimplifyLogicNot(ILExpression expr, ref bool modified)
         {

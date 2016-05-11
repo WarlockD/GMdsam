@@ -281,7 +281,7 @@ namespace GameMaker
                 string asm_filename = filename + ".asm";
                 GameMaker.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
             }
-            string raw_filename = Path.GetFileName(filename);
+      
             ILBlock block = new GameMaker.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
             FunctionFix.FixCalls(block);
             PushFix.FixCalls(block);
@@ -439,7 +439,7 @@ namespace GameMaker
                 if (allvars.ContainsKey(name)) return;
                 VarInfo vi = new VarInfo();
                 vi.Name = v.Name;
-                if (!v.isLocal) vi.Instance = v.InstanceName ?? v.Instance.ToString();
+                if (!v.isLocal && !v.isGenerated) vi.Instance = v.InstanceName ?? v.Instance.ToString();
 
                 vi.isArray = v.Index != null;
                 allvars.Add(name, vi);
@@ -492,9 +492,11 @@ namespace GameMaker
                         foreach (var a in e.Actions)
                         {
                             File.Code codeData = File.Codes[a.CodeOffset];
+                            context.DebugName = obj.Name + "_" + GMContext.EventToString(i, e.SubType); // in case of debug
                             if (context.Debug)
                             {
                                 Debug.WriteLine("Name: " + codeData.Name + " Event: " + GMContext.EventToString(i, e.SubType));
+                           
                             }
                             ILBlock method = DecompileBlock(context, codeData.Data);
                             string code = LuaCodeText(context, method); // auto indents it
@@ -732,6 +734,10 @@ namespace GameMaker
                         pos++;
                         context.Debug = true;
                         break;
+                    case "-multiThread":
+                        pos++;
+                        context.doThreads = true;
+                        break;
                     case "-all":
                         all = true;
                         pos++;
@@ -800,12 +806,20 @@ namespace GameMaker
                             foreach (var s in File.Scripts)
                             {
                                 string filename = Path.Combine(info.FullName, s.Name);
-                                Task task = Task.Run(() =>
+                                if (context.doThreads)
+                                {
+                                    Task task = Task.Run(() =>
+                                    {
+                                        using (StreamWriter sw = new StreamWriter(filename + ".lua"))
+                                            WriteScript(context, s.Name, s.Data, sw);
+                                    });
+                                    tasks.Add(task);
+                                } else
                                 {
                                     using (StreamWriter sw = new StreamWriter(filename + ".lua"))
                                         WriteScript(context, s.Name, s.Data, sw);
-                                });
-                                tasks.Add(task);
+                                }
+                                
                             }
                             Task.WaitAll(tasks.ToArray());
                         }
@@ -825,6 +839,7 @@ namespace GameMaker
                     File.GObject o = s as File.GObject;
                     if (o != null)
                     {
+                        context.DebugName = o.Name; // in case of debug
                         string filename = Path.ChangeExtension(o.Name, context.doLua ? ".lua" : ".js");
                         if (context.Debug)
                         {
@@ -843,14 +858,20 @@ namespace GameMaker
                     File.Script os = s as File.Script;
                     if(os != null)
                     {
+                        context.DebugName = os.Name; // in case of debug
                         string codeName = os.Name.Replace("gml_Script_", "");
                         string filename = Path.ChangeExtension(codeName, context.doLua ? ".lua" : ".js");
-                        Task task = Task.Run(() =>
+                        if (context.Debug)
                         {
                             using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, codeName, os.Data, sw);
                         }
-                        );
-                        tasks.Add(task);
+                        else
+                        {
+                            Task task = Task.Run(() => {
+                                using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, codeName, os.Data, sw);
+                            });
+                            tasks.Add(task);
+                        }
                         continue;
                     }
                 }

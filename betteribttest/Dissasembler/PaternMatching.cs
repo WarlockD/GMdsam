@@ -7,8 +7,46 @@ using System.Threading.Tasks;
 
 namespace GameMaker.Dissasembler
 {
-    public static class PatternMatching
-    {
+    public static class PatternMatching {
+
+
+        public static ILExpression NegateCondition(this ILExpression expr)
+        {
+            Debug.Assert(expr != null);
+            Debug.Assert(expr.Code != GMCode.Push); // We don't handle pushes
+            switch (expr.Code)
+            {
+                case GMCode.Not:
+                    return expr.Arguments.Single(); // VERY simple, remove the negate
+                case GMCode.Constant:
+                case GMCode.Var:
+                case GMCode.Call:
+                    return new ILExpression(GMCode.Not, null, expr); // VERY simple, add a not
+
+                case GMCode.Seq: expr.Code = GMCode.Sne; return expr;
+                case GMCode.Sne: expr.Code = GMCode.Seq; return expr;
+                case GMCode.Sgt: expr.Code = GMCode.Sle; return expr;
+                case GMCode.Sge: expr.Code = GMCode.Slt; return expr;
+                case GMCode.Slt: expr.Code = GMCode.Sge; return expr;
+                case GMCode.Sle: expr.Code = GMCode.Sgt; return expr;
+                // this is complcated as we have to negate the left and right side too
+                case GMCode.LogicAnd:
+                case GMCode.LogicOr:
+                    expr.Code = expr.Code == GMCode.LogicOr ? GMCode.LogicAnd : GMCode.LogicOr;
+                    expr.Arguments[0] = NegateCondition(expr.Arguments[0]);
+                    expr.Arguments[1] = NegateCondition(expr.Arguments[1]);
+                    return expr;
+                case GMCode.Neg:
+                    throw new Exception("Error, cannot logic negate a neg");
+                default:
+                    // might be math that assigns zero
+                    if (expr.Code.isExpression()) // if it is then lets make it equal zero
+                    {
+                        return new ILExpression(GMCode.Seq, null, expr, new ILExpression(GMCode.Constant, new ILValue((short) 0)));
+                    }
+                    throw new Exception("Error, cannot logic negate a this code");
+            }
+        }
         public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool ident = true) where T : ILNode
         {
             // output.WriteLine();
@@ -106,6 +144,18 @@ namespace GameMaker.Dissasembler
             }
             value = ret;
             return true;
+        }
+        public static ILLabel GotoLabel(this ILBasicBlock bb)
+        {
+            ILLabel label = (bb.Body[bb.Body.Count - 1] as ILExpression).Operand as ILLabel;
+            Debug.Assert(label != null);
+            return label;
+        }
+        public static ILLabel EntryLabel(this ILBasicBlock bb)
+        {
+            ILLabel label = bb.Body[0]  as ILLabel;
+            Debug.Assert(label != null);
+            return label;
         }
         public static bool MatchCall(this ILNode node, GM_Type type, out ILExpression call)
         {
@@ -218,12 +268,12 @@ namespace GameMaker.Dissasembler
             operand = default(T);
             return false;
         }
-        public static bool Match(this ILNode node, GMCode code, out IList<ILExpression> args)
+        public static bool Match(this ILNode node, GMCode code, out List<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code)
             {
-                //Debug.Assert(expr.Operand == null);
+                Debug.Assert(expr.Operand == null);
                 args = expr.Arguments;
                 return true;
             }
@@ -233,7 +283,7 @@ namespace GameMaker.Dissasembler
 
         public static bool Match(this ILNode node, GMCode code, out ILExpression arg)
         {
-            IList<ILExpression> args;
+            List<ILExpression> args;
             if (node.Match(code, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -243,7 +293,7 @@ namespace GameMaker.Dissasembler
             return false;
         }
 
-        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out IList<ILExpression> args)
+        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out List<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code)
@@ -259,7 +309,7 @@ namespace GameMaker.Dissasembler
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg)
         {
-            IList<ILExpression> args;
+            List<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -271,7 +321,7 @@ namespace GameMaker.Dissasembler
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg1, out ILExpression arg2)
         {
-            IList<ILExpression> args;
+            List<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 2)
             {
                 arg1 = args[0];
@@ -363,6 +413,30 @@ namespace GameMaker.Dissasembler
             brLabel = null;
             return false;
         }
+        public static bool MatchLastAt<T>(this ILBasicBlock bb, int back, GMCode code, out T operand, out ILExpression arg)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code,  out operand, out arg)) return true;
+            arg = default(ILExpression);
+            operand = default(T);
+            return false;
+        }
+        public static bool MatchLastAt<T>(this ILBasicBlock bb, int back, GMCode code, out T operand)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code, out operand)) return true;
+            operand = default(T);
+            return false;
+        }
+        public static bool MatchLastAt(this ILBasicBlock bb, int back, GMCode code, out ILExpression arg)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code, out arg)) return true;
+            arg = default(ILExpression);
+            return false;
+        }
+        public static bool MatchLastAt(this ILBasicBlock bb, int back, GMCode code)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code)) return true;
+            return false;
+        }
         public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
         {
             if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand) &&
@@ -395,7 +469,7 @@ namespace GameMaker.Dissasembler
             brLabel = null;
             return false;
         }
-        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out IList<ILExpression> args, out ILLabel brLabel)
+        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out List<ILExpression> args, out ILLabel brLabel)
         {
             if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand, out args) &&
                 bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
@@ -407,35 +481,7 @@ namespace GameMaker.Dissasembler
             brLabel = null;
             return false;
         }
-        public static int FindLastIndexOf(this IList<ILNode> ast, GMCode code, int from)
-        {
-            if (ast.Count == 0 || from < 0 || from > (ast.Count - 1)) return -1;
-            for (int i = from; i >= 0; i--) if (ast[i].Match(code)) return i;
-            return -1;
-        }
-        public static int FindLastIndexOf(this IList<ILNode> ast, GMCode code)
-        {
-            return ast.FindLastIndexOf(code, ast.Count - 1);
-        }
-        public static bool MatchLastCount<T>(this IList<T> ast, GMCode code, int count, out List<ILExpression> match) where T : ILNode
-        {
-            do
-            {
-                if (ast.Count == 0 && ast.Count < count) break;
-                int i = ast.Count - 1, j = 0;
-                List<ILExpression> ret = new List<ILExpression>();
-                for (; i >= 0 && j < count; i--, j++)
-                {
-                    ILExpression test;
-                    if (ast.ElementAtOrDefault(i).Match(code, out test)) ret.Add(test); else break;
-                }
-                if (j != count) break; // bad match or not enough match
-                match = ret;
-                return true;
-            } while (false);
-            match = default(List<ILExpression>);
-            return false;
-        }
+
 
         public static bool isConstant(this ILExpression n)
         {

@@ -11,7 +11,10 @@ namespace GameMaker.Dissasembler
     public class LoopsAndConditions
     {
         Dictionary<ILLabel, ControlFlowNode> labelToCfNode = new Dictionary<ILLabel, ControlFlowNode>();
-
+        public ControlFlowNode LabelToNode(ILLabel l)
+        {
+            return labelToCfNode[l];
+        }
         readonly GMContext context;
 
         uint nextLabelIndex = 0;
@@ -29,8 +32,9 @@ namespace GameMaker.Dissasembler
                 graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-                //graph.ExportGraph().Save("loop_graph.dot");
+                if (context.Debug) graph.ExportGraph().Save(context.MakeDebugFileName("graph_loop.dot"));
                 block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
+               
             }
         }
         public void FindWiths(ILBlock block)
@@ -65,7 +69,7 @@ namespace GameMaker.Dissasembler
                 graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-              //  graph.ExportGraph().Save("condition_graph.dot");
+                if (context.Debug) graph.ExportGraph().Save(context.MakeDebugFileName("graph_condition.dot"));
                 block.Body = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
             }
         }
@@ -75,7 +79,7 @@ namespace GameMaker.Dissasembler
             source.Outgoing.Add(edge);
             destination.Incoming.Add(edge);
         }
-        ControlFlowGraph BuildGraph(IList<ILNode> nodes, ILLabel entryLabel)
+        public ControlFlowGraph BuildGraph(IList<ILNode> nodes, ILLabel entryLabel)
         {
 
             int index = 0;
@@ -131,9 +135,8 @@ namespace GameMaker.Dissasembler
 
             return new ControlFlowGraph(cfNodes.ToArray());
         }
-
-        
-            List<ILNode> FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
+      
+        List<ILNode> FindLoops(HashSet<ControlFlowNode> scope, ControlFlowNode entryPoint, bool excludeEntryPoint)
         {
             List<ILNode> result = new List<ILNode>();
 
@@ -154,16 +157,16 @@ namespace GameMaker.Dissasembler
                     HashSet<ControlFlowNode> loopContents = FindLoopContent(scope, node);
 
                     // If the first expression is a loop condition
-                    ILBasicBlock basicBlock = (ILBasicBlock)node.UserData;
-                    ILExpression condExpr;
+                    ILBasicBlock basicBlock = (ILBasicBlock) node.UserData;
+                    ILExpression condExpr = null;
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchSingleAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
-                      //  basicBlock.MatchSingleAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
-                        basicBlock.MatchSingleAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel)) // built it the same way
-                    {
-                        bool ispushEnv = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code == GMCode.Pushenv; 
+                    if (basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) || 
+                        basicBlock.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel)||
+                         basicBlock.MatchLastAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel) )// built it the same way from the dissasembler
+                       {
+                        bool ispushEnv = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code == GMCode.Pushenv;
                         ControlFlowNode trueTarget;
                         labelToCfNode.TryGetValue(trueLabel, out trueTarget);
                         ControlFlowNode falseTarget;
@@ -176,16 +179,18 @@ namespace GameMaker.Dissasembler
                             loopContents.RemoveOrThrow(node);
                             scope.RemoveOrThrow(node);
 
-                            // If false means enter the loop
+                            bool mustNegate = false;
                             if (loopContents.Contains(falseTarget) || falseTarget == node)
                             {
                                 // Negate the condition
-                                condExpr = new ILExpression(GMCode.Not, null, condExpr);
+                                mustNegate = true;
+                                //  condExpr = new ILExpression(GMCode.Not, null, condExpr);
                                 ILLabel tmp = trueLabel;
                                 trueLabel = falseLabel;
                                 falseLabel = tmp;
                             }
-
+                            // HACK
+                          
                             ControlFlowNode postLoopTarget;
                             labelToCfNode.TryGetValue(falseLabel, out postLoopTarget);
                             if (postLoopTarget != null)
@@ -195,34 +200,47 @@ namespace GameMaker.Dissasembler
                                 var pullIn = scope.Except(postLoopContents).Where(n => node.Dominates(n));
                                 loopContents.UnionWith(pullIn);
                             }
-                            if(ispushEnv)
+
+
+                        
+                            Debug.Assert(condExpr != null);
+                            
+
+                          
+                            if (ispushEnv)
                             {
                                 // Use loop to implement the brtrue
                                 basicBlock.Body.RemoveTail(GMCode.Pushenv, GMCode.B);
                                 basicBlock.Body.Add(new ILWithStatement()
                                 {
-                                    Enviroment = condExpr,
+                                    Enviroment = condExpr, // we never negate 
+                                    EnviromentName = context.InstanceToString(condExpr),
                                     Body = new ILBlock()
                                     {
                                         EntryGoto = new ILExpression(GMCode.B, trueLabel),
                                         Body = FindLoops(loopContents, node, false)
                                     }
                                 });
-                            } else
+                            }
+                            else
                             {
                                 // Use loop to implement the brtrue
-                                basicBlock.Body.RemoveTail(GMCode.Bf, GMCode.B);
+                                basicBlock.Body.RemoveRange(basicBlock.Body.Count - 2, 2);
+                               // basicBlock.Body.RemoveTail(GMCode.Bt, GMCode.B);
+
                                 basicBlock.Body.Add(new ILWhileLoop()
                                 {
-                                    Condition = condExpr,
+                                    Condition = mustNegate ? condExpr : condExpr.NegateCondition(),
                                     BodyBlock = new ILBlock()
                                     {
                                         EntryGoto = new ILExpression(GMCode.B, trueLabel),
                                         Body = FindLoops(loopContents, node, false)
                                     }
                                 });
+
+                               
                             }
-                          
+
                             basicBlock.Body.Add(new ILExpression(GMCode.B, falseLabel));
                             result.Add(basicBlock);
 
@@ -260,7 +278,7 @@ namespace GameMaker.Dissasembler
             // Add whatever is left
             foreach (var node in scope)
             {
-                result.Add((ILNode)node.UserData);
+                result.Add((ILNode) node.UserData);
             }
             scope.Clear();
 
@@ -288,7 +306,7 @@ namespace GameMaker.Dissasembler
                    
                     {
                         // Switch
-                        IList<ILExpression> cases;
+                        List<ILExpression> cases;
                         ILLabel[] caseLabels;
                         ILExpression switchCondition;
                         ILLabel fallLabel;
@@ -390,10 +408,12 @@ namespace GameMaker.Dissasembler
                         // Two-way branch
                         ILLabel trueLabel;
                         ILLabel falseLabel;
-                        IList<ILExpression> condExprs;
+                        List<ILExpression> condExprs;
                         if (block.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExprs, out trueLabel)
+                            || block.MatchLastAndBr(GMCode.Bt, out falseLabel, out condExprs, out trueLabel) // be sure to invert this condition
                             && condExprs[0].Code != GMCode.Pop)  // its resolved
                         {
+                            GMCode code = (block.Body[block.Body.Count - 2] as ILExpression).Code;
                             ILExpression condExpr = condExprs[0];
                             IList<ILNode> body = block.Body;
                             // this is a simple condition, skip anything short curiket for now
@@ -401,11 +421,11 @@ namespace GameMaker.Dissasembler
                             // Convert the brtrue to ILCondition
                             ILCondition ilCond = new ILCondition()
                             {
-                                Condition = condExpr,
+                                Condition = code == GMCode.Bf ? condExpr : condExpr.NegateCondition(),
                                 TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
                                 FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
                             };
-                            block.Body.RemoveTail(GMCode.Bf, GMCode.B);
+                            block.Body.RemoveTail(code, GMCode.B);
                             block.Body.Add(ilCond);
                             result.Add(block);
 
@@ -458,12 +478,12 @@ namespace GameMaker.Dissasembler
             return result;
         }
 
-        static bool HasSingleEdgeEnteringBlock(ControlFlowNode node)
+        public static bool HasSingleEdgeEnteringBlock(ControlFlowNode node)
         {
             return node.Incoming.Count(edge => !node.Dominates(edge.Source)) == 1;
         }
 
-        static HashSet<ControlFlowNode> FindDominatedNodes(HashSet<ControlFlowNode> scope, ControlFlowNode head)
+        public static HashSet<ControlFlowNode> FindDominatedNodes(HashSet<ControlFlowNode> scope, ControlFlowNode head)
         {
             HashSet<ControlFlowNode> agenda = new HashSet<ControlFlowNode>();
             HashSet<ControlFlowNode> result = new HashSet<ControlFlowNode>();
@@ -486,7 +506,7 @@ namespace GameMaker.Dissasembler
             return result;
         }
 
-        static HashSet<ControlFlowNode> FindLoopContent(HashSet<ControlFlowNode> scope, ControlFlowNode head)
+        public static HashSet<ControlFlowNode> FindLoopContent(HashSet<ControlFlowNode> scope, ControlFlowNode head)
         {
             var viaBackEdges = head.Predecessors.Where(p => head.Dominates(p));
             HashSet<ControlFlowNode> agenda = new HashSet<ControlFlowNode>(viaBackEdges);
