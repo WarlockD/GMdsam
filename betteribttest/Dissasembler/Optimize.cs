@@ -215,11 +215,11 @@ namespace GameMaker.Dissasembler
 
             if (reducebranches)
             {
-                if (block.Body.Count > 0)
+                if (basicBlocks.Count > 0)
                 {
                     for (int i = 0; i < block.Body.Count; i++)
                     {
-                        ILBasicBlock bb = block.Body[0] as ILBasicBlock;
+                        ILBasicBlock bb = block.Body[i] as ILBasicBlock;
                         if (bb == null) continue;
                         ILLabel trueLabel;
                         ILLabel falseLabel;

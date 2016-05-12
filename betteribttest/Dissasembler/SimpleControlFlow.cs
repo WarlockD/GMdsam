@@ -229,26 +229,12 @@ namespace GameMaker.Dissasembler
             return modified;
         }
 
-
-        public bool MatchLastBtOrBf(ILBasicBlock head, out bool isBt, out ILLabel trueLabel,out ILExpression condition, out ILLabel falseLabel) {
-            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condition, out falseLabel) ||
-               head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condition, out trueLabel)) {
-                isBt = (head.Body[head.Body.Count - 2] as ILExpression).Code == GMCode.Bt;
-                return true;
-            }
-            isBt = default(bool);
-            trueLabel = default(ILLabel);
-            falseLabel = default(ILLabel);
-            condition = default(ILExpression);
-            return false;
-        }
         // This is before the expression is processed, so ILValue's and constants havn't been assigned
         public bool SimplifyTernaryOperator(List<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
             //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
             //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
-            bool isBt;
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
@@ -262,14 +248,14 @@ namespace GameMaker.Dissasembler
             List<ILExpression> finalFall;
             ILLabel finalFalseFall;
             ILLabel finalTrueFall;
-            if(MatchLastBtOrBf(head,out isBt, out trueLabel, out condExpr, out falseLabel) &&
+            if(head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
               //  labelGlobalRefCount[trueLabel] == 1 &&
              //   labelGlobalRefCount[falseLabel] == 1 &&
                 labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
                 labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out falseExpr, out falseFall) &&
                 trueFall == falseFall &&
                 body.Contains(labelToBasicBlock[trueLabel]) &&
-                labelToBasicBlock[trueFall].MatchLastAndBr(GMCode.Bf, out finalFalseFall, out finalFall, out finalTrueFall) &&
+                labelToBasicBlock[trueFall].MatchLastAndBr(GMCode.Bt, out finalTrueFall, out finalFall, out finalFalseFall) &&
                 finalFall.Count == 0
                // finalFall.Code == GMCode.Pop
                ) // (finalFall == null || finalFall.Code == GMCode.Pop)
@@ -313,8 +299,8 @@ namespace GameMaker.Dissasembler
                 Debug.Assert(newExpr != null);
                 // head.Body.RemoveTail(ILCode.Brtrue, ILCode.Br);
                 head.Body.RemoveRange(head.Body.Count - 2, 2);
-                head.Body.Add(new ILExpression(GMCode.Bf, finalFalseFall, newExpr));
-                head.Body.Add(new ILExpression(GMCode.B, finalTrueFall));
+                head.Body.Add(new ILExpression(GMCode.Bt, finalTrueFall, newExpr)); 
+                head.Body.Add(new ILExpression(GMCode.B, finalFalseFall));
 
                 // Remove the inlined branch from scope
                // body.RemoveOrThrow(nextBasicBlock);
@@ -329,18 +315,13 @@ namespace GameMaker.Dissasembler
         public bool SimplifyShortCircuit(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
-           // Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
+
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
-            // Ok, since we have not changed out all the Bf's to Bt like in ILSpy, we have to do them seperately
-            // as I am getting bugs in my wahhoo about it
-            if ((head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
-                head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel)) 
-                 // its a terrtery so ignore it?
-                ) // I saw this too
+
+            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel))
             {
-                GMCode code = (head.Body[head.Body.Count - 2] as ILExpression).Code;
                 for (int pass = 0; pass < 2; pass++)
                 {
 
@@ -349,16 +330,14 @@ namespace GameMaker.Dissasembler
                     ILLabel nextLabel = (pass == 0) ? trueLabel : falseLabel;
                     ILLabel otherLablel = (pass == 0) ? falseLabel : trueLabel;
                     bool negate = (pass == 1);
-                    negate = GMCode.Bt == code ? !negate : negate;
                     ILBasicBlock nextBasicBlock = labelToBasicBlock[nextLabel];
                     ILExpression nextCondExpr;
                     ILLabel nextTrueLablel;
-                    ILLabel nextFalseLabel; 
+                    ILLabel nextFalseLabel;
                     if (body.Contains(nextBasicBlock) &&
                         nextBasicBlock != head &&
-                        labelGlobalRefCount[(ILLabel)nextBasicBlock.Body.First()] == 1 &&
-                        (nextBasicBlock.MatchSingleAndBr(GMCode.Bf, out nextFalseLabel, out nextCondExpr, out nextTrueLablel) ||
-                        nextBasicBlock.MatchSingleAndBr(GMCode.Bt, out nextTrueLablel, out nextCondExpr, out nextFalseLabel) )&&
+                        labelGlobalRefCount[(ILLabel) nextBasicBlock.Body.First()] == 1 &&
+                        nextBasicBlock.MatchSingleAndBr(GMCode.Bt, out nextTrueLablel, out nextCondExpr, out nextFalseLabel) &&
                         nextCondExpr.Code != GMCode.Pop && // ugh
                         (otherLablel == nextFalseLabel || otherLablel == nextTrueLablel))
                     {
@@ -368,14 +347,14 @@ namespace GameMaker.Dissasembler
                         if (otherLablel == nextFalseLabel)
                         {
                             logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, negate ? new ILExpression(GMCode.Not, null, condExpr) : condExpr, nextCondExpr);
-                           
+
                         }
-                        else {
+                        else
+                        {
                             logicExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, negate ? condExpr : new ILExpression(GMCode.Not, null, condExpr), nextCondExpr);
 
                         }
-                     //   head.Body.RemoveTail(GMCode.Bf, GMCode.B);
-                        head.Body.RemoveRange(head.Body.Count - 2, 2);
+                        head.Body.RemoveTail(GMCode.Bt, GMCode.B);
                         head.Body.Add(new ILExpression(GMCode.Bf, nextFalseLabel, logicExpr));
                         head.Body.Add(new ILExpression(GMCode.B, nextTrueLablel));
 
@@ -384,9 +363,7 @@ namespace GameMaker.Dissasembler
 
                         return true;
                     }
-                    
                 }
-                
             }
          
             return false;
