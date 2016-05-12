@@ -410,8 +410,8 @@ namespace GameMaker.Dissasembler
                         ILLabel falseLabel;
                         List<ILExpression> condExprs;
                         if (block.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExprs, out trueLabel)
-                            || block.MatchLastAndBr(GMCode.Bt, out falseLabel, out condExprs, out trueLabel) // be sure to invert this condition
-                            && condExprs[0].Code != GMCode.Pop)  // its resolved
+                            || block.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExprs, out falseLabel) // be sure to invert this condition
+                            && condExprs.Count > 0)  // its resolved
                         {
                             GMCode code = (block.Body[block.Body.Count - 2] as ILExpression).Code;
                             ILExpression condExpr = condExprs[0];
@@ -421,7 +421,7 @@ namespace GameMaker.Dissasembler
                             // Convert the brtrue to ILCondition
                             ILCondition ilCond = new ILCondition()
                             {
-                                Condition = code == GMCode.Bf ? condExpr : condExpr.NegateCondition(),
+                                Condition = condExpr, //code == GMCode.Bf ? condExpr : condExpr.NegateCondition(),
                                 TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
                                 FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
                             };
@@ -450,6 +450,8 @@ namespace GameMaker.Dissasembler
                                 scope.ExceptWith(content);
                                 foreach (var con in FindConditions(content, falseTarget)) ilCond.FalseBlock.Body.Add(con);
                             }
+                       
+
 
                         }
                     }

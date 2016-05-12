@@ -202,32 +202,7 @@ namespace GameMaker.Dissasembler
                 Debug.WriteLine(line);
             }
         }
-        // checks to see if the node can be used in an expression, or if it needs latter processing
-        bool isNodeResolved(ILExpression e)
-        {
-            if (e.Code == GMCode.Push) e = e.MatchSingleArgument(); // go into
-            switch (e.Code)
-            {
-                case GMCode.Constant: return true; // always
-                case GMCode.Var:
-                    if ((e.Operand as ILVariable).isResolved) return true;
-                    break;
-                case GMCode.Call:
-                    if ((e.Operand is ILCall)) return true;
-                    break;
-                default:
-                    if (e.Code.isExpression() && e.Arguments.Count != 0) return true;
-                    break;
-
-            }
-            return false;
-        }
-        bool isNodeResolved(ILNode node)
-        {
-            ILExpression e = node as ILExpression;
-            if (e == null) return false;
-            else return isNodeResolved(e);
-        }
+        
     
 
 
@@ -269,7 +244,7 @@ namespace GameMaker.Dissasembler
             for (int i= index; i >= 0 && count > 0; i--, count--)
             {
                 ILNode n = nodes[i];
-                if (n.FixPushExpression() && isNodeResolved(n))
+                if (n.FixPushExpression() && n.isNodeResolved())
                     args.Add(n.MatchSingleArgument());
                 else break;
             }
@@ -288,31 +263,33 @@ namespace GameMaker.Dissasembler
                 int popDelta = expr.Code.GetPopDelta();
                 ILExpression left;
                 ILExpression right;
-                if (popDelta == 1 && nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out left) && isNodeResolved(left))
+                if (popDelta == 1 && nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out left) && left.isNodeResolved())
                 {
                     expr.Arguments.Add(left);
+                    nodes[pos] = new ILExpression(GMCode.Push, null, expr); // change it to a push
                     nodes.RemoveAt(pos - 1);
                     return true;
                 } else if (
                     popDelta == 2 &&
-                     (nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out left) && isNodeResolved(left)) &&
-                     (nodes.ElementAtOrDefault(pos - 2).Match(GMCode.Push, out right) && isNodeResolved(right)) )
+                     (nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out left) && left.isNodeResolved()) &&
+                     (nodes.ElementAtOrDefault(pos - 2).Match(GMCode.Push, out right) && right.isNodeResolved()) )
                 {
-                    expr.Arguments.Add(left);
                     expr.Arguments.Add(right);
+                    expr.Arguments.Add(left);
+                    nodes[pos] = new ILExpression(GMCode.Push, null, expr); // change it to a push
                     nodes.RemoveRange(pos - 2,2);
                     return true;
                 }
             }
             return false;
         }
-        bool ResolveVariable( ILVariable v, ILNode instance, ILNode index = null)
+        void ResolveVariable( ILVariable v, ILNode instance, ILNode index = null)
         {
-            if (v.isResolved || v.isLocal || v.isGenerated) return false;
+            if (v.isResolved || v.isLocal || v.isGenerated) return;
             if (v.isArray)
             {
                 Debug.Assert(index != null);
-                if (isNodeResolved(instance) && isNodeResolved(index))                {
+                if (instance.isNodeResolved() && index.isNodeResolved())                {
                     v.Index = index;
                     v.Instance = instance;
                     v.isResolved = true;
@@ -321,7 +298,7 @@ namespace GameMaker.Dissasembler
             else
             {
                 Debug.Assert(index == null);
-                if (isNodeResolved(instance))
+                if (instance.isNodeResolved())
                 {
                     v.Index = null;
                     v.Instance = instance;
@@ -357,7 +334,6 @@ namespace GameMaker.Dissasembler
                 }
                 Debug.Assert(!v.InstanceName.Contains("Constant"));
             }
-            return false;
         }
         bool ResolveVariable(List<ILNode> nodes, ref int i, ILVariable v, bool remove = true)
         {
@@ -367,8 +343,8 @@ namespace GameMaker.Dissasembler
                 {
                     ILNode t_instance = nodes.ElementAtOrDefault(i - 2);
                     ILNode t_index = nodes.ElementAtOrDefault(i - 1);
-                    if (t_instance.FixPushExpression() && t_index.FixPushExpression() && 
-                        isNodeResolved(t_instance) && isNodeResolved(t_index))
+                    if (t_instance.FixPushExpression() && t_index.FixPushExpression() &&
+                        t_instance.isNodeResolved() && t_index.isNodeResolved())
                     {
                         v.Index = t_index.MatchSingleArgument();
                         v.Instance = t_instance.MatchSingleArgument();
@@ -380,7 +356,7 @@ namespace GameMaker.Dissasembler
                 else
                 {
                     ILNode t_instance = nodes.ElementAtOrDefault(i - 1);
-                    if (t_instance.FixPushExpression() && isNodeResolved(t_instance))
+                    if (t_instance.FixPushExpression() && t_instance.isNodeResolved())
                     {
                         v.Index = null;
                         v.Instance = t_instance.MatchSingleArgument();
@@ -437,7 +413,7 @@ namespace GameMaker.Dissasembler
                     {
                         ILNode n = nodes[j];
                         if (n is ILLabel) continue; // skip labels
-                        if (n.FixPushExpression() && isNodeResolved(n))
+                        if (n.isExpressionResolved())
                         {
                             e.Arguments.Add(n.MatchSingleArgument());
                             nodes.RemoveAt(j);
@@ -450,30 +426,7 @@ namespace GameMaker.Dissasembler
             }
             return modified;
         }
-        // Create simple assigments that have constants
-        bool SimpleAssigments(List<ILNode> nodes, ILExpression expr, int pos)
-        {
-            bool modified = false;
-            for (int i = 0; i < nodes.Count; i++)
-            {
-                ILVariable v;
-                if (nodes[i].Match(GMCode.Pop, out v))
-                {
-                    ResolveVariable(nodes, ref i, v);
-                    if (!v.isResolved) break;
-                    ILNode value = nodes.ElementAtOrDefault(i - 1);
-                    if (value.FixPushExpression() && isNodeResolved(value))
-                    {
-                        ILAssign a = new ILAssign() { Variable = v, Expression = value.MatchSingleArgument() };
-                        i--; // backup
-                        nodes.RemoveAt(i);
-                        nodes[i] = a;
-                        modified |= true;
-                    }
-                }
-            }
-            return modified;
-        }
+
         bool MatchVariablePush(List<ILNode> nodes, ILExpression expr, int pos)
         {
             ILExpression ev;
@@ -495,7 +448,7 @@ namespace GameMaker.Dissasembler
                     if (!v.isResolved) return false; // exit if we can't resolve it
                 }
                 ILExpression e;
-                if(nodes.ElementAtOrDefault(pos-1).Match(GMCode.Push, out e) && isNodeResolved(e))
+                if(nodes.ElementAtOrDefault(pos-1).Match(GMCode.Push, out e) && e.isNodeResolved())
                 {
                     
                     ILAssign assign = new ILAssign() { Variable = v, Expression = e.MatchSingleArgument() };
@@ -507,48 +460,57 @@ namespace GameMaker.Dissasembler
             return false;
 
         }
-            bool ComplexAssignments(List<ILNode> nodes, ILExpression expr, int pos)
+        bool ComplexAssignments(List<ILNode> nodes, ILExpression expr, int pos)
         {
-            bool modified = false;
 
-            ILExpression instance;
-            ILExpression index;
-            ILExpression ev;
             int dupType = 0;
 
-
-
-            
-
-
-            if (expr.Match(GMCode.Push, out instance) && isNodeResolved(instance) &&
-                nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out index) && isNodeResolved(index) &&
-                nodes.ElementAtOrDefault(pos + 2).Match(GMCode.Dup, out dupType) &&
-                dupType == 1 &&
-                nodes.ElementAtOrDefault(pos + 3).Match(GMCode.Push, out ev) &&
-                ev.Code == GMCode.Var)  // resonably sure we have a complex assignment
+            if (expr.Match(GMCode.Dup, out dupType))
             {
-                ILVariable v = ev.Operand as ILVariable;
-                nodes.RemoveAt(pos + 2); // lets remove the dup
-                Debug.Assert(v.isResolved == false);
-               ResolveVariable(v, instance, index);
-                pos = pos + 2;
-                // we now have a valid var, lets find where the pop is
-                ILVariable popVar = null;
-                for (int i=pos;i < nodes.Count; i++)
+                ILExpression instance;
+                ILExpression index;
+                ILExpression expr_var;
+                ILVariable v = null;
+                if (dupType == 1 &&
+                 nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out index) && index.isNodeResolved() &&
+                 nodes.ElementAtOrDefault(pos - 2).Match(GMCode.Push, out instance) && instance.isNodeResolved() &&
+                 nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out expr_var) && expr_var.Code == GMCode.Var)
+                // this is usally an assign
                 {
-                    if(nodes[i].Match(GMCode.Pop, out popVar))
-                    {
-                        Debug.Assert(popVar.Name == v.Name); // only thing we can compare
-                        (nodes[i] as ILExpression).Operand = v;// replace it with fixed
-                        break; 
-                    }
+                    v = expr_var.Operand as ILVariable;
+                    Debug.Assert(v.isArray);
+                    Debug.Assert(!v.isResolved); // Some sanity checks
+                    nodes.RemoveRange(pos - 2, 3); // lets remove the dup and the pushes, we are at the push var now
+                    ResolveVariable(v, instance, index);// resolve it                   
                 }
-                Debug.Assert(popVar != null);
-                modified = true;
+                else if (dupType == 0 &&
+                  nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out instance) && instance.isNodeResolved() &&
+                  nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out expr_var) && expr_var.Code == GMCode.Var)
+                {
+                    v = expr_var.Operand as ILVariable;
+                    Debug.Assert(!v.isArray); // its not an array
+                    Debug.Assert(!v.isResolved); // Some sanity checks
+                    nodes.RemoveRange(pos - 1, 2); // lets remove the dup and the pushes, we are at the push var now
+                    ResolveVariable(v, instance);// resolve it
+                }
+                if (v != null)
+                {
+                    ILVariable popVar = null;
+                    Debug.Assert(v.isResolved);
+                    for (int i = pos; i < nodes.Count; i++) // need to find the matching pop
+                    {
+                        if (nodes[i].Match(GMCode.Pop, out popVar))
+                        {
+                            Debug.Assert(popVar.Name == v.Name); // only thing we can compare
+                            (nodes[i] as ILExpression).Operand = v;// replace it with fixed
+                            break;
+                        }
+                    }
+                    Debug.Assert(popVar != null);
+                    return true;
+                }
             }
-
-            return modified;
+            return false;
         }
 
         // Try to make reduce conditional branches
@@ -556,8 +518,8 @@ namespace GameMaker.Dissasembler
         {
             if ((expr.Code == GMCode.Bt || expr.Code == GMCode.Bf || expr.Code == GMCode.Ret) && expr.Arguments.Count == 0)
             {
-                ILNode condition = nodes.ElementAtOrDefault(pos - 1);
-                if (isNodeResolved(condition))
+                ILExpression condition = nodes.ElementAtOrDefault(pos - 1) as ILExpression;
+                if (condition.isNodeResolved())
                 {
                     expr.Arguments.Add(condition.MatchSingleArgument());
                     nodes.RemoveAt(pos - 1); // remove the push
@@ -637,7 +599,7 @@ namespace GameMaker.Dissasembler
                         expr = new ILExpression(GMCode.B, ConvertLabel(i.Operand as Label));
                         break;
                     case GMCode.Ret:
-                        expr = new ILExpression(code, null, new ILExpression(GMCode.Pop, null));
+                        expr = new ILExpression(code, null);
                         expr.Conv = i.Types;
                         break;
                     case GMCode.Bt:
@@ -670,7 +632,8 @@ namespace GameMaker.Dissasembler
             ILBlock block = node as ILBlock;
             if (block != null)
             {
-                List<ILNode> flatBody = new List<ILNode>();
+               
+                List <ILNode> flatBody = new List<ILNode>();
                 foreach (ILNode child in block.GetChildren())
                 {
                     FlattenBasicBlocks(child);
@@ -706,137 +669,130 @@ namespace GameMaker.Dissasembler
       
         GMContext context;
         /// <summary>
-        /// Combines all the if statements to an elseif chain.
+        /// Combines all the if statements to an elseif chain if we hit a case or something
         /// </summary>
         /// <param name="block">The Block to combine</param>
         /// <param name="minCombine">The minimum amount of if statments to combine</param>
-        public static void CombineIfStatements(ILBlock method, int minCombine)
+        public static void CombineIfStatements(ILBlock method)
         {
-            int start = -1;
-            ILElseIfChain chain = null;
-            string v = null;
-            Func<ILCondition,string> GetVarInCondition = (ILCondition c)=>{
-                if(c.Condition.Arguments.Count == 1)
-                {
-                    if (c.Condition.Arguments[0].Code == GMCode.Call)
-                        return c.Condition.Operand as string; // combine all function calls
-                }
-                if(c.Condition.Arguments.Count == 2)
-                {
-                    if (c.Condition.Arguments[0].Code == GMCode.Var && c.Condition.Arguments[1].Code == GMCode.Constant)
-                        return c.Condition.Arguments[0].ToString();
-                    else if (c.Condition.Arguments[0].Code == GMCode.Constant && c.Condition.Arguments[1].Code == GMCode.Var)
-                        return c.Condition.Arguments[1].ToString();
-                }
-                return null;
-            };
-            Func<ILBlock, bool> InsertChain = (ILBlock block) =>
-             {
-                 if (chain.Conditions.Count < minCombine) return false;
-                 ILCondition last = chain.Conditions.Last();
-                 // if (chain.Conditions.Take(chain.Conditions.Count - 1).Any(x => x.FalseBlock != null && x != last)) break;
-                 if (chain.Conditions.Any(x => x.FalseBlock != null && x != last)) return false;
-                 if (last.FalseBlock != null) // we have an else here
-                 {
-                     chain.Else = last.FalseBlock;
-                     last.FalseBlock = null;
-                 }
-             //    Debug.Assert("self.gx" != v);
-                 //    foreach (var a in chain.Conditions) block.Body.Remove(a);
-                 block.Body.RemoveRange(start + 1, chain.Conditions.Count - 1);
-                 block.Body[start] = chain;
-                 return true;
-             };
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-
+                List<ILCondition> chain = null;
                 for (int i = 0; i < block.Body.Count; i++)
                 {
                     ILCondition c = block.Body[i] as ILCondition;
-                    if (c != null)
+                    while (c != null && c.FalseBlock != null && c.FalseBlock.Body.Count == 1)
                     {
-                        if (v == null)
-                        {
-                            v = GetVarInCondition(c);
-                            if (v == null) continue;
-                            start = i;
-                            chain = new ILElseIfChain();
-                            chain.Conditions.Add(c);
-                        }
-                        else
-                        {
-                            string cv = GetVarInCondition(c);
-                            if (cv != v) {
-                                if (InsertChain(block))
-                                    i = start;
-                                chain = null;
-                                v = null;   
-                            }
-                            else chain.Conditions.Add(c);
-                        }
+                        ILCondition next = c.FalseBlock.Body[0] as ILCondition;
+                        if (next == null) break;
+                        chain = chain ?? new List<ILCondition>();
+                        chain.Add(c);
+                        c.FalseBlock = null;
+                        c = next;
                     }
-                    if(chain != null) {
-                        if (InsertChain(block))
-                            i = start;
-                        chain = null;
-                        v = null;
+                    if(chain != null)
+                    {
+                        ILElseIfChain ifelse = new ILElseIfChain() { Conditions = chain, Else = c.FalseBlock };
+                        block.Body[i] = ifelse;
+                       // ifelse.
                     }
+                    chain = null; // out of scope
                 }
             }
-           
         }
         // Fix for compiler generated loops
         public void FixAllPushes(List<ILNode> ast) // on the offchance we have a bunch of pushes, fix them for latter
         {
             foreach (var n in ast) n.FixPushExpression();
         }
-        public void SanityCheck(ILBlock method)
+        // Soo, since I cannot be 100% sure where the start of a instance might be
+        // ( could be an expresion, complex var, etc)
+        // Its put somewhere in a block 
+        public bool PushEnviromentFix(IList<ILNode> body, ILBasicBlock head, int pos)
         {
-            
+            ILExpression expr;
+            ILLabel pushLabelNext;
+            ILLabel pushExprLabel;
+            ILLabel pushenvLabel;
+            List<ILExpression> args;
+            if (head.MatchSingleAndBr(GMCode.Pushenv, out pushenvLabel, out args, out pushLabelNext) && args.Count == 0 &&
+                (body.ElementAtOrDefault(pos - 1) as ILBasicBlock).MatchLastAndBr(GMCode.Push, out expr, out pushExprLabel))
+            {
+                ILBasicBlock pushBlock = body.ElementAtOrDefault(pos - 1) as ILBasicBlock;
+                pushBlock.Body.RemoveAt(pushBlock.Body.Count - 2);
+                args.Add(expr);
+                return true;
+            }
+            return false;
+        }
+        void DebugSainityCheck(ILBlock method)
+        {
+            HashSet<ILBasicBlock> badblocks = new HashSet<ILBasicBlock>();
+            Dictionary<GMCode, int> badCodes = new Dictionary<GMCode, int>();
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                foreach (ILBasicBlock bb in block.Body)
+                {
+                    for (int i = bb.Body.Count - 1; i >= 0; i--)
+                    {
+                        ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
+                        if (expr != null)
+                        {
+                            if (expr.Code == GMCode.Dup || expr.Code == GMCode.Push)
+                            {
+                                if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
+                                badCodes[expr.Code]++;
+                                badblocks.Add(bb);
+                            }
+                            else if ((expr.Code == GMCode.Bt || expr.Code == GMCode.Bf) && expr.Arguments.Count == 0)
+                            {
+                                if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
+                                badCodes[expr.Code]++;
+                                badblocks.Add(bb);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (badblocks.Count > 0)
+            {
+                method.DebugSave(context.MakeDebugFileName("bad_stuff.txt"));
+                ILBlock badmethod = new ILBlock();
+                badmethod.Body = badblocks.OrderBy(b => b.GotoLabel().Name).Select(b => (ILNode) b).ToList();
+                string raw;
+                string dfilename = context.MakeDebugFileName("bad_blocks.txt");
+                using (StringWriter sw = new StringWriter()) // since I am writing it twice, jsut ues a string
+                {
+                    sw.WriteLine("Filename: {0}", dfilename);
+                    foreach(var kp in badCodes)
+                    {
+                        sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
+                    }
+                    sw.WriteLine();
+                    badmethod.DebugSave(sw);
+                    raw = sw.ToString();
+                }
+                using (StreamWriter sw = new StreamWriter(dfilename)) sw.Write(raw);
+                using (StreamWriter sw = new StreamWriter("bad_blocks_dump.txt")) sw.Write(raw);
+            }
+            Debug.Assert(badblocks.Count == 0);
         }
         public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
         {
             bool modified;
             if (code.Count == 0) return new ILBlock();
-                this.context = context;
-
-
+            this.context = context;
             _method = code;
             this.optimize = optimize;
             List<ILNode> ast = BuildPreAst();
             ILBlock method = new ILBlock();
             method.Body = ast;
-            method.DebugSave(context.MakeDebugFileName("before_clean.txt"));
             FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
-            do
-            {
-                modified = false;
                 
-              //  modified |= CombineExpressions(ast);
-           //     modified |= ResolveVarsWithExpressions(ast);
-              //  modified |= CombineCall(ast);
-             //   modified |= SimpleAssigments(ast);
-               
-                modified |= FixPushEnviroment(ast);
-             //   modified |= SimplifyBranches(ast);
-             //   if (context.doLua) modified |= DetectSwitchLua(ast); better once basicblocks are created
-            } while (modified);
-          
-
-            // sainity check, all dups must of been handled
-            var list = method.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Dup).ToList();
-
-            // RealStackAnalysis rsa = new RealStackAnalysis(context);
-            //  var body = rsa.Build(method);
-            // Beleve it or not, this stack system works
-            // However, I am only dealing with a few set paterns
-            // so lets match them only
-
-            method.DebugSave(context.MakeDebugFileName("raw_body.txt"));
-
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("raw_body.txt"));
             GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
-            foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block);
+
+            foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
             if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks.txt"));
 
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
@@ -853,7 +809,9 @@ namespace GameMaker.Dissasembler
                     modified |= block.RunOptimization(SimplifyBranches); // Any resolved pushes are put into a branch argument
                     modified |= block.RunOptimization(CombineCall); // Any resolved pushes are put into a branch argument
                     modified |= block.RunOptimization(CombineExpressions); // Any resolved pushes are put into a branch argument
-                    
+                    modified |= block.RunOptimization(PushEnviromentFix); // match all with's with expressions
+
+
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
@@ -870,12 +828,16 @@ namespace GameMaker.Dissasembler
                     // the byte code should of made sure they are all add statements anyway
                     //  if(context.doLua)  modified |= block.RunOptimization(Optimize.FixLuaStringAddExpression);
                     if (context.doLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
-
+                                                                                                    
+                    // somewhere, so bug, is leaving an empty block, I think because of switches
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).RemoveRedundentBlocks);
 
                 } while (modified);
             }
             if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            DebugSainityCheck(method);// sainity check, evething must be ready for this
+
+                foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions(context).FindLoops(block);
             }
@@ -885,6 +847,26 @@ namespace GameMaker.Dissasembler
                 new LoopsAndConditions(context).FindConditions(block);
             }
 
+
+            // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
+            // cause I don't convert it and mabye not converting all bt's to bf's dosn't
+       
+            do
+            {
+                modified = false;
+                foreach (ILCondition ilCond in method.GetSelfAndChildrenRecursive<ILCondition>())
+                {
+                    if (ilCond.TrueBlock.Body.Count == 0 && ilCond.FalseBlock.Body.Count != 0)
+                    { // If we have an empty true block but stuff in the falls block, negate the condition and swap blocks
+                        var swap = ilCond.TrueBlock;
+                        ilCond.TrueBlock = ilCond.FalseBlock;
+                        ilCond.FalseBlock = swap;
+                        ilCond.Condition = ilCond.Condition.NegateCondition();
+                        modified |= true;
+                    }
+                }
+            } while (modified);
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_flatten.txt"));
             FlattenBasicBlocks(method);
             if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_gotos.txt"));
             Optimize.RemoveRedundantCode(method);
@@ -893,15 +875,29 @@ namespace GameMaker.Dissasembler
 
             new GotoRemoval(context).RemoveGotos(method);
 
-            GotoRemoval.RemoveRedundantCode(context,method);
-            new GotoRemoval(context).RemoveGotos(method);
+            // Final clean ups, eveything is resloved, scrubbed, etc
 
-            if (context.doLua) CombineIfStatements(method, 3);
+            do
+            {
+                // We have to do this here as we want clean if statments
+                // ILSpy does this later when it converts the ILAst to normal Ast, but since were skipping that
+                // step, this "should" make if statements a bit cleaner
+                modified = false;
+                foreach (ILCondition ilCond in method.GetSelfAndChildrenRecursive<ILCondition>())
+                {
+                    if (ilCond.TrueBlock.Body.Count == 0 && (ilCond.FalseBlock != null && ilCond.FalseBlock.Body.Count != 0))
+                    { // If we have an empty true block but stuff in the falls block, negate the condition and swap blocks
+                        var swap = ilCond.TrueBlock;
+                        ilCond.TrueBlock = ilCond.FalseBlock;
+                        ilCond.FalseBlock = swap;
+                        ilCond.Condition = ilCond.Condition.NegateCondition();
+                        modified |= true;
+                    }
+                }
+            } while (modified);
+
+            if (context.doLua) CombineIfStatements(method);
             if (context.Debug) method.DebugSave(context.MakeDebugFileName("final.cpp"));
-
-
-            // cleanup functions
-            Optimize.ReplaceExpressionsWithCalls(method);
 
 
             return method;

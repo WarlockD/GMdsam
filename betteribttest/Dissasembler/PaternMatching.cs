@@ -157,6 +157,46 @@ namespace GameMaker.Dissasembler
             Debug.Assert(label != null);
             return label;
         }
+        // checks to see if the node can be used in an expression, or if it needs latter processing
+        public static bool isExpressionResolved(this ILExpression e)
+        {
+            if (e == null) return false;
+            if (e.Code == GMCode.Push) e = e.MatchSingleArgument(); // go into
+            switch (e.Code)
+            {
+                case GMCode.Constant: return true; // always
+                case GMCode.Var:
+                    if ((e.Operand as ILVariable).isResolved) return true;
+                    break;
+                case GMCode.Call:
+                    if ((e.Operand is ILCall)) return true;
+                    break;
+                default:
+                    if (e.Code.isExpression() && e.Arguments.Count != 0) return true;
+                    break;
+
+            }
+            return false;
+        }
+        public static bool isExpressionResolved(this ILNode node)
+        {
+            if (node == null) return false;
+            ILExpression e = node as ILExpression;
+            if (e != null) return isExpressionResolved(e);
+           else  return false;
+        }
+        public static bool isNodeResolved(this ILNode node)
+        {
+            if (node == null) return false;
+            ILExpression e = node as ILExpression;
+            if (e != null) return isExpressionResolved(e); 
+            else return true; // true on any node that isn't an expressoin
+        }
+        public static bool isNodeResolved(this ILExpression e)
+        {
+            if (e == null) return false;
+            return isExpressionResolved(e);
+        }
         public static bool MatchCall(this ILNode node, GM_Type type, out ILExpression call)
         {
             ILCall c = node as ILCall;
@@ -385,7 +425,20 @@ namespace GameMaker.Dissasembler
             object filler;
             return bb.MatchSingleAndBr<object>(code, out filler, out arg, out brLabel);
         }
-
+        public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out List<ILExpression> args, out ILLabel brLabel)
+        {
+            {
+                if (bb.Body.Count == 3 &&
+           bb.Body[0] is ILLabel &&
+           bb.Body[1].Match(code, out operand, out args) &&
+           bb.Body[2].Match(GMCode.B, out brLabel))
+                    return true;
+            }
+            args = default(List<ILExpression>);
+            brLabel = default(ILLabel);
+            operand = default(T);
+            return false;
+        }
         public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
         {
             {

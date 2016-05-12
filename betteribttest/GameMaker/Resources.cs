@@ -419,6 +419,7 @@ namespace GameMaker
             CheckList("OBJT", ref objects);
             CheckList("SCPT", ref scripts);
             RefactorCode();
+            
             DebugPring();
         }
         public static IReadOnlyList<Script> Scripts { get { CheckList("SCPT", ref scripts); return scripts; } }

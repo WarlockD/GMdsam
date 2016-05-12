@@ -162,7 +162,7 @@ namespace GameMaker.Dissasembler
         /// The method adds necessary branches to make control flow between blocks
         /// explicit and thus order independent.
         /// </summary>
-        public static void SplitToBasicBlocks(ILBlock block)
+        public static void SplitToBasicBlocks(ILBlock block,bool reducebranches=false)
         {
             int nextLabelIndex = 0;
             List<ILNode> basicBlocks = new List<ILNode>();
@@ -212,6 +212,28 @@ namespace GameMaker.Dissasembler
             }
 
             block.Body = basicBlocks;
+
+            if (reducebranches)
+            {
+                if (block.Body.Count > 0)
+                {
+                    for (int i = 0; i < block.Body.Count; i++)
+                    {
+                        ILBasicBlock bb = block.Body[0] as ILBasicBlock;
+                        if (bb == null) continue;
+                        ILLabel trueLabel;
+                        ILLabel falseLabel;
+                        if (bb.MatchLastAndBr(GMCode.Bf, out falseLabel, out trueLabel))
+                        {
+                            ILExpression bf = bb.Body[bb.Body.Count - 2] as ILExpression;
+                            ILExpression b = bb.Body[bb.Body.Count - 1] as ILExpression;
+                            bf.Code = GMCode.Bt;
+                            b.Operand = falseLabel;
+                            bf.Operand = trueLabel;
+                        }
+                    }
+                }
+            }
             return;
         }
         public static void RemoveRedundantCode(ILBlock method)

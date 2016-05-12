@@ -117,14 +117,13 @@ namespace GameMaker.Dissasembler
             if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine("--" + BlockTitle);
             Body.WriteLuaNodes(output, false);
         }
-        public void DebugSave(string filename, string fileHeader = null)
+        public void DebugSave(TextWriter tw)
         {
-            using (PlainTextOutput pto = new PlainTextOutput(new System.IO.StreamWriter(filename), 8))
+            using (PlainTextOutput pto = new PlainTextOutput(tw))
             {
-                if(fileHeader!= null) pto.RawWriteLine("Headder   : " + fileHeader);
-                pto.RawWriteLine("Filename : " + filename);
+               
                 ILLabel last = null;
-                for(int i=0; i < Body.Count; i++)
+                for (int i = 0; i < Body.Count; i++)
                 {
                     ILNode n = Body[i];
                     ILLabel l = n as ILLabel;
@@ -134,10 +133,19 @@ namespace GameMaker.Dissasembler
                     ILExpression e = n as ILExpression;
                     if (e != null)
                         pto.Write(e.ToString()); // want to make sure we are using the debug
-                     else
+                    else
                         n.WriteTo(pto);
                     pto.WriteLine();
                 }
+            }
+        }
+        public void DebugSave(string filename, string fileHeader = null)
+        {
+            using (System.IO.StreamWriter sw = new System.IO.StreamWriter(filename))
+            {
+                if (fileHeader != null) sw.WriteLine("Headder   : " + fileHeader);
+                sw.WriteLine("Filename : " + filename);
+                DebugSave(sw);
             }
         }
         public void DebugSaveLua(string filename, string fileHeader = null)
@@ -170,9 +178,9 @@ namespace GameMaker.Dissasembler
         {
             if (TextToReplace == null)
             {
-                Variable.WriteTo(output);
+                Variable.WriteToLua(output);
                 output.Write(" = ");
-                Expression.WriteTo(output);
+                Expression.WriteToLua(output);
             }
             else output.Write(TextToReplace);
             
@@ -498,7 +506,37 @@ namespace GameMaker.Dissasembler
         }
         public override void WriteToLua(ITextOutput output)
         {
-            WriteTo(output);
+            if (!isLocal && !isGenerated)
+            {
+                Debug.Assert(Instance != null);
+                do
+                {
+                    if (EnviromentOverride != null)
+                    {
+                        int instance;
+                        if (InstanceName == "self" || Instance.Match(GMCode.Constant, out instance) &&
+                            instance == -1)
+                        {
+                            output.Write(EnviromentOverride);
+                            output.Write(".");
+                            break;
+                        }
+                    }
+                    if (InstanceName != null) output.Write(InstanceName);
+                    else if (Instance != null) Instance.WriteToLua(output);
+                    else output.Write("stack");
+                    output.Write(".");
+                } while (false);
+            }
+            if (!isResolved) output.Write('?');
+            output.Write(Name);
+            if (isArray)
+            {
+                output.Write('[');
+                if (Index != null) Index.WriteToLua(output);
+                output.Write(']');
+            }
+
         }
     }
     public struct ILRange
@@ -772,9 +810,19 @@ namespace GameMaker.Dissasembler
             if (arg.Code == GMCode.Constant || arg.Code == GMCode.Var) arg.WriteOperand(output, escapeString);
             else arg.WriteTo(output); // don't know what it is
         }
+        public void WriteArgumentLua(ITextOutput output, int index, bool escapeString = true)
+        {
+            ILExpression arg = Arguments[index];
+            if (arg.Code == GMCode.Constant || arg.Code == GMCode.Var) arg.WriteOperand(output, escapeString);
+            else arg.WriteToLua(output); // don't know what it is
+        }
         public void WriteArguments(ITextOutput output, int start)
         {
             Arguments.WriteNodes(output, start, true, true);
+        }
+        public void WriteArgumentsLua(ITextOutput output, int start)
+        {
+            Arguments.WriteLuaNodes(output,false);
         }
         static readonly string POPDefaultString = "%POP%";
         public void WriteArgumentOrPop(ITextOutput output, int index, bool escapeString = true)
@@ -789,34 +837,33 @@ namespace GameMaker.Dissasembler
             WriteArgumentOrPop(output, index);
             if (needParm) output.Write(')');
         }
+        public void WriteParmLua(ITextOutput output, int index)
+        {
+            bool needParm = CheckParm(index);
+            if (needParm) output.Write('(');
+            WriteArgumentLua(output, index);
+            if (needParm) output.Write(')');
+        }
         public void WriteExpressionLua(ITextOutput output)
         {
             int count = Code.getOpTreeCount(); // not a leaf
             string operation = Code.getOpTreeString();
             if (count == 1)
             {
-                if (operation == "!") operation = "not ";
+                if (Code == GMCode.Not) operation = "not ";
                 output.Write(operation);
-                WriteParm(output, 0);
+                WriteParmLua(output, 0);
             }
             else if (count == 2)
             {
-                if (operation == "&&") operation = " and ";
-                else if (operation == "||") operation = " or ";
-                else if (operation == "!=") operation = "~=";
-                ILValue constant;
-                if(Code == GMCode.Add && 
-                    (Arguments.ElementAtOrDefault(0).Match(GMCode.Constant, out constant) ||
-                    Arguments.ElementAtOrDefault(1).Match(GMCode.Constant, out constant)) &&
-                    constant.Type == GM_Type.String)
-                {
-                    operation = " .. "; // change to concat
-                }
-                WriteParm(output, 0);
+                if (Code == GMCode.LogicAnd) operation = " and ";
+                else if (Code == GMCode.LogicOr) operation = " or ";
+                else if (Code == GMCode.Sne) operation = "~=";
+                WriteParmLua(output, 0);
                 output.Write(' ');
                 output.Write(Code.getOpTreeString());
                 output.Write(' ');
-                WriteParm(output, 1);
+                WriteParmLua(output, 1);
             }
         }
         public void WriteExpression(ITextOutput output)
@@ -925,27 +972,25 @@ namespace GameMaker.Dissasembler
                     output.Write(Operand.ToString());
                     break;
                 case GMCode.B: // this is where the magic happens...woooooooooo
-                    output.Write("goto ");
+                    output.Write("(B) ");
                     WriteOperand(output);
                     break;
                 case GMCode.Bf:
+                    output.Write("(Bf) ");
                     if (Arguments.Count > 0)
-                    {
-                        output.Write("Push(");
-                        Arguments[0].WriteTo(output);
-                        output.Write(")");
-                    }
-                    output.Write("Branch IfFalse ");
+                        Arguments[0].WriteTo(output); 
+                    else
+                        output.Write(" POP ");
+                    output.Write(" :: ");
                     WriteOperand(output);
                     break;
                 case GMCode.Bt:
+                    output.Write("(Bt) ");
                     if (Arguments.Count > 0)
-                    {
-                        output.Write("Push(");
                         Arguments[0].WriteTo(output);
-                        output.Write(")");
-                    }
-                    output.Write("BranchIfTrue ");
+                    else
+                        output.Write(" POP ");
+                    output.Write(" :: ");
                     WriteOperand(output);
                     break;
                 case GMCode.Pushenv:
@@ -1021,9 +1066,30 @@ namespace GameMaker.Dissasembler
                             }
                         }
                             break;
-                    default:
-                        InternalWriteTo(output);
+                    case GMCode.Constant: // primitive c# type
+                        WriteOperand(output);
                         break;
+                    case GMCode.Var:  // should be ILVariable
+                        {
+                            ILVariable v = Operand as ILVariable;
+                            v.WriteToLua(output);
+                        }
+                        break;
+                    case GMCode.Exit:
+                        output.Write("return -- Exit");
+                        break;
+                    case GMCode.Ret:
+                        output.Write("return ");
+                        WriteArgumentsLua(output, 0);
+                        break;
+                    case GMCode.LoopOrSwitchBreak:
+                        output.Write("break");
+                        break;
+                    case GMCode.LoopContinue:
+                        output.Write("continue");
+                        break;
+                    default:
+                        throw new Exception("Not Implmented! ugh");
                 }
             }
             if (Comment != null) output.Write("--[[ " + Comment + "--]]");
@@ -1131,7 +1197,8 @@ namespace GameMaker.Dissasembler
                 ILCondition condition = Conditions[i];
                 if (i==0) output.Write("if "); // starting if
                 else output.Write("elseif ");
-                condition.WriteToLua(output);
+                // have to manualy write the condition
+                condition.Condition.WriteToLua(output);
                 output.WriteLine(" then");
                 if (condition.TrueBlock.Body.Count == 0) output.WriteLine(" [[-- Empty Block --]] ");
                 else condition.TrueBlock.Body.WriteLuaNodes(output, true);
@@ -1169,7 +1236,7 @@ namespace GameMaker.Dissasembler
             output.WriteLine(" then ");
             if (TrueBlock.Body.Count == 0) output.WriteLine(" [[-- Empty Block --]] ");
             else TrueBlock.Body.WriteLuaNodes(output, true);
-            if (FalseBlock != null)
+            if (FalseBlock != null && FalseBlock.Body.Count > 0)
             {
                 output.WriteLine("else");
                 FalseBlock.Body.WriteLuaNodes(output, true);
@@ -1184,7 +1251,7 @@ namespace GameMaker.Dissasembler
             output.Write(" ) ");
             if (TrueBlock.Body.Count == 0) output.Write(" [[-- Empty Block --]] ");
             else TrueBlock.Body.WriteNodes(output, true, true);
-            if (FalseBlock != null)
+            if (FalseBlock != null && FalseBlock.Body.Count >0)
             {
                 output.Write("else");
                 if (FalseBlock.Body.Count == 0) output.Write("{ /* Empty Block */ }");
@@ -1252,71 +1319,7 @@ namespace GameMaker.Dissasembler
                 yield return caseBlock;
             }
         }
-#if false
-        // Old case convert code
-        public void WriteToLuaCaseBlock(CaseBlock block, ITextOutput output)
-        {
-            // hack so that it goes into lua easier and I don't have to remove breaks
-            output.WriteLine("repeat");
-            output.Indent();
-            for(int i=0;i < block.Body.Count;i++)
-            {
-                var n = block.Body[i];
-                if(i == (block.Body.Count - 1))
-                {
-                    ILExpression e = n as ILExpression;
-                    if (e != null && e.Code == GMCode.LoopOrSwitchBreak) break; // skip last break
-                }
-                n.WriteToLua(output);
-                output.WriteLine();
-            }
-            output.Unindent();
-            output.WriteLine("until true");
-        }
-        public override void WriteToLua(ITextOutput output)
-        { // you don't have case statements in lua, so we have to make a crap tone of if stattements
-          // going to have to change this in
-          // the decompiler and remove the switchmangle
-          // for right now though lets hack it
-            int last = this.CaseBlocks.Count - 1;
-            CaseBlock defaultBlock = null;
-            for (int i = 0; i < this.CaseBlocks.Count; i++)
-            {
-                var caseblock = this.CaseBlocks[i];
-                if(caseblock.Values == null)
-                {
-                    Debug.Assert(defaultBlock == null);
-                    defaultBlock = caseblock;
-                    continue;
-                }
-                output.Write(i == 0 ? "if " : "elseif ");
-                Condition.WriteToLua(output);
-                output.Write(" == ");
-                caseblock.Values[0].WriteToLua(output);
-                if (caseblock.Values.Count > 1) {
-                    for (int j = 1; j < caseblock.Values.Count; j++) {
-                        output.Write(" or ");
-                        Condition.WriteToLua(output);
-                        output.Write(" == ");
-                        caseblock.Values[j].WriteToLua(output);
-                    }
-                }
-            
-                output.WriteLine(" then ");
-                output.Indent();
-                WriteToLuaCaseBlock(caseblock, output);
-                output.Unindent();
-            }
-            if (defaultBlock != null)
-            {
-                output.WriteLine("else");
-                output.Indent();
-                WriteToLuaCaseBlock(defaultBlock, output);
-                output.Unindent();
-            }
-            output.Write("end");
-        }
-#endif
+
         public override void WriteToLua(ITextOutput output)
         {
             for(int i=0; i< CaseBlocks.Count;i++)

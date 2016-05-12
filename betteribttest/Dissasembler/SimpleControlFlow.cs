@@ -108,47 +108,14 @@ namespace GameMaker.Dissasembler
                 if (head.Body[head.Body.Count - 3].Match(GMCode.Push, out left))
                 {
                     head.Body.RemoveAt(head.Body.Count - 3);
-                    foreach (var e in cases) e.Arguments.Add(new ILExpression(left)); // add the expression to all the branches
+                    foreach (var e in cases) e.Arguments.Insert(0,new ILExpression(left)); // add the expression to all the branches
                 } else throw new Exception("switch failure");
                 modified |= true;
             }
             return modified;
         }
 
-        // Soo, since I cannot be 100% sure where the start of a instance might be
-        // ( could be an expresion, complex var, etc)
-        // Its put somewhere in a block 
-        public bool PushEnviromentFix(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
-            ILExpression expr;
-            ILLabel next;
-            ILLabel pushLabel;
-            ILLabel pushLabelNext;
-            if (head.MatchLastAndBr(GMCode.Push, out expr, out next)&&
-            //     labelGlobalRefCount[next] == 1 &&  // don't check this
-                body.Contains(labelToBasicBlock[next]) &&
-                labelToBasicBlock[next].MatchSingleAndBr(GMCode.Pushenv, out pushLabel, out pushLabelNext) 
-                )
-            {
-                ILBasicBlock pushBlock = labelToBasicBlock[next];
-                head.Body.RemoveAt(head.Body.Count - 2);// hackery, but sure, block should be removed in a flatten
-                if(expr.Code == GMCode.Constant)
-                {
-                    ILValue value = expr.Operand as ILValue;
-                    if(value.Value is int)
-                    {
-                        int ivalue = (int) value.Value;
-                        if (ivalue == 0)
-                            value.ValueText = "stack"; // hack for now, some of these methods do this humm
-                        else
-                            value.ValueText = context.InstanceToString(ivalue);
-                    }
-                }
-                (pushBlock.Body[pushBlock.Body.Count - 2] as ILExpression).Arguments.Add(expr);
-                return true;
-            }
-            return false;
-        }
+       
    
         bool MatchGeneratedLoopHeader(ILBasicBlock head, out ILLabel trueLabel, out ILLabel falseLabel, out ILExpression start)
         {
@@ -263,42 +230,57 @@ namespace GameMaker.Dissasembler
         }
 
 
-
+        public bool MatchLastBtOrBf(ILBasicBlock head, out bool isBt, out ILLabel trueLabel,out ILExpression condition, out ILLabel falseLabel) {
+            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condition, out falseLabel) ||
+               head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condition, out trueLabel)) {
+                isBt = (head.Body[head.Body.Count - 2] as ILExpression).Code == GMCode.Bt;
+                return true;
+            }
+            isBt = default(bool);
+            trueLabel = default(ILLabel);
+            falseLabel = default(ILLabel);
+            condition = default(ILExpression);
+            return false;
+        }
         // This is before the expression is processed, so ILValue's and constants havn't been assigned
         public bool SimplifyTernaryOperator(List<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
-        //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
-       //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
-            
+            //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
+            //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
+            bool isBt;
             ILExpression condExpr;
             ILLabel trueLabel;
             ILLabel falseLabel;
-           
+
             ILExpression trueExpr;
             ILLabel trueFall;
-            
+
             ILExpression falseExpr;
             ILLabel falseFall;
 
-            ILExpression finalFall;
+            List<ILExpression> finalFall;
             ILLabel finalFalseFall;
             ILLabel finalTrueFall;
-
-            if ((head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
-                head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel)) &&
-                labelGlobalRefCount[trueLabel] == 1 &&
-                labelGlobalRefCount[falseLabel] == 1 &&
+            if(MatchLastBtOrBf(head,out isBt, out trueLabel, out condExpr, out falseLabel) &&
+              //  labelGlobalRefCount[trueLabel] == 1 &&
+             //   labelGlobalRefCount[falseLabel] == 1 &&
                 labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
                 labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out falseExpr, out falseFall) &&
                 trueFall == falseFall &&
                 body.Contains(labelToBasicBlock[trueLabel]) &&
                 labelToBasicBlock[trueFall].MatchLastAndBr(GMCode.Bf, out finalFalseFall, out finalFall, out finalTrueFall) &&
-                finalFall.Code == GMCode.Pop
+                finalFall.Count == 0
+               // finalFall.Code == GMCode.Pop
                ) // (finalFall == null || finalFall.Code == GMCode.Pop)
             {
-                Debug.Assert(finalFall.Arguments.Count != 2);
+                Debug.Assert(finalFall.Count ==0);
+           //     Debug.Assert(!isBt); // hopefully I don't have to worry about negating
+              //  labelToBasicBlock[trueLabel].Body.RemoveAt(1);
+                labelToBasicBlock[falseLabel].Body.RemoveAt(1); // remove the pushes
                 ILValue falseLocVar = falseExpr.Code == GMCode.Constant ? falseExpr.Operand as ILValue : null;
+
+
                 ILValue trueLocVar = trueExpr.Code == GMCode.Constant ? trueExpr.Operand as ILValue : null;
                 Debug.Assert(falseLocVar != null || trueLocVar != null);
                 ILExpression newExpr=null;
@@ -354,8 +336,8 @@ namespace GameMaker.Dissasembler
             // Ok, since we have not changed out all the Bf's to Bt like in ILSpy, we have to do them seperately
             // as I am getting bugs in my wahhoo about it
             if ((head.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel) ||
-                head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel)) &&
-                condExpr.Code != GMCode.Pop // its a terrtery so ignore it?
+                head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel)) 
+                 // its a terrtery so ignore it?
                 ) // I saw this too
             {
                 GMCode code = (head.Body[head.Body.Count - 2] as ILExpression).Code;
@@ -428,7 +410,16 @@ namespace GameMaker.Dissasembler
                 return new ILExpression(code, null, left, right) { InferredType = GM_Type.Bool };
             }
         }
-
+        // somewhere, so bug, is leaving an empty block, I think because of switches
+        public bool RemoveRedundentBlocks(IList<ILNode> body, ILBasicBlock head, int pos)
+        {
+            if(head.Body.Count == 2 && body.Contains(head) && !labelGlobalRefCount.ContainsKey(head.EntryLabel()) )
+            {
+                body.RemoveOrThrow(head);
+                return true;
+            }
+            return false;
+        }
         public bool JoinBasicBlocks(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             ILLabel nextLabel;

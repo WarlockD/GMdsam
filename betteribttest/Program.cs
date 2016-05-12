@@ -638,7 +638,7 @@ namespace GameMaker
         static void WriteScript(GMContext context, string codeName, Stream codeStream, TextWriter tw, string header = null)
         {
             ILBlock block = DecompileBlock(context, codeStream);
-            string scriptName = codeName.Remove(0, "gml_Script_".Length);
+            string scriptName = codeName.Contains("gml_Script_") ? codeName.Remove(0, "gml_Script_".Length) : codeName;
             context.DebugName = scriptName; // in case of debug
             int arguments = 0;
             //   Debug.Assert(scriptName != "SCR_TEXTSETUP");
@@ -707,6 +707,22 @@ namespace GameMaker
                     case "-s":
                         pos++;
                         toSearch = args.ElementAtOrDefault(pos);
+                        pos++;
+                        break;
+                    case "-any":
+                        pos++;
+                        toSearch = args.ElementAtOrDefault(pos);
+                        context.doLua = true;
+                        foreach(var o in File.Search(toSearch))
+                        {
+                            File.Code c = o as File.Code;
+                            if(c!= null)
+                            {
+                                context.DebugName = c.Name;
+                                using (StreamWriter sw = new StreamWriter(c.Name+ ".lua")) WriteScript(context, c.Name, c.Data, sw);
+                            }
+                        }
+                        Environment.Exit(0);
                         pos++;
                         break;
                     case "-o":
@@ -810,14 +826,28 @@ namespace GameMaker
                                 {
                                     Task task = Task.Run(() =>
                                     {
-                                        using (StreamWriter sw = new StreamWriter(filename + ".lua"))
-                                            WriteScript(context, s.Name, s.Data, sw);
+                                        if (s.Data != null)
+                                        {
+                                            using (StreamWriter sw = new StreamWriter(filename + ".lua"))
+                                                WriteScript(context, s.Name, s.Data, sw);
+                                        }
+                                        else
+                                        {
+                                            Console.WriteLine("Script {0} index is -1", s.Name);
+                                        }
                                     });
                                     tasks.Add(task);
                                 } else
                                 {
-                                    using (StreamWriter sw = new StreamWriter(filename + ".lua"))
-                                        WriteScript(context, s.Name, s.Data, sw);
+                                    if(s.Data!= null)
+                                    {
+                                        using (StreamWriter sw = new StreamWriter(filename + ".lua"))
+                                            WriteScript(context, s.Name, s.Data, sw);
+                                    } else
+                                    {
+                                        Console.WriteLine("Script {0} index is -1", s.Name);
+                                    }
+                                    
                                 }
                                 
                             }

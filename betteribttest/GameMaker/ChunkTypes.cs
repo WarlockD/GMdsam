@@ -953,7 +953,18 @@ namespace GameMaker
             {
                 get
                 {
-                    return File.Codes[_scriptIndex].Data;
+                    if (_scriptIndex == -1) { // its not in the list but it might still be in the code list
+                        foreach(var o in File.Search(Name))
+                        {
+                            if (o == this) continue; // skip if its this
+                            Code c = o as Code;
+                            if (c == null) continue; // just looking for code
+                            return c.Data;
+                        }
+                        return null;
+                    }
+                    else
+                        return File.Codes[_scriptIndex].Data;
                 }
             }
             // public byte[] RawSound { get; private set; }
@@ -978,6 +989,7 @@ namespace GameMaker
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());
+                Debug.Assert(!Name.Contains("gotobattle"));
                 Size = r.ReadInt32();
             }
         }

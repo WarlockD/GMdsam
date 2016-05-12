@@ -60,6 +60,7 @@
     <Compile Include="Dissasembler\LoopAndConditions.cs" />
     <Compile Include="Dissasembler\OpCode.cs" />
     <Compile Include="Dissasembler\Optimize.cs" />
+    <Compile Include="Dissasembler\PushResolver.cs" />
     <Compile Include="FlowAnalysis\ILInlining.cs" />
     <Compile Include="FlowAnalysis\RealStackAnalysis.cs" />
     <Compile Include="FlowAnalysis\StackAnalysis.cs" />
