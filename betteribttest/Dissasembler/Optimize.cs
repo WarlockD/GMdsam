@@ -236,6 +236,12 @@ namespace GameMaker.Dissasembler
             }
             return;
         }
+        // Bad programing here.  It seems GM dosn't remove code that is never used, like if somone
+        // puts code after an exit or return
+        public static void RemoveCodeAfterExit(ILBlock method)
+        {
+
+        }
         public static void RemoveRedundantCode(ILBlock method)
         {
             Dictionary<ILLabel, int> labelRefCount = new Dictionary<ILLabel, int>();
@@ -514,8 +520,9 @@ namespace GameMaker.Dissasembler
                 return SimplifyLogicNot(expr.Arguments[0], ref modified);
 
             ILExpression res = null;
-            while (expr.Code == GMCode.Not)
+            while (expr.Code == GMCode.Not && expr.Arguments.Count >0)
             {
+                Debug.Assert(expr.Arguments.Count == 1);
                 a = expr.Arguments[0];
                 // remove double negation
                 if (a.Code == GMCode.Not)

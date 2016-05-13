@@ -5,22 +5,169 @@ using System.Text;
 using System.Threading.Tasks;
 using GameMaker.Dissasembler;
 using System.IO;
+using System.Threading;
 
 namespace GameMaker
 {
     public class GMContext
     {
-        struct StringInfo
-        {
-            public string str;
-            public string escaped;
+        enum MType{
+            Info,
+            Warning,
+            Error,
+            Fatal,
+
         }
+        class Message
+        {
+            public MType Type;
+            public string Msg;
+            public string Header;
+            public ILNode Node = null;
+        }
+        static bool HasOpenedFile = false;
+        public static string ErrorFileName = "errors.txt";
+        public static string ChangeEndOfFileName(string filename, string toAdd)
+        {
+            return Path.ChangeExtension((Path.GetFileNameWithoutExtension(filename) + toAdd), Path.GetExtension(filename));
+        }
+        public static string TimeStamp
+        {
+            get
+            {
+                DateTime now = DateTime.Now;
+                return now.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+        public static string DateTimeStamp
+        {
+            get
+            {
+                DateTime now = DateTime.Now;
+                return now.ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+        string FixDebugFileName(string dfilename)
+        {
+            if (System.IO.File.Exists(dfilename))
+            {
+                int count = 0;
+                string filename = dfilename;
+                for (filename = ChangeEndOfFileName(dfilename, "_" + count);
+                    System.IO.File.Exists(filename);
+                    filename = ChangeEndOfFileName(dfilename, "_" + ++count)) ; // I like creative uses of for loops
+                System.IO.File.Copy(dfilename, filename);
+                System.IO.File.Delete(dfilename);
+            }
+            return dfilename;
+        }
+        public void DumpMessages()
+        {
+            lock (messages)
+            {
+                if (messages.Count > 0)
+                {
+
+                    if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
+                    {
+                        string filename = FixDebugFileName(ErrorFileName);
+                        using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.OpenOrCreate)))
+                            sw.WriteLine("Error Start: {0}", DateTimeStamp);
+                        HasOpenedFile = true;
+                    }
+                    using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.Append)))
+                    {
+                        foreach (var m in messages)
+                        {
+                            sw.Write(m.Header);
+                            sw.WriteLine(m.Msg);
+                            if (m.Node != null)
+                            {
+                                using (StringWriter strw = new StringWriter())
+                                {
+                                    var ptext = new PlainTextOutput(strw);
+                                    ptext.Header = m.Header;
+                                    ptext.Indent();
+                                    m.Node.WriteToLua(ptext);
+                                    ptext.Unindent();
+                                    if (m.Node is ILExpression) ptext.WriteLine();
+                                    sw.Write(strw.ToString());
+                                }
+                            }
+                        }
+                    }
+                    messages.Clear();
+                }
+            }
+        }
+        public void CheckAsync()
+        {
+            if(HasFatalError || ct.IsCancellationRequested)
+            {
+                DumpMessages();
+                ct.ThrowIfCancellationRequested();
+            }
+        }
+        void DoMessage(MType type, string msg, ILNode node, params object[] o)
+        {
+            Message m = new Message() { Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), TimeStamp, DebugName), Msg = msg, Node = node };
+            lock (messages) messages.Add(m);
+            if(type == MType.Fatal)  HasFatalError = true;
+        }
+        public void Info(string msg, params object[] o)
+        {
+            DoMessage(MType.Info, msg, null, o);
+        }
+        public void Warning(string msg, params object[] o)
+        {
+            DoMessage(MType.Warning, msg, null, o);
+        }
+        public void Error(string msg, params object[] o)
+        {
+            DoMessage(MType.Error, msg, null, o);
+        }
+        public void FatalError(string msg, params object[] o)
+        {
+            DoMessage(MType.Fatal, msg, null, o);
+            HasFatalError = true;
+        }
+        public void Info(string msg, ILNode node, params object[] o)
+        {
+            DoMessage(MType.Info, msg, node, o);
+        }
+        public void Warning(string msg, ILNode node, params object[] o)
+        {
+            DoMessage(MType.Warning, msg, node, o);
+        }
+        public void Error(string msg, ILNode node, params object[] o)
+        {
+            DoMessage(MType.Error, msg, node, o);
+        }
+        public void FatalError(string msg, ILNode node, params object[] o)
+        {
+            DoMessage(MType.Fatal, msg, node, o);
+            HasFatalError = true;
+        }
+        List<Message> messages = new List<Message>();
+        public CancellationToken ct;
         public bool makeObject = false;
         public bool doLua = false;
         public bool doAsm = false;
         public bool doLuaObject = false;
         public string DebugName = null;
         public bool doThreads = false;
+        public bool Debug = false;
+        public static bool HasFatalError { get; private set; }
+        static GMContext()
+        {
+            HasFatalError = false;
+        }
+        public GMContext Clone()
+        {
+            GMContext ctx = (GMContext) MemberwiseClone();
+            ctx.DebugName = DebugName + "_clone"; // for safty, but it should be changed
+            return ctx;
+        }
 
         public StreamWriter MakeDebugStream(string file)
         {
@@ -38,15 +185,21 @@ namespace GameMaker
             {
                 string filename = Path.GetFileNameWithoutExtension(file);
                 filename = DebugName + "_" + filename + Path.GetExtension(file);
-                return file.Replace(Path.GetFileName(file), filename); // so we keep any path information
+                filename = file.Replace(Path.GetFileName(file), filename); // so we keep any path information
+                return FixDebugFileName(filename);
             }
             else return file;
         }
 
-        public bool Debug = false;
+       
         public GMContext()
         {
         }
+        ~GMContext()
+        {
+            DumpMessages();
+        }
+
         public static string EscapeChar(char v)
         {
             switch (v)

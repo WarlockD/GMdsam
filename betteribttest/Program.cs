@@ -276,13 +276,14 @@ namespace GameMaker
         static ILBlock DecompileBlock(GMContext context, Stream code, string filename=null, string header = null)
         {
             var instructionsNew = GameMaker.Dissasembler.Instruction.Dissasemble(code, context);
-            if (context.doAsm)
+            if (context.doAsm || context.Debug)
             {
-                string asm_filename = filename + ".asm";
+                string asm_filename = (filename ?? context.DebugName) + ".asm";
                 GameMaker.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
             }
       
             ILBlock block = new GameMaker.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+            if (block == null) return null;
             FunctionFix.FixCalls(block);
             PushFix.FixCalls(block);
             if(filename != null)
@@ -309,7 +310,13 @@ namespace GameMaker
             using (StringWriter sw = new StringWriter())
             {
                 PlainTextWriter ptext = new PlainTextWriter(sw);
-                block.Body.WriteLuaNodes(ptext); // remember this is already idented
+                if(block == null)
+                {
+                    ptext.Indent();
+                    ptext.WriteLine("-- Look at errors.txt, bad code decompile");
+                    ptext.Unindent();
+                } else
+                    block.Body.WriteLuaNodes(ptext); // remember this is already idented
                 code = sw.ToString();
                 code = CleanLuaText(code); // god I need to fix this, maybe I have to build custom ast's afterall
             }
@@ -500,7 +507,7 @@ namespace GameMaker
                             }
                             ILBlock method = DecompileBlock(context, codeData.Data);
                             string code = LuaCodeText(context, method); // auto indents it
-                            cache.AddVars(method);
+                            if(method != null) cache.AddVars(method);
 
                             ptext.WriteLine("function {0}()", codeData.Name);
                             // ptext.Indent();
@@ -638,6 +645,7 @@ namespace GameMaker
         static void WriteScript(GMContext context, string codeName, Stream codeStream, TextWriter tw, string header = null)
         {
             ILBlock block = DecompileBlock(context, codeStream);
+            if (block == null) return; // error
             string scriptName = codeName.Contains("gml_Script_") ? codeName.Remove(0, "gml_Script_".Length) : codeName;
             context.DebugName = scriptName; // in case of debug
             int arguments = 0;
@@ -722,6 +730,7 @@ namespace GameMaker
                                 using (StreamWriter sw = new StreamWriter(c.Name+ ".lua")) WriteScript(context, c.Name, c.Data, sw);
                             }
                         }
+                        context.DumpMessages();
                         Environment.Exit(0);
                         pos++;
                         break;
@@ -810,6 +819,7 @@ namespace GameMaker
                             foreach (var obj in File.Objects)
                             {
                                 string filename = Path.Combine(info.FullName, obj.Name);
+                                filename = Path.ChangeExtension(filename, "lua");
                                 using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, obj, sw);
                             }
                         }
@@ -824,22 +834,28 @@ namespace GameMaker
                                 string filename = Path.Combine(info.FullName, s.Name);
                                 if (context.doThreads)
                                 {
+                                    var ctx = context.Clone();
+                                    ctx.DebugName = s.Name;
                                     Task task = Task.Run(() =>
                                     {
                                         if (s.Data != null)
                                         {
                                             using (StreamWriter sw = new StreamWriter(filename + ".lua"))
-                                                WriteScript(context, s.Name, s.Data, sw);
+                                                WriteScript(ctx, s.Name, s.Data, sw);
+                                            
                                         }
                                         else
                                         {
-                                            Console.WriteLine("Script {0} index is -1", s.Name);
+                                            ctx.Error("Script {0} index is -1", s.Name);
                                         }
+                                        ctx.CheckAsync();
+                                       
                                     });
                                     tasks.Add(task);
                                 } else
                                 {
-                                    if(s.Data!= null)
+                                    context.DebugName = s.Name;
+                                    if (s.Data!= null)
                                     {
                                         using (StreamWriter sw = new StreamWriter(filename + ".lua"))
                                             WriteScript(context, s.Name, s.Data, sw);
@@ -852,6 +868,7 @@ namespace GameMaker
                                 
                             }
                             Task.WaitAll(tasks.ToArray());
+                            context.DumpMessages();
                         }
                         break;
                     default:
@@ -869,6 +886,7 @@ namespace GameMaker
                     File.GObject o = s as File.GObject;
                     if (o != null)
                     {
+
                         context.DebugName = o.Name; // in case of debug
                         string filename = Path.ChangeExtension(o.Name, context.doLua ? ".lua" : ".js");
                         if (context.Debug)
@@ -877,11 +895,14 @@ namespace GameMaker
                         }
                         else
                         {
+                            var ctx = context.Clone();
+                            ctx.DebugName = o.Name;
                             Task task = Task.Run(() =>
                             {
-                                using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, o, sw);
+                                using (StreamWriter  sw = new StreamWriter(filename)) MakeObject(ctx, o, sw);
                             });
                             tasks.Add(task);
+                            ctx.CheckAsync();
                         }
                         continue;
                     }
@@ -897,21 +918,26 @@ namespace GameMaker
                         }
                         else
                         {
+                            var ctx = context.Clone();
+                            ctx.DebugName = o.Name;
                             Task task = Task.Run(() => {
-                                using (StreamWriter sw = new StreamWriter(filename)) WriteScript(context, codeName, os.Data, sw);
-                            });
+                                using (StreamWriter sw = new StreamWriter(filename)) WriteScript(ctx, codeName, os.Data, sw);
+                            },ctx.ct);
                             tasks.Add(task);
+                            ctx.CheckAsync();
                         }
                         continue;
                     }
                 }
                 Task.WaitAny(tasks.ToArray());
+                context.DumpMessages();
             }
 
             if(FilesFound.Count==0)
             {
                 Console.WriteLine("No scripts or objects found with '" + toSearch + "' in the name");
-            } 
+            }
+            context.DumpMessages();
             System.Diagnostics.Debug.WriteLine("Done");
         }
     }

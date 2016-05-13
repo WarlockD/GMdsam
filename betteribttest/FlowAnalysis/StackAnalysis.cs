@@ -1,4 +1,4 @@
-﻿using betteribttest.FlowAnalysis;
+﻿
 using GameMaker.FlowAnalysis;
 using System;
 using System.Collections.Generic;
@@ -725,7 +725,30 @@ namespace GameMaker.Dissasembler
             }
             return false;
         }
-        void DebugSainityCheck(ILBlock method)
+        bool AfterLoopsAndConditions(ILBlock method)
+        {
+            HashSet<ILBlock> badblocks = new HashSet<ILBlock>();
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                foreach(var child in block.GetChildren().OfType<ILExpression>().Where(x=> x.Code == GMCode.B || x.Code == GMCode.Bt || x.Code == GMCode.Bf))
+                {
+                    badblocks.Add(block);
+                }
+            }
+            if (badblocks.Contains(method)) badblocks.Remove(method);
+            if(badblocks.Count > 0) // we shouldn't have any branches anymore
+            {
+                ILBlock badmethod = new ILBlock();
+                badmethod.Body = badblocks.Select(b => (ILNode) b).ToList();
+                method.DebugSave(context.MakeDebugFileName("bad_after_stuff.txt"));
+                context.FatalError("After Loop And Conditions failed, look at bad_after_stuff.txt");
+                return true;
+            }
+            if(context.Debug) Debug.Assert(badblocks.Count == 0);
+            return false;
+         
+        }
+        bool BeforeConditionsDebugSainityCheck(ILBlock method)
         {
             HashSet<ILBasicBlock> badblocks = new HashSet<ILBasicBlock>();
             Dictionary<GMCode, int> badCodes = new Dictionary<GMCode, int>();
@@ -738,7 +761,7 @@ namespace GameMaker.Dissasembler
                         ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
                         if (expr != null)
                         {
-                            if (expr.Code == GMCode.Dup || expr.Code == GMCode.Push)
+                            if (expr.Code == GMCode.Dup || expr.Code == GMCode.Push || expr.Code == GMCode.Popz)
                             {
                                 if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
                                 badCodes[expr.Code]++;
@@ -757,15 +780,25 @@ namespace GameMaker.Dissasembler
 
             if (badblocks.Count > 0)
             {
+                ControlFlowLabelMap map = new ControlFlowLabelMap(method);
                 method.DebugSave(context.MakeDebugFileName("bad_stuff.txt"));
+
+                //  HashSet<ILBasicBlock> callies = new HashSet<ILBasicBlock>();
+                foreach (var bb in badblocks.ToList())
+                {
+                    var p = map.LabelToParrents(bb.EntryLabel());
+                    //  Debug.Assert(p.Count == 1);
+                    badblocks.UnionWith(p.Select(x => map.LabelToBasicBlock(x)));
+                    //  badblocks.Add(map.LabelToBasicBlock(p[0]));
+                }
                 ILBlock badmethod = new ILBlock();
-                badmethod.Body = badblocks.OrderBy(b => b.GotoLabel().Name).Select(b => (ILNode) b).ToList();
+                badmethod.Body = badblocks.OrderBy(b => b.GotoLabelName()).Select(b => (ILNode) b).ToList();
                 string raw;
                 string dfilename = context.MakeDebugFileName("bad_blocks.txt");
                 using (StringWriter sw = new StringWriter()) // since I am writing it twice, jsut ues a string
                 {
                     sw.WriteLine("Filename: {0}", dfilename);
-                    foreach(var kp in badCodes)
+                    foreach (var kp in badCodes)
                     {
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
                     }
@@ -774,109 +807,14 @@ namespace GameMaker.Dissasembler
                     raw = sw.ToString();
                 }
                 using (StreamWriter sw = new StreamWriter(dfilename)) sw.Write(raw);
-                using (StreamWriter sw = new StreamWriter("bad_blocks_dump.txt")) sw.Write(raw);
+                context.FatalError("Before graph sanity check failed, look at bad_block_dump.txt");
+                return true;
             }
-            Debug.Assert(badblocks.Count == 0);
+            return false;
         }
-        public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        void FixIfStatements(ILBlock method)
         {
             bool modified;
-            if (code.Count == 0) return new ILBlock();
-            this.context = context;
-            _method = code;
-            this.optimize = optimize;
-            List<ILNode> ast = BuildPreAst();
-            ILBlock method = new ILBlock();
-            method.Body = ast;
-            FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
-                
-            GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
-
-            foreach(var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
-            if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks.txt"));
-
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
-            {
-             
-                do
-                {
-                    modified = false;
-                    if (context.doLua) modified |= block.RunOptimization(new SimpleControlFlow(method, context).DetectSwitchLua);
-
-                    modified |= block.RunOptimization(MatchVariablePush); // checks pushes for instance or indexs for vars
-                    modified |= block.RunOptimization(SimpleAssignments);
-                    modified |= block.RunOptimization(ComplexAssignments); // basicly self increment, this SHOULDN'T cross block boundrys
-                    modified |= block.RunOptimization(SimplifyBranches); // Any resolved pushes are put into a branch argument
-                    modified |= block.RunOptimization(CombineCall); // Any resolved pushes are put into a branch argument
-                    modified |= block.RunOptimization(CombineExpressions); // Any resolved pushes are put into a branch argument
-                    modified |= block.RunOptimization(PushEnviromentFix); // match all with's with expressions
-
-
-
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);
-
-
-                    // basicly self increment
-                    //  modified |= ComplexAssignments(ast);
-                  
-                    modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
-                    modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
-                    modified |= block.RunOptimization(Optimize.ReplaceWithAssignStatements);
-                    // This SHOULD work as the root expression would check the rest of it and
-                    // the byte code should of made sure they are all add statements anyway
-                    //  if(context.doLua)  modified |= block.RunOptimization(Optimize.FixLuaStringAddExpression);
-                    if (context.doLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
-                                                                                                    
-                    // somewhere, so bug, is leaving an empty block, I think because of switches
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).RemoveRedundentBlocks);
-
-                } while (modified);
-            }
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
-            DebugSainityCheck(method);// sainity check, evething must be ready for this
-
-                foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
-            {
-                new LoopsAndConditions(context).FindLoops(block);
-            }
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_conditions.txt"));
-            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
-            {
-                new LoopsAndConditions(context).FindConditions(block);
-            }
-
-
-            // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
-            // cause I don't convert it and mabye not converting all bt's to bf's dosn't
-       
-            do
-            {
-                modified = false;
-                foreach (ILCondition ilCond in method.GetSelfAndChildrenRecursive<ILCondition>())
-                {
-                    if (ilCond.TrueBlock.Body.Count == 0 && ilCond.FalseBlock.Body.Count != 0)
-                    { // If we have an empty true block but stuff in the falls block, negate the condition and swap blocks
-                        var swap = ilCond.TrueBlock;
-                        ilCond.TrueBlock = ilCond.FalseBlock;
-                        ilCond.FalseBlock = swap;
-                        ilCond.Condition = ilCond.Condition.NegateCondition();
-                        modified |= true;
-                    }
-                }
-            } while (modified);
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_flatten.txt"));
-            FlattenBasicBlocks(method);
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_gotos.txt"));
-            Optimize.RemoveRedundantCode(method);
-            new GotoRemoval(context).RemoveGotos(method);
-            Optimize.RemoveRedundantCode(method);
-
-            new GotoRemoval(context).RemoveGotos(method);
-
-            // Final clean ups, eveything is resloved, scrubbed, etc
-
             do
             {
                 // We have to do this here as we want clean if statments
@@ -895,10 +833,95 @@ namespace GameMaker.Dissasembler
                     }
                 }
             } while (modified);
+        }
+        public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        {
+            bool modified;
+            if (code.Count == 0) return new ILBlock();
+            this.context = context;
+            _method = code;
+            this.optimize = optimize;
+            List<ILNode> ast = BuildPreAst();
+            ILBlock method = new ILBlock();
+            method.Body = ast;
+            FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
+                
+            GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("raw.txt"));
+            foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
+            if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks.txt"));
 
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+             
+                do
+                {
+                    modified = false;
+                    if (context.doLua) modified |= block.RunOptimization(new SimpleControlFlow(method, context).DetectSwitchLua);
+
+                    modified |= block.RunOptimization(MatchVariablePush); // checks pushes for instance or indexs for vars
+                    modified |= block.RunOptimization(SimpleAssignments);
+                    modified |= block.RunOptimization(ComplexAssignments); // basicly self increment, this SHOULDN'T cross block boundrys
+                    modified |= block.RunOptimization(SimplifyBranches); // Any resolved pushes are put into a branch argument
+                    modified |= block.RunOptimization(CombineCall); // Any resolved pushes are put into a branch argument
+                    modified |= block.RunOptimization(CombineExpressions); // Any resolved pushes are put into a branch argument
+                    modified |= block.RunOptimization(PushEnviromentFix); // match all with's with expressions
+                    modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
+                    modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
+                    if (context.doLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
+
+
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).FixOptimizedForLoops);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);                                     
+                    // somewhere, so bug, is leaving an empty block, I think because of switches
+                    // It screws up the flatten block check for some reason
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).RemoveRedundentBlocks);
+                    if (GMContext.HasFatalError) return null;
+                } while (modified);
+            }
+            if (context.Debug)
+            {
+                method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
+                new LoopsAndConditions(context).SaveGraph(method, "before_loop.dot");
+            }
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
+            if (BeforeConditionsDebugSainityCheck(method)) return null ;// sainity check, evething must be ready for this
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                new LoopsAndConditions(context).FindLoops(block);
+            }
+            if (GMContext.HasFatalError) return null;
+            if (context.Debug) {
+                method.DebugSave(context.MakeDebugFileName("before_conditions.txt"));
+                new LoopsAndConditions(context).SaveGraph(method, "before_conditions.dot");
+            }
+            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
+            {
+                new LoopsAndConditions(context).FindConditions(block);
+            }
+            if (GMContext.HasFatalError) return null;
+
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_flatten.txt"));
+            FlattenBasicBlocks(method);
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_gotos.txt"));
+            Optimize.RemoveRedundantCode(method);
+            new GotoRemoval(context).RemoveGotos(method);
+
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_if.txt"));
+            // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
+            // cause I don't convert it and mabye not converting all bt's to bf's dosn't
+            FixIfStatements(method);
             if (context.doLua) CombineIfStatements(method);
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("final.cpp"));
+            if (context.Debug) method.DebugSave(context.MakeDebugFileName("final.lua"));
 
+            Optimize.RemoveRedundantCode(method);
+            new GotoRemoval(context).RemoveGotos(method);
+
+
+
+            if (AfterLoopsAndConditions(method)) return null; // another sanity check
 
             return method;
 

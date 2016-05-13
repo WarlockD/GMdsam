@@ -9,20 +9,31 @@ namespace GameMaker.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
+        Dictionary<ILLabel, List<ILLabel>> labelToBranch = new Dictionary<ILLabel, List<ILLabel>>();
+
         public ControlFlowLabelMap(ILBlock method)
         {
             foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
+                labelToBranch[target] = new List<ILLabel>();
             }
             foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
             {
+                ILLabel entry = bb.EntryLabel();
+                ILExpression br = bb.Body.ElementAtOrDefault(bb.Body.Count - 2) as ILExpression;
+                ILExpression b = bb.Body.ElementAtOrDefault(bb.Body.Count - 1) as ILExpression;
+                if (br != null && (br.Code == GMCode.Bt || br.Code == GMCode.Bt)) labelToBranch[br.Operand as ILLabel].Add(entry);
+                if (b != null && b.Code == GMCode.B) labelToBranch[b.Operand as ILLabel].Add(entry);
+
+
                 foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
                 {
                     labelToBasicBlock[label] = bb;
                 }
             }
         }
+        public List<ILLabel> LabelToParrents(ILLabel l) { return labelToBranch[l]; }
         public ILBasicBlock LabelToBasicBlock(ILLabel l) { return labelToBasicBlock[l]; }
         public int LabelCount(ILLabel l) { return labelGlobalRefCount[l];  }
     }
@@ -77,39 +88,83 @@ namespace GameMaker.Dissasembler
             // block is fixed, return the condition as all we need is the left side to compare it to
             return seq;
         }
+        ILBasicBlock FindEndOfSwitch(ILBasicBlock start)
+        {
+            Stack<ILBasicBlock> agenda = new Stack<ILBasicBlock>();
+            agenda.Push(start);
+            while (agenda.Count > 0)
+            {
+                ILBasicBlock bb = agenda.Pop();
+                if (bb.MatchAt(1,GMCode.Popz)) return bb;
+                foreach (ILLabel target in bb.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
+                    agenda.Push(labelToBasicBlock[target]);
+            }
+            return null;
+        }
         public bool DetectSwitchLua(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             bool modified = false;
-            List<ILExpression> cases = new List<ILExpression>();
             ILExpression condition;
             ILLabel trueLabel;
             ILLabel falseLabel;
             ILLabel fallThough;
         //    Debug.Assert(head.EntryLabel().Name != "Block_473");
             if (MatchSwitchCase(head, out trueLabel, out fallThough, out condition)) { // we ignore this first match, but remember the position
-                cases.Add(PreSetUpCaseBlock(head, condition));
-                int lastBlock = pos;
+                List<ILExpression> cases = new List<ILExpression>();
+                List<ILNode> caseBlocks = new List<ILNode>();
                 ILLabel prev = head.EntryLabel();
-                for(int i=pos-1; i >=0;i--)
+                ILBasicBlock startOfCases = head;
+                cases.Add(PreSetUpCaseBlock(startOfCases, condition));
+                caseBlocks.Add(startOfCases);
+    
+                for (int i=pos-1; i >=0;i--)
                 {
                     ILBasicBlock bb = body[i] as ILBasicBlock;
                     if (MatchSwitchCase(bb, out trueLabel, out falseLabel, out condition))
                     {
-                        head = bb;
-                        cases.Add(PreSetUpCaseBlock(head, condition));
+                        caseBlocks.Add(bb);
+                        cases.Add(PreSetUpCaseBlock(bb, condition));
+                      
                         Debug.Assert(falseLabel == prev);
-                        prev = head.EntryLabel();
+                        prev = bb.EntryLabel();
+                        startOfCases = bb;
                     }
                     else break;
                 }
                 // we have all the cases
                 // head is at the "head" of the cases
                 ILExpression left;
-                if (head.Body[head.Body.Count - 3].Match(GMCode.Push, out left))
+                if (startOfCases.Body[startOfCases.Body.Count - 3].Match(GMCode.Push, out left))
                 {
-                    head.Body.RemoveAt(head.Body.Count - 3);
+                    startOfCases.Body.RemoveAt(startOfCases.Body.Count - 3);
                     foreach (var e in cases) e.Arguments.Insert(0,new ILExpression(left)); // add the expression to all the branches
                 } else throw new Exception("switch failure");
+                // It seems GM makes a default case that just jumps to the end of the switch but I cannot
+                // rely on it always being there
+                ILBasicBlock default_case = body[pos + 1] as ILBasicBlock;
+                Debug.Assert(default_case.EntryLabel() == head.GotoLabel());
+                ILBasicBlock end_of_switch = labelToBasicBlock[default_case.GotoLabel()];
+                if ((end_of_switch.Body[1] as ILExpression).Code == GMCode.Popz)
+                {
+                    end_of_switch.Body.RemoveAt(1); // yeaa!
+                }
+                else // booo
+                { // We have a default case so now we have to find where the popz ends, 
+                    // this could be bad if we had a wierd generated for loop, but we are just doing stupid search
+                    ILBasicBlock test1 = FindEndOfSwitch(end_of_switch);
+                    // we take a sample from one of the cases to make sure we do end up at the same place
+                    ILBasicBlock test2 = FindEndOfSwitch(head);
+                    if (test1 == test2)
+                    { // two matches are good enough for me
+                        test1.Body.RemoveAt(1); // yeaa!
+                    }
+                    else
+                    {
+                        context.Error("Cannot find end of switch", end_of_switch); // booo
+                    }
+                }
+                // tricky part, finding that damn popz
+
                 modified |= true;
             }
             return modified;
@@ -249,32 +304,28 @@ namespace GameMaker.Dissasembler
             ILLabel finalFalseFall;
             ILLabel finalTrueFall;
             if(head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
-              //  labelGlobalRefCount[trueLabel] == 1 &&
-             //   labelGlobalRefCount[falseLabel] == 1 &&
+               labelGlobalRefCount[trueLabel] == 1 &&
+               labelGlobalRefCount[falseLabel] == 1 &&
                 labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
                 labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out falseExpr, out falseFall) &&
                 trueFall == falseFall &&
-                body.Contains(labelToBasicBlock[trueLabel]) &&
-                labelToBasicBlock[trueFall].MatchLastAndBr(GMCode.Bt, out finalTrueFall, out finalFall, out finalFalseFall) &&
+                body.Contains(labelToBasicBlock[trueFall]) &&
+                labelToBasicBlock[trueFall].MatchSingleAndBr(GMCode.Bt, out finalTrueFall, out finalFall, out finalFalseFall) &&
                 finalFall.Count == 0
                // finalFall.Code == GMCode.Pop
                ) // (finalFall == null || finalFall.Code == GMCode.Pop)
             {
                 Debug.Assert(finalFall.Count ==0);
-           //     Debug.Assert(!isBt); // hopefully I don't have to worry about negating
-              //  labelToBasicBlock[trueLabel].Body.RemoveAt(1);
-                labelToBasicBlock[falseLabel].Body.RemoveAt(1); // remove the pushes
-                ILValue falseLocVar = falseExpr.Code == GMCode.Constant ? falseExpr.Operand as ILValue : null;
+                int? falseLocVar = falseExpr.Operand is ILValue ? (falseExpr.Operand as ILValue).IntValue : null;
+                int? trueLocVar = trueExpr.Operand is ILValue ? (trueExpr.Operand as ILValue).IntValue : null;
 
-
-                ILValue trueLocVar = trueExpr.Code == GMCode.Constant ? trueExpr.Operand as ILValue : null;
                 Debug.Assert(falseLocVar != null || trueLocVar != null);
                 ILExpression newExpr=null;
                 // a ? true : b    is equivalent to  a || b
                 // a ? b : true    is equivalent to  !a || b
                 // a ? b : false   is equivalent to  a && b
                 // a ? false : b   is equivalent to  !a && b
-               if (trueLocVar != null && trueLocVar.Type == GM_Type.Short && (trueLocVar == 0 || trueLocVar == 1))
+               if (trueLocVar != null &&  (trueLocVar == 0 || trueLocVar == 1))
                 {
                     // It can be expressed as logical expression
                     if (trueLocVar != 0)
@@ -285,7 +336,7 @@ namespace GameMaker.Dissasembler
                         newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, new ILExpression(GMCode.Not, null, condExpr), falseExpr);
                     }
                 }
-                else if(falseLocVar != null && falseLocVar.Type == GM_Type.Short && (falseLocVar == 0 || falseLocVar == 1))
+                else if(falseLocVar != null && (falseLocVar == 0 || falseLocVar == 1))
                     {
                     // It can be expressed as logical expression
                     if (falseLocVar != 0)
@@ -297,8 +348,7 @@ namespace GameMaker.Dissasembler
                     }
                 }
                 Debug.Assert(newExpr != null);
-                // head.Body.RemoveTail(ILCode.Brtrue, ILCode.Br);
-                head.Body.RemoveRange(head.Body.Count - 2, 2);
+                head.Body.RemoveTail(GMCode.Bt, GMCode.B);
                 head.Body.Add(new ILExpression(GMCode.Bt, finalTrueFall, newExpr)); 
                 head.Body.Add(new ILExpression(GMCode.B, finalFalseFall));
 
@@ -324,7 +374,6 @@ namespace GameMaker.Dissasembler
             {
                 for (int pass = 0; pass < 2; pass++)
                 {
-
                     // On the second pass, swap labels and negate expression of the first branch
                     // It is slightly ugly, but much better then copy-pasting this whole block
                     ILLabel nextLabel = (pass == 0) ? trueLabel : falseLabel;
@@ -355,8 +404,8 @@ namespace GameMaker.Dissasembler
 
                         }
                         head.Body.RemoveTail(GMCode.Bt, GMCode.B);
-                        head.Body.Add(new ILExpression(GMCode.Bf, nextFalseLabel, logicExpr));
-                        head.Body.Add(new ILExpression(GMCode.B, nextTrueLablel));
+                        head.Body.Add(new ILExpression(GMCode.Bt, nextTrueLablel, logicExpr));
+                        head.Body.Add(new ILExpression(GMCode.B, nextFalseLabel));
 
                         // Remove the inlined branch from scope
                         body.RemoveOrThrow(nextBasicBlock);
@@ -390,8 +439,14 @@ namespace GameMaker.Dissasembler
         // somewhere, so bug, is leaving an empty block, I think because of switches
         public bool RemoveRedundentBlocks(IList<ILNode> body, ILBasicBlock head, int pos)
         {
-            if(head.Body.Count == 2 && body.Contains(head) && !labelGlobalRefCount.ContainsKey(head.EntryLabel()) )
+            if(!labelGlobalRefCount.ContainsKey(head.EntryLabel())  && body.Contains(head))
             {
+                if(head.Body.Count != 2)
+                {
+                    // we have an empty block that has data in it? throw it as an error.
+                    // Might just be extra code like after an exit that was never used or a programer error but lets record it anyway
+                    context.Warning("BasicBlock with data removed, not linked to anything so should be safe", head);
+                }
                 body.RemoveOrThrow(head);
                 return true;
             }

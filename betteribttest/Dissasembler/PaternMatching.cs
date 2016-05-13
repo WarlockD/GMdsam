@@ -151,6 +151,22 @@ namespace GameMaker.Dissasembler
             Debug.Assert(label != null);
             return label;
         }
+        public static string GotoLabelName(this ILBasicBlock bb)
+        {
+            ILExpression end = bb.Body.Last() as ILExpression;
+            switch (end.Code)
+            {
+                case GMCode.B:
+                    return (end.Operand as ILLabel).Name;
+                case GMCode.Ret:
+                    return "Return";
+                case GMCode.Exit:
+                    return "Exit";
+                    
+            }
+            Debug.Assert(false);
+            return null;
+        }
         public static ILLabel EntryLabel(this ILBasicBlock bb)
         {
             ILLabel label = bb.Body[0]  as ILLabel;

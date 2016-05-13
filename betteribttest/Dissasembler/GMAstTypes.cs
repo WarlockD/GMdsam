@@ -286,9 +286,13 @@ namespace GameMaker.Dissasembler
         public ILValue(ILVariable v) { this.Value = v; Type = GM_Type.Var; }
         public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
         public ILValue(ILExpression e) { this.Value = e; Type = GM_Type.ConstantExpression; }
-        public override ILNode Dup()
+        public int? IntValue
         {
-            return new ILValue(this);
+            get
+            {
+                if (Value is int) return (int) Value;
+                else return null;
+            }
         }
         public override string ToString()
         {
@@ -1088,6 +1092,10 @@ namespace GameMaker.Dissasembler
                     case GMCode.LoopContinue:
                         output.Write("continue");
                         break;
+                    case GMCode.B:
+                        output.Write("goto ");
+                        WriteOperand(output);
+                        break;
                     default:
                         throw new Exception("Not Implmented! ugh");
                 }
@@ -1378,7 +1386,7 @@ namespace GameMaker.Dissasembler
         {
             // UGH Now I see why you use withs
             // This cycles though EACH object named in this instance, so it really IS a loop
-            string local_value = "w_" + withVars++;
+            // UNLESS its given an instance number, like from a var or call.  In that case its only doing that instance
             string enviromentName;
             if (EnviromentName != null) enviromentName = EnviromentName;
             else
@@ -1389,14 +1397,28 @@ namespace GameMaker.Dissasembler
                     enviromentName = w.ToString();
                 }
             }
-            output.WriteLine("for _,{0} in with({1}) do", local_value, enviromentName);
-            output.Indent();
-            string old_enviroment = EnviromentOverride;
-            EnviromentOverride = local_value; // override the enviroment name
-            Body.Body.WriteLuaNodes(output, false);
-            EnviromentOverride = old_enviroment;
-            output.Unindent();
-            output.WriteLine("end -- with({0}) end", enviromentName);           
+            if (Enviroment.Code == GMCode.Constant)
+            {
+                string local_value = "w_" + withVars++;
+               
+                output.WriteLine("for _,{0} in with({1}) do", local_value, enviromentName);
+                output.Indent();
+                string old_enviroment = EnviromentOverride;
+                EnviromentOverride = local_value; // override the enviroment name
+                Body.Body.WriteLuaNodes(output, false);
+                EnviromentOverride = old_enviroment;
+                output.Unindent();
+                output.WriteLine("end -- with({0}) end", enviromentName);
+            } else
+            {
+                output.WriteLine("-- with({0}) start", enviromentName); // mainly used for debugging
+                string old_enviroment = EnviromentOverride;
+                EnviromentOverride = enviromentName; // override the enviroment name
+                Body.Body.WriteLuaNodes(output, false);
+                EnviromentOverride = old_enviroment;
+                output.WriteLine("-- with({0}) end", enviromentName);
+            }
+            
         }
         public override void WriteTo(ITextOutput output)
         {

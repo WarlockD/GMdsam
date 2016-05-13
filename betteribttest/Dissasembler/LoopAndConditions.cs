@@ -32,9 +32,7 @@ namespace GameMaker.Dissasembler
                 graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-                if (context.Debug) graph.ExportGraph().Save(context.MakeDebugFileName("graph_loop.dot"));
-                block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false);
-               
+                block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false); 
             }
         }
         public void FindWiths(ILBlock block)
@@ -60,7 +58,17 @@ namespace GameMaker.Dissasembler
                
             }
         }
-
+        public void SaveGraph(ILBlock block, string filename)
+        {
+            if (block.Body.Count > 0)
+            {
+                ControlFlowGraph graph;
+                graph = BuildGraph(block.Body, (ILLabel) block.EntryGoto.Operand);
+                graph.ComputeDominance();
+                graph.ComputeDominanceFrontier();
+                graph.ExportGraph().Save(System.IO.Path.ChangeExtension(filename, "dot"));
+            }
+        }
         public void FindConditions(ILBlock block)
         {
             if (block.Body.Count > 0)
@@ -69,7 +77,6 @@ namespace GameMaker.Dissasembler
                 graph = BuildGraph(block.Body, (ILLabel)block.EntryGoto.Operand);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
-                if (context.Debug) graph.ExportGraph().Save(context.MakeDebugFileName("graph_condition.dot"));
                 block.Body = FindConditions(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint);
             }
         }
@@ -79,7 +86,7 @@ namespace GameMaker.Dissasembler
             source.Outgoing.Add(edge);
             destination.Incoming.Add(edge);
         }
-        public ControlFlowGraph BuildGraph(IList<ILNode> nodes, ILLabel entryLabel)
+        public  ControlFlowGraph BuildGraph(IList<ILNode> nodes, ILLabel entryLabel)
         {
 
             int index = 0;
@@ -162,8 +169,7 @@ namespace GameMaker.Dissasembler
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    if (basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) || 
-                        basicBlock.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExpr, out trueLabel)||
+                    if (basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
                          basicBlock.MatchLastAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel) )// built it the same way from the dissasembler
                        {
                         bool ispushEnv = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code == GMCode.Pushenv;
@@ -409,11 +415,10 @@ namespace GameMaker.Dissasembler
                         ILLabel trueLabel;
                         ILLabel falseLabel;
                         List<ILExpression> condExprs;
-                        if (block.MatchLastAndBr(GMCode.Bf, out falseLabel, out condExprs, out trueLabel)
-                            || block.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExprs, out falseLabel) // be sure to invert this condition
+                        if (block.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExprs, out falseLabel) // be sure to invert this condition
                             && condExprs.Count > 0)  // its resolved
                         {
-                            GMCode code = (block.Body[block.Body.Count - 2] as ILExpression).Code;
+ 
                             ILExpression condExpr = condExprs[0];
                             IList<ILNode> body = block.Body;
                             // this is a simple condition, skip anything short curiket for now
@@ -425,7 +430,7 @@ namespace GameMaker.Dissasembler
                                 TrueBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, trueLabel) },
                                 FalseBlock = new ILBlock() { EntryGoto = new ILExpression(GMCode.B, falseLabel) }
                             };
-                            block.Body.RemoveTail(code, GMCode.B);
+                            block.Body.RemoveTail(GMCode.Bt, GMCode.B);
                             block.Body.Add(ilCond);
                             result.Add(block);
 
