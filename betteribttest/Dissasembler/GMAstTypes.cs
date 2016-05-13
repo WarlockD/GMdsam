@@ -15,10 +15,6 @@ namespace GameMaker.Dissasembler
 
     public abstract class ILNode
     {
-        public virtual ILNode Dup()
-        {
-            throw new Exception("Not implmented"); // We need this for dups
-        }
         // hack
         public static string EnviromentOverride = null;
         // removed ILList<T>

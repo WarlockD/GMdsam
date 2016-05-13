@@ -64,10 +64,8 @@
     <Compile Include="FlowAnalysis\ControlFlowGraph.cs" />
     <Compile Include="FlowAnalysis\ControlFlowGraphBuilder.cs" />
     <Compile Include="FlowAnalysis\ControlFlowNode.cs" />
-    <Compile Include="FlowAnalysis\ControlStructureDetector.cs" />
     <Compile Include="Dissasembler\GotoRemoval.cs" />
     <Compile Include="FlowAnalysis\GraphViz.cs" />
-    <Compile Include="FlowAnalysis\OpCodeInfo.cs" />
     <Compile Include="Dissasembler\PaternMatching.cs" />
     <Compile Include="Dissasembler\GMAstTypes.cs" />
     <Compile Include="Dissasembler\SimpleControlFlow.cs" />

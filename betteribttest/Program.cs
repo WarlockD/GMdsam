@@ -919,7 +919,7 @@ namespace GameMaker
                         else
                         {
                             var ctx = context.Clone();
-                            ctx.DebugName = o.Name;
+                            ctx.DebugName = os.Name;
                             Task task = Task.Run(() => {
                                 using (StreamWriter sw = new StreamWriter(filename)) WriteScript(ctx, codeName, os.Data, sw);
                             },ctx.ct);

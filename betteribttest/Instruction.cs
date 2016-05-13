@@ -172,11 +172,12 @@ namespace GameMaker
             { (GMCode) 0x11, "<" },
             { (GMCode) 0x12, "<=" },
             { (GMCode) 0x13, "==" },
-            {  (GMCode)0x14, "!=" },
+          //  {  (GMCode)0x14, "!=" },
+          {  (GMCode)0x14, "~=" },
             {  (GMCode)0x15, ">=" },
             {  (GMCode)0x16, ">" },
-              { GMCode.LogicAnd, "&&" },
-            { GMCode.LogicOr, "||" },
+              { GMCode.LogicAnd, "and" },
+            { GMCode.LogicOr, "or" },
             { GMCode.Concat, ".." },
         };
         public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
