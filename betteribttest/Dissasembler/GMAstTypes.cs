@@ -113,27 +113,93 @@ namespace GameMaker.Dissasembler
             if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine("--" + BlockTitle);
             Body.WriteLuaNodes(output, false);
         }
+        public void DebugSave(ITextOutput pto, ILNode n)
+        {
+            ILLabel l = n as ILLabel;
+            if (l != null) {
+                pto.WriteLine("ILabel {0}", l.ToString());
+                return;
+            }
+            ILExpression e = n as ILExpression;
+            if (e != null)
+            {
+                pto.WriteLine(e.ToString()); // want to make sure we are using the debug
+                return;
+            }
+            ILAssign assign = n as ILAssign;
+            if (assign != null)
+            {
+                pto.Write("ILAssign ");
+                assign.Variable.WriteToLua(pto);
+                pto.Write(" = ");
+                pto.WriteLine(assign.Expression.ToString()); // want to make sure we are using the debug
+                return;
+            }
+            ILCondition condition = n as ILCondition;
+            if (condition != null)
+            {
+                pto.Write("ILCondition If ");
+                pto.Write(condition.Condition.ToString()); // want to make sure we are using the debug
+                pto.WriteLine("then");
+                pto.Indent();
+                condition.TrueBlock.DebugSave(pto);
+                pto.Unindent();
+                if (condition.FalseBlock != null && condition.FalseBlock.Body.Count > 0)
+                {
+                    pto.WriteLine("else");
+                    pto.Indent();
+                    condition.FalseBlock.DebugSave(pto);
+                    pto.Unindent();
+                }
+                pto.WriteLine("end");
+                return;
+            }
+            ILWhileLoop loop = n as ILWhileLoop;
+            if (loop != null)
+            {
+                pto.Write("ILWhileLoop while ");
+                pto.Write(loop.Condition.ToString()); // want to make sure we are using the debug
+                pto.WriteLine("do");
+                pto.Indent();
+                loop.BodyBlock.DebugSave(pto);
+                pto.Unindent();
+                pto.WriteLine("end");
+                return;
+            }
+            ILWithStatement with = n as ILWithStatement;
+            if (with != null)
+            {
+                pto.Write("ILWithStatement with ");
+                pto.Write(with.Enviroment.ToString()); // want to make sure we are using the debug
+                pto.WriteLine("do");
+                pto.Indent();
+                with.Body.DebugSave(pto);
+                pto.Unindent();
+                pto.WriteLine("end");
+                return;
+            }
+            ILBasicBlock bb = n as ILBasicBlock;
+            if (bb != null)
+            {
+                pto.WriteLine("ILBasicBlock Start");
+                pto.Indent();
+                foreach (var n2 in bb.Body) DebugSave(pto, n2);
+                pto.Unindent();
+                pto.WriteLine("ILBasicBlock End");
+                return;
+            }
+            Debug.WriteLine(n.GetType().ToString());
+            Debug.WriteLine(n.ToString());
+            Debug.Assert(false);
+        }
+        public void DebugSave(ITextOutput pto)
+        {
+            foreach (var n2 in Body) DebugSave(pto, n2);
+        }
         public void DebugSave(TextWriter tw)
         {
-            using (PlainTextOutput pto = new PlainTextOutput(tw))
-            {
-               
-                ILLabel last = null;
-                for (int i = 0; i < Body.Count; i++)
-                {
-                    ILNode n = Body[i];
-                    ILLabel l = n as ILLabel;
-                    if (l != null) { last = l; pto.Header = ""; }
-                    else if (last != null) pto.Header = last.Name;
-
-                    ILExpression e = n as ILExpression;
-                    if (e != null)
-                        pto.Write(e.ToString()); // want to make sure we are using the debug
-                    else
-                        n.WriteTo(pto);
-                    pto.WriteLine();
-                }
-            }
+            PlainTextOutput pto = new PlainTextOutput(tw);
+            DebugSave(pto); 
         }
         public void DebugSave(string filename, string fileHeader = null)
         {

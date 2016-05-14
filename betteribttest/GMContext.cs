@@ -18,12 +18,18 @@ namespace GameMaker
             Fatal,
 
         }
-        class Message
+        class Message : IComparable<Message>
         {
+            public DateTime TimeStamp;
             public MType Type;
             public string Msg;
             public string Header;
             public ILNode Node = null;
+
+            public int CompareTo(Message other)
+            {
+                return TimeStamp.CompareTo(other);
+            }
         }
         static bool HasOpenedFile = false;
         public static string ErrorFileName = "errors.txt";
@@ -61,13 +67,13 @@ namespace GameMaker
             }
             return dfilename;
         }
-        public void DumpMessages()
+        void DumpMessages()
         {
             lock (messages)
             {
                 if (messages.Count > 0)
                 {
-
+                  //  messages.Sort();
                     if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
                     {
                         string filename = FixDebugFileName(ErrorFileName);
@@ -95,8 +101,9 @@ namespace GameMaker
                                 }
                             }
                         }
+                        messages.Clear();
                     }
-                    messages.Clear();
+                   
                 }
             }
         }
@@ -110,9 +117,10 @@ namespace GameMaker
         }
         void DoMessage(MType type, string msg, ILNode node, params object[] o)
         {
-            Message m = new Message() { Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), TimeStamp, DebugName), Msg = msg, Node = node };
+            var time = DateTime.Now;
+            Message m = new Message() { TimeStamp = time, Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), DebugName), Msg = msg, Node = node };
             lock (messages) messages.Add(m);
-            if(type == MType.Fatal)  HasFatalError = true;
+            if (type == MType.Fatal) HasFatalError = true;
         }
         public void Info(string msg, params object[] o)
         {
@@ -164,8 +172,19 @@ namespace GameMaker
         }
         public GMContext Clone()
         {
-            GMContext ctx = (GMContext) MemberwiseClone();
-            ctx.DebugName = DebugName + "_clone"; // for safty, but it should be changed
+            GMContext ctx = new GMContext();
+            lock (messages)
+            {
+                
+                ctx.makeObject = makeObject;
+                ctx.doLua = doLua;
+                ctx.doAsm = doAsm;
+                ctx.doLuaObject = doLuaObject;
+                ctx.DebugName = DebugName + "_clone"; // for safty, but it should be changed
+                ctx.doThreads = doThreads;
+                ctx.Debug = Debug;
+                ctx.messages = messages;
+            }
             return ctx;
         }
 

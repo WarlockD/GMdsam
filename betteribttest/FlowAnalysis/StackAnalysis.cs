@@ -741,7 +741,7 @@ namespace GameMaker.Dissasembler
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.Select(b => (ILNode) b).ToList();
                 method.DebugSave(context.MakeDebugFileName("bad_after_stuff.txt"));
-                context.FatalError("After Loop And Conditions failed, look at bad_after_stuff.txt");
+                context.Error("After Loop And Conditions failed, look at bad_after_stuff.txt");
                 return true;
             }
             if(context.Debug) Debug.Assert(badblocks.Count == 0);
@@ -807,7 +807,7 @@ namespace GameMaker.Dissasembler
                     raw = sw.ToString();
                 }
                 using (StreamWriter sw = new StreamWriter(dfilename)) sw.Write(raw);
-                context.FatalError("Before graph sanity check failed, look at bad_block_dump.txt");
+                context.Error("Before graph sanity check failed, look at bad_block_dump.txt");
                 return true;
             }
             return false;

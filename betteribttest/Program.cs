@@ -39,7 +39,7 @@ namespace GameMaker
         {
 
             ILValue arg;
-            if (expr.MatchIntConstant(out arg))
+            if (expr.MatchIntConstant(out arg) && (int) arg.Value != -1)
             {
                 int instance = (int) arg.Value;
                 arg.ValueText = "\"" + context.IndexToAudioName(instance) + "\"";
@@ -48,13 +48,13 @@ namespace GameMaker
         static void instanceArgument(ILNode expr)
         {
             ILValue arg;
-            if (expr.MatchIntConstant(out arg))
+            if (expr.MatchIntConstant(out arg) && (int) arg.Value != -1)
                 arg.ValueText = "\"" + context.InstanceToString((int) arg.Value) + "\"";
         }
         static void fontArgument(ILNode expr)
         {
             ILValue arg;
-            if (expr.MatchIntConstant(out arg))
+            if (expr.MatchIntConstant(out arg) && (int)arg.Value != -1)
                 arg.ValueText = "\"" + context.IndexToFontName((int) arg.Value) + "\"";
 
         }
@@ -74,7 +74,7 @@ namespace GameMaker
         static void scriptArgument(ILNode expr)
         {
             ILValue arg;
-            if (expr.MatchIntConstant(out arg))
+            if (expr.MatchIntConstant(out arg) && (int) arg.Value != -1)
                 arg.ValueText = "\"" + context.IndexToScriptName((int) arg.Value) + "\"";
         }
         static void scriptExecuteFunction(ILCall call)
@@ -730,7 +730,6 @@ namespace GameMaker
                                 using (StreamWriter sw = new StreamWriter(c.Name+ ".lua")) WriteScript(context, c.Name, c.Data, sw);
                             }
                         }
-                        context.DumpMessages();
                         Environment.Exit(0);
                         pos++;
                         break;
@@ -820,6 +819,7 @@ namespace GameMaker
                             {
                                 string filename = Path.Combine(info.FullName, obj.Name);
                                 filename = Path.ChangeExtension(filename, "lua");
+                             
                                 using (StreamWriter sw = new StreamWriter(filename)) MakeObject(context, obj, sw);
                             }
                         }
@@ -868,7 +868,6 @@ namespace GameMaker
                                 
                             }
                             Task.WaitAll(tasks.ToArray());
-                            context.DumpMessages();
                         }
                         break;
                     default:
@@ -930,14 +929,12 @@ namespace GameMaker
                     }
                 }
                 Task.WaitAny(tasks.ToArray());
-                context.DumpMessages();
             }
 
             if(FilesFound.Count==0)
             {
                 Console.WriteLine("No scripts or objects found with '" + toSearch + "' in the name");
             }
-            context.DumpMessages();
             System.Diagnostics.Debug.WriteLine("Done");
         }
     }
