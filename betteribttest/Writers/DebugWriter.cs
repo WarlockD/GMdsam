@@ -11,12 +11,20 @@ namespace GameMaker.Writers
 {
     public class DebugWriter : BlockToCode
     {
+        public override string LineComment
+        {
+            get
+            {
+                return "//";
+            }
+        }
+
         public DebugWriter(GMContext context) : base(context) { }
         public DebugWriter(GMContext context, TextWriter tw, string filename = null) : base(context,tw,filename) { }
         public DebugWriter(GMContext context, string filename): base(context,filename) { }
 
 
-        protected override void Write(ILBasicBlock block)
+        public override void Write(ILBasicBlock block)
         {
             ILLabel start = block.Body.First() as ILLabel;
             ILExpression end = block.Body.Last() as ILExpression;
@@ -29,7 +37,7 @@ namespace GameMaker.Writers
                 WriteNode(block.Body.Last()); 
             // The if and loop replace the last goto, so watch for that on basic blocks
         }
-        protected override void Write(ILElseIfChain chain)
+        public override void Write(ILElseIfChain chain)
         {
             
             for(int i=0; i < chain.Conditions.Count; i++)
@@ -49,34 +57,34 @@ namespace GameMaker.Writers
             WriteLine("IFElseChain End ");
         }
 
-        protected override void Write(ILExpression expr)
+        public override void Write(ILExpression expr)
         {
             Write(expr.ToString()); // debug is the expressions to string
         }
-        protected override void Write(ILVariable v)
+        public override void Write(ILVariable v)
         {
             Write(v.ToString());
         }
-        protected override void Write(ILValue v)
+        public override void Write(ILValue v)
         {
             Write(v.ToString());
         }
-        protected override void Write(ILLabel label)
+        public override void Write(ILLabel label)
         {
             Write("ILabel {0} ", label.ToString());
         }
-        protected override void Write(ILCall v)
+        public override void Write(ILCall v)
         {
             Write("ILCall?");
         }
-        protected override void Write(ILAssign assign)
+        public override void Write(ILAssign assign)
         {
             Write("ILAssign ");
             Write(assign.Variable);
             Write(" = ");
             Write(assign.Expression); // want to make sure we are using the debug
         }
-        protected override void Write(ILCondition condition)
+        public override void Write(ILCondition condition)
         {
             Write("ILCondition If ");
             Write(condition.Condition); // want to make sure we are using the debug
@@ -90,7 +98,7 @@ namespace GameMaker.Writers
             WriteLine("ILCondition end");
             return;
         }
-        protected override void Write(ILWhileLoop loop)
+        public override void Write(ILWhileLoop loop)
         {
             Write("ILWhileLoop If ");
             Write(loop.Condition); // want to make sure we are using the debug
@@ -98,18 +106,13 @@ namespace GameMaker.Writers
             Write(loop.BodyBlock);
             WriteLine("ILWhileLoop end");
         }
-        protected override void Write(ILWithStatement with)
+        public override void Write(ILWithStatement with)
         {
             Write("ILWithStatement with ");
             Write(with.Enviroment); // want to make sure we are using the debug
             WriteLine(" do");
             Write(with.Body);
             WriteLine("ILWithStatement end");
-        }
-        protected override void WriteMethodHeader()
-        {
-            if(FileName != null) WriteLine("Filename: {0}", FileName);
-            WriteLine("MethodName: {0}", MethodName);
         }
     }
 }

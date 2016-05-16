@@ -401,36 +401,39 @@ namespace GameMaker.Dissasembler
         // Unless I ever get a type/var anyisys system up, its going to stay like this
         public bool isLocal = false; // used when we 100% know self is not used
         public string Name;
-        public ILNode Instance = null; // We NEED this
+        public ILNode Instance = null; // We NEED this, unless its local or generated
         public string InstanceName=null;
         public bool isGenerated = false;
         public ILExpression Index = null; // not null if we have an index
         public bool isArray=false;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
         public GM_Type Type = GM_Type.NoType;
-
+        // Returns the full name of the variable, even if its an array as long as the array access is constant
+        // This format is near universal, so you can use it anywhere
         public string FullName
         {
             get
             {
-                if (isLocal || isGenerated) return Name;
-                else return  (InstanceName ?? Instance.ToString()) + '.' +   Name;
+                StringBuilder sb = new StringBuilder();
+                if (Instance != null)  {
+                    sb.Append((InstanceName ?? Instance.ToString()));
+                    sb.Append('.');
+                }
+                sb.Append(Name);
+                if(isArray && Index.Code == GMCode.Constant)
+                {
+                    sb.Append('[');
+                    sb.Append(Index.Operand.ToString());
+                    sb.Append(']');
+                }
+                return sb.ToString();
             }
         }
-
         public bool isFixedVar {  get
             {
-                return Index is ILValue;
+                return Index.Code == GMCode.Constant || (Index.Code == GMCode.Array2D && Index.Arguments[0].Code == GMCode.Constant && Index.Arguments[1].Code == GMCode.Constant);
             }
         }
-        /*
-        public override IEnumerable<ILNode> GetChildren()
-        {
-            //
-            if (Instance != null) yield return Instance;
-            if (Index != null) yield return Index;
-        }
-        */
         public bool Equals(ILVariable obj)
         {
             if (object.ReferenceEquals(obj, null)) return false;

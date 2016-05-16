@@ -210,10 +210,14 @@ namespace GameMaker.Dissasembler
         {
             if (expr.Code == GMCode.Call && expr.Operand is string)
             {
+                string fun_name = expr.Operand as string;
+        
                 List <ILExpression> args = GetArguments(nodes,  pos-1, expr.Extra);
                 if (args != null)
                 {
-                    ILCall call = new ILCall() { Name = expr.Operand as string, Type = expr.InferredType, Arguments = args.Select(x => (ILNode) x).ToList() };
+                    
+                    ILCall call = new ILCall() { Name = fun_name, Type = expr.InferredType, Arguments = args.Select(x => (ILNode) x).ToList() };
+                   
                     expr.Arguments.Clear();
                     expr.Operand = call; // fix it
                     pos -= expr.Extra;

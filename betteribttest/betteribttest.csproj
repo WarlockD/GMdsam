@@ -79,7 +79,8 @@
     <Compile Include="PListDict.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Writers\LoveWriter.cs" />
+    <Compile Include="Writers\LuaWriter.cs" />
+    <Compile Include="Writers\LuaFunctionWriter.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

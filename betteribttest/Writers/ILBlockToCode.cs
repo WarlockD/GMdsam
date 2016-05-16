@@ -18,11 +18,12 @@ namespace GameMaker.Writers
                 identCache[count] = identString = new string(' ', count * 4);
             return identString;
         }
-        protected SortedList<string, ILBlock> methods = new SortedList<string, ILBlock>();
         protected ILBlock method { get; private set; }
         protected GMContext context { get; private set; }
         protected string MethodName { get; private set; }
-        protected string FileName { get; private set; }
+        public string FileName { get; private set; }
+        public int Line { get; private set; }
+        public int Column { get; private set; }
         bool needIdent = false;
         string currentIdent;
         TextWriter writer;
@@ -39,58 +40,69 @@ namespace GameMaker.Writers
                 this.ownedWriter = true;
             }
         }
-        public BlockToCode(GMContext context)
-        {
-            this.context = context;
-            this.method = null;
-            this.MethodName = null;
-            this.FileName = null;
-            this.writer = new StringWriter();
-            this.ownedWriter = true;
-        }
+        public abstract string LineComment { get;}
+
         public BlockToCode(GMContext context, TextWriter tw, string filename = null)
         {
             this.context = context;
+            this.Ident = 0;
             this.method = null;
             this.MethodName = null;
             this.FileName = Path.GetFileName(filename);
             this.writer = tw;
             this.ownedWriter = false;
+            this.Column = 0;
+            this.Line = 1;
         }
         public BlockToCode(GMContext context, string filename = null)
         {
             this.context = context;
+            this.Ident = 0;
             this.method = null;
             this.MethodName = null;
-            this.FileName = Path.GetFileName(filename);
-            this.writer = new StreamWriter(filename);
+            this.Column = 0;
+            this.Line = 1;
+            if(filename == null)
+            {
+                this.FileName = null;
+                this.writer = new StringWriter();
+            } else
+            {
+                this.FileName = Path.GetFileName(filename);
+                this.writer = new StreamWriter(filename);
+               
+            }
             this.ownedWriter = true;
+
         }
-        protected void Indent()
+        public int Ident
         {
-            ident++;
-            currentIdent = FindIdent(ident);
+            get { return ident; }
+            set
+            {
+                ident = value;
+                currentIdent = FindIdent(ident);
+            }
         }
-        protected void UnIndent()
-        {
-            ident--;
-            currentIdent = FindIdent(ident);
-        }
-        protected void WriteLine()
+        public void WriteLine()
         {
             needIdent = true;
+            Column = 0;
+            Line++;
             writer.WriteLine();
         }
-        protected void Write(char c)
+        public void Write(char c)
         {
             if(needIdent)
             {
                 writer.Write(currentIdent);
+                Column += currentIdent.Length;
                 needIdent = false;
             }
+            Column++;
             writer.Write(c);
         }
-        protected void Write(string s)
+        public void Write(string s)
         {
             for(int i=0;i < s.Length; i++)
             {
@@ -105,97 +117,65 @@ namespace GameMaker.Writers
                 Write(c);
             }
         }
-        protected void WriteLine(string s)
+        public void WriteLine(string s)
         {
             Write(s);
             WriteLine();
         }
-        protected void Write(string msg, params object[] o)
+        public void Write(string msg, params object[] o)
         {
             Write(string.Format(msg, o));
         }
-        protected void WriteLine(string msg, params object[] o)
+        public void WriteLine(string msg, params object[] o)
         {
             WriteLine(string.Format(msg, o));
         }
-      
-        protected abstract void Write(ILCall bb);
-        protected abstract void Write(ILVariable bb);
-        protected abstract void Write(ILValue bb);
-        protected abstract void Write(ILLabel bb);
 
-        protected abstract void Write(ILBasicBlock bb);
-        protected abstract void Write(ILCondition bb);
-        protected abstract void Write(ILAssign bb);
-        protected abstract void Write(ILExpression bb);
-        protected abstract void Write(ILWithStatement bb);
-        protected abstract void Write(ILWhileLoop bb);
-        protected abstract void Write(ILElseIfChain bb);
+        public abstract void Write(ILCall bb);
+        public abstract void Write(ILVariable bb);
+        public abstract void Write(ILValue bb);
+        public abstract void Write(ILLabel bb);
 
-        protected virtual void Write(ILBlock block)
+        public abstract void Write(ILBasicBlock bb);
+        public abstract void Write(ILCondition bb);
+        public abstract void Write(ILAssign bb);
+        public abstract void Write(ILExpression bb);
+        public abstract void Write(ILWithStatement bb);
+        public abstract void Write(ILWhileLoop bb);
+        public abstract void Write(ILElseIfChain bb);
+
+        public virtual void Write(ILBlock block)
         {
             WriteNodes(block.Body, true, true);
         }
-        protected void WriteNode(ILNode n, bool newline = false)
+        public void WriteNode(ILNode n, bool newline = false)
         {
             Write((dynamic)n);
             if (newline) WriteLine();
         }
-        protected void WriteNodes<T>(IEnumerable<T> nodes,bool newline, bool ident) where T:ILNode
+        public void WriteNodes<T>(IEnumerable<T> nodes,bool newline, bool ident) where T:ILNode
         {
-            if (ident) Indent();
+            if (ident) Ident++;
             foreach (var n in nodes)
             {
                 Write((dynamic)n);
                 if (newline) WriteLine();
             }
-            if (ident) UnIndent();
+            if (ident) Ident--;
         }
-        
-        protected virtual void WriteHeader()
-        {
 
-        }
-        protected virtual void WriteFooter()
-        {
-
-        }
-        protected virtual void WriteMethodHeader()
-        {
-
-        }
-        protected virtual void WriteMethodFooter()
-        {
-
-        }
-        public virtual void AddMethod(string MethodName, ILBlock Method, object userData=null)
-        {
-            methods.Add(MethodName, Method);
-        }
-        public virtual void WriteMethod(string MethodName, ILBlock Method)
+        public virtual void WriteMethod(string MethodName, ILBlock Method, bool ident=true)
         {
             this.MethodName = MethodName;
             this.method = Method;
-            WriteMethodHeader();
-            WriteNodes(method.Body, true, true);
-            WriteMethodFooter();
+            WriteNodes(method.Body, true, ident);
             this.MethodName = null;
             this.method = null;
         }
-        public virtual void WriteAllMethods()
-        {
-            if(methods.Count > 0)
-            {
-                WriteHeader();
-                foreach (var m in methods)
-                    WriteMethod(m.Key, m.Value);
-                WriteFooter();
-                methods.Clear();
-            }
-        }
+
         public override string ToString()
         {
-            if (writer is StringWriter)
+            if (this.ownedWriter && writer is StringWriter)
                 return (writer as StringWriter).ToString();
             else
             {
@@ -220,9 +200,9 @@ namespace GameMaker.Writers
         {
             if (!disposedValue)
             {
+                writer.Flush(); // flush either way
                 if (disposing && this.ownedWriter)
                 {
-                    writer.Flush();
                     writer.Dispose();
                     writer = null;
                     this.ownedWriter = false;
