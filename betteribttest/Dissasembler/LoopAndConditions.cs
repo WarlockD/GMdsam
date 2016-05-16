@@ -63,7 +63,15 @@ namespace GameMaker.Dissasembler
             if (block.Body.Count > 0)
             {
                 ControlFlowGraph graph;
-                graph = BuildGraph(block.Body, (ILLabel) block.EntryGoto.Operand);
+                ILLabel l = block.EntryGoto.Operand as ILLabel;
+                if(l == null && block.Body.First() is ILExpression)
+                {
+                    ILExpression e = block.Body.First() as ILExpression;
+                    l = e.Operand as ILLabel;
+                }
+                if (l == null) throw new Exception("Bad label");
+
+                graph = BuildGraph(block.Body, l);
                 graph.ComputeDominance();
                 graph.ComputeDominanceFrontier();
                 graph.ExportGraph().Save(System.IO.Path.ChangeExtension(filename, "dot"));

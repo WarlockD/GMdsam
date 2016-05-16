@@ -57,17 +57,18 @@ namespace GameMaker
         {
             if (System.IO.File.Exists(dfilename))
             {
+                var info = Directory.CreateDirectory("old_errors");
                 int count = 0;
-                string filename = dfilename;
-                for (filename = ChangeEndOfFileName(dfilename, "_" + count);
-                    System.IO.File.Exists(filename);
-                    filename = ChangeEndOfFileName(dfilename, "_" + ++count)) ; // I like creative uses of for loops
+                string filename;
+                do {
+                    filename = Path.Combine(info.FullName, ChangeEndOfFileName(dfilename, "_" + count++));
+                } while (System.IO.File.Exists(filename));
                 System.IO.File.Copy(dfilename, filename);
-                System.IO.File.Delete(dfilename);
+                System.IO.File.Delete(dfilename); 
             }
             return dfilename;
         }
-        void DumpMessages()
+        public void DumpMessages()
         {
             lock (messages)
             {
@@ -94,9 +95,9 @@ namespace GameMaker
                                     var ptext = new PlainTextOutput(strw);
                                     ptext.Header = m.Header;
                                     ptext.Indent();
-                                    m.Node.WriteToLua(ptext);
+                                    ptext.Write(m.Node.ToString());
                                     ptext.Unindent();
-                                    if (m.Node is ILExpression) ptext.WriteLine();
+                                    ptext.WriteLine();
                                     sw.Write(strw.ToString());
                                 }
                             }
@@ -1036,7 +1037,8 @@ namespace GameMaker
                     }
                 case 4:
                     {
-                        str = "CollisionEvent";
+                        str = "CollisionEvent_";
+                        str += subevent.ToString();
                         break;
                     }
                 case 5:

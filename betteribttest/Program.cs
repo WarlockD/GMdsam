@@ -219,6 +219,8 @@ namespace GameMaker
             PushFix.Add("self.mycolor", colorArgument);
             PushFix.Add("self.myfont", fontArgument);
             PushFix.Add("self.txtsound", soundArgument);
+            PushFix.Add("self.image_blend", colorArgument);
+            
         }
         static void DebugMain()
         {
@@ -279,7 +281,11 @@ namespace GameMaker
             if (context.doAsm || context.Debug)
             {
                 string asm_filename = (filename ?? context.DebugName) + ".asm";
-                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew.Values, asm_filename);
+                var list = instructionsNew.Values.Where(x => x != null).ToList();
+                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(list, asm_filename);
+                var graph = FlowAnalysis.ControlFlowGraphBuilder.Build(list);
+                graph.ExportGraph().Save((filename ?? context.DebugName) + ".dot");
+
             }
       
             ILBlock block = new GameMaker.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);

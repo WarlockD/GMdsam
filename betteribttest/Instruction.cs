@@ -74,9 +74,10 @@ namespace GameMaker
         Switch = 0xf9,
         Case = 0xfa,
         Constant = 0xfb, 
-        Assign,
+   //     Assign,
         DefaultCase,
-        Concat // -- filler for lua or string math
+        Concat, // -- filler for lua or string math
+        Array2D,
     }
     public static class GMCodeUtil
     {

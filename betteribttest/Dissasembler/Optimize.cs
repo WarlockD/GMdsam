@@ -394,24 +394,7 @@ namespace GameMaker.Dissasembler
             }
             return modified;
         }
-        // replace with assign statments as in lua we need to concat strings or in other engines
-        // we might have to change the way we assign stuff, ie self.x = 4 changes to self:setX(4)
-        public static bool ReplaceWithAssignStatements(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
-            bool modified = false;
-            for(int i =0; i < head.Body.Count; i++)
-            {
-                ILExpression e = head.Body[i] as ILExpression;
-                if(e != null && e.Code == GMCode.Assign)
-                {
-                    Debug.Assert(e.Arguments[0].Operand is ILVariable);
-                    ILAssign assign = new ILAssign() { Variable = e.Arguments[0].Operand as ILVariable, Expression = e.Arguments[1] };
-                    head.Body[i] = assign;
-                    modified |= true;
-                }
-            }
-            return modified;
-        }
+
         // we move all the calls to a ICall Node so we can see them easier.  We convert all the ILExpression bits as most
         // calls have constants anyway, makes it easeir to process
         public static void ReplaceExpressionsWithCalls(ILBlock method)

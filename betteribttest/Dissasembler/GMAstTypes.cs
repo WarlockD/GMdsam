@@ -113,102 +113,15 @@ namespace GameMaker.Dissasembler
             if (!string.IsNullOrWhiteSpace(BlockTitle)) output.WriteLine("--" + BlockTitle);
             Body.WriteLuaNodes(output, false);
         }
-        public void DebugSave(ITextOutput pto, ILNode n)
+        public void DebugSave(string MethodName, TextWriter tw)
         {
-            ILLabel l = n as ILLabel;
-            if (l != null) {
-                pto.WriteLine("ILabel {0}", l.ToString());
-                return;
-            }
-            ILExpression e = n as ILExpression;
-            if (e != null)
-            {
-                pto.WriteLine(e.ToString()); // want to make sure we are using the debug
-                return;
-            }
-            ILAssign assign = n as ILAssign;
-            if (assign != null)
-            {
-                pto.Write("ILAssign ");
-                assign.Variable.WriteToLua(pto);
-                pto.Write(" = ");
-                pto.WriteLine(assign.Expression.ToString()); // want to make sure we are using the debug
-                return;
-            }
-            ILCondition condition = n as ILCondition;
-            if (condition != null)
-            {
-                pto.Write("ILCondition If ");
-                pto.Write(condition.Condition.ToString()); // want to make sure we are using the debug
-                pto.WriteLine("then");
-                pto.Indent();
-                condition.TrueBlock.DebugSave(pto);
-                pto.Unindent();
-                if (condition.FalseBlock != null && condition.FalseBlock.Body.Count > 0)
-                {
-                    pto.WriteLine("else");
-                    pto.Indent();
-                    condition.FalseBlock.DebugSave(pto);
-                    pto.Unindent();
-                }
-                pto.WriteLine("end");
-                return;
-            }
-            ILWhileLoop loop = n as ILWhileLoop;
-            if (loop != null)
-            {
-                pto.Write("ILWhileLoop while ");
-                pto.Write(loop.Condition.ToString()); // want to make sure we are using the debug
-                pto.WriteLine("do");
-                pto.Indent();
-                loop.BodyBlock.DebugSave(pto);
-                pto.Unindent();
-                pto.WriteLine("end");
-                return;
-            }
-            ILWithStatement with = n as ILWithStatement;
-            if (with != null)
-            {
-                pto.Write("ILWithStatement with ");
-                pto.Write(with.Enviroment.ToString()); // want to make sure we are using the debug
-                pto.WriteLine("do");
-                pto.Indent();
-                with.Body.DebugSave(pto);
-                pto.Unindent();
-                pto.WriteLine("end");
-                return;
-            }
-            ILBasicBlock bb = n as ILBasicBlock;
-            if (bb != null)
-            {
-                pto.WriteLine("ILBasicBlock Start");
-                pto.Indent();
-                foreach (var n2 in bb.Body) DebugSave(pto, n2);
-                pto.Unindent();
-                pto.WriteLine("ILBasicBlock End");
-                return;
-            }
-            Debug.WriteLine(n.GetType().ToString());
-            Debug.WriteLine(n.ToString());
-            Debug.Assert(false);
+            using (var w = new Writers.DebugWriter(null, tw))
+                w.WriteMethod(MethodName, this);
         }
-        public void DebugSave(ITextOutput pto)
+        public void DebugSave(string MethodName, string FileName)
         {
-            foreach (var n2 in Body) DebugSave(pto, n2);
-        }
-        public void DebugSave(TextWriter tw)
-        {
-            PlainTextOutput pto = new PlainTextOutput(tw);
-            DebugSave(pto); 
-        }
-        public void DebugSave(string filename, string fileHeader = null)
-        {
-            using (System.IO.StreamWriter sw = new System.IO.StreamWriter(filename))
-            {
-                if (fileHeader != null) sw.WriteLine("Headder   : " + fileHeader);
-                sw.WriteLine("Filename : " + filename);
-                DebugSave(sw);
-            }
+            using (var w = new Writers.DebugWriter(null, FileName))
+                w.WriteMethod(MethodName, this);
         }
         public void DebugSaveLua(string filename, string fileHeader = null)
         {
@@ -224,7 +137,7 @@ namespace GameMaker.Dissasembler
     {
         public string TextToReplace = null;
         public ILVariable Variable;
-        public ILNode Expression;
+        public ILExpression Expression;
 
         public override void WriteTo(ITextOutput output)
         {
@@ -491,7 +404,7 @@ namespace GameMaker.Dissasembler
         public ILNode Instance = null; // We NEED this
         public string InstanceName=null;
         public bool isGenerated = false;
-        public ILNode Index = null; // not null if we have an index
+        public ILExpression Index = null; // not null if we have an index
         public bool isArray=false;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
         public GM_Type Type = GM_Type.NoType;
@@ -538,7 +451,7 @@ namespace GameMaker.Dissasembler
 
         public override void WriteTo(ITextOutput output)
         {
-          
+
             if (!isLocal && !isGenerated)
             {
                 Debug.Assert(Instance != null);
@@ -563,12 +476,23 @@ namespace GameMaker.Dissasembler
             }
             if (!isResolved) output.Write('?');
             output.Write(Name);
+            
             if (isArray)
             {
                 output.Write('[');
-                if (Index != null) Index.WriteTo(output);
+                if (Index != null)
+                {
+                    if (Index.Code == GMCode.Array2D)
+                    {
+                        Index.Arguments[0].WriteTo(output);
+                        output.Write(',');
+                        Index.Arguments[1].WriteTo(output);
+                    }
+                    else Index.WriteTo(output);
+                }
                 output.Write(']');
             }
+
         }
         public override void WriteToLua(ITextOutput output)
         {
@@ -599,7 +523,17 @@ namespace GameMaker.Dissasembler
             if (isArray)
             {
                 output.Write('[');
-                if (Index != null) Index.WriteToLua(output);
+                if (Index != null)
+                {
+                    if (Index.Code == GMCode.Array2D)
+                    {
+                        Index.Arguments[0].WriteToLua(output);
+                        output.Write(']');
+                        output.Write('[');
+                        Index.Arguments[1].WriteToLua(output);                        
+                    }
+                    else Index.WriteTo(output);
+                }
                 output.Write(']');
             }
 
@@ -903,6 +837,20 @@ namespace GameMaker.Dissasembler
             WriteArgumentOrPop(output, index);
             if (needParm) output.Write(')');
         }
+        public void WriteParm(StringBuilder output, int index)
+        {
+            bool needParm = CheckParm(index);
+            if (needParm) output.Append('(');
+            if (index < Arguments.Count)
+            {
+                ILExpression e = Arguments[index];
+                if (e.Code == GMCode.Var || e.Code == GMCode.Constant || e.Code == GMCode.Call) output.Append(e.Operand.ToString()); 
+                else Arguments[index].ToString(output, true);
+            }
+            else
+                output.Append("%POP%");
+            if (needParm) output.Append(')');
+        }
         public void WriteParmLua(ITextOutput output, int index)
         {
             bool needParm = CheckParm(index);
@@ -950,8 +898,39 @@ namespace GameMaker.Dissasembler
             }
         }
         // have to override due to issues with diffrent WriteTos
-        public void ToString(StringBuilder sb)
+        public void ToString(StringBuilder sb,bool readableExpressions=true)
         {
+            if(readableExpressions) {
+                switch (Code)
+                {
+                    case GMCode.Var:
+                    case GMCode.Constant:
+                    case GMCode.Call:
+                        sb.Append(Operand.ToString());
+                        break;
+                    default:
+                        if (Code.isExpression())
+                        {
+                            int count = Code.getOpTreeCount(); // not a leaf
+                            if (count == 1)
+                            {
+                                sb.Append(Code.getOpTreeString());
+                                WriteParm(sb, 0);
+                            }
+                            else if (count == 2)
+                            {
+                                WriteParm(sb, 0);
+                                sb.Append(' ');
+                                sb.Append(Code.getOpTreeString());
+                                sb.Append(' ');
+                                WriteParm(sb, 1);
+                            }
+                        }
+                        else ToString(sb, false);
+                        break;
+                }
+                return;
+            }
             sb.Append(Code.ToString());
             sb.Append(" ");
             if (Operand != null)
@@ -1010,11 +989,13 @@ namespace GameMaker.Dissasembler
                     }
 
                     break;
+                    /*
                 case GMCode.Assign:
                     WriteArgumentOrPop(output, 0, false);
                     output.Write(" = ");
                     WriteArgumentOrPop(output, 1, true);
                     break;
+                    */
                 case GMCode.Popz:
                     output.Write("Popz");
                     break;
@@ -1085,6 +1066,16 @@ namespace GameMaker.Dissasembler
                 case GMCode.DefaultCase:
                     output.Write("default: goto ");
                     WriteOperand(output);
+                    break;
+                case GMCode.Array2D:
+                    output.Write("Array2D(");
+                    WriteArgumentOrPop(output, 0);
+                    output.Write(',');
+                    WriteArgumentOrPop(output, 1);
+                    output.Write(")");
+                    break; // we shouldn't ever print here
+                case GMCode.Break:
+                    output.Write("array break");
                     break;
                 case GMCode.Case:
                     output.Write("case ");
@@ -1184,6 +1175,7 @@ namespace GameMaker.Dissasembler
                         }
                         break;
                     default:
+
                         InternalWriteTo(output);
                         break;
                 }

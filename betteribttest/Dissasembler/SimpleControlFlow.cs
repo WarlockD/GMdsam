@@ -41,15 +41,14 @@ namespace GameMaker.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
-        GMContext context;
+    GMContext context;
         //  TypeSystem typeSystem;
 
         public SimpleControlFlow(ILBlock method,GMContext context)
         {
             this.context = context;
-          //  this.typeSystem = context.CurrentMethod.Module.TypeSystem;
-
-            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
+            //  this.typeSystem = context.CurrentMethod.Module.TypeSystem;
+           foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
             }
@@ -58,8 +57,9 @@ namespace GameMaker.Dissasembler
                 foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
                 {
                     labelToBasicBlock[label] = bb;
-                }
+              }
             }
+       
         }
         // Detect a switch block, combine them all, and either build a switch block or 
         // just a bunch of if statements
@@ -283,8 +283,149 @@ namespace GameMaker.Dissasembler
             }
             return modified;
         }
+        // Another generated code.
+        // THIS time its a ternary, that is value ? part1 : part 2
+        // but this code is not valid in game maker, atleast I don't think, I can't find info on it
+        // on their website.  It apperes in obj_shop1-4 (cut and paste?) with a wierd operand of 0
+        // Just going to match it so the error goes away
+        public bool SimplifyComplexTernaryOperatorPart2(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            Debug.Assert(body.Contains(head));
+            //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
+            //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
+            ILExpression condExpr;
+            ILLabel trueLabel;
+            ILLabel falseLabel;
 
+            ILExpression trueExpr;
+            ILLabel trueFall;
+
+            // ILExpression falseExpr;
+            //  ILLabel falseFall;
+
+            // List<ILExpression> finalFall;
+            //  ILLabel finalFalseFall;
+            //  ILLabel finalTrueFall;
+            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
+                  labelGlobalRefCount[trueLabel] == 1 &&
+               labelGlobalRefCount[falseLabel] == 1 &&
+                condExpr.Code == GMCode.Constant && (int)(condExpr.Operand as ILValue) == 0 &&
+                labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall)&&
+                labelToBasicBlock[trueFall].MatchAt(1, GMCode.Pop)) // <-- soo wierd
+            {
+                labelToBasicBlock[trueFall].Body.Insert(1, labelToBasicBlock[trueLabel].Body[1]);
+                body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
+                body.RemoveOrThrow(labelToBasicBlock[falseLabel]);
+                head.Body.RemoveTail(GMCode.Bt, GMCode.B);
+                head.Body.Add(new ILExpression(GMCode.B, trueFall));
+                //  ILBasicBlock tblock = labelToBasicBlock[trueFall];
+                // insert the push into the new 
+                //    
+                return true;
+            }
+            return false;
+        }
+        // So this one... ugh
+        // What happenes here is that the compiler combined two non-trivial compare to short if one fails
+        // or if the other succeeds.  Had I, at the start, converted all temp values to generated veriables
+        // I might beable to optimize this in another pass easier.  As it is, I have to match this patern
+        // and figure out how to optimize it.  It makes more sence before eveything was converted to Bt's
+        // So lets try to optmize part of it, so the rest is taken care off
+
+        public bool SimplifyComplexTernaryOperatorPart1(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            Debug.Assert(body.Contains(head));
+            //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
+            //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
+            ILExpression condExpr;
+            ILLabel trueLabel;
+            ILLabel falseLabel;
+
+            ILExpression trueExpr;
+            ILLabel trueFall;
+
+            // ILExpression falseExpr;
+            //  ILLabel falseFall;
+
+            // List<ILExpression> finalFall;
+            //  ILLabel finalFalseFall;
+            //  ILLabel finalTrueFall;
+            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
+                 labelGlobalRefCount[trueLabel] == 1 &&
+                 labelGlobalRefCount[falseLabel] == 1)
+            {
+                if (labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
+                    trueExpr.Code == GMCode.Constant && (int)(trueExpr.Operand as ILValue) == 1)
+                {
+                    // So, what happens here is the "true" jump pushes a 1 for the next Bt to be true
+                    // Lets just get rid of the middle man and swap the labels and remove  this 1
+                    ILBasicBlock trueBlock = labelToBasicBlock[trueLabel];
+                    ILBasicBlock fallthoughBlock = labelToBasicBlock[trueBlock.GotoLabel()];
+                    (head.Body[head.Body.Count - 2] as ILExpression).Operand =
+                        (fallthoughBlock.Body[head.Body.Count - 2] as ILExpression).Operand; // swap the labels
+                                                                                             // remove the push block if only used once
+                    if (labelGlobalRefCount[trueLabel] == 1) body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
+                    return true;
+                }
+                if (labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
+                    trueExpr.Code == GMCode.Constant && (int)(trueExpr.Operand as ILValue) == 1)
+                {
+                    // So, what happens here is the "true" jump pushes a 1 for the next Bt to be true
+                    // Lets just get rid of the middle man and swap the labels and remove  this 1
+                    ILBasicBlock trueBlock = labelToBasicBlock[trueLabel];
+                    ILBasicBlock fallthoughBlock = labelToBasicBlock[trueBlock.GotoLabel()];
+                    (head.Body[head.Body.Count - 2] as ILExpression).Operand =
+                        (fallthoughBlock.Body[head.Body.Count - 2] as ILExpression).Operand; // swap the labels
+                                                                                             // remove the push block if only used once
+                    if (labelGlobalRefCount[trueLabel] == 1) body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
+                    return true;
+                }
+            }
+            return false;
+        }
+        public ILExpression ResolveTernaryExpression(ILExpression condExpr, ILExpression trueExpr, ILExpression falseExpr)
+        {
+            int? falseLocVar = falseExpr.Operand is ILValue ? (falseExpr.Operand as ILValue).IntValue : null;
+            int? trueLocVar = trueExpr.Operand is ILValue ? (trueExpr.Operand as ILValue).IntValue : null;
+
+            Debug.Assert(falseLocVar != null || trueLocVar != null);
+            ILExpression newExpr = null;
+            // a ? true : b    is equivalent to  a || b
+            // a ? b : true    is equivalent to  !a || b
+            // a ? b : false   is equivalent to  a && b
+            // a ? false : b   is equivalent to  !a && b
+            if (trueLocVar != null && (trueLocVar == 0 || trueLocVar == 1))
+            {
+                // It can be expressed as logical expression
+                if (trueLocVar != 0)
+                {
+                    newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, falseExpr);
+
+                }
+                else
+                {
+
+                    newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, new ILExpression(GMCode.Not, null, condExpr), falseExpr);
+
+                }
+            }
+            else if (falseLocVar != null && (falseLocVar == 0 || falseLocVar == 1))
+            {
+                // It can be expressed as logical expression
+                if (falseLocVar != 0)
+                {
+                    newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, new ILExpression(GMCode.Not, null, condExpr), trueExpr);
+                }
+                else
+                {
+                    newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, condExpr, trueExpr);
+                }
+            }
+            Debug.Assert(newExpr != null);
+            return newExpr;
+        }
         // This is before the expression is processed, so ILValue's and constants havn't been assigned
+
         public bool SimplifyTernaryOperator(List<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
@@ -309,55 +450,40 @@ namespace GameMaker.Dissasembler
                 labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
                 labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out falseExpr, out falseFall) &&
                 trueFall == falseFall &&
-                body.Contains(labelToBasicBlock[trueFall]) &&
-                labelToBasicBlock[trueFall].MatchSingleAndBr(GMCode.Bt, out finalTrueFall, out finalFall, out finalFalseFall) &&
-                finalFall.Count == 0
+                body.Contains(labelToBasicBlock[trueFall]) 
                // finalFall.Code == GMCode.Pop
                ) // (finalFall == null || finalFall.Code == GMCode.Pop)
             {
-                Debug.Assert(finalFall.Count ==0);
-                int? falseLocVar = falseExpr.Operand is ILValue ? (falseExpr.Operand as ILValue).IntValue : null;
-                int? trueLocVar = trueExpr.Operand is ILValue ? (trueExpr.Operand as ILValue).IntValue : null;
+                ILBasicBlock trueBlock = labelToBasicBlock[trueLabel];
+                ILBasicBlock falseBlock = labelToBasicBlock[falseLabel];
+                ILBasicBlock fallBlock = labelToBasicBlock[trueFall];
+                ILExpression newExpr = ResolveTernaryExpression(condExpr, trueExpr, falseExpr);
 
-                Debug.Assert(falseLocVar != null || trueLocVar != null);
-                ILExpression newExpr=null;
-                // a ? true : b    is equivalent to  a || b
-                // a ? b : true    is equivalent to  !a || b
-                // a ? b : false   is equivalent to  a && b
-                // a ? false : b   is equivalent to  !a && b
-               if (trueLocVar != null &&  (trueLocVar == 0 || trueLocVar == 1))
-                {
-                    // It can be expressed as logical expression
-                    if (trueLocVar != 0)
-                    {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, condExpr, falseExpr);
-                    }
-                    else {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, new ILExpression(GMCode.Not, null, condExpr), falseExpr);
-                    }
-                }
-                else if(falseLocVar != null && (falseLocVar == 0 || falseLocVar == 1))
-                    {
-                    // It can be expressed as logical expression
-                    if (falseLocVar != 0)
-                    {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicOr, new ILExpression(GMCode.Not, null, condExpr), trueExpr);
-                    }
-                    else {
-                        newExpr = MakeLeftAssociativeShortCircuit(GMCode.LogicAnd, condExpr, trueExpr);
-                    }
-                }
-                Debug.Assert(newExpr != null);
                 head.Body.RemoveTail(GMCode.Bt, GMCode.B);
-                head.Body.Add(new ILExpression(GMCode.Bt, finalTrueFall, newExpr)); 
-                head.Body.Add(new ILExpression(GMCode.B, finalFalseFall));
-
-                // Remove the inlined branch from scope
-               // body.RemoveOrThrow(nextBasicBlock);
-                // Remove the old basic blocks
-                body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
-                body.RemoveOrThrow(labelToBasicBlock[falseLabel]);
-                body.RemoveOrThrow(labelToBasicBlock[trueFall]);
+                body.RemoveOrThrow(trueBlock);
+                body.RemoveOrThrow(falseBlock);
+                // figure out if its a wierd short or not
+                if (fallBlock.MatchSingleAndBr(GMCode.Bt, out finalTrueFall, out finalFall, out finalFalseFall) &&
+                finalFall.Count == 0)
+                {
+                    head.Body.Add(new ILExpression(GMCode.Bt, finalTrueFall, newExpr));
+                    if (labelGlobalRefCount[trueFall] == 2) body.RemoveOrThrow(fallBlock);
+                } else if(fallBlock.Body.Count == 2) // wierd break,
+                {
+                    finalFalseFall = fallBlock.GotoLabel();
+                    head.Body.Add(new ILExpression(GMCode.Push, null, newExpr)); // we want to push it for next pass
+                    if (labelGlobalRefCount[trueFall] == 2) body.RemoveOrThrow(fallBlock);
+                }
+                else if (fallBlock.MatchAt(1,GMCode.Pop)) { // generated? wierd instance?
+                    finalFalseFall = fallBlock.EntryLabel();
+                    context.Info("Wierd Generated Pop here", newExpr);
+                    head.Body.Add(new ILExpression(GMCode.Push, null, newExpr));
+                    // It should be combined in JoinBasicBlocks function
+                    // so don't remove failblock
+                }
+                Debug.Assert(finalFalseFall != null);
+              
+                head.Body.Add(new ILExpression(GMCode.B, finalFalseFall));         
                 return true;
             }
             return false;

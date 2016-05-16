@@ -283,7 +283,7 @@ namespace GameMaker.Dissasembler
             }
             return false;
         }
-        void ResolveVariable( ILVariable v, ILNode instance, ILNode index = null)
+        void ResolveVariable( ILVariable v, ILNode instance, ILExpression index = null)
         {
             if (v.isResolved || v.isLocal || v.isGenerated) return;
             if (v.isArray)
@@ -705,6 +705,36 @@ namespace GameMaker.Dissasembler
         {
             foreach (var n in ast) n.FixPushExpression();
         }
+
+        public bool MultiDimenionArray(List<ILNode> body, ILExpression expr, int pos)
+        {
+            // A break is when gamemaker has multi dimional array access.
+            // Basicly, and I think this is a STUIPID hack as I supsect, internaly, GameMaker just makes
+            // arrays as hash lookups.  It takes the y and * it by 32000 then adds the x, then wraps both 
+            // expressions as a break  We will change it from V[x,y] to V[y][x] to be compatable with 
+            // most stuff
+            ILExpression yAccess;
+            ILExpression multiConstant;
+            ILExpression xAccess;
+            if (expr.Code == GMCode.Add && expr.Arguments.Count == 0 &&
+                body[pos - 1].Match(GMCode.Break) &&  
+                body[pos - 2].Match(GMCode.Push, out yAccess) &&  // we are going backwards so this should be the y
+                body[pos - 3].Match(GMCode.Mul) &&
+                body[pos - 4].Match(GMCode.Push, out multiConstant) &&
+                body[pos - 5].Match( GMCode.Break) &&
+                body[pos - 6].Match(GMCode.Push, out xAccess))
+            {
+                if(xAccess.isNodeResolved() && yAccess.isNodeResolved())
+                {
+                    ILExpression newExpr = new ILExpression(GMCode.Array2D, null, yAccess, xAccess);
+                    body.RemoveRange(pos - 6, 6);
+                    body[pos - 6] = new ILExpression(GMCode.Push, null, newExpr);
+                    //       Debug.Assert(false);
+                    return true;
+                }
+            }
+            return false;
+        }
         // Soo, since I cannot be 100% sure where the start of a instance might be
         // ( could be an expresion, complex var, etc)
         // Its put somewhere in a block 
@@ -740,7 +770,7 @@ namespace GameMaker.Dissasembler
             {
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.Select(b => (ILNode) b).ToList();
-                method.DebugSave(context.MakeDebugFileName("bad_after_stuff.txt"));
+                method.DebugSave(context.DebugName, context.MakeDebugFileName("bad_after_stuff.txt"));
                 context.Error("After Loop And Conditions failed, look at bad_after_stuff.txt");
                 return true;
             }
@@ -781,32 +811,38 @@ namespace GameMaker.Dissasembler
             if (badblocks.Count > 0)
             {
                 ControlFlowLabelMap map = new ControlFlowLabelMap(method);
-                method.DebugSave(context.MakeDebugFileName("bad_stuff.txt"));
+                method.DebugSave(context.DebugName, context.MakeDebugFileName("bad_stuff.txt"));
 
                 //  HashSet<ILBasicBlock> callies = new HashSet<ILBasicBlock>();
                 foreach (var bb in badblocks.ToList())
                 {
+                    badblocks.UnionWith(bb.GetChildren()
+                        .OfType<ILExpression>()
+                        .Where(x => x.Operand is ILLabel)
+                        .Select(x => x.Operand as ILLabel)
+                        .Select(x => map.LabelToBasicBlock(x)));
+
                     var p = map.LabelToParrents(bb.EntryLabel());
+                    p.Add(bb.GotoLabel());
+
                     //  Debug.Assert(p.Count == 1);
                     badblocks.UnionWith(p.Select(x => map.LabelToBasicBlock(x)));
                     //  badblocks.Add(map.LabelToBasicBlock(p[0]));
                 }
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.OrderBy(b => b.GotoLabelName()).Select(b => (ILNode) b).ToList();
-                string raw;
+                
                 string dfilename = context.MakeDebugFileName("bad_blocks.txt");
-                using (StringWriter sw = new StringWriter()) // since I am writing it twice, jsut ues a string
+               
+                using (StreamWriter sw = new StreamWriter(dfilename))
                 {
                     sw.WriteLine("Filename: {0}", dfilename);
                     foreach (var kp in badCodes)
-                    {
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
-                    }
                     sw.WriteLine();
-                    badmethod.DebugSave(sw);
-                    raw = sw.ToString();
+                    var dwriter = new Writers.DebugWriter(context,sw);
+                    dwriter.WriteMethod("bad_blocks", badmethod);
                 }
-                using (StreamWriter sw = new StreamWriter(dfilename)) sw.Write(raw);
                 context.Error("Before graph sanity check failed, look at bad_block_dump.txt");
                 return true;
             }
@@ -847,9 +883,13 @@ namespace GameMaker.Dissasembler
             FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
                 
             GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("raw.txt"));
+            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("raw.txt"));
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
-            if(context.Debug) method.DebugSave(context.MakeDebugFileName("basic_blocks.txt"));
+            if (context.Debug)
+            {
+                new LoopsAndConditions(context).SaveGraph(method, context.MakeDebugFileName("basic_blocks.dot"));
+                method.DebugSave(context.DebugName, context.MakeDebugFileName("basic_blocks.txt"));
+            }
 
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
@@ -866,13 +906,18 @@ namespace GameMaker.Dissasembler
                     modified |= block.RunOptimization(CombineCall); // Any resolved pushes are put into a branch argument
                     modified |= block.RunOptimization(CombineExpressions); // Any resolved pushes are put into a branch argument
                     modified |= block.RunOptimization(PushEnviromentFix); // match all with's with expressions
+                    modified |= block.RunOptimization(MultiDimenionArray);
                     modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
+                    
                     if (context.doLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
 
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
+                  //  modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyComplexTernaryOperatorPart1);
+               //     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyComplexTernaryOperatorPart2);
+
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).FixOptimizedForLoops);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);                                     
                     // somewhere, so bug, is leaving an empty block, I think because of switches
@@ -883,10 +928,9 @@ namespace GameMaker.Dissasembler
             }
             if (context.Debug)
             {
-                method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
+                method.DebugSave(context.DebugName, context.MakeDebugFileName("before_loop.txt"));
                 new LoopsAndConditions(context).SaveGraph(method, "before_loop.dot");
             }
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_loop.txt"));
             if (BeforeConditionsDebugSainityCheck(method)) return null ;// sainity check, evething must be ready for this
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
@@ -894,7 +938,7 @@ namespace GameMaker.Dissasembler
             }
             if (GMContext.HasFatalError) return null;
             if (context.Debug) {
-                method.DebugSave(context.MakeDebugFileName("before_conditions.txt"));
+                method.DebugSave(context.DebugName, context.MakeDebugFileName("before_conditions.txt"));
                 new LoopsAndConditions(context).SaveGraph(method, "before_conditions.dot");
             }
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
@@ -903,24 +947,24 @@ namespace GameMaker.Dissasembler
             }
             if (GMContext.HasFatalError) return null;
 
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_flatten.txt"));
+            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("before_flatten.txt"));
             FlattenBasicBlocks(method);
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_gotos.txt"));
+            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("before_gotos.txt"));
             Optimize.RemoveRedundantCode(method);
             new GotoRemoval(context).RemoveGotos(method);
 
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("before_if.txt"));
+            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("before_if.txt"));
             // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
             // cause I don't convert it and mabye not converting all bt's to bf's dosn't
             FixIfStatements(method);
             if (context.doLua) CombineIfStatements(method);
-            if (context.Debug) method.DebugSave(context.MakeDebugFileName("final.lua"));
+           
 
             Optimize.RemoveRedundantCode(method);
             new GotoRemoval(context).RemoveGotos(method);
 
 
-
+            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("final.txt"));
             if (AfterLoopsAndConditions(method)) return null; // another sanity check
 
             return method;

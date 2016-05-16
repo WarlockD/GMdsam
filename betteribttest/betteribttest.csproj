@@ -7,7 +7,7 @@
     <ProjectGuid>{B020BC80-D16E-4158-9C13-A6C135BC6A7F}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>betteribttest</RootNamespace>
+    <RootNamespace>GameMaker</RootNamespace>
     <AssemblyName>betteribttest</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -72,11 +72,14 @@
     <Compile Include="GameMaker\ChunkTypes.cs" />
     <Compile Include="GameMaker\Resources.cs" />
     <Compile Include="GMContext.cs" />
+    <Compile Include="Writers\DebugWriter.cs" />
+    <Compile Include="Writers\ILBlockToCode.cs" />
     <Compile Include="Instruction.cs" />
     <Compile Include="ITextOutput.cs" />
     <Compile Include="PListDict.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Writers\LoveWriter.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

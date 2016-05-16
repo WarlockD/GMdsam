@@ -184,6 +184,8 @@ namespace GameMaker.Dissasembler
                 case GMCode.Var:
                     if ((e.Operand as ILVariable).isResolved) return true;
                     break;
+                case GMCode.Array2D:
+                    return true; // array index
                 case GMCode.Call:
                     if ((e.Operand is ILCall)) return true;
                     break;

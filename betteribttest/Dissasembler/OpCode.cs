@@ -247,6 +247,9 @@ namespace GameMaker.Dissasembler
                     i.Types = new GM_Type[] { (GM_Type)((raw >> 16) & 15), (GM_Type)((raw >> 20) & 15) };
                     break;
                 case GMCode.Break:
+                   // saw this here obj_snowfloor
+                   // From older documentation on the net, this is to check if arrays have made
+                   // Debug.Assert(false); // the fuck?
                     //  i._extra = (int)(0x00FFFFFFF & raw); // never seen the need for more than this
                     break;
                 case GMCode.B:
@@ -431,7 +434,10 @@ namespace GameMaker.Dissasembler
                 list.Add(i.Address, i);
             }
             if (list.Count == 0) return list; // return list, its empty
-
+            for(int i=0; i < list.Values.Count; i++)
+            {
+                list.Values[i].Next = list.Values.ElementAtOrDefault(i + 1);
+            }
             Instruction last = list.Last().Value;
             if(last.Code != GMCode.Exit || last.Code != GMCode.Ret)
             {
