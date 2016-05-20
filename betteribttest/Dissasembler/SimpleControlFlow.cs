@@ -32,6 +32,11 @@ namespace GameMaker.Dissasembler
                     labelToBasicBlock[label] = bb;
                 }
             }
+            foreach (ILFakeSwitch fswitch in method.GetSelfAndChildrenRecursive<ILFakeSwitch>())
+            {
+                foreach (var target in fswitch.GetLabels())
+                    labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
+            }
         }
         public List<ILLabel> LabelToParrents(ILLabel l) { return labelToBranch[l]; }
         public ILBasicBlock LabelToBasicBlock(ILLabel l) { return labelToBasicBlock[l]; }
@@ -50,6 +55,13 @@ namespace GameMaker.Dissasembler
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
             }
+            foreach (ILFakeSwitch fswitch in method.GetSelfAndChildrenRecursive<ILFakeSwitch>())
+            {
+                foreach(var target in fswitch.GetLabels())
+                    labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
+            }
+
+           
             foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
             {
                 foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
@@ -86,18 +98,33 @@ namespace GameMaker.Dissasembler
             // block is fixed, return the condition as all we need is the left side to compare it to
             return seq;
         }
-        ILBasicBlock FindEndOfSwitch(ILBasicBlock start)
+        struct AgendaParrent
         {
-            Stack<ILBasicBlock> agenda = new Stack<ILBasicBlock>();
-            agenda.Push(start);
+            public ILLabel Parent;
+            public ILBasicBlock Block;
+        }
+        ILBasicBlock FindEndOfSwitch(ILBasicBlock start, out ILLabel Parent)
+        {
+            Stack<AgendaParrent> agenda = new Stack<AgendaParrent>();
+            agenda.Push(new AgendaParrent() { Block = start, Parent = null });
             while (agenda.Count > 0)
             {
-                ILBasicBlock bb = agenda.Pop();
-                if (bb.MatchAt(1,GMCode.Popz)) return bb;
-                foreach (ILLabel target in bb.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
-                    agenda.Push(labelToBasicBlock[target]);
+                AgendaParrent bb = agenda.Pop();
+                if (bb.Block.MatchAt(1, GMCode.Popz))
+                {
+                    Parent = bb.Parent;
+                    return bb.Block;
+                }
+                foreach (ILLabel target in bb.Block.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
+                    agenda.Push(new AgendaParrent() { Block = labelToBasicBlock[target], Parent = bb.Block.EntryLabel() });
             }
+            Parent = default(ILLabel);
             return null;
+        }
+        ILBasicBlock FindEndOfSwitch(ILBasicBlock start)
+        {
+            ILLabel callTo;
+            return FindEndOfSwitch(start, out callTo);
         }
         public bool DetectSwitch(List<ILNode> body, ILBasicBlock head, int pos)
         {
@@ -132,16 +159,8 @@ namespace GameMaker.Dissasembler
                 } // we have all the cases
 
 
-                // we have all the cases
-                // head is at the "head" of the cases
-                ILExpression left;
-                if (startOfCases.Body[startOfCases.Body.Count - 3].Match(GMCode.Push, out left))
-                {
-                    startOfCases.Body.RemoveAt(startOfCases.Body.Count - 3);
-                    fake.Condition = left;
-                }
-                else
-                {
+                if (!startOfCases.Body[startOfCases.Body.Count - 4].Match(GMCode.Push, out fake.Condition)) { 
+
                     Context.Info("switch failure " + startOfCases.ToString());
                     
                     // Something not worky?
@@ -152,33 +171,38 @@ namespace GameMaker.Dissasembler
                 // rely on it always being there
                 ILBasicBlock default_case = body[pos + 1] as ILBasicBlock;
                 Debug.Assert(default_case.EntryLabel() == head.GotoLabel());
-                ILBasicBlock end_of_switch = labelToBasicBlock[default_case.GotoLabel()];
-                if ((end_of_switch.Body[1] as ILExpression).Code == GMCode.Popz)
+                ILBasicBlock end_of_switch = FindEndOfSwitch(default_case, out fallThough);
+                if(end_of_switch != null)
                 {
-                    end_of_switch.Body.RemoveAt(1); // yeaa!
-                }
-                else // booo
-                { // We have a default case so now we have to find where the popz ends, 
-                    // this could be bad if we had a wierd generated for loop, but we are just doing stupid search
-                    ILBasicBlock test1 = FindEndOfSwitch(end_of_switch);
-                    // we take a sample from one of the cases to make sure we do end up at the same place
-                    ILBasicBlock test2 = FindEndOfSwitch(head);
-                    if (test1 == test2)
-                    { // two matches are good enough for me
-                        test1.Body.RemoveAt(1); // yeaa!
-                    }
-                    else
+                    if(fallThough == null) // we have no default case
                     {
-                        Context.Error("Cannot find end of switch", end_of_switch); // booo
+                        fallThough = default_case.EntryLabel();
+                        end_of_switch.Body.RemoveAt(1); // yeaa!
+                    } else
+                    {
+                        ILBasicBlock test1 = FindEndOfSwitch(startOfCases);
+                        ILBasicBlock test2 = FindEndOfSwitch(head);
+                        // Make sure we all reach the same place, I should test ALL the cases to make sure this happens
+                        // but just a few should be good enough
+                        if (end_of_switch == test1 && end_of_switch == test2) {
+                            end_of_switch.Body.RemoveAt(1); // yeaa!
+                        } else
+                        {
+                            Context.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
+                            throw new Exception("end_of_switch");
+                        }
                     }
-                    end_of_switch = test1;
+                } else
+                {
+                    Context.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
+                    throw new Exception("end_of_switch");
                 }
                 // Now we have to  clean up
                 foreach (var b in caseBlocks.Where(x => x != startOfCases)) body.RemoveOrThrow(b);
                 // then modify head with the new switch structure
                 startOfCases.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Seq, GMCode.Bt, GMCode.B);
                 startOfCases.Body.Add(fake);
-                startOfCases.Body.Add(new ILExpression(GMCode.B, head.GotoLabel()));
+                startOfCases.Body.Add(new ILExpression(GMCode.B, fallThough));
                 modified = true;
             }
             return modified;

@@ -107,7 +107,7 @@ namespace GameMaker.Writers
             }
             else Run(obj,path);
         }
-        void RunTask(File.Script s, string path = null)
+        void RunTask(File.Script s, string path)
         {
             if (Context.doThreads)
             {
@@ -141,7 +141,7 @@ namespace GameMaker.Writers
                 if (s != null)
                 {
                     Context.Info("Found Script '{0}': ", s.Name);
-                    RunTask(s);
+                    RunTask(s, s.Name);
                     continue;
                 }
                 Context.Info("Found Type '{0}' of Name '{1}': ", a.GetType().ToString(),  a.Name);

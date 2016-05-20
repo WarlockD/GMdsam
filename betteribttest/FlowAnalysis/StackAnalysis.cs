@@ -379,7 +379,6 @@ namespace GameMaker.Dissasembler
                                 ILVariable t = e.Operand as ILVariable;
                                 Debug.Assert(t != null && t.isResolved); // should be there and resolved
                                 v.Instance = t;
-                                v.InstanceName = t.ToString();
                             }
                             break;
                         case GMCode.Constant:
@@ -396,7 +395,6 @@ namespace GameMaker.Dissasembler
                             Debug.Assert(false);
                             break;
                     }
-                    Debug.Assert(!v.InstanceName.Contains("Constant"));
                     return true;
                 }
             }

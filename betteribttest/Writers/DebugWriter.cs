@@ -36,7 +36,13 @@ namespace GameMaker.Writers
                 return null;
             }
         }
-
+        void WriteField<T>(string field, T n) where T: ILNode
+        {
+            writer.Write(" ,");
+            writer.Write(field);
+            writer.Write('=');
+            writer.WriteNode(n,false);
+        }
         public void SetStream(BlockToCode writer)
         {
             this.writer = writer;
@@ -88,13 +94,61 @@ namespace GameMaker.Writers
             writer.WriteLine("IFElseChain End ");
         }
 
+
         public void Write(ILExpression expr)
         {
-            writer.Write(expr.ToString()); // debug is the expressions to string
+            writer.Write("{ Code=");
+            writer.Write(expr.Code.ToString());
+            //  if (Code.isExpression())
+            //      WriteExpressionLua(output);
+            // ok, big one here, important to get this right
+            if(expr.Operand != null) writer.Write(" , Operand=");
+            switch (expr.Code)
+            {
+                case GMCode.Call:
+                    if (expr.Operand is string)
+                    {
+                        writer.Write(" , FuncName=");
+                        writer.Write(expr.Operand as string);
+                    }
+                    else writer.Write(expr.Operand as ILCall);
+                    break;
+                case GMCode.Constant: // primitive c# type
+                    if (expr.Operand != null) writer.Write(expr.Operand as ILValue);
+                    break;
+                case GMCode.Var:  // should be ILVariable
+                    if (expr.Operand != null) writer.Write(expr.Operand as ILVariable);
+                    break;
+                case GMCode.B:
+                case GMCode.Bf:
+                case GMCode.Bt:
+                    if (expr.Operand != null) writer.Write(expr.Operand as ILLabel);
+                    break;
+                default:
+                    if (expr.Operand != null)
+                        writer.Write(expr.Operand.ToString());
+                    break;
+                 
+            }
+            if (expr.Arguments.Count > 0)
+            {
+                writer.Write(" ,Arguments=");
+                foreach (var e in expr.Arguments) writer.Write(e);
+            }
+            writer.Write(" }");
         }
         public void Write(ILVariable v)
         {
-            writer.Write(v.ToString());
+            writer.Write("{ Name=");
+            writer.Write(v.Name);
+            if (!v.isResolved)
+            {
+                writer.Write("?");
+                if (v.isArray) writer.Write(" ,isArray=true");
+            }
+            if (v.Instance != null) WriteField("Instance", v.Instance);
+            if (v.Index != null) WriteField("Index", v.Index);
+            writer.Write(" }");
         }
         public  void Write(ILValue v)
         {
@@ -102,7 +156,7 @@ namespace GameMaker.Writers
         }
         public  void Write(ILLabel label)
         {
-            writer.Write("ILabel {0} ", label.ToString());
+            writer.Write(":{0}:", label.Name);
         }
         public  void Write(ILCall v)
         {

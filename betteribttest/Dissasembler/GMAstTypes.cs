@@ -63,9 +63,17 @@ namespace GameMaker.Dissasembler
         {
             yield break;
         }
+        void WriteNode(ILNode n, Writers.BlockToCode o)
+        {
+            o.WriteNode(n, false);
+        }
         public override string ToString()
         {
-            return Writers.BlockToCode.DebugNodeToString(this);
+            using (var w = new Writers.BlockToCode(new Writers.DebugFormater()))
+            {
+                w.WriteNode(this);
+                return w.ToString();
+            }
         }
     }
     public class ILBasicBlock : ILNode
@@ -287,10 +295,11 @@ namespace GameMaker.Dissasembler
                     sb.Append('.');
                 }
                 sb.Append(Name);
-                if(isArray && Index.Code == GMCode.Constant)
+                if(isArray)
                 {
                     sb.Append('[');
-                    sb.Append(Index.Operand.ToString());
+                    if(Index != null && Index.Code == GMCode.Constant) sb.Append(Index.Operand.ToString());
+
                     sb.Append(']');
                 }
                 return sb.ToString();
@@ -590,6 +599,10 @@ namespace GameMaker.Dissasembler
             sb.Append(" Case Count=");
             sb.Append(Cases.Count);
             return sb.ToString();
+        }
+        public IEnumerable<ILLabel> GetLabels()
+        {
+            return Cases.Select(x => x.Goto);
         }
     }
     public class ILSwitch : ILNode

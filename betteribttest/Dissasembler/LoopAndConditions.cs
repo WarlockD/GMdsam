@@ -143,6 +143,21 @@ namespace GameMaker.Dissasembler
                         destination.Incoming.Add(edge);
                     }
                 }
+                foreach (ILFakeSwitch fswitch in node.GetSelfAndChildrenRecursive<ILFakeSwitch>())
+                {
+                    // Labels which are out of out scope will not be in the collection
+                    // Insert self edge only if we are sure we are a loop
+                    foreach (var target in fswitch.GetLabels())
+                    {
+                        ControlFlowNode destination;
+                        if (labelToCfNode.TryGetValue(target, out destination) && (destination != source || target == node.Body.FirstOrDefault()))
+                        {
+                            ControlFlowEdge edge = new ControlFlowEdge(source, destination, JumpType.Normal);
+                            source.Outgoing.Add(edge);
+                            destination.Incoming.Add(edge);
+                        }
+                    }
+                }
             }
 
             return new ControlFlowGraph(cfNodes.ToArray());
@@ -337,7 +352,7 @@ namespace GameMaker.Dissasembler
                             if (fallTarget != null)
                                 frontiers.UnionWith(fallTarget.DominanceFrontier.Except(new[] { fallTarget }));
 
-                            foreach (ILLabel condLabel in fswitch.Cases.Select(x => x.Goto))
+                            foreach (ILLabel condLabel in fswitch.GetLabels())
                             {
                                 ControlFlowNode condTarget = null;
                                 labelToCfNode.TryGetValue(condLabel, out condTarget);
@@ -347,7 +362,7 @@ namespace GameMaker.Dissasembler
 
                             for (int i = 0; i < fswitch.Cases.Count; i++)
                             {
-                                ILLabel condLabel = caseLabels[i];
+                                ILLabel condLabel = fswitch.Cases[i].Goto;
 
                                 // Find or create new case block
                                 ILSwitch.ILCase caseBlock = ilSwitch.Cases.FirstOrDefault(b => b.EntryGoto.Operand == condLabel);

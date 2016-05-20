@@ -22,6 +22,7 @@ namespace GameMaker.Writers
     {
         ICodeFormater Clone();
         void SetStream(BlockToCode s);
+        void Write(ILFakeSwitch f);
         void Write(ILVariable v);
         void Write(ILAssign a);
         void Write(ILCall bb);
@@ -113,32 +114,27 @@ namespace GameMaker.Writers
         {
             writer.Flush();
         }
-        static BlockToCode debugStringWriter;
-        static BlockToCode niceStringWriter;
+
         static BlockToCode()
         {
-            debugStringWriter = new BlockToCode(new DebugFormater());
-             niceStringWriter = new BlockToCode(new Lua.Formater());
         }
         public static string DebugNodeToString(ILNode node) 
         {
             string ret;
-            lock (debugStringWriter)
+            using(var w = new BlockToCode(new DebugFormater()))
             {
-                debugStringWriter.Clear();
-                debugStringWriter.WriteNode(node);
-                ret = debugStringWriter.ToString();
+                w.WriteNode(node);
+                ret = w.ToString();
             }
             return ret;
         }
         public static string NiceNodeToString(ILNode node)
         {
             string ret;
-            lock (niceStringWriter)
+            using (var w = new BlockToCode(new DebugFormater()))
             {
-                niceStringWriter.Clear();
-                niceStringWriter.WriteNode(node);
-                ret = niceStringWriter.ToString();
+                w.WriteNode(node);
+                ret = w.ToString();
             }
             return ret;
         }
@@ -249,18 +245,9 @@ namespace GameMaker.Writers
         }
         void _WriteNode<T>(T n) where T: ILNode
         {
-            try
-            {
-                Write((dynamic) n);
-            }
-            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException e)
-            {
-                Context.Error("Ex: {0}", e.Message);
-            }
-            catch (Exception general)
-            {
-                Context.Error("Ex: {0}", general.Message);
-            }
+
+                formater.Write((dynamic) n);
+
 
         }
         public void WriteNodesComma<T>(IEnumerable<T> nodes, bool need_comma = false) where T : ILNode
@@ -342,14 +329,10 @@ namespace GameMaker.Writers
             call_infos.Add(new NodeInfo<ILCall>(c, Line, Column, c.Name));
             formater.Write(c);
         }
-        public void Write(ILValue bb) {  formater.Write(bb); }
-        public void Write(ILLabel bb) {  formater.Write(bb); }
-        public void Write(ILBasicBlock bb) {  formater.Write(bb); }
-        public void Write(ILCondition bb) {formater.Write(bb); }
-        public void Write(ILExpression bb) {  formater.Write(bb); }
-        public void Write(ILWithStatement bb) { formater.Write(bb); }
-        public void Write(ILWhileLoop bb) {  formater.Write(bb); }
-        public void Write(ILElseIfChain bb) { formater.Write(bb); }
+        public void Write<T>(T n) where T: ILNode
+        {
+            _WriteNode(n);
+        }
         public void Write(ILBlock block)
         { // this is why we feed eveythign though this thing
             var backup = currentBlock;

@@ -27,6 +27,10 @@ namespace GameMaker.Writers.JavaScript
         {
             throw new Exception("Should not run into basic block here");
         }
+        public void Write(ILFakeSwitch f)
+        {
+            throw new Exception("Should not run into basic block here");
+        }
         // this is a switch statement so we will just write it as such
         public void Write(ILElseIfChain chain)
         {
