@@ -9,9 +9,19 @@ using System.Threading.Tasks;
 
 namespace GameMaker.Writers
 {
-    public class DebugWriter : BlockToCode
+    public class DebugFormater : ICodeFormater 
     {
-        public override string LineComment
+        public ICodeFormater Clone()
+        {
+            return new DebugFormater();
+        }
+        public static BlockToCode Create(string filename)
+        {
+            return new BlockToCode(null, new DebugFormater(), filename);
+        }
+        BlockToCode writer = null;
+
+        public string LineComment
         {
             get
             {
@@ -19,100 +29,108 @@ namespace GameMaker.Writers
             }
         }
 
-        public DebugWriter(GMContext context) : base(context) { }
-        public DebugWriter(GMContext context, TextWriter tw, string filename = null) : base(context,tw,filename) { }
-        public DebugWriter(GMContext context, string filename): base(context,filename) { }
+        public string NodeEnding
+        {
+            get
+            {
+                return null;
+            }
+        }
 
-
-        public override void Write(ILBasicBlock block)
+        public void SetStream(BlockToCode writer)
+        {
+            this.writer = writer;
+        }
+        public void Write(ILBasicBlock block)
         {
             ILLabel start = block.Body.First() as ILLabel;
             ILExpression end = block.Body.Last() as ILExpression;
-            WriteLine("BasicBlock Entry={0}", start.ToString());
+            writer.WriteLine("BasicBlock Entry={0}", start.ToString());
             for (int i = 1; i < block.Body.Count - 1; i++)
-                WriteNode(block.Body[i], true);
+                writer.WriteNode(block.Body[i], true);
             if (end != null)
-                WriteLine("BasicBlock Exit={0}", end.Code == GMCode.B ? end.Operand.ToString() : end.ToString());
+                writer.WriteLine("BasicBlock Exit={0}", end.Code == GMCode.B ? end.Operand.ToString() : end.ToString());
             else
-                WriteNode(block.Body.Last()); 
+                writer.WriteNode(block.Body.Last()); 
             // The if and loop replace the last goto, so watch for that on basic blocks
         }
-        public override void Write(ILElseIfChain chain)
+        public  void Write(ILElseIfChain chain)
         {
             
             for(int i=0; i < chain.Conditions.Count; i++)
             {
                 var c = chain.Conditions[i];
-                if(i == 0) Write("IFElseChain If ");
-                WriteNode(c.Condition);
-                WriteLine();
-                WriteNode(c.TrueBlock); // auto indent
-                if (i < chain.Conditions.Count - 1) Write("IFElseChain ElseIf ");
+                if(i == 0) writer.Write("IFElseChain If ");
+                writer.WriteNode(c.Condition);
+                writer.WriteLine();
+                writer.WriteNode(c.TrueBlock); // auto indent
+                if (i < chain.Conditions.Count - 1) writer.Write("IFElseChain ElseIf ");
             }
             if(chain.Else != null && chain.Else.Body.Count > 0)
             {
-                WriteLine("IFElseChain Else");
-                WriteNode(chain.Else); // auto indent
+                writer.WriteLine("IFElseChain Else");
+                writer.WriteNode(chain.Else); // auto indent
             }
-            WriteLine("IFElseChain End ");
+            writer.WriteLine("IFElseChain End ");
         }
 
-        public override void Write(ILExpression expr)
+        public void Write(ILExpression expr)
         {
-            Write(expr.ToString()); // debug is the expressions to string
+            writer.Write(expr.ToString()); // debug is the expressions to string
         }
-        public override void Write(ILVariable v)
+        public void Write(ILVariable v)
         {
-            Write(v.ToString());
+            writer.Write(v.ToString());
         }
-        public override void Write(ILValue v)
+        public  void Write(ILValue v)
         {
-            Write(v.ToString());
+            writer.Write(v.ToString());
         }
-        public override void Write(ILLabel label)
+        public  void Write(ILLabel label)
         {
-            Write("ILabel {0} ", label.ToString());
+            writer.Write("ILabel {0} ", label.ToString());
         }
-        public override void Write(ILCall v)
+        public  void Write(ILCall v)
         {
-            Write("ILCall?");
+            writer.Write("ILCall?");
         }
-        public override void Write(ILAssign assign)
+        public  void Write(ILAssign assign)
         {
-            Write("ILAssign ");
-            Write(assign.Variable);
-            Write(" = ");
-            Write(assign.Expression); // want to make sure we are using the debug
+            writer.Write("ILAssign ");
+            writer.Write(assign.Variable);
+            writer.Write(" = ");
+            writer.Write(assign.Expression); // want to make sure we are using the debug
         }
-        public override void Write(ILCondition condition)
+        public  void Write(ILCondition condition)
         {
-            Write("ILCondition If ");
-            Write(condition.Condition); // want to make sure we are using the debug
-            WriteLine("then");
-            Write(condition.TrueBlock);
+            writer.Write("ILCondition If ");
+            writer.Write(condition.Condition); // want to make sure we are using the debug
+            writer.WriteLine("then");
+            writer.Write(condition.TrueBlock);
             if (condition.FalseBlock != null && condition.FalseBlock.Body.Count > 0)
             {
-                WriteLine("else");
-                Write(condition.FalseBlock);
+                writer.WriteLine("else");
+                writer.Write(condition.FalseBlock);
             }
-            WriteLine("ILCondition end");
-            return;
+            writer.WriteLine("ILCondition end");
         }
-        public override void Write(ILWhileLoop loop)
+        public  void Write(ILWhileLoop loop)
         {
-            Write("ILWhileLoop If ");
-            Write(loop.Condition); // want to make sure we are using the debug
-            WriteLine(" do");
-            Write(loop.BodyBlock);
-            WriteLine("ILWhileLoop end");
+            writer.Write("ILWhileLoop If ");
+            writer.Write(loop.Condition); // want to make sure we are using the debug
+            writer.WriteLine(" do");
+            writer.Write(loop.BodyBlock);
+            writer.WriteLine("ILWhileLoop end");
         }
-        public override void Write(ILWithStatement with)
+        public  void Write(ILWithStatement with)
         {
-            Write("ILWithStatement with ");
-            Write(with.Enviroment); // want to make sure we are using the debug
-            WriteLine(" do");
-            Write(with.Body);
-            WriteLine("ILWithStatement end");
+            writer.Write("ILWithStatement with ");
+            writer.Write(with.Enviroment); // want to make sure we are using the debug
+            writer.WriteLine(" do");
+            writer.Write(with.Body);
+            writer.WriteLine("ILWithStatement end");
         }
+        public string Extension { get { return "_d.txt"; } }
+
     }
 }

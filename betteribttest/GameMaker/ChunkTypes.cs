@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,63 +12,150 @@ namespace GameMaker
 {
     public partial class File
     {
-        public interface NamedResrouce
+        public interface INamedResrouce
         {
             string Name { get; }
         }
-        public interface FileDataResource
+        public interface IGameMakerReader
+        {
+            void ReadRaw(BinaryReader r);
+        }
+        public interface IFileDataResource
         {
             Stream Data { get; }
         }
-        public abstract class FilePosition : IComparable<FilePosition>, IEquatable<FilePosition>
-        { //create comparer
-            public int Position { get; protected set; }
-            public int Index { get; protected set; }
-            public FilePosition()
+        public interface IIndexable
+        {
+            int Index { get; }
+        }
+        [Serializable]
+        public abstract class GameMakerStructure : IEquatable<GameMakerStructure>, IIndexable//: ISerializable
+        {
+            [NonSerialized]
+            int position;
+            [NonSerialized]
+            protected int? index;
+            public int Position { get { return position; } }
+            public int Index {  get { return index == null ? -100 : (int)index; } }
+            public bool hasIndex {  get { return index != null;  } }
+            protected abstract void InternalRead(BinaryReader r);
+            public void ReadFromDataWin(BinaryReader r, int index)
             {
-                Index = -1;
-                Position = -1;
-            }
-            public FilePosition(BinaryReader r, int index)
-            {
-                Index = index;
-                Position = (int)r.BaseStream.Position;
+                this.index = index;
+                position = (int) r.BaseStream.Position; // used for equality
                 InternalRead(r);
             }
-            protected abstract void InternalRead(BinaryReader r);
+            public void ReadFromDataWin(BinaryReader r)
+            {
+                this.index = null;
+                position = (int) r.BaseStream.Position; // used for equality
+                InternalRead(r);
+            }
+            public static T ReadStructure<T>(BinaryReader r, int? index = null) where T : GameMakerStructure, new()
+            {
+                T o = new T();
+                o.InternalRead(r);
+                o.index = index;
+                return o;
+            }
+            public static T[] ArrayFromOffset<T>(BinaryReader r, int offset) where T : GameMakerStructure, new()
+            {
+                var pos = r.BaseStream.Position;
+                r.BaseStream.Position = offset;
+                T[] ret = ArrayFromOffset<T>(r);
+                r.BaseStream.Position = pos;
+                return ret;
+            }
+            public static T[] ArrayFromOffset<T>(BinaryReader r) where T : GameMakerStructure, new()
+            {
+                var entries = r.ReadChunkEntries();
+                if (entries.Length == 0) return new T[0];
+                T[] data = new T[entries.Length];
+                foreach (var e in r.ForEachEntry(entries))
+                {
+                    T obj = new T();
+                    obj.Read(r, e.Index);
+                    data[e.Index] = obj;
+                }
+                return data;
+            }
             public void Read(BinaryReader r, int index)
             {
-                Index = index;
-                Position = (int)r.BaseStream.Position;
+                this.index = index;
+                this.position = (int) r.BaseStream.Position;
                 InternalRead(r);
-            }
-            public int CompareTo(FilePosition other)
-            {
-                return Position.CompareTo(other.Position);
             }
             public override int GetHashCode()
             {
-                return Position;
+                return position;
             }
-            public override bool Equals(object obj)
-            {
-                if (object.ReferenceEquals(obj, null)) return false;
-                if (object.ReferenceEquals(obj, this)) return true;
-                FilePosition d = obj as FilePosition;
-                if (d != null) return Equals(d);
-                return d != null && Equals(d);
-            }
-            public bool Equals(FilePosition other)
+            public bool Equals(GameMakerStructure other)
             {
                 return other.Position == Position;
             }
             public override string ToString()
             {
-                NamedResrouce ns = this as NamedResrouce;
+                INamedResrouce ns = this as INamedResrouce;
                 return ns != null ? ns.Name : this.GetType().Name;
             }
+            /*
+            public abstract void GetObjectData(SerializationInfo info, StreamingContext context);
+            // The special constructor is used to deserialize values.
+            public GameMakerStructure(SerializationInfo info, StreamingContext context){ }
+            public GameMakerStructure() { }
+            */
         }
-        public class Texture : FilePosition, FileDataResource
+        [Serializable]
+        public class AudioFile : GameMakerStructure, INamedResrouce, IFileDataResource
+        {
+            string name;
+            int audio_type;
+            string extension;
+            string filename;
+            int effects;
+            float volume;
+            float pan;
+            int other;
+            int sound_index;
+  
+            public string Name { get { return name; } }
+            public int AudioType { get { return audio_type; } }
+            public string Extension { get { return extension; } }
+            public string FileName { get { return filename; } }
+            public int Effects { get { return effects; } }
+            public float Volume { get { return volume; } }
+            public float Pan { get { return pan; } }
+            public int Other { get { return other; } }
+            public int SoundIndex { get { return sound_index; } }
+            public Stream Data { get { return sound_index >= 0 ? File.rawAudio[SoundIndex].Data : null; } }
+
+            protected override void InternalRead(BinaryReader r)
+            {
+                name = string.Intern(r.ReadStringFromNextOffset()); // be sure to intern the name
+                audio_type = r.ReadInt32();
+                // Ok, 101 seems to be wave files in the win files eveything else is mabye exxternal?
+                // 100 is mp3 ogg?
+                // found no other types in there.  
+                // Debug.Assert(audio.audioType == 101 || audio.audioType == 100);
+                extension = r.ReadStringFromNextOffset();
+                filename = r.ReadStringFromNextOffset();
+                effects = r.ReadInt32();
+                volume = r.ReadSingle();
+                pan = r.ReadSingle();
+                other = r.ReadInt32();
+                sound_index = r.ReadInt32();
+            }
+            /*
+            public GameMakerStructure(SerializationInfo info, StreamingContext context) { }
+            public override void GetObjectData(SerializationInfo info, StreamingContext context)
+            {
+                info.AddValue("")
+            }
+            */
+        }
+       
+       
+        public class Texture : GameMakerStructure, IFileDataResource
         {
             int _pngLength;
             int _pngOffset;
@@ -109,40 +197,7 @@ namespace GameMaker
                 _pngLength = (int)r.BaseStream.Position - Position;
             }
         }
-        public class AudioFile : FilePosition, NamedResrouce
-        {
-            public string Name { get; private set; }
-            public int AudioType { get; private set; }
-            public string Extension { get; private set; }
-            public string FileName { get; private set; }
-            public int Effects { get; private set; }
-            public float Volume { get; private set; }
-            public float Pan { get; private set; }
-            public int Other { get; private set; }
-            public int SoundIndex { get; private set; }
-            public RawAudio Audio { get; private set; }
- 
-            protected override void InternalRead(BinaryReader r)
-            {
-                Name = string.Intern(r.ReadStringFromNextOffset()); // be sure to intern the name
-                AudioType = r.ReadInt32();
-                // Ok, 101 seems to be wave files in the win files eveything else is mabye exxternal?
-                // 100 is mp3 ogg?
-                // found no other types in there.  
-                // Debug.Assert(audio.audioType == 101 || audio.audioType == 100);
-                Extension = r.ReadStringFromNextOffset();
-                FileName = r.ReadStringFromNextOffset();
-                Effects = r.ReadInt32();
-                Volume = r.ReadSingle();
-                Pan = r.ReadSingle();
-                Other = r.ReadInt32();
-                SoundIndex = r.ReadInt32();
-                if (SoundIndex >= 0) 
-                    Audio = File.rawAudio[SoundIndex];
-                else
-                    Audio = null;
-            }
-        }
+      
         public abstract class LuaObjectBuilder
         {
             public string TableName = null;
@@ -386,7 +441,8 @@ namespace GameMaker
                 sb.Append("}");
             }
         }
-        public class SpriteFrame : FilePosition, ILuaObject
+        [Serializable()]
+        public class SpriteFrame : GameMakerStructure, ILuaObject
         {
             public short X { get; private set; }
             public short Y { get; private set; }
@@ -408,7 +464,11 @@ namespace GameMaker
                 b.Add("width", Width);
                 b.Add("height", Height);
                 b.Add("offsetx", OffsetX);
-                b.Add("offsety", CropHeight);
+                b.Add("offsety", OffsetY);
+                b.Add("crop_width", CropWidth);
+                b.Add("crop_height", CropHeight);
+                b.Add("original_width", OriginalWidth);
+                b.Add("original_height", OriginalHeight);
                 b.Add("texture", TextureIndex);
                 return b;
             }
@@ -430,7 +490,8 @@ namespace GameMaker
                 TextureIndex = r.ReadInt16();
             }
         }
-        public class Sprite : FilePosition, NamedResrouce, ILuaObject
+        [Serializable()]
+        public class Sprite : GameMakerStructure, INamedResrouce, ILuaObject
         {
             public string Name { get; private set; }
             public int Width { get; private set; }
@@ -468,7 +529,7 @@ namespace GameMaker
                 Height0 = r.ReadInt32();
                 Another = r.ReadInt32();
                 Extra = r.ReadInt32(7);
-                Frames = File.ArrayFromOffset<SpriteFrame>(r);
+                Frames = ArrayFromOffset<SpriteFrame>(r);
                 // bitmask is here
                 int haveMask = r.ReadInt32();
                 if (haveMask != 0)
@@ -482,7 +543,8 @@ namespace GameMaker
             }
 
         }
-        public class GObject : FilePosition, NamedResrouce
+        [Serializable()]
+        public class GObject : GameMakerStructure, INamedResrouce
         {
             public class Event
             {
@@ -663,7 +725,8 @@ namespace GameMaker
                 }
             }
         };
-        public class Background : FilePosition, NamedResrouce
+        [Serializable()]
+        public class Background : GameMakerStructure, INamedResrouce
         {
             public string Name { get; private set; }
             public bool Trasparent { get; private set; }
@@ -682,9 +745,11 @@ namespace GameMaker
                 Frame.Read(r, -1);
             }
         };
-        public class Room : FilePosition, NamedResrouce
+        [Serializable()]
+        public class Room : GameMakerStructure, INamedResrouce
         {
-            public class View : FilePosition
+            [Serializable()]
+            public class View : GameMakerStructure
             {
                 public bool Visible;
                 public int X;
@@ -715,10 +780,11 @@ namespace GameMaker
                     Border_Y = r.ReadInt32();
                     Speed_X = r.ReadInt32();
                     Speed_Y = r.ReadInt32();
-                    Index = r.ReadInt32();
+                    index = r.ReadInt32();
                 }
             }
-            public class Background : FilePosition
+            [Serializable()]
+            public class Background : GameMakerStructure
             {
                 public bool Visible;
                 public bool Foreground;
@@ -744,7 +810,8 @@ namespace GameMaker
                     Stretch = r.ReadIntBool();
                 }
             };
-            public class Instance : FilePosition
+            [Serializable()]
+            public class Instance : GameMakerStructure
             {
                 public int X;
                 public int Y;
@@ -768,7 +835,8 @@ namespace GameMaker
                     Rotation = r.ReadSingle();
                 }
             };
-            public class Tile : FilePosition
+            [Serializable()]
+            public class Tile : GameMakerStructure
             {
                 public int X;
                 public int Y;
@@ -801,8 +869,8 @@ namespace GameMaker
                     Ocupancy = mixed >> 24;
                 }
             };
-            public string Name { get; private set; }
-            public string Caption { get; private set; }
+            public string Name { get;  set; }
+            public string Caption { get;  set; }
 
             public int Width;
             public int Height;
@@ -832,15 +900,17 @@ namespace GameMaker
                 int viewsOffset = r.ReadInt32();
                 int instancesOffset = r.ReadInt32();
                 int tilesOffset = r.ReadInt32();
-                Backgrounds = File.ArrayFromOffset<Background>(r, backgroundsOffset);
-                Views = File.ArrayFromOffset<View>(r, viewsOffset);
-                Objects = File.ArrayFromOffset<Instance>(r, instancesOffset);
-                Tiles = File.ArrayFromOffset<Tile>(r, tilesOffset);
+                Backgrounds = ArrayFromOffset<Background>(r, backgroundsOffset);
+                Views = ArrayFromOffset<View>(r, viewsOffset);
+                Objects = ArrayFromOffset<Instance>(r, instancesOffset);
+                Tiles = ArrayFromOffset<Tile>(r, tilesOffset);
             }
         }
-        public class Font : FilePosition, NamedResrouce, ILuaObject
+        [Serializable()]
+        public class Font : GameMakerStructure, INamedResrouce, ILuaObject
         {
-            public class Glyph : FilePosition, ILuaObject
+            [Serializable()]
+            public class Glyph : GameMakerStructure, ILuaObject
             {
                 public short ch;
                 public short x;
@@ -925,12 +995,13 @@ namespace GameMaker
                 r.BaseStream.Position = pos;
                 ScaleW = r.ReadSingle();
                 ScaleH = r.ReadSingle();
-                Glyphs = File.ArrayFromOffset<Glyph>(r);
+                Glyphs = ArrayFromOffset<Glyph>(r);
             }
 
 
         }
-        public class RawAudio : FilePosition, FileDataResource
+
+        public class RawAudio : GameMakerStructure, IFileDataResource
         {
             public int Size { get; private set; }
             public Stream Data
@@ -946,8 +1017,14 @@ namespace GameMaker
              //   RawSound = r.ReadBytes(Size);
             }
         }
-        public class Script : FilePosition, FileDataResource, NamedResrouce {
+        public class Script : GameMakerStructure, IFileDataResource, INamedResrouce {
             public string Name { get; set; }
+            public Code Code {
+                get
+                {
+                    return _scriptIndex == -1 ? null : File.Codes[_scriptIndex];
+                }
+            }
             int _scriptIndex;
             public Stream Data
             {
@@ -975,7 +1052,7 @@ namespace GameMaker
             }
         }
 
-        public class Code : FilePosition, FileDataResource, NamedResrouce
+        public class Code : GameMakerStructure, IFileDataResource, INamedResrouce
         {
             public string Name { get; set; }
             public int Size { get; private set; }

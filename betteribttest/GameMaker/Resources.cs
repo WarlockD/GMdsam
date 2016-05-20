@@ -6,9 +6,143 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Runtime.Serialization;
+using System.Reflection;
+using System.Collections.Specialized;
 
 namespace GameMaker
 {
+
+    class SimplerLuaFormatter : IFormatter
+    {
+        SerializationBinder binder;
+        StreamingContext context;
+        ISurrogateSelector surrogateSelector;
+
+        public SimplerLuaFormatter()
+        {
+            context = new StreamingContext(StreamingContextStates.File);
+        }
+
+        public object Deserialize(System.IO.Stream serializationStream)
+        {
+            StreamReader sr = new StreamReader(serializationStream);
+
+            // Get Type from serialized data.
+            string line = sr.ReadLine();
+            char[] delim = new char[] { '=' };
+            string[] sarr = line.Split(delim);
+            string className = sarr[1];
+            Type t = Type.GetType(className);
+
+            // Create object of just found type name.
+            Object obj = FormatterServices.GetUninitializedObject(t);
+
+            // Get type members.
+            MemberInfo[] members = FormatterServices.GetSerializableMembers(obj.GetType(), Context);
+
+            // Create data array for each member.
+            object[] data = new object[members.Length];
+
+            // Store serialized variable name -> value pairs.
+            StringDictionary sdict = new StringDictionary();
+            while (sr.Peek() >= 0)
+            {
+                line = sr.ReadLine();
+                sarr = line.Split(delim);
+
+                // key = variable name, value = variable value.
+                sdict[sarr[0].Trim()] = sarr[1].Trim();
+            }
+            sr.Close();
+
+            // Store for each member its value, converted from string to its type.
+            for (int i = 0; i < members.Length; ++i)
+            {
+                FieldInfo fi = ((FieldInfo) members[i]);
+                if (!sdict.ContainsKey(fi.Name))
+                    throw new SerializationException("Missing field value : " + fi.Name);
+                data[i] = System.Convert.ChangeType(sdict[fi.Name], fi.FieldType);
+            }
+
+            // Populate object members with theri values and return object.
+            return FormatterServices.PopulateObjectMembers(obj, members, data);
+        }
+        void SerializeArray(StreamWriter sw, System.Collections.IEnumerable e)
+        {
+            sw.WriteLine("{ ");
+            bool comma = false;
+            foreach (var o in e)
+            {
+                if (comma) { comma = true; sw.Write(", "); }
+                SerializePump(sw, e);
+            }
+            sw.WriteLine(" }");
+        }
+        void SerializePump(StreamWriter sw, object graph,string table=null)
+        {
+            MemberInfo[] members = FormatterServices.GetSerializableMembers(graph.GetType(), Context);
+            object[] objs = FormatterServices.GetObjectData(graph, members);
+            if (table != null) sw.Write("{0} = ", table);
+            sw.Write("{ ");
+            for (int i = 0; i < objs.Length; ++i)
+            {
+                sw.Write(members[i].Name);
+                sw.Write(" = ");
+                SerializeValue(sw,objs[i]);
+            }
+            sw.WriteLine(" }");
+        }
+        void SerializeValue(StreamWriter sw, object o)
+        {
+            switch (Type.GetTypeCode(o.GetType()))
+            {
+                case TypeCode.String:
+                    sw.Write("\"");
+                    sw.Write(o.ToString());
+                    sw.Write("\"");
+                    break;
+                case TypeCode.Boolean:
+                    sw.Write((bool) o ? "true" : "false");
+                    break;
+                default: // otherwise check if its an array
+                    if (o.GetType().IsPrimitive) sw.Write(o.ToString()); // default
+                    else if (o is System.Collections.IEnumerable) SerializeArray(sw, o as System.Collections.IEnumerable);
+                    else SerializePump(sw, o);
+                    break;
+            }
+        }
+        public void Serialize(System.IO.Stream serializationStream, object graph)
+        {
+            StreamWriter sw = new StreamWriter(serializationStream);
+           
+            sw.WriteLine(" local ClassName=\"{0}\"", graph.GetType().FullName);
+            sw.WriteLine("local self = {}");
+            SerializePump(sw, graph);
+            serializationStream.Flush();
+        }
+
+        //  
+
+   
+
+        public ISurrogateSelector SurrogateSelector
+        {
+            get { return surrogateSelector; }
+            set { surrogateSelector = value; }
+        }
+        public SerializationBinder Binder
+        {
+            get { return binder; }
+            set { binder = value; }
+        }
+        public StreamingContext Context
+        {
+            get { return context; }
+            set { context = value; }
+        }
+    }
+
     public static class BinaryReaderExtensions
     {
         public static T[] ReadArray<T>(this BinaryReader r, int offset, int count) where T : struct
@@ -25,8 +159,8 @@ namespace GameMaker
             r.Read(data, 0, 4);
             return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
         }
-        
-        public static T[] ReadArray<T>(this BinaryReader r, int count) where T: struct
+
+        public static T[] ReadArray<T>(this BinaryReader r, int count) where T : struct
         {
             int size = Marshal.SizeOf<T>();
             byte[] bytes = r.ReadBytes(count * size);
@@ -38,7 +172,7 @@ namespace GameMaker
         {
             return r.ReadArray<uint>(offset, count);
         }
-        public static uint[] ReadUInt32(this BinaryReader r,  int count)
+        public static uint[] ReadUInt32(this BinaryReader r, int count)
         {
             return r.ReadArray<uint>(count);
         }
@@ -67,7 +201,7 @@ namespace GameMaker
             int b = r.ReadInt32();
             if (b != 1 && b != 0) throw new Exception("Expected bool to be 0 or 1");
             return b != 0;
-        } 
+        }
         /// <summary>
         /// Reads a string of a fixed lenght at position
         /// </summary>
@@ -129,11 +263,11 @@ namespace GameMaker
                 Entry[] entries = new Entry[count];
                 int[] ientries = r.ReadInt32(count);
                 for (int i = 0; i < count; i++)
-                    entries[i] = new Entry(i,ientries[i], i + 1 < count ? ientries[i] : -1);
+                    entries[i] = new Entry(i, ientries[i], i + 1 < count ? ientries[i] : -1);
                 return entries;
             }
         }
-        public static Entry[] ReadChunkEntries(this BinaryReader r,int offset)
+        public static Entry[] ReadChunkEntries(this BinaryReader r, int offset)
         {
             var pos = r.BaseStream.Position;
             r.BaseStream.Position = offset;
@@ -177,31 +311,11 @@ namespace GameMaker
             }
             r.BaseStream.Position = pos;
         }
-       
+
     }
     public partial class File
     {
-        static  T[] ArrayFromOffset<T>(BinaryReader r, int offset) where T : FilePosition, new()
-        {
-            var pos = r.BaseStream.Position;
-            r.BaseStream.Position = offset;
-            T[] ret = ArrayFromOffset<T>(r);
-            r.BaseStream.Position = pos;
-            return ret;
-        }
-        static  T[] ArrayFromOffset<T>(BinaryReader r) where T : FilePosition, new()
-        {
-            var entries = r.ReadChunkEntries();
-            if (entries.Length == 0) return new T[0];
-            T[] data = new T[entries.Length];
-            foreach (var e in r.ForEachEntry(entries))
-            {
-                T obj = new T();
-                obj.Read(r, e.Index);
-                data[e.Index] = obj;
-            }
-            return data;
-        }
+      
         class Chunk
         {
             public readonly int start;
@@ -210,7 +324,7 @@ namespace GameMaker
             public readonly string name;
             public Chunk(string name, int start, int size) { this.name = name; this.start = start; this.end = start + size; this.size = size; }
         }
-        static Dictionary<string, Chunk> fileChunks = null; 
+        static Dictionary<string, Chunk> fileChunks = null;
         static byte[] rawData = null;
         static string filename = null;
 
@@ -218,9 +332,9 @@ namespace GameMaker
         static List<string> stringList = null;
 
         static List<SpriteFrame> spriteframes = null;
-        static List<Texture> textures = null;  
-        static List<Sprite> sprites = null; 
-        static List<GObject> objects = null;  
+        static List<Texture> textures = null;
+        static List<Sprite> sprites = null;
+        static List<GObject> objects = null;
         static List<Room> rooms = null;
         static List<Background> backgrounds = null;
         static List<AudioFile> sounds = null;
@@ -228,7 +342,7 @@ namespace GameMaker
         static List<Font> fonts = null;
         static List<Code> codes = null;
         static List<Script> scripts = null;
-        static Dictionary<string, FilePosition> namedResourceLookup = new Dictionary<string, FilePosition>();
+        static Dictionary<string, GameMakerStructure> namedResourceLookup = new Dictionary<string, GameMakerStructure>();
         static void InternalLoad()
         {
             if (filename == null) throw new FileNotFoundException("No file name defined");
@@ -263,7 +377,7 @@ namespace GameMaker
                 {
                     string chunkName = r.ReadFixedString(4);
                     int chunkSize = r.ReadInt32();
-                    int chuckStart = (int)r.BaseStream.Position;
+                    int chuckStart = (int) r.BaseStream.Position;
                     chunk = new Chunk(chunkName, chuckStart, chunkSize);
                     fileChunks[chunkName] = chunk;
                     if (chunkName == "FORM") full_size = chunkSize; // special case for form
@@ -272,18 +386,18 @@ namespace GameMaker
             }
         }
 
-       public static IEnumerable<NamedResrouce> Search(string name)
+        public static IEnumerable<INamedResrouce> Search(string name)
         {
-            return namedResourceLookup.Where(x => x.Key.Contains(name)).Select(x => (NamedResrouce)x.Value);
+            return namedResourceLookup.Where(x => x.Key.Contains(name)).Select(x => (INamedResrouce) x.Value);
         }
 
-        public static bool TryLookup<T>(string name, out T ret) where T: FilePosition
+        public static bool TryLookup<T>(string name, out T ret) where T : GameMakerStructure
         {
-            FilePosition data;
+            GameMakerStructure data;
             if (namedResourceLookup.TryGetValue(name, out data))
             {
                 T t = data as T;
-                if(t != null)
+                if (t != null)
                 {
                     ret = t;
                     return true;
@@ -345,14 +459,14 @@ namespace GameMaker
                     Count = r.ReadInt32();
                     Start = r.ReadInt32();
                     Offsets = new int[Count];
-                    int save = (int)r.BaseStream.Position;
+                    int save = (int) r.BaseStream.Position;
                     r.BaseStream.Position = Start;
                     if (Count > 0)
                     {
                         for (int i = 0; i < Count; i++)
                         {
                             uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
-                            int position = (int)r.BaseStream.Position;
+                            int position = (int) r.BaseStream.Position;
                             var code = GMCodeUtil.getFromRaw(first);
                             Debug.Assert(code == GMCode.Push || code == GMCode.Pop || code == GMCode.Call);
                             int offset = r.ReadInt32() & 0x00FFFFFF;
@@ -386,15 +500,15 @@ namespace GameMaker
                     int offset = r.Key;
                     int debug0 = BitConverter.ToInt32(rawData, offset);
                     int index = stringToIndex[r.Value.Name];
-                    rawData[offset+0] = (byte)((index) & 0xFF);
-                    rawData[offset + 1] = (byte)((index >> 8) & 0xFF);
-                    rawData[offset + 2] = (byte)((index >> 16) & 0xFF);
+                    rawData[offset + 0] = (byte) ((index) & 0xFF);
+                    rawData[offset + 1] = (byte) ((index >> 8) & 0xFF);
+                    rawData[offset + 2] = (byte) ((index >> 16) & 0xFF);
                 }
             }
         }
         static void RefactorCode()
         {
-            if(codes == null)
+            if (codes == null)
             {
                 CheckList("CODE", ref codes); // fill out all the scripts first
                 RefactorCodeManager rcm = new RefactorCodeManager(File.rawData);
@@ -419,21 +533,21 @@ namespace GameMaker
             CheckList("OBJT", ref objects);
             CheckList("SCPT", ref scripts);
             RefactorCode();
-            
+
             DebugPring();
         }
         public static IReadOnlyList<Script> Scripts { get { CheckList("SCPT", ref scripts); return scripts; } }
         public static IReadOnlyList<string> Strings { get { CheckStrings(); return stringList; } }
         public static IReadOnlyList<Code> Codes { get { RefactorCode(); return codes; } }
         public static IReadOnlyList<Font> Fonts { get { CheckList("FONT", ref fonts); return fonts; } }
-        public static IReadOnlyList<Texture> Textures { get { CheckList("TXTR",ref textures); return textures; } }
+        public static IReadOnlyList<Texture> Textures { get { CheckList("TXTR", ref textures); return textures; } }
         public static IReadOnlyList<SpriteFrame> SpriteFrames { get { CheckList("TPAG", ref spriteframes); return spriteframes; } }
         public static IReadOnlyList<Sprite> Sprites { get { CheckList("SPRT", ref sprites); return sprites; } }
         public static IReadOnlyList<GObject> Objects { get { CheckList("OBJT", ref objects); return objects; } }
         public static IReadOnlyList<Room> Rooms { get { CheckList("ROOM", ref rooms); return rooms; } }
         public static IReadOnlyList<Background> Backgrounds { get { CheckList("BGND", ref backgrounds); return backgrounds; } }
-        public static IReadOnlyList<AudioFile> Sounds { get { CheckList("AUDO",ref rawAudio);  CheckList("SOND",ref sounds); return sounds; } }
-        static void CheckList<T>(string chunkName, ref List<T> list) where T : FilePosition, new()
+        public static IReadOnlyList<AudioFile> Sounds { get { CheckList("AUDO", ref rawAudio); CheckList("SOND", ref sounds); return sounds; } }
+        static void CheckList<T>(string chunkName, ref List<T> list) where T : GameMakerStructure, new()
         {
             if (rawData == null) throw new FileLoadException("Data.win file not open");
             if (list == null) list = new List<T>();
@@ -444,9 +558,9 @@ namespace GameMaker
                 if (fileChunks.TryGetValue(chunkName, out chunk)) ReadList(list, r, chunk.start, chunk.end);// textures
             }
         }
-        static void ReadList<T>(List<T> list, BinaryReader r, int start, int end) where T : FilePosition, new()
+        static void ReadList<T>(List<T> list, BinaryReader r, int start, int end) where T : GameMakerStructure, new()
         {
-            bool isNamedResouce = typeof(T).GetInterfaces().Contains(typeof(NamedResrouce));
+            bool isNamedResouce = typeof(T).GetInterfaces().Contains(typeof(INamedResrouce));
             list.Clear();
             foreach (var e in r.ForEachEntry(start))
             {
@@ -455,8 +569,8 @@ namespace GameMaker
                 list.Add(t);
                 if (isNamedResouce)
                 {
-                    NamedResrouce nr = t as NamedResrouce;
-                    if (namedResourceLookup == null) namedResourceLookup = new Dictionary<string, FilePosition>();
+                    INamedResrouce nr = t as INamedResrouce;
+                    if (namedResourceLookup == null) namedResourceLookup = new Dictionary<string, GameMakerStructure>();
                     namedResourceLookup.Add(nr.Name, t);
                 }
             }
@@ -531,26 +645,40 @@ namespace GameMaker
                         }
                 }
             }
+            { // xmltest
+                const string filename = "room_all.xml";
+                if (System.IO.File.Exists(filename)) System.IO.File.Delete(filename);
+                using (System.IO.FileStream file = new System.IO.FileStream(filename, FileMode.Create))
+                {
+                    System.Xml.Serialization.XmlSerializer writer = new System.Xml.Serialization.XmlSerializer(typeof(File.AudioFile));
+                    writer.Serialize(file, Sounds[45]);
+                    file.Flush();
+                } 
+            }
+            {
+                const string filename = "room_all.lua";
+                if (System.IO.File.Exists(filename)) System.IO.File.Delete(filename);
+                using (System.IO.FileStream file = new System.IO.FileStream(filename, FileMode.Create))
+                {
+                    file.Position = 0;
+                    SimplerLuaFormatter writer = new SimplerLuaFormatter();
+                    writer.Serialize(file, Sounds[45]);
+                    file.Flush();
+                    file.Close();
+                }
+            }
+            //  
+            // var path = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "//SerializationOverview.xml";
         }
+        
         public static void LoadDataWin(string filename)
         {
             if (File.filename != null && File.rawData != null && File.filename == filename) return; // don't do anything, file already loaded
             File.rawData = null; // clear old data
             File.filename = filename;
             InternalLoad();
-            /*
-             Chunk chunk;
-            if (fileChunks.TryGetValue("TXTR", out chunk)) ReadList(textures, r, chunk.start, chunk.end);// textures
-            if (fileChunks.TryGetValue("SPRT", out chunk)) ReadList(sprites, r, chunk.start, chunk.end);// sprites
-            if (fileChunks.TryGetValue("OBJT", out chunk)) ReadList(objects, r, chunk.start, chunk.end);// sprites
-            if (fileChunks.TryGetValue("BGND", out chunk)) ReadList(backgrounds, r, chunk.start, chunk.end);// backgrounds
-            if (fileChunks.TryGetValue("SOND", out chunk)) ReadList(sounds, r, chunk.start, chunk.end);// audio files
-            if (fileChunks.TryGetValue("AUDO", out chunk)) ReadList(rawAudio, r, chunk.start, chunk.end);// audio files
 
-            if (fileChunks.TryGetValue("FONT", out chunk)) ReadList(fonts, r, chunk.start, chunk.end);// audio files
-            if (fileChunks.TryGetValue("ROOM", out chunk)) ReadList(rooms, r, chunk.start, chunk.end);// sprites
-             */
-            
+
         }
     }
 }

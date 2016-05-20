@@ -6,22 +6,52 @@ using System.Threading.Tasks;
 using GameMaker.Dissasembler;
 using System.IO;
 using System.Threading;
+using GameMaker.Writers;
+using System.Text.RegularExpressions;
 
 namespace GameMaker
 {
+    public enum OutputType
+    {
+        LoveLua,
+        JavaScript
+    }
     public class GMContext
     {
+        public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
+        public static ILBlock DecompileBlock(GMContext context, Stream code)
+        {
+            var instructionsNew = GameMaker.Dissasembler.Instruction.Dissasemble(code, context);
+            if (context.doAsm || context.Debug)
+            {
+                string asm_filename = context.DebugName;
+                var list = instructionsNew.Values.Where(x => x != null).ToList();
+                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(list, Path.ChangeExtension(asm_filename, "asm"));
+                var graph = FlowAnalysis.ControlFlowGraphBuilder.Build(list);
+                string dot_filename =  context.DebugName + ".dot";
+                try
+                {
+                    graph.ExportGraph().Save(Path.Combine(asm_filename, "dot"));
+                }
+                catch (Exception e)
+                {
+                    context.Error("Could not create .dot file: {0}", Path.ChangeExtension(asm_filename, "dot"));
+                }
+            }
+            return new GameMaker.Dissasembler.ILAstBuilder().Build(instructionsNew, false, context);
+        }
+        const string ObjectNameHeader = "gml_Object_";
         enum MType{
             Info,
             Warning,
             Error,
             Fatal,
-
         }
         class Message : IComparable<Message>
         {
             public DateTime TimeStamp;
             public MType Type;
+            public string DebugName;
             public string Msg;
             public string Header;
             public ILNode Node = null;
@@ -68,6 +98,7 @@ namespace GameMaker
             }
             return dfilename;
         }
+       
         public void DumpMessages()
         {
             lock (messages)
@@ -75,13 +106,7 @@ namespace GameMaker
                 if (messages.Count > 0)
                 {
                   //  messages.Sort();
-                    if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
-                    {
-                        string filename = FixDebugFileName(ErrorFileName);
-                        using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.OpenOrCreate)))
-                            sw.WriteLine("Error Start: {0}", DateTimeStamp);
-                        HasOpenedFile = true;
-                    }
+                    
                     using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.Append)))
                     {
                         foreach (var m in messages)
@@ -116,12 +141,54 @@ namespace GameMaker
                 ct.ThrowIfCancellationRequested();
             }
         }
+        void ToConsole(string s)
+        {
+            Console.WriteLine(s);
+            System.Diagnostics.Debug.WriteLine(s); // just because I don't look at console all the time
+        }
+        void ToConsole(Message m)
+        {
+            if(consoleLevel >= m.Type)
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append(m.Header);
+                sb.Append(m.Msg);
+                ToConsole(sb.ToString());
+                if(m.Node != null)
+                {
+                    using (StringWriter strw = new StringWriter())
+                    {
+                        var ptext = new PlainTextOutput(strw);
+                        ptext.Header = m.Header;
+                        ptext.Indent();
+                        ptext.Write(m.Node.ToString());
+                        ptext.Unindent();
+                        ptext.WriteLine();
+                        ToConsole(strw.ToString());
+                    }
+                }
+            }
+        }
         void DoMessage(MType type, string msg, ILNode node, params object[] o)
         {
+            if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
+            {
+                string filename = FixDebugFileName(ErrorFileName);
+                using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.OpenOrCreate)))
+                    sw.WriteLine("Error Start: {0}", DateTimeStamp);
+                HasOpenedFile = true;
+            }
+
             var time = DateTime.Now;
-            Message m = new Message() { TimeStamp = time, Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), DebugName), Msg = msg, Node = node };
+            if (o != null && o.Length > 0) msg = string.Format(msg, o);
+            Message m = new Message() { DebugName = this.DebugName, TimeStamp = time, Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), DebugName), Msg = msg, Node = node };
             lock (messages) messages.Add(m);
-            if (type == MType.Fatal) HasFatalError = true;
+            ToConsole(m);
+            if (type == MType.Fatal)
+            {
+                DumpMessages();
+                Environment.Exit(-1);
+            }
         }
         public void Info(string msg, params object[] o)
         {
@@ -155,17 +222,17 @@ namespace GameMaker
         public void FatalError(string msg, ILNode node, params object[] o)
         {
             DoMessage(MType.Fatal, msg, node, o);
-            HasFatalError = true;
         }
         List<Message> messages = new List<Message>();
         public CancellationToken ct;
+        public bool doGlobals = true;
         public bool makeObject = false;
-        public bool doLua = false;
+        public OutputType outputType = OutputType.LoveLua;
         public bool doAsm = false;
-        public bool doLuaObject = false;
         public string DebugName = null;
         public bool doThreads = false;
         public bool Debug = false;
+        MType consoleLevel = MType.Warning;
         public static bool HasFatalError { get; private set; }
         static GMContext()
         {
@@ -178,9 +245,8 @@ namespace GameMaker
             {
                 
                 ctx.makeObject = makeObject;
-                ctx.doLua = doLua;
+                ctx.outputType = outputType;
                 ctx.doAsm = doAsm;
-                ctx.doLuaObject = doLuaObject;
                 ctx.DebugName = DebugName + "_clone"; // for safty, but it should be changed
                 ctx.doThreads = doThreads;
                 ctx.Debug = Debug;

@@ -216,7 +216,7 @@ namespace GameMaker.Dissasembler
                 if (args != null)
                 {
                     
-                    ILCall call = new ILCall() { Name = fun_name, Type = expr.InferredType, Arguments = args.Select(x => (ILNode) x).ToList() };
+                    ILCall call = new ILCall() { Name = fun_name, Type = expr.InferredType, Arguments = args };
                    
                     expr.Arguments.Clear();
                     expr.Operand = call; // fix it
@@ -672,6 +672,54 @@ namespace GameMaker.Dissasembler
         }
       
         GMContext context;
+        // IfElse fixes two things.  
+        // 1. A long list of if then statements that have no else
+        // 2. An inbeded if statment that goes to else, then continues as such
+        static void CombineIFThenList(ILBlock block)
+        {
+            ILElseIfChain ifelse = null;
+            for (int i=0; i < block.Body.Count; i++)
+            {
+                ILCondition c = block.Body[i] as ILCondition;
+                int start = i;
+                while (c != null && (c.FalseBlock == null || c.FalseBlock.Body.Count > 0))
+                {
+                    if (ifelse == null) ifelse = new ILElseIfChain();
+                    ifelse.Conditions.Add(c);
+                    c = block.Body.ElementAtOrDefault(++i) as ILCondition;
+                }
+                if (ifelse != null)
+                {
+                    block.Body[start] = ifelse;
+                    block.Body.RemoveRange(start + 1, ifelse.Conditions.Count - 1);
+                    ifelse = null; // out of scope
+                }
+            }
+        }
+        static void CombineIfThenElse(ILBlock block)
+        {
+            List<ILCondition> chain = null;
+            for (int i = 0; i < block.Body.Count; i++)
+            {
+                ILCondition c = block.Body[i] as ILCondition;
+                while (c != null && c.FalseBlock != null && c.FalseBlock.Body.Count == 1)
+                {
+                    ILCondition next = c.FalseBlock.Body[0] as ILCondition;
+                    if (next == null) break;
+                    chain = chain ?? new List<ILCondition>();
+                    chain.Add(c);
+                    c.FalseBlock = null;
+                    c = next;
+                }
+                if (chain != null)
+                {
+                    ILElseIfChain ifelse = new ILElseIfChain() { Conditions = chain, Else = c.FalseBlock };
+                    block.Body[i] = ifelse;
+                    // ifelse.
+                }
+                chain = null; // out of scope
+            }
+        }
         /// <summary>
         /// Combines all the if statements to an elseif chain if we hit a case or something
         /// </summary>
@@ -681,28 +729,10 @@ namespace GameMaker.Dissasembler
         {
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                List<ILCondition> chain = null;
-                for (int i = 0; i < block.Body.Count; i++)
-                {
-                    ILCondition c = block.Body[i] as ILCondition;
-                    while (c != null && c.FalseBlock != null && c.FalseBlock.Body.Count == 1)
-                    {
-                        ILCondition next = c.FalseBlock.Body[0] as ILCondition;
-                        if (next == null) break;
-                        chain = chain ?? new List<ILCondition>();
-                        chain.Add(c);
-                        c.FalseBlock = null;
-                        c = next;
-                    }
-                    if(chain != null)
-                    {
-                        ILElseIfChain ifelse = new ILElseIfChain() { Conditions = chain, Else = c.FalseBlock };
-                        block.Body[i] = ifelse;
-                       // ifelse.
-                    }
-                    chain = null; // out of scope
-                }
+                CombineIfThenElse(block); // usally made by switch statements
+                CombineIFThenList(block); // just a list of ifs
             }
+            
         }
         // Fix for compiler generated loops
         public void FixAllPushes(List<ILNode> ast) // on the offchance we have a bunch of pushes, fix them for latter
@@ -844,7 +874,7 @@ namespace GameMaker.Dissasembler
                     foreach (var kp in badCodes)
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
                     sw.WriteLine();
-                    var dwriter = new Writers.DebugWriter(context,sw);
+                    var dwriter = new Writers.BlockToCode(context, new Writers.DebugFormater(), sw);
                     dwriter.WriteMethod("bad_blocks", badmethod);
                 }
                 context.Error("Before graph sanity check failed, look at bad_block_dump.txt");
@@ -901,7 +931,7 @@ namespace GameMaker.Dissasembler
                 do
                 {
                     modified = false;
-                    if (context.doLua) modified |= block.RunOptimization(new SimpleControlFlow(method, context).DetectSwitchLua);
+                    if (context.outputType == OutputType.LoveLua) modified |= block.RunOptimization(new SimpleControlFlow(method, context).DetectSwitchLua);
 
                     modified |= block.RunOptimization(MatchVariablePush); // checks pushes for instance or indexs for vars
                     modified |= block.RunOptimization(SimpleAssignments);
@@ -913,14 +943,13 @@ namespace GameMaker.Dissasembler
                     modified |= block.RunOptimization(MultiDimenionArray);
                     modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
-                    
-                    if (context.doLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
+
+                    // fixes expressions that add strings
+                    if (context.outputType == OutputType.LoveLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
 
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
-                  //  modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyComplexTernaryOperatorPart1);
-               //     modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyComplexTernaryOperatorPart2);
 
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).FixOptimizedForLoops);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);                                     
@@ -961,7 +990,9 @@ namespace GameMaker.Dissasembler
             // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
             // cause I don't convert it and mabye not converting all bt's to bf's dosn't
             FixIfStatements(method);
-            if (context.doLua) CombineIfStatements(method);
+
+            // final fix to clean up switch statements and remove extra ends
+            if (context.outputType == OutputType.LoveLua) CombineIfStatements(method);
            
 
             Optimize.RemoveRedundantCode(method);

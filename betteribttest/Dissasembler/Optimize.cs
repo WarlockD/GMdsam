@@ -395,43 +395,7 @@ namespace GameMaker.Dissasembler
             return modified;
         }
 
-        // we move all the calls to a ICall Node so we can see them easier.  We convert all the ILExpression bits as most
-        // calls have constants anyway, makes it easeir to process
-        public static void ReplaceExpressionsWithCalls(ILBlock method)
-        {
-            bool modified;
-            do
-            {
-                modified = false;
-                foreach (var expr in method.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Call && x.Operand is string))
-                {
-                    ILCall call = new ILCall() { Name = expr.Operand as string };
-                    foreach (var arg in expr.Arguments)
-                    {
-                        switch (arg.Code)
-                        {
-                            case GMCode.Constant:
-                                call.Arguments.Add(arg.Operand as ILValue);
-                                break;
-                            case GMCode.Var:
-                                call.Arguments.Add(arg.Operand as ILVariable);
-                                break;
-                            case GMCode.Call:
-                                if (arg.Operand is string) goto default; // not processed yet
-                                call.Arguments.Add(arg.Operand as ILCall);
-                                break;
-                            default:
-                                call.Arguments.Add(arg);
-                                break;
-                        }
-                    }
-                    expr.Operand = call;
-                    expr.Arguments.Clear();
-                    call.Type = expr.InferredType;
-                    modified = true;
-                }
-            } while (modified);
-        }
+     
         // GM uses 1 and 0 as bool but uses conv to convert them so lets fix calls
         // like check() == 1 and change them to just check()
 

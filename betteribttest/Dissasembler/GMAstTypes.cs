@@ -15,6 +15,7 @@ namespace GameMaker.Dissasembler
 
     public abstract class ILNode
     {
+        public string Comment = null;
         // hack
         public static string EnviromentOverride = null;
         // removed ILList<T>
@@ -115,12 +116,12 @@ namespace GameMaker.Dissasembler
         }
         public void DebugSave(string MethodName, TextWriter tw)
         {
-            using (var w = new Writers.DebugWriter(null, tw))
+            using (var w = new Writers.BlockToCode(null, new Writers.DebugFormater(), tw))
                 w.WriteMethod(MethodName, this);
         }
         public void DebugSave(string MethodName, string FileName)
         {
-            using (var w = new Writers.DebugWriter(null, FileName))
+            using (var w = new Writers.BlockToCode(new GMContext(), new Writers.DebugFormater(), FileName))
                 w.WriteMethod(MethodName, this);
         }
         public void DebugSaveLua(string filename, string fileHeader = null)
@@ -174,7 +175,8 @@ namespace GameMaker.Dissasembler
         public string Name;
         public string Enviroment = null;
         public string FunctionNameOverride = null;
-        public List<ILNode> Arguments = new List<ILNode>();
+        public string FullTextOverride = null;
+        public List<ILExpression> Arguments = new List<ILExpression>();
         public GM_Type Type = GM_Type.NoType; // return type
         public override void WriteTo(ITextOutput output)
         {
@@ -402,7 +404,17 @@ namespace GameMaker.Dissasembler
         public bool isLocal = false; // used when we 100% know self is not used
         public string Name;
         public ILNode Instance = null; // We NEED this, unless its local or generated
-        public string InstanceName=null;
+        string instance_name = null;
+
+        public string InstanceName
+        {
+            get {
+                if (isLocal || Instance == null) return null;
+                Debug.Assert(instance_name != null);
+                return instance_name;
+            }
+            set { instance_name = value; }
+        }
         public bool isGenerated = false;
         public ILExpression Index = null; // not null if we have an index
         public bool isArray=false;
@@ -429,6 +441,13 @@ namespace GameMaker.Dissasembler
                 return sb.ToString();
             }
         }
+        public bool isGlobal
+        {
+            get
+            {
+                return InstanceName == "global"; // mabye check the instance number.
+            }
+        }
         public bool isFixedVar {  get
             {
                 return Index.Code == GMCode.Constant || (Index.Code == GMCode.Array2D && Index.Arguments[0].Code == GMCode.Constant && Index.Arguments[1].Code == GMCode.Constant);
@@ -436,9 +455,9 @@ namespace GameMaker.Dissasembler
         }
         public bool Equals(ILVariable obj)
         {
-            if (object.ReferenceEquals(obj, null)) return false;
-            if (object.ReferenceEquals(obj, this)) return true;
-            return obj.Name == Name && obj.InstanceName == InstanceName;
+            if (obj.isArray != this.isArray || obj.isLocal != this.isLocal) return false; // easy
+            if (isLocal) return obj.Name == Name;
+            else return obj.Name == Name && obj.InstanceName == InstanceName;
         }
         public override bool Equals(object obj)
         {
@@ -639,6 +658,29 @@ namespace GameMaker.Dissasembler
             this.ILRanges = new List<ILRange>(i.ILRanges);
             InferredType = i.InferredType;
             ExpectedType = i.ExpectedType;
+        }
+        public static ILExpression MakeConstant(string s, string valuetext = null)
+        {
+            ILValue v = new ILValue(s);
+            if (valuetext != null) v.ValueText = valuetext;
+            return new ILExpression(GMCode.Constant, v);
+        }
+        public static ILExpression MakeConstant(int i, string valuetext = null)
+        {
+            ILValue v = new ILValue(i);
+            if (valuetext != null) v.ValueText = valuetext;
+            return new ILExpression(GMCode.Constant, v);
+        }
+        // used to make a temp self holder value
+        public static ILExpression MakeVariable(string name, bool local=true)
+        {
+            ILVariable v = new ILVariable() { Name = name, isLocal = local , isResolved = true , isGenerated = true };
+            if (!local)
+            {
+                v.Instance = new ILValue(-1);
+                v.InstanceName = "self";
+            }
+            return new ILExpression(GMCode.Var, v);
         }
         public ILExpression(ILExpression i, List<ILRange> range = null) // copy it
         {
