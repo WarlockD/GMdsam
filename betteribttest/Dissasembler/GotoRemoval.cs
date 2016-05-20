@@ -11,10 +11,9 @@ namespace GameMaker.Dissasembler
     {
         Dictionary<ILNode, ILNode> parent = new Dictionary<ILNode, ILNode>();
         Dictionary<ILNode, ILNode> nextSibling = new Dictionary<ILNode, ILNode>();
-        GMContext context;
-        public GotoRemoval(GMContext context)
+
+        public GotoRemoval()
         {
-            this.context = context;
         }
         public void RemoveGotos(ILBlock method)
         {
@@ -58,10 +57,10 @@ namespace GameMaker.Dissasembler
                 }
             } while (modified);
 
-            RemoveRedundantCode(context,method);
+            RemoveRedundantCode(method);
         }
 
-        public static void RemoveRedundantCode(GMContext context,ILBlock method)
+        public static void RemoveRedundantCode(ILBlock method)
         {
             // Remove dead lables and nops and any popzs left
             HashSet<ILLabel> liveLabels = new HashSet<ILLabel>(method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()));
@@ -92,7 +91,7 @@ namespace GameMaker.Dissasembler
             // Remove redundant case blocks altogether
             foreach (ILSwitch ilSwitch in method.GetSelfAndChildrenRecursive<ILSwitch>())
             {
-                foreach (ILBlock ilCase in ilSwitch.CaseBlocks)
+                foreach (ILBlock ilCase in ilSwitch.Cases)
                 {
                     Debug.Assert(ilCase.EntryGoto == null);
 
@@ -108,11 +107,11 @@ namespace GameMaker.Dissasembler
                 }
                 // fix case block
 
-                var defaultCase = ilSwitch.CaseBlocks.SingleOrDefault(cb => cb.Values == null);
+                var defaultCase = ilSwitch.Cases.SingleOrDefault(cb => cb.Values == null);
                 // If there is no default block, remove empty case blocks
-                if (defaultCase == null || (defaultCase.Body.Count == 1 && defaultCase.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
+                if (ilSwitch.Default == null || (ilSwitch.Default.Body.Count == 1 && ilSwitch.Default.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
                 {
-                    ilSwitch.CaseBlocks.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
+                    ilSwitch.Cases.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
                 }
             }
  
@@ -148,7 +147,7 @@ namespace GameMaker.Dissasembler
             if (modified)
             {
                 // More removals might be possible
-                new GotoRemoval(context).RemoveGotos(method);
+                new GotoRemoval().RemoveGotos(method);
             }
         }
 

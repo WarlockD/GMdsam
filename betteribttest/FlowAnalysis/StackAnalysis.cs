@@ -157,11 +157,11 @@ namespace GameMaker.Dissasembler
         ILVariable BuildVar(int operand, int extra)
         {
             // int loadtype = operand >> 24;
-            ILVariable v = new ILVariable() { Name = context.LookupString(operand & 0x1FFFFF), Instance = new ILValue(extra)  };// standard for eveyone
+            ILVariable v = new ILVariable() { Name = Context.LookupString(operand & 0x1FFFFF), Instance = new ILValue(extra)  };// standard for eveyone
 
             if (extra != 0) {
                 v.isResolved = true; // very simple var
-                v.InstanceName = context.InstanceToString(extra);
+                v.InstanceName = Context.InstanceToString(extra);
             } else {
                 v.isResolved = false;
                 v.isArray = (extra == 0 && operand >= 0);
@@ -327,7 +327,7 @@ namespace GameMaker.Dissasembler
                             ILValue value = e.Operand as ILValue;
                             Debug.Assert(v != null && value.Value is int); // should be there and resolved
                             v.Instance = value;
-                            v.InstanceName = context.InstanceToString((int) value);
+                            v.InstanceName = Context.InstanceToString((int) value);
                         }
                         break;
                     default:
@@ -387,7 +387,7 @@ namespace GameMaker.Dissasembler
                                 ILValue value = e.Operand as ILValue;
                                 Debug.Assert(v != null && value.Value is int); // should be there and resolved
                                 v.Instance = value;
-                                v.InstanceName = context.InstanceToString((int) value);
+                                v.InstanceName = Context.InstanceToString((int) value);
                             }
                             break;
                         default:
@@ -671,7 +671,6 @@ namespace GameMaker.Dissasembler
             }
         }
       
-        GMContext context;
         // IfElse fixes two things.  
         // 1. A long list of if then statements that have no else
         // 2. An inbeded if statment that goes to else, then continues as such
@@ -804,11 +803,11 @@ namespace GameMaker.Dissasembler
             {
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.Select(b => (ILNode) b).ToList();
-                method.DebugSave(context.DebugName, context.MakeDebugFileName("bad_after_stuff.txt"));
-                context.Error("After Loop And Conditions failed, look at bad_after_stuff.txt");
+                method.DebugSave(Context.DebugName, Context.MakeDebugFileName("bad_after_stuff.txt"));
+                Context.Error("After Loop And Conditions failed, look at bad_after_stuff.txt");
                 return true;
             }
-            if(context.Debug) Debug.Assert(badblocks.Count == 0);
+            if(Context.Debug) Debug.Assert(badblocks.Count == 0);
             return false;
          
         }
@@ -845,7 +844,7 @@ namespace GameMaker.Dissasembler
             if (badblocks.Count > 0)
             {
                 ControlFlowLabelMap map = new ControlFlowLabelMap(method);
-                method.DebugSave(context.DebugName, context.MakeDebugFileName("bad_stuff.txt"));
+                method.DebugSave(Context.DebugName, Context.MakeDebugFileName("bad_stuff.txt"));
 
                 //  HashSet<ILBasicBlock> callies = new HashSet<ILBasicBlock>();
                 foreach (var bb in badblocks.ToList())
@@ -866,7 +865,7 @@ namespace GameMaker.Dissasembler
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.OrderBy(b => b.GotoLabelName()).Select(b => (ILNode) b).ToList();
                 
-                string dfilename = context.MakeDebugFileName("bad_blocks.txt");
+                string dfilename = Context.MakeDebugFileName("bad_blocks.txt");
                
                 using (StreamWriter sw = new StreamWriter(dfilename))
                 {
@@ -874,10 +873,10 @@ namespace GameMaker.Dissasembler
                     foreach (var kp in badCodes)
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
                     sw.WriteLine();
-                    var dwriter = new Writers.BlockToCode(context, new Writers.DebugFormater(), sw);
+                    var dwriter = new Writers.BlockToCode(new Writers.DebugFormater(), sw);
                     dwriter.WriteMethod("bad_blocks", badmethod);
                 }
-                context.Error("Before graph sanity check failed, look at bad_block_dump.txt");
+                Context.Error("Before graph sanity check failed, look at bad_block_dump.txt");
                 return true;
             }
             return false;
@@ -904,11 +903,10 @@ namespace GameMaker.Dissasembler
                 }
             } while (modified);
         }
-        public ILBlock Build(SortedList<int, Instruction> code, bool optimize, GMContext context)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
+        public ILBlock Build(SortedList<int, Instruction> code, bool optimize)  //  List<string> StringList, List<string> InstanceList = null) //DecompilerContext context)
         {
             bool modified;
             if (code.Count == 0) return new ILBlock();
-            this.context = context;
             _method = code;
             this.optimize = optimize;
             List<ILNode> ast = BuildPreAst();
@@ -917,12 +915,12 @@ namespace GameMaker.Dissasembler
             FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
                 
             GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
-            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("raw.txt"));
+            if (Context.Debug) method.DebugSave(Context.DebugName, Context.MakeDebugFileName("raw.txt"));
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
-            if (context.Debug)
+            if (Context.Debug)
             {
-                new LoopsAndConditions(context).SaveGraph(method, context.MakeDebugFileName("basic_blocks.dot"));
-                method.DebugSave(context.DebugName, context.MakeDebugFileName("basic_blocks.txt"));
+                new LoopsAndConditions().SaveGraph(method, Context.MakeDebugFileName("basic_blocks.dot"));
+                method.DebugSave(Context.DebugName, Context.MakeDebugFileName("basic_blocks.txt"));
             }
 
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
@@ -931,7 +929,7 @@ namespace GameMaker.Dissasembler
                 do
                 {
                     modified = false;
-                    if (context.outputType == OutputType.LoveLua) modified |= block.RunOptimization(new SimpleControlFlow(method, context).DetectSwitchLua);
+                  modified |= block.RunOptimization(new SimpleControlFlow(method).DetectSwitch);
 
                     modified |= block.RunOptimization(MatchVariablePush); // checks pushes for instance or indexs for vars
                     modified |= block.RunOptimization(SimpleAssignments);
@@ -945,61 +943,61 @@ namespace GameMaker.Dissasembler
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
 
                     // fixes expressions that add strings
-                    if (context.outputType == OutputType.LoveLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
+                    if (Context.outputType == OutputType.LoveLua) modified |= block.RunOptimization(Optimize.FixLuaStringAdd); // by block
 
 
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyShortCircuit);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).SimplifyTernaryOperator);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyShortCircuit);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).SimplifyTernaryOperator);
 
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).FixOptimizedForLoops);
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).JoinBasicBlocks);                                     
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).FixOptimizedForLoops);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).JoinBasicBlocks);                                     
                     // somewhere, so bug, is leaving an empty block, I think because of switches
                     // It screws up the flatten block check for some reason
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, context).RemoveRedundentBlocks);
-                    if (GMContext.HasFatalError) return null;
+                    modified |= block.RunOptimization(new SimpleControlFlow(method).RemoveRedundentBlocks);
+                    if (Context.HasFatalError) return null;
                 } while (modified);
             }
-            if (context.Debug)
+            if (Context.Debug)
             {
-                method.DebugSave(context.DebugName, context.MakeDebugFileName("before_loop.txt"));
-                new LoopsAndConditions(context).SaveGraph(method, "before_loop.dot");
+                method.DebugSave(Context.DebugName, Context.MakeDebugFileName("before_loop.txt"));
+                new LoopsAndConditions().SaveGraph(method, "before_loop.dot");
             }
             if (BeforeConditionsDebugSainityCheck(method)) return null ;// sainity check, evething must be ready for this
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                new LoopsAndConditions(context).FindLoops(block);
+                new LoopsAndConditions().FindLoops(block);
             }
-            if (GMContext.HasFatalError) return null;
-            if (context.Debug) {
-                method.DebugSave(context.DebugName, context.MakeDebugFileName("before_conditions.txt"));
-                new LoopsAndConditions(context).SaveGraph(method, "before_conditions.dot");
+            if (Context.HasFatalError) return null;
+            if (Context.Debug) {
+                method.DebugSave(Context.DebugName, Context.MakeDebugFileName("before_conditions.txt"));
+                new LoopsAndConditions().SaveGraph(method, "before_conditions.dot");
             }
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                new LoopsAndConditions(context).FindConditions(block);
+                new LoopsAndConditions().FindConditions(block);
             }
-            if (GMContext.HasFatalError) return null;
+            if (Context.HasFatalError) return null;
 
-            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("before_flatten.txt"));
+            if (Context.Debug) method.DebugSave(Context.DebugName, Context.MakeDebugFileName("before_flatten.txt"));
             FlattenBasicBlocks(method);
-            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("before_gotos.txt"));
+            if (Context.Debug) method.DebugSave(Context.DebugName, Context.MakeDebugFileName("before_gotos.txt"));
             Optimize.RemoveRedundantCode(method);
-            new GotoRemoval(context).RemoveGotos(method);
+            new GotoRemoval().RemoveGotos(method);
 
-            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("before_if.txt"));
+            if (Context.Debug) method.DebugSave(Context.DebugName, Context.MakeDebugFileName("before_if.txt"));
             // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
             // cause I don't convert it and mabye not converting all bt's to bf's dosn't
             FixIfStatements(method);
 
             // final fix to clean up switch statements and remove extra ends
-            if (context.outputType == OutputType.LoveLua) CombineIfStatements(method);
+            if (Context.outputType == OutputType.LoveLua) CombineIfStatements(method);
            
 
             Optimize.RemoveRedundantCode(method);
-            new GotoRemoval(context).RemoveGotos(method);
+            new GotoRemoval().RemoveGotos(method);
 
 
-            if (context.Debug) method.DebugSave(context.DebugName, context.MakeDebugFileName("final.txt"));
+            if (Context.Debug) method.DebugSave(Context.DebugName, Context.MakeDebugFileName("final.txt"));
             if (AfterLoopsAndConditions(method)) return null; // another sanity check
 
             return method;

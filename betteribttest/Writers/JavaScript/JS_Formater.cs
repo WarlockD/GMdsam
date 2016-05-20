@@ -273,7 +273,7 @@ namespace GameMaker.Writers.JavaScript
                 writer.WriteNodesComma(v.Arguments, need_comma);
                 writer.Write(')');
             }
-            if (v.Comment != null) writer.Write(" --[[ {0} --]]", v.Comment);
+            if (v.Comment != null) writer.Write(" */ {0}  */", v.Comment);
 
         }
         public void Write(ILAssign assign)
@@ -287,30 +287,31 @@ namespace GameMaker.Writers.JavaScript
             }
             writer.Write(assign.Expression); // want to make sure we are using the debug
         }
-        bool WriteSingleLineOrBlock(ILBlock block)
+        void WriteSingleLineOrBlock(ILBlock block)
         {
             if (block.Body.Count > 1)
             {
                 writer.WriteLine(" {");
                 writer.Write(block);
-                writer.Write("} ");
-                return false;
+                writer.Write("} "); // extra ';' here but can I live with that?
+            } else
+            {
+                writer.WriteLine();
+                writer.Indent++;
+                writer.WriteNode(block.Body.Single(), false);
+                writer.Indent--;
             }
-            writer.Write(' ');
-            writer.WriteNode(block.Body.Single(), false);
-            return true;
         }
         public void Write(ILCondition condition)
         {
             writer.Write("if(");
             writer.Write(condition.Condition); // want to make sure we are using the debug
             writer.Write(") ");
-            bool newline = WriteSingleLineOrBlock(condition.TrueBlock);
+            WriteSingleLineOrBlock(condition.TrueBlock);
             if (condition.FalseBlock != null && condition.FalseBlock.Body.Count > 0)
             {
-                if (newline) writer.WriteLine();
-                writer.Write("else");
-                newline = WriteSingleLineOrBlock(condition.FalseBlock);
+                writer.WriteLine("else");
+                WriteSingleLineOrBlock(condition.FalseBlock);
             }
         }
         public void Write(ILWhileLoop loop)
@@ -318,8 +319,7 @@ namespace GameMaker.Writers.JavaScript
             writer.Write("while(");
             writer.Write(loop.Condition); // want to make sure we are using the debug
             writer.WriteLine(") ");
-            writer.Write(loop.BodyBlock);
-            writer.Write("}"); // Side note: ILBlock puts the writeline here
+            WriteSingleLineOrBlock(loop.BodyBlock);
         }
         static int localGen = 0;
         public void Write(ILWithStatement with)
@@ -330,15 +330,15 @@ namespace GameMaker.Writers.JavaScript
             // the with function in code returns a ipairs table of either all the instances OR just the single instance
             // with must be able to tell the diffrence when a string, int or table is sent
             string localVar = "with_" + localGen++;
-            if (with.EnviromentName != null) writer.WriteLine("// Enviroment: {0}", with.EnviromentName);
-            writer.WriteLine("var {0} = with({1})", localVar, with.Enviroment.Operand.ToString());
+            string env = BlockToCode.NiceNodeToString(with.Enviroment);
+            writer.WriteLine("var {0} = with({1})", localVar, env);
 
             writer.WriteLine("for(var ins=0; ins < {0}.length; ins++) {");
             writer.Indent++;
             writer.WriteLine("var self = {0}[ins]", localVar);
             writer.WriteNodes(with.Body.Body, true, false); // manualy write it
             writer.Write("}");
-            if (with.EnviromentName != null) writer.Write("// Enviroment: {0}", with.EnviromentName);
+            writer.Write("// Enviroment: {0}", env);
         }
 
 

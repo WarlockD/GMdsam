@@ -709,7 +709,7 @@ namespace GameMaker
                     {
                         Event ev = new Event();
                         ev.SubType = r.ReadInt32();
-                        ev.SubTypeName = GMContext.EventToString(i, ev.SubType);
+                        ev.SubTypeName = Context.EventToString(i, ev.SubType);
                         var actionEntries = r.ReadChunkEntries();
                         if (actionEntries.Length == 0) { ev.Actions = new Action[0]; continue; } // shouldn't happen
                         List<Action> actions = new List<Action>();

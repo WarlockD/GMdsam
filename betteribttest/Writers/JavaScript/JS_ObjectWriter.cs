@@ -54,7 +54,7 @@ namespace GameMaker.Writers.JavaScript
             output.WriteLine("self.{0} = self.{0} || {{}}", table);
             foreach (var func in actions) InsertIntoTable(table, func.SubType, func.Method);
         }
-        public void WriteObject(GMContext context, File.GObject obj, BlockToCode output)
+        public void WriteObject(File.GObject obj, BlockToCode output)
         {
             this.output = output;
             //   ILVariable.WriteSelfOnTextOut = false;
@@ -72,14 +72,14 @@ namespace GameMaker.Writers.JavaScript
                     foreach (var a in e.Actions)
                     {
                         File.Code codeData = File.Codes[a.CodeOffset];
-                        context.DebugName = obj.Name + "_" + GMContext.EventToString(i, e.SubType); // in case of debug
-                        if (context.Debug)
+                        Context.DebugName = obj.Name + "_" + Context.EventToString(i, e.SubType); // in case of debug
+                        if (Context.Debug)
                         {
-                            Debug.WriteLine("Name: " + codeData.Name + " Event: " + GMContext.EventToString(i, e.SubType));
+                            Debug.WriteLine("Name: " + codeData.Name + " Event: " + Context.EventToString(i, e.SubType));
                         }
-                        ILBlock method = GMContext.DecompileBlock(context, codeData.Data);
+                        ILBlock method = Context.DecompileBlock( codeData.Data);
                         if (method == null) continue;
-                        ActionInfo info = new ActionInfo() { Method = method, Name = GMContext.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
+                        ActionInfo info = new ActionInfo() { Method = method, Name = Context.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
                         cache.AddVars(method);
                         einfo.Actions.Add(info);
                     }

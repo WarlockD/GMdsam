@@ -16,18 +16,15 @@ namespace GameMaker.Writers.Lua
             return new Mutater();
         }
         BlockToCode output;
-        GMContext context;
         public void SetStream(BlockToCode output)
         {
             if(output == null)
             {
                 this.output = null;
-                this.context = null;
             }
             else
             {
                 this.output = output;
-                this.context = output.Context;
             }
           
         }

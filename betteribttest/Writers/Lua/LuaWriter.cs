@@ -303,15 +303,16 @@ namespace GameMaker.Writers.Lua
             // the with function in code returns a ipairs table of either all the instances OR just the single instance
             // with must be able to tell the diffrence when a string, int or table is sent
             string localVar = "with_" + localGen++;
+            string env = BlockToCode.NiceNodeToString(with.Enviroment);
             writer.Write("for _, {0} in with({1}) do", localVar, with.Enviroment.Operand.ToString());
-            if (with.EnviromentName != null) writer.WriteLine(" -- Enviroment: {0}", with.EnviromentName);
-            else writer.WriteLine();
+            writer.WriteLine(" -- Enviroment: {0}", env);
+
             writer.Indent++;
             writer.WriteLine("local self = {0} -- change instance", localVar);
             writer.WriteNodes(with.Body.Body, true, false); // manualy write it
             writer.Indent--;
             writer.Write("end");
-            if (with.EnviromentName != null) writer.Write(" -- Enviroment: {0}", with.EnviromentName);
+            writer.Write(" -- Enviroment: {0}", env);
         }
 
 

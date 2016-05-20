@@ -11,12 +11,12 @@ namespace GameMaker.Writers
 {
     public interface IScriptWriter
     {
-        void WriteScript(GMContext context, File.Script script, BlockToCode output);
+        void WriteScript(File.Script script, BlockToCode output);
     }
 
     public interface IObjectWriter
     {
-        void WriteObject(GMContext context, File.GObject obj, BlockToCode output);
+        void WriteObject(File.GObject obj, BlockToCode output);
     }
     public interface ICodeFormater
     {
@@ -100,6 +100,7 @@ namespace GameMaker.Writers
     }
     public class BlockToCode : IDisposable
     {
+        static Regex regex_newline = new Regex("(\r\n|\r|\n)", RegexOptions.Compiled);
         static Dictionary<int, string> identCache = new Dictionary<int, string>();
         static string FindIdent(int count)
         {
@@ -112,6 +113,36 @@ namespace GameMaker.Writers
         {
             writer.Flush();
         }
+        static BlockToCode debugStringWriter;
+        static BlockToCode niceStringWriter;
+        static BlockToCode()
+        {
+            debugStringWriter = new BlockToCode(new DebugFormater());
+             niceStringWriter = new BlockToCode(new Lua.Formater());
+        }
+        public static string DebugNodeToString(ILNode node) 
+        {
+            string ret;
+            lock (debugStringWriter)
+            {
+                debugStringWriter.Clear();
+                debugStringWriter.WriteNode(node);
+                ret = debugStringWriter.ToString();
+            }
+            return ret;
+        }
+        public static string NiceNodeToString(ILNode node)
+        {
+            string ret;
+            lock (niceStringWriter)
+            {
+                niceStringWriter.Clear();
+                niceStringWriter.WriteNode(node);
+                ret = niceStringWriter.ToString();
+            }
+            return ret;
+        }
+      
         ILBlock currentBlock = null;
         int currentIndex = 0;
         ICodeFormater formater = null;
@@ -138,9 +169,18 @@ namespace GameMaker.Writers
                 formater.SetStream(this);
             }
         }
+        public void Clear()
+        {
+            StringWriter sw = writer as StringWriter;
+            if (sw == null) throw new ArgumentException("Cannot clear a non  string writer", "writer");
+            sw.GetStringBuilder().Clear();
+            this.Indent = 0;
+            this.method = null;
+            this.MethodName = null;
+            this.Column = 0;
+            this.Line = 1;
+        }
         public ILBlock method { get; private set; }
-        GMContext context;
-        public GMContext Context { get { return context; } }
         string method_name;
 
         public string MethodName {
@@ -158,35 +198,34 @@ namespace GameMaker.Writers
         TextWriter writer;
         bool ownedWriter;
         int ident = 0;
-        void Init(GMContext context, ICodeFormater formater)
+        void Init(ICodeFormater formater)
         {
             if (formater == null) throw new ArgumentNullException("Formater");
-            if (context == null) throw new ArgumentNullException("context");
             this.formater = formater;
             formater.SetStream(this);
-            this.context = context;
             this.Indent = 0;
             this.method = null;
             this.MethodName = null;
             this.Column = 0;
             this.Line = 1;
         }
-        public BlockToCode(GMContext context, ICodeFormater formater, TextWriter tw)
+
+        public BlockToCode(ICodeFormater formater, TextWriter tw)
         {
             if (tw == null) throw new ArgumentNullException("tw");
-            Init(context, formater);
+            Init(formater);
             this.writer = tw;
             this.ownedWriter = false;
         }
-        public BlockToCode(GMContext context, ICodeFormater formater)
+        public BlockToCode(ICodeFormater formater)
         {
-            Init(context, formater);
+            Init(formater);
             this.writer = new StringWriter();
             this.ownedWriter = true;
         }
-        public BlockToCode(GMContext context, ICodeFormater formater, string filename) {
+        public BlockToCode( ICodeFormater formater, string filename) {
             if (filename == null) throw new ArgumentNullException("filename");
-            Init(context, formater);
+            Init(formater);
             filename = Path.ChangeExtension(filename, formater.Extension);
             this.writer = new StreamWriter(filename);
             this.ownedWriter = true;
@@ -208,13 +247,29 @@ namespace GameMaker.Writers
             Line++;
             writer.WriteLine();
         }
+        void _WriteNode<T>(T n) where T: ILNode
+        {
+            try
+            {
+                Write((dynamic) n);
+            }
+            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException e)
+            {
+                Context.Error("Ex: {0}", e.Message);
+            }
+            catch (Exception general)
+            {
+                Context.Error("Ex: {0}", general.Message);
+            }
+
+        }
         public void WriteNodesComma<T>(IEnumerable<T> nodes, bool need_comma = false) where T : ILNode
         {
             foreach (var n in nodes)
             {
                 if (need_comma) Write(',');
-                Write((dynamic) n);
-                need_comma = true;
+                _WriteNode(n);
+                 need_comma = true;
             }
         }
         public void Write(char c)
@@ -310,9 +365,12 @@ namespace GameMaker.Writers
         }
         public void WriteNode(ILNode n, bool newline = false)
         {
-            Write((dynamic)n);
-            if (formater.NodeEnding != null) writer.Write(formater.NodeEnding);
-            if (newline) WriteLine();
+            _WriteNode(n);
+            if (newline)
+            {
+                if (formater.NodeEnding != null) writer.Write(formater.NodeEnding);
+                WriteLine();
+            }
         }
         public void WriteNodes<T>(IEnumerable<T> nodes,bool newline, bool ident) where T:ILNode
         {
@@ -333,30 +391,7 @@ namespace GameMaker.Writers
             this.method = null;
         }
         // this is hevey so watch it
-        static Regex regex_newline = new Regex("(\r\n|\r|\n)", RegexOptions.Compiled);
-        public string NodeToString(ILNode n, bool newlines=true)
-        {
-            string ret;
-            using (StringWriter sw = new StringWriter())
-            {
-                var backup_writer = writer;
-                int backup_line = Line;
-                int backup_col = Column;
-                int backup_ident = Indent;
-                Column = 0;
-                Line = 1;
-                Indent = 0;
-                writer = sw;
-                Write((dynamic) n);
-                writer = backup_writer;
-                Line = backup_line;
-                Column = backup_col;
-                Indent = backup_ident;
-                ret = sw.ToString();
-            }
-            if(!newlines) ret = regex_newline.Replace(ret, "; ");
-            return ret;
-        }
+      
         public override string ToString()
         {
             if (this.ownedWriter && writer is StringWriter)

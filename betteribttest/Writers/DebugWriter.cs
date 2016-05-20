@@ -17,7 +17,7 @@ namespace GameMaker.Writers
         }
         public static BlockToCode Create(string filename)
         {
-            return new BlockToCode(null, new DebugFormater(), filename);
+            return new BlockToCode(new DebugFormater(), filename);
         }
         BlockToCode writer = null;
 
@@ -53,6 +53,20 @@ namespace GameMaker.Writers
             else
                 writer.WriteNode(block.Body.Last()); 
             // The if and loop replace the last goto, so watch for that on basic blocks
+        }
+        public void Write(ILFakeSwitch f)
+        {
+            writer.WriteLine("ILFakeSwitch Condition={0}", f.Condition);
+            writer.Indent++;
+            foreach(var c in f.Cases)
+            {
+                writer.Write("ILFakeSwitch.ILCase Value=");
+                writer.Write(c.Value);
+                writer.Write(" Goto=");
+                writer.Write(c.Goto);
+                writer.WriteLine();
+            }
+            writer.Indent--;
         }
         public  void Write(ILElseIfChain chain)
         {

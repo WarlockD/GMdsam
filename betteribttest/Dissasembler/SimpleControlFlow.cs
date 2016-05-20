@@ -41,13 +41,11 @@ namespace GameMaker.Dissasembler
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
-    GMContext context;
         //  TypeSystem typeSystem;
 
-        public SimpleControlFlow(ILBlock method,GMContext context)
+        public SimpleControlFlow(ILBlock method)
         {
-            this.context = context;
-            //  this.typeSystem = context.CurrentMethod.Module.TypeSystem;
+            //  this.typeSystem = Context.CurrentMethod.Module.TypeSystem;
            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
@@ -101,7 +99,91 @@ namespace GameMaker.Dissasembler
             }
             return null;
         }
-        public bool DetectSwitchLua(IList<ILNode> body, ILBasicBlock head, int pos)
+        public bool DetectSwitch(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+
+            bool modified = false;
+            ILExpression condition;
+            ILLabel trueLabel;
+            ILLabel falseLabel;
+            ILLabel fallThough;
+            //    Debug.Assert(head.EntryLabel().Name != "Block_473");
+            if (MatchSwitchCase(head, out trueLabel, out fallThough, out condition))
+            {
+                ILFakeSwitch fake = new ILFakeSwitch();
+                fake.Cases.Add(new ILFakeSwitch.ILCase() { Goto = trueLabel, Value = condition });
+                List<ILNode> caseBlocks = new List<ILNode>();
+                ILLabel prev = head.EntryLabel();
+                ILBasicBlock startOfCases = head;
+                caseBlocks.Add(startOfCases);
+
+                for (int i = pos - 1; i >= 0; i--)
+                {
+                    ILBasicBlock bb = body[i] as ILBasicBlock;
+                    if (MatchSwitchCase(bb, out trueLabel, out falseLabel, out condition))
+                    {
+                        caseBlocks.Add(bb);
+                        fake.Cases.Add(new ILFakeSwitch.ILCase() { Goto = trueLabel, Value = condition });
+                        Debug.Assert(falseLabel == prev);
+                        prev = bb.EntryLabel();
+                        startOfCases = bb;
+                    }
+                    else break;
+                } // we have all the cases
+
+
+                // we have all the cases
+                // head is at the "head" of the cases
+                ILExpression left;
+                if (startOfCases.Body[startOfCases.Body.Count - 3].Match(GMCode.Push, out left))
+                {
+                    startOfCases.Body.RemoveAt(startOfCases.Body.Count - 3);
+                    fake.Condition = left;
+                }
+                else
+                {
+                    Context.Info("switch failure " + startOfCases.ToString());
+                    
+                    // Something not worky?
+                    throw new Exception("switch failure");
+
+                }
+                // It seems GM makes a default case that just jumps to the end of the switch but I think I can 
+                // rely on it always being there
+                ILBasicBlock default_case = body[pos + 1] as ILBasicBlock;
+                Debug.Assert(default_case.EntryLabel() == head.GotoLabel());
+                ILBasicBlock end_of_switch = labelToBasicBlock[default_case.GotoLabel()];
+                if ((end_of_switch.Body[1] as ILExpression).Code == GMCode.Popz)
+                {
+                    end_of_switch.Body.RemoveAt(1); // yeaa!
+                }
+                else // booo
+                { // We have a default case so now we have to find where the popz ends, 
+                    // this could be bad if we had a wierd generated for loop, but we are just doing stupid search
+                    ILBasicBlock test1 = FindEndOfSwitch(end_of_switch);
+                    // we take a sample from one of the cases to make sure we do end up at the same place
+                    ILBasicBlock test2 = FindEndOfSwitch(head);
+                    if (test1 == test2)
+                    { // two matches are good enough for me
+                        test1.Body.RemoveAt(1); // yeaa!
+                    }
+                    else
+                    {
+                        Context.Error("Cannot find end of switch", end_of_switch); // booo
+                    }
+                    end_of_switch = test1;
+                }
+                // Now we have to  clean up
+                foreach (var b in caseBlocks.Where(x => x != startOfCases)) body.RemoveOrThrow(b);
+                // then modify head with the new switch structure
+                startOfCases.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Seq, GMCode.Bt, GMCode.B);
+                startOfCases.Body.Add(fake);
+                startOfCases.Body.Add(new ILExpression(GMCode.B, head.GotoLabel()));
+                modified = true;
+            }
+            return modified;
+        }
+        public bool DetectSwitchOld(List<ILNode> body, ILBasicBlock head, int pos)
         {
             bool modified = false;
             ILExpression condition;
@@ -160,10 +242,13 @@ namespace GameMaker.Dissasembler
                     }
                     else
                     {
-                        context.Error("Cannot find end of switch", end_of_switch); // booo
+                        Context.Error("Cannot find end of switch", end_of_switch); // booo
                     }
                 }
                 // tricky part, finding that damn popz
+
+                // Ok, we have all the case blocks, they are all fixed, and its like a big chain of ifs now.
+                // But for anything OTHER than lua that has switch statments, we want to mark this for latter
 
                 modified |= true;
             }
@@ -476,7 +561,7 @@ namespace GameMaker.Dissasembler
                 }
                 else if (fallBlock.MatchAt(1,GMCode.Pop)) { // generated? wierd instance?
                     finalFalseFall = fallBlock.EntryLabel();
-                    context.Info("Wierd Generated Pop here", newExpr);
+                    Context.Info("Wierd Generated Pop here", newExpr);
                     head.Body.Add(new ILExpression(GMCode.Push, null, newExpr));
                     // It should be combined in JoinBasicBlocks function
                     // so don't remove failblock
@@ -571,7 +656,7 @@ namespace GameMaker.Dissasembler
                 {
                     // we have an empty block that has data in it? throw it as an error.
                     // Might just be extra code like after an exit that was never used or a programer error but lets record it anyway
-                    context.Warning("BasicBlock with data removed, not linked to anything so should be safe", head);
+                    Context.Warning("BasicBlock with data removed, not linked to anything so should be safe", head);
                 }
                 body.RemoveOrThrow(head);
                 return true;

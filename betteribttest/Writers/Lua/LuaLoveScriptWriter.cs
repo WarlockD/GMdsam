@@ -86,14 +86,14 @@ namespace GameMaker.Writers.Lua
     }
     public class ScriptWriter : IScriptWriter
     {
-        public void WriteScript(GMContext context, File.Script code, BlockToCode output)
+        public void WriteScript(File.Script code, BlockToCode output)
         {
-            ILBlock block = GMContext.DecompileBlock(context, code.Data);
+            ILBlock block = Context.DecompileBlock( code.Data);
             if (block == null) return; // error
             int arguments = 0;
             foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>())
             {
-                Match match = GMContext.ScriptArgRegex.Match(v.Name);
+                Match match = Context.ScriptArgRegex.Match(v.Name);
                 if (match != null && match.Success)
                 {
                     int arg = int.Parse(match.Groups[1].Value) + 1; // we want the count

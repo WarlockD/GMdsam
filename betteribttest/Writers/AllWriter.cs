@@ -22,12 +22,9 @@ namespace GameMaker.Writers
         DirectoryInfo scriptDirectory = null;
         DirectoryInfo objectDirectory = null;
         List<Task> tasks = new List<Task>();
-        GMContext context;
-        public AllWriter(GMContext context)
-        {
-            this.context = context;
-            var info = Directory.CreateDirectory("scripts");
 
+        public AllWriter()
+        {
         }
         void AddGlobals(BlockToCode output)
         {
@@ -40,7 +37,7 @@ namespace GameMaker.Writers
         }
         IScriptWriter GetScriptWriter()
         {
-            switch (context.outputType)
+            switch (Context.outputType)
             {
                 case OutputType.LoveLua:
                     return (IScriptWriter)new Lua.ScriptWriter();
@@ -53,7 +50,7 @@ namespace GameMaker.Writers
         }
         IObjectWriter GetObjectWriter()
         {
-            switch (context.outputType)
+            switch (Context.outputType)
             {
                 case OutputType.LoveLua:
                     return (IObjectWriter) new Lua.ObjectWriter();
@@ -68,7 +65,7 @@ namespace GameMaker.Writers
         {
             ICodeFormater formater = null;
             INodeMutater mutater = null;
-            switch (context.outputType)
+            switch (Context.outputType)
             {
                 case OutputType.LoveLua:
                     formater = new Lua.Formater();
@@ -80,28 +77,28 @@ namespace GameMaker.Writers
                 default:
                     throw new Exception("Bad output type type");
             }
-            BlockToCode output = new BlockToCode(context, formater, filename);
+            BlockToCode output = new BlockToCode( formater, filename);
             output.Mutater = mutater;
             return output;
         }
         void Run(File.Script s, string filename=null)
         {
-            context.DebugName = s.Name;
+            Context.DebugName = s.Name;
             using (BlockToCode output = CreateOutput(filename))
             {
-                GetScriptWriter().WriteScript(context, s, output);
-                if (context.doGlobals) AddGlobals(output);
+                GetScriptWriter().WriteScript( s, output);
+                if (Context.doGlobals) AddGlobals(output);
             }
         }
         void Run(File.GObject obj, string filename=null)
         {
             BlockToCode output = CreateOutput(filename);
-            GetObjectWriter().WriteObject(context, obj, output);
-            if (context.doGlobals) AddGlobals(output);
+            GetObjectWriter().WriteObject( obj, output);
+            if (Context.doGlobals) AddGlobals(output);
         }
         void RunTask(File.GObject obj, string path=null)
         {
-            if (context.doThreads)
+            if (Context.doThreads)
             {
                 Task task = new Task(()=> Run(obj,path), TaskCreationOptions.LongRunning);
                 task.ContinueWith(ExceptionHandler, TaskContinuationOptions.OnlyOnFaulted);
@@ -112,7 +109,7 @@ namespace GameMaker.Writers
         }
         void RunTask(File.Script s, string path = null)
         {
-            if (context.doThreads)
+            if (Context.doThreads)
             {
                 Task task = new Task(() => Run(s, path), TaskCreationOptions.LongRunning);
                 task.ContinueWith(ExceptionHandler, TaskContinuationOptions.OnlyOnFaulted);
@@ -123,18 +120,18 @@ namespace GameMaker.Writers
         }
         public void Search(string toSearch, bool parents) // also add object parents
         {
-            context.doGlobals = false; // don't do globals on search
+            Context.doGlobals = false; // don't do globals on search
             foreach (var a in File.Search(toSearch))
             {
                 File.GObject obj = a as File.GObject;
                 if (obj != null)
                 {
-                    context.Info("Found Object '{0}': ", obj.Name);
+                    Context.Info("Found Object '{0}': ", obj.Name);
                     RunTask(obj);
                     while(obj.Parent > -1)
                     {
                         var p = File.Objects[obj.Parent];
-                        context.Info("    Found Parent '{0}': ", p.Name);
+                        Context.Info("    Found Parent '{0}': ", p.Name);
                         RunTask(p);
                         obj = p;
                     }
@@ -143,11 +140,11 @@ namespace GameMaker.Writers
                 File.Script s = a as File.Script;
                 if (s != null)
                 {
-                    context.Info("Found Script '{0}': ", s.Name);
+                    Context.Info("Found Script '{0}': ", s.Name);
                     RunTask(s);
                     continue;
                 }
-                context.Info("Found Type '{0}' of Name '{1}': ", a.GetType().ToString(),  a.Name);
+                Context.Info("Found Type '{0}' of Name '{1}': ", a.GetType().ToString(),  a.Name);
             }
         }
         public void StartWriteAllScripts()
@@ -199,7 +196,7 @@ namespace GameMaker.Writers
                 }
             }
             
-            if(context.doGlobals)
+            if(Context.doGlobals)
             {
                 using (StreamWriter sw = new StreamWriter("globals.lua"))
                 {

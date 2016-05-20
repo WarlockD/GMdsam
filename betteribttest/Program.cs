@@ -14,9 +14,6 @@ namespace GameMaker
 {
     static class Program
     {
-
-        static GMContext context;
-     
         static void InstructionError(string message, params object[] o)
         {
             Console.WriteLine("Useage <exe> data.win <-asm> [-s search_term] [-all (objects|scripts)");
@@ -40,7 +37,7 @@ namespace GameMaker
         }
         static void GoodExit()
         {
-            if (context != null) context.DumpMessages();
+            Context.DumpMessages();
             Console.WriteLine("All Done!");
             Environment.Exit(0);
         }
@@ -60,8 +57,6 @@ namespace GameMaker
             {
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
-            context = new GMContext();
-
             string toSearch = null;
             int pos = 1;
             while (pos < args.Length)
@@ -72,7 +67,7 @@ namespace GameMaker
                         {
                             pos++;
                             toSearch = args.ElementAtOrDefault(pos);
-                            var w = new Writers.AllWriter(context);
+                            var w = new Writers.AllWriter();
                             string option = args.ElementAtOrDefault(pos);
                             w.Search(toSearch, true);
                             w.FinishProcessing();
@@ -82,16 +77,16 @@ namespace GameMaker
                         break;
                     case "-debug":
                         pos++;
-                        context.Debug = true;
+                        Context.Debug = true;
                         break;
                     case "-thread":
                         pos++;
-                        context.doThreads = true;
+                        Context.doThreads = true;
                         break;
                     case "-all":
                         {
                             pos++;
-                            var w = new Writers.AllWriter(context);
+                            var w = new Writers.AllWriter();
                             string option = args.ElementAtOrDefault(pos);
                             if (string.IsNullOrWhiteSpace(option)) option = "eveything";
                             switch (option)
@@ -116,15 +111,15 @@ namespace GameMaker
                         }
                         break;
                     case "-lua":
-                        context.outputType = OutputType.LoveLua;
+                        Context.outputType = OutputType.LoveLua;
                         pos++;
                         break;
                     case "-js":
-                        context.outputType = OutputType.JavaScript;
+                        Context.outputType = OutputType.JavaScript;
                         pos++;
                         break;
                     case "-asm":
-                        context.doAsm = true;
+                        Context.doAsm = true;
                         pos++;
                         break;
                     default:

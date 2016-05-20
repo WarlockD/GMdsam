@@ -15,13 +15,10 @@ namespace GameMaker.Dissasembler
         {
             return labelToCfNode[l];
         }
-        readonly GMContext context;
-
         uint nextLabelIndex = 0;
 
-        public LoopsAndConditions(GMContext context)//DecompilerContext context)
+        public LoopsAndConditions()//DecompilerContext context)
         {
-            this.context = context;
         }
 
         public void FindLoops(ILBlock block)
@@ -228,7 +225,6 @@ namespace GameMaker.Dissasembler
                                 basicBlock.Body.Add(new ILWithStatement()
                                 {
                                     Enviroment = condExpr, // we never negate 
-                                    EnviromentName = context.InstanceToString(condExpr),
                                     Body = new ILBlock()
                                     {
                                         EntryGoto = new ILExpression(GMCode.B, trueLabel),
@@ -320,28 +316,19 @@ namespace GameMaker.Dissasembler
                    
                     {
                         // Switch
-                        List<ILExpression> cases;
-                        ILLabel[] caseLabels;
-                        ILExpression switchCondition;
-                        ILLabel fallLabel;
+                        ILFakeSwitch fswitch = block.Body.ElementAtOrDefault(block.Body.Count - 2) as ILFakeSwitch;
                         //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
                         // matches a switch statment, not sure how the hell I am going to do this
-                        if (block.MatchLastAndBr(GMCode.Switch,out caseLabels, out cases, out fallLabel))
+                        if (fswitch != null)
                         {
-                        //    Debug.Assert(fallLabel == endBlock); // this should be true
-                            switchCondition = cases[0]; // thats the switch arg
-                            cases.RemoveAt(0); // remove the switch condition
-                        
-                            // Replace the switch code with ILSwitch
-                            ILSwitch ilSwitch = new ILSwitch() { Condition = switchCondition };
-                            block.Body.RemoveTail(GMCode.Switch, GMCode.B);
-                            block.Body.Add(ilSwitch);
-                            block.Body.Add(new ILExpression(GMCode.B, fallLabel));
-                            result.Add(block);
+                            ILSwitch ilSwitch = new ILSwitch() { Condition = fswitch.Condition };
+                            block.Body[block.Body.Count - 2] = ilSwitch; // replace it, nothing else needs to be done!
 
                             // Remove the item so that it is not picked up as content
                             scope.RemoveOrThrow(node);
 
+                            ILLabel fallLabel = block.GotoLabel();
+                            ILLabel[] caseLabels = fswitch.Cases.Select(x => x.Goto).ToArray();
                             // Pull in code of cases
                             ControlFlowNode fallTarget = null;
                             labelToCfNode.TryGetValue(fallLabel, out fallTarget);
@@ -350,7 +337,7 @@ namespace GameMaker.Dissasembler
                             if (fallTarget != null)
                                 frontiers.UnionWith(fallTarget.DominanceFrontier.Except(new[] { fallTarget }));
 
-                            foreach (ILLabel condLabel in caseLabels)
+                            foreach (ILLabel condLabel in fswitch.Cases.Select(x => x.Goto))
                             {
                                 ControlFlowNode condTarget = null;
                                 labelToCfNode.TryGetValue(condLabel, out condTarget);
@@ -358,20 +345,20 @@ namespace GameMaker.Dissasembler
                                     frontiers.UnionWith(condTarget.DominanceFrontier.Except(new[] { condTarget }));
                             }
 
-                            for (int i = 0; i < caseLabels.Length; i++)
+                            for (int i = 0; i < fswitch.Cases.Count; i++)
                             {
                                 ILLabel condLabel = caseLabels[i];
 
                                 // Find or create new case block
-                                ILSwitch.CaseBlock caseBlock = ilSwitch.CaseBlocks.FirstOrDefault(b => b.EntryGoto.Operand == condLabel);
+                                ILSwitch.ILCase caseBlock = ilSwitch.Cases.FirstOrDefault(b => b.EntryGoto.Operand == condLabel);
                                 if (caseBlock == null)
                                 {
-                                    caseBlock = new ILSwitch.CaseBlock()
+                                    caseBlock = new ILSwitch.ILCase()
                                     {
                                         Values = new List<ILExpression>(),
                                         EntryGoto = new ILExpression(GMCode.B, condLabel)
                                     };
-                                    ilSwitch.CaseBlocks.Add(caseBlock);
+                                    ilSwitch.Cases.Add(caseBlock);
 
                                     ControlFlowNode condTarget = null;
                                     labelToCfNode.TryGetValue(condLabel, out condTarget);
@@ -391,7 +378,7 @@ namespace GameMaker.Dissasembler
                                         });
                                     }
                                 }
-                                caseBlock.Values.Add(cases[i].Arguments[0]);
+                                caseBlock.Values.Add(fswitch.Cases[i].Value);
                             }
 
                             // Heuristis to determine if we want to use fallthough as default case
@@ -400,8 +387,8 @@ namespace GameMaker.Dissasembler
                                 HashSet<ControlFlowNode> content = FindDominatedNodes(scope, fallTarget);
                                 if (content.Any())
                                 {
-                                    var caseBlock = new ILSwitch.CaseBlock() { EntryGoto = new ILExpression(GMCode.B, fallLabel) };
-                                    ilSwitch.CaseBlocks.Add(caseBlock);
+                                    var caseBlock = new ILSwitch.ILCase() { EntryGoto = new ILExpression(GMCode.B, fallLabel) };
+                                    ilSwitch.Cases.Add(caseBlock);
                                     block.Body.RemoveTail(GMCode.B);
 
                                     scope.ExceptWith(content);

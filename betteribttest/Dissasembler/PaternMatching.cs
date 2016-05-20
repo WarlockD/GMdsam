@@ -47,61 +47,7 @@ namespace GameMaker.Dissasembler
                     throw new Exception("Error, cannot logic negate a this code");
             }
         }
-        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool ident = true) where T : ILNode
-        {
-            // output.WriteLine();
-            if (ident) output.Indent();
-            for (; start < count; start++)
-            {
-                ILNode n = nodes[start];
-                n.WriteToLua(output);
-                output.WriteLine();
-            }
-            if (ident) output.Unindent();
-        }
-        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, int start, int count, bool endingSemiColon, bool withBrackets) where T : ILNode
-        {
-            // Generic method to print a list of nodes
-            if (nodes.Count == 0 || count == 0) return false;
-            else if ((nodes.Count - start) == 1 || count == 1)
-            {
-                nodes[start].WriteTo(output);
-                if (endingSemiColon) output.Write(';');
-                return false;
-            }
-            else
-            {
-                if (withBrackets) output.Write('{');
-                output.WriteLine();
-                output.Indent();
-                for (; start < count; start++)
-                {
-                    ILNode n = nodes[start];
-                    n.WriteTo(output);
-                    if (endingSemiColon && n is ILExpression) output.Write(';');
-                    output.WriteLine();
-                }
-                output.Unindent();
-                if (withBrackets) output.Write('}');
-                return true; // we did a writeline, atleast one
-            }
-        }
-        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, int start, bool endingSemiColon, bool withBrackets) where T : ILNode
-        {
-            return nodes.WriteNodes(output, start, nodes.Count - start, endingSemiColon, withBrackets);
-        }
-        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, bool endingSemiColon, bool withBrackets) where T : ILNode
-        {
-            return nodes.WriteNodes(output, 0, nodes.Count, endingSemiColon, withBrackets);
-        }
-        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, int start, bool ident = true) where T : ILNode
-        {
-            nodes.WriteLuaNodes(output, start, nodes.Count - start, ident);
-        }
-        public static void WriteLuaNodes<T>(this IList<T> nodes, ITextOutput output, bool ident = true) where T : ILNode
-        {
-            nodes.WriteLuaNodes(output, 0, nodes.Count, ident);
-        }
+     
         public static void CollectLabels(this ILExpression node, HashSet<ILLabel> labels)
         {
             ILLabel label = node.Operand as ILLabel;
