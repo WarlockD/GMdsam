@@ -22,7 +22,10 @@ namespace GameMaker.Writers.Lua
         {
             this.writer = writer;
         }
-        // since this is a debug writer we have to handle basicblock, otherwise we would never have this or use dynamic here
+        public void Write(ILSwitch f)
+        {
+            throw new Exception("Switch here, should not reach");
+        }
         public void Write(ILBasicBlock block)
         {
             throw new Exception("Should not run into basic block here");
@@ -40,13 +43,13 @@ namespace GameMaker.Writers.Lua
                 writer.WriteNode(c.Condition);
                 writer.Write(" then");
                 writer.WriteLine();
-                writer.WriteNode(c.TrueBlock); // auto indent
+                writer.Write(c.TrueBlock); // auto indent
                 if (i < chain.Conditions.Count - 1) writer.Write("elseif ");
             }
             if (chain.Else != null && chain.Else.Body.Count > 0)
             {
                 writer.WriteLine("else");
-                writer.WriteNode(chain.Else); // auto indent
+                writer.Write(chain.Else); // auto indent
             }
             writer.Write("end"); // Side note: ILBlock puts the writeline here
         }
@@ -306,9 +309,9 @@ namespace GameMaker.Writers.Lua
             // UNLESS its given an instance number, like from a var or call.  In that case its only doing that instance
             // the with function in code returns a ipairs table of either all the instances OR just the single instance
             // with must be able to tell the diffrence when a string, int or table is sent
-            string localVar = "with_" + localGen++;
-            string env = BlockToCode.NiceNodeToString(with.Enviroment);
-            writer.Write("for _, {0} in with({1}) do", localVar, with.Enviroment.Operand.ToString());
+            string localVar = "with_" + localGen++;  
+            string env = Context.InstanceToString(with.Enviroment);
+            writer.Write("for _, {0} in with({1}) do", localVar, env);
             writer.WriteLine(" -- Enviroment: {0}", env);
 
             writer.Indent++;

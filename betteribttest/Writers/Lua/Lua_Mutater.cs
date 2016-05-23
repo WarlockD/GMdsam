@@ -173,13 +173,15 @@ namespace GameMaker.Writers.Lua
                 colorArgument(x.Arguments[1]);
             });
         }
-        public ILCall MutateCall(ILBlock block, int pos, ILCall call)
+        public ILCall MutateCall(ILCall call)
         {
-            if(call.Name.Contains("gml_Script_"))
+           
+            if(call.Name.Contains("gml_Script_")) // need to see why this happends
                 call.Name = call.Name.Replace("gml_Script_", "");
             Action<ILCall,BlockToCode> func;
             if (FunctionFix.TryGetValue(call.Name, out func))
                 func(call,output);
+            else if (Constants.IsDefined(call.Name)) return call; // do nothing cause its defined, wee
             else
             {
                 if (call.Name.IndexOf("scr_") == 0) // its a user script default
@@ -191,12 +193,15 @@ namespace GameMaker.Writers.Lua
             return call;
         }
 
-        public ILAssign MutateAssign(ILBlock block, int pos, ILAssign assign)
+        public ILAssign MutateAssign(ILAssign assign)
         {
             return assign;
         }
+        public ILVariable MutateVar(ILVariable v)
+        {
+            return v;
+        }
 
-       
     }
 
 }

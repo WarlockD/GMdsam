@@ -16,9 +16,11 @@ namespace GameMaker.Dissasembler
             return labelToCfNode[l];
         }
         uint nextLabelIndex = 0;
+        Context.ErrorContext error;
 
-        public LoopsAndConditions()//DecompilerContext context)
+        public LoopsAndConditions(Context.ErrorContext error)//DecompilerContext context)
         {
+            this.error = error;
         }
 
         public void FindLoops(ILBlock block)
@@ -55,25 +57,7 @@ namespace GameMaker.Dissasembler
                
             }
         }
-        public void SaveGraph(ILBlock block, string filename)
-        {
-            if (block.Body.Count > 0)
-            {
-                ControlFlowGraph graph;
-                ILLabel l = block.EntryGoto.Operand as ILLabel;
-                if(l == null && block.Body.First() is ILExpression)
-                {
-                    ILExpression e = block.Body.First() as ILExpression;
-                    l = e.Operand as ILLabel;
-                }
-                if (l == null) throw new Exception("Bad label");
-
-                graph = BuildGraph(block.Body, l);
-                graph.ComputeDominance();
-                graph.ComputeDominanceFrontier();
-                graph.ExportGraph().Save(System.IO.Path.ChangeExtension(filename, "dot"));
-            }
-        }
+  
         public void FindConditions(ILBlock block)
         {
             if (block.Body.Count > 0)
@@ -338,11 +322,11 @@ namespace GameMaker.Dissasembler
                         {
                             ILSwitch ilSwitch = new ILSwitch() { Condition = fswitch.Condition };
                             block.Body[block.Body.Count - 2] = ilSwitch; // replace it, nothing else needs to be done!
-
+                            result.Add(block); // except add it to the result, DOLT
                             // Remove the item so that it is not picked up as content
                             scope.RemoveOrThrow(node);
 
-                            ILLabel fallLabel = block.GotoLabel();
+                            ILLabel fallLabel = fswitch.Default;
                             ILLabel[] caseLabels = fswitch.Cases.Select(x => x.Goto).ToArray();
                             // Pull in code of cases
                             ControlFlowNode fallTarget = null;
@@ -352,7 +336,7 @@ namespace GameMaker.Dissasembler
                             if (fallTarget != null)
                                 frontiers.UnionWith(fallTarget.DominanceFrontier.Except(new[] { fallTarget }));
 
-                            foreach (ILLabel condLabel in fswitch.GetLabels())
+                            foreach (ILLabel condLabel in caseLabels)
                             {
                                 ControlFlowNode condTarget = null;
                                 labelToCfNode.TryGetValue(condLabel, out condTarget);
@@ -418,6 +402,12 @@ namespace GameMaker.Dissasembler
                                         }
                                     });
                                 }
+                            }
+                            // this is just to be fancy, but lets sort it as long as all the values are const
+                            if(!ilSwitch.Cases.Select(x=> x.Values.Where(x1=>x1.Code != GMCode.Constant)).Any())
+                            {
+                                // if all the values are ordered then lets sort by ivalue
+                                ilSwitch.Cases = ilSwitch.Cases.OrderBy(o => o.Values[0].Operand as ILValue).ToList();
                             }
                         }
                      //   Debug.Assert((block.Body.First() as ILLabel).Name != "L1938");

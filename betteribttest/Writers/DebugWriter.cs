@@ -15,10 +15,6 @@ namespace GameMaker.Writers
         {
             return new DebugFormater();
         }
-        public static BlockToCode Create(string filename)
-        {
-            return new BlockToCode(new DebugFormater(), filename);
-        }
         BlockToCode writer = null;
 
         public string LineComment
@@ -74,6 +70,25 @@ namespace GameMaker.Writers
             }
             writer.Indent--;
         }
+        public void Write(ILSwitch f)
+        {
+            writer.WriteLine("ILSwitch Condition={0}", f.Condition);
+            writer.Indent++;
+            foreach (var c in f.Cases)
+            {
+                writer.Write("ILSwitch.ILCase Value=");
+                writer.WriteNodesComma(c.Values);
+                writer.WriteLine();
+                writer.Write((ILBlock)c);
+            }
+            if(f.Default != null && f.Default.Body.Count > 0)
+            {
+                writer.WriteLine();
+                writer.WriteLine("ILSwitch Default", f.Condition);
+                writer.Write(f.Default);
+            }
+            writer.Indent--;
+        }
         public  void Write(ILElseIfChain chain)
         {
             
@@ -81,15 +96,15 @@ namespace GameMaker.Writers
             {
                 var c = chain.Conditions[i];
                 if(i == 0) writer.Write("IFElseChain If ");
-                writer.WriteNode(c.Condition);
+                writer.Write(c.Condition);
                 writer.WriteLine();
-                writer.WriteNode(c.TrueBlock); // auto indent
+                writer.Write(c.TrueBlock); // auto indent
                 if (i < chain.Conditions.Count - 1) writer.Write("IFElseChain ElseIf ");
             }
             if(chain.Else != null && chain.Else.Body.Count > 0)
             {
                 writer.WriteLine("IFElseChain Else");
-                writer.WriteNode(chain.Else); // auto indent
+                writer.Write(chain.Else); // auto indent
             }
             writer.WriteLine("IFElseChain End ");
         }

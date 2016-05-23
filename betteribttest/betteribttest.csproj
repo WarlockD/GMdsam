@@ -57,9 +57,6 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Antlr4.Runtime">
-      <HintPath>D:\Downloads\Antlr4.Runtime.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.IO.Compression" />
@@ -76,10 +73,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Constants.cs" />
     <Compile Include="Dissasembler\LoopAndConditions.cs" />
     <Compile Include="Dissasembler\OpCode.cs" />
     <Compile Include="Dissasembler\Optimize.cs" />
-    <Compile Include="FlowAnalysis\StackAnalysis.cs" />
+    <Compile Include="FlowAnalysis\BuildILAst.cs" />
     <Compile Include="FlowAnalysis\ControlFlowEdge.cs" />
     <Compile Include="FlowAnalysis\ControlFlowGraph.cs" />
     <Compile Include="FlowAnalysis\ControlFlowGraphBuilder.cs" />
@@ -93,7 +91,10 @@
     <Compile Include="GameMaker\Resources.cs" />
     <Compile Include="GMContext.cs" />
     <Compile Include="Writers\AllWriter.cs" />
+    <Compile Include="Writers\CodeWriter.cs" />
     <Compile Include="Writers\DebugWriter.cs" />
+    <Compile Include="Writers\GameMaker\GM_Formater.cs" />
+    <Compile Include="Writers\GameMaker\GM_Writer.cs" />
     <Compile Include="Writers\ILBlockToCode.cs" />
     <Compile Include="Instruction.cs" />
     <Compile Include="ITextOutput.cs" />
@@ -101,12 +102,10 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Writers\JavaScript\JS_Formater.cs" />
-    <Compile Include="Writers\JavaScript\JS_ObjectWriter.cs" />
-    <Compile Include="Writers\JavaScript\JS_ScriptWriter.cs" />
-    <Compile Include="Writers\Lua\LuaLoveObjectWriter.cs" />
-    <Compile Include="Writers\Lua\LuaMutater.cs" />
-    <Compile Include="Writers\Lua\LuaWriter.cs" />
-    <Compile Include="Writers\Lua\LuaLoveScriptWriter.cs" />
+    <Compile Include="Writers\JavaScript\JS_Writer.cs" />
+    <Compile Include="Writers\Lua\Lua_Mutater.cs" />
+    <Compile Include="Writers\Lua\Lua_Formater.cs" />
+    <Compile Include="Writers\Lua\Lua_Writer.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -117,6 +116,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
+    <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>

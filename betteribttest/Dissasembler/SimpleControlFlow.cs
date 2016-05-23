@@ -10,9 +10,43 @@ namespace GameMaker.Dissasembler
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
         Dictionary<ILLabel, List<ILLabel>> labelToBranch = new Dictionary<ILLabel, List<ILLabel>>();
-
-        public ControlFlowLabelMap(ILBlock method)
+        Context.ErrorContext error;
+        public ControlFlowLabelMap(ILBlock method, Context.ErrorContext error)
         {
+            this.error = error;
+            foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
+            {
+                ILLabel entry = bb.Body[0] as ILLabel;
+                //     ILExpression br = bb.Body.ElementAtOrDefault(bb.Body.Count - 2) as ILExpression;
+                //     ILExpression b = bb.Body.ElementAtOrDefault(bb.Body.Count - 1) as ILExpression;
+                //     if (br != null && (br.Code == GMCode.Bt || br.Code == GMCode.Bt)) labelToBranch[br.Operand as ILLabel].Add(entry);
+                //   if (b != null && b.Code == GMCode.B) labelToBranch[b.Operand as ILLabel].Add(entry);
+                // skip 1 cause we have the label entry
+                labelToBasicBlock[entry] = bb;
+                for (int i = 1; i < bb.Body.Count; i++)
+                {
+                    ILNode n = bb.Body[i];
+                    ILLabel target = null;
+                    ILExpression e = n as ILExpression;
+                    if (e != null) target = e.Operand as ILLabel;
+                    if (target != null)
+                    {
+                        labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
+                        labelToBranch.GetOrDefault(target).Add(entry);
+                        continue;
+                    }
+                    ILFakeSwitch fswitch = n as ILFakeSwitch;
+                    if (fswitch != null)
+                    {
+                        foreach (var fl in fswitch.GetLabels())
+                            labelGlobalRefCount[fl] = labelGlobalRefCount.GetOrDefault(fl) + 1;
+                    }
+                }
+            }
+        }
+        public void ControlFlowLabelMapOld(ILBlock method)
+        {
+            // This single constructor is eating ALOT o time, renaming it and trying to considate it into one loop
             foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
@@ -25,18 +59,19 @@ namespace GameMaker.Dissasembler
                 ILExpression b = bb.Body.ElementAtOrDefault(bb.Body.Count - 1) as ILExpression;
                 if (br != null && (br.Code == GMCode.Bt || br.Code == GMCode.Bt)) labelToBranch[br.Operand as ILLabel].Add(entry);
                 if (b != null && b.Code == GMCode.B) labelToBranch[b.Operand as ILLabel].Add(entry);
-
+                //
 
                 foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
                 {
                     labelToBasicBlock[label] = bb;
                 }
+                foreach (ILFakeSwitch fswitch in bb.GetChildren().OfType<ILFakeSwitch>())
+                {
+                    foreach (var target in fswitch.GetLabels())
+                        labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
+                }
             }
-            foreach (ILFakeSwitch fswitch in method.GetSelfAndChildrenRecursive<ILFakeSwitch>())
-            {
-                foreach (var target in fswitch.GetLabels())
-                    labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-            }
+           
         }
         public List<ILLabel> LabelToParrents(ILLabel l) { return labelToBranch[l]; }
         public ILBasicBlock LabelToBasicBlock(ILLabel l) { return labelToBasicBlock[l]; }
@@ -47,9 +82,10 @@ namespace GameMaker.Dissasembler
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
         //  TypeSystem typeSystem;
-
-        public SimpleControlFlow(ILBlock method)
+        Context.ErrorContext error;
+        public SimpleControlFlow(ILBlock method, Context.ErrorContext error)
         {
+            this.error = error;
             //  this.typeSystem = Context.CurrentMethod.Module.TypeSystem;
            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
@@ -126,7 +162,7 @@ namespace GameMaker.Dissasembler
             ILLabel callTo;
             return FindEndOfSwitch(start, out callTo);
         }
-        public bool DetectSwitch(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool DetectSwitch_GenerateSwitch(List<ILNode> body, ILBasicBlock head, int pos)
         {
 
             bool modified = false;
@@ -137,7 +173,7 @@ namespace GameMaker.Dissasembler
             //    Debug.Assert(head.EntryLabel().Name != "Block_473");
             if (MatchSwitchCase(head, out trueLabel, out fallThough, out condition))
             {
-                ILFakeSwitch fake = new ILFakeSwitch();
+                ILFakeSwitch fake = new ILFakeSwitch() { Default = head.GotoLabel() };
                 fake.Cases.Add(new ILFakeSwitch.ILCase() { Goto = trueLabel, Value = condition });
                 List<ILNode> caseBlocks = new List<ILNode>();
                 ILLabel prev = head.EntryLabel();
@@ -161,7 +197,7 @@ namespace GameMaker.Dissasembler
 
                 if (!startOfCases.Body[startOfCases.Body.Count - 4].Match(GMCode.Push, out fake.Condition)) { 
 
-                    Context.Info("switch failure " + startOfCases.ToString());
+                    error.Info("switch failure " + startOfCases.ToString());
                     
                     // Something not worky?
                     throw new Exception("switch failure");
@@ -188,13 +224,13 @@ namespace GameMaker.Dissasembler
                             end_of_switch.Body.RemoveAt(1); // yeaa!
                         } else
                         {
-                            Context.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
+                            error.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
                             throw new Exception("end_of_switch");
                         }
                     }
                 } else
                 {
-                    Context.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
+                    error.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
                     throw new Exception("end_of_switch");
                 }
                 // Now we have to  clean up
@@ -202,12 +238,22 @@ namespace GameMaker.Dissasembler
                 // then modify head with the new switch structure
                 startOfCases.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Seq, GMCode.Bt, GMCode.B);
                 startOfCases.Body.Add(fake);
-                startOfCases.Body.Add(new ILExpression(GMCode.B, fallThough));
+                startOfCases.Body.Add(new ILExpression(GMCode.B, fake.Default)); //  end_of_switch.EntryLabel()));
                 modified = true;
             }
             return modified;
         }
-        public bool DetectSwitchOld(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool DetectSwitch(List<ILNode> body, ILBasicBlock head, int pos)
+        {
+            // We can either convert the switch into a switch body or into a sequrence 
+            // of branches.  Since Lua dosn't have a switch, it makes more sence to convert
+            // it to if statements as we can optimize it afterwards
+            if(Context.outputType == OutputType.LoveLua)
+                return DetectSwitch_GenerateBranches(body, head, pos);
+            else
+                return DetectSwitch_GenerateSwitch(body, head, pos);
+        }
+        public bool DetectSwitch_GenerateBranches(List<ILNode> body, ILBasicBlock head, int pos)
         {
             bool modified = false;
             ILExpression condition;
@@ -266,7 +312,7 @@ namespace GameMaker.Dissasembler
                     }
                     else
                     {
-                        Context.Error("Cannot find end of switch", end_of_switch); // booo
+                        error.Error("Cannot find end of switch", end_of_switch); // booo
                     }
                 }
                 // tricky part, finding that damn popz
@@ -392,106 +438,7 @@ namespace GameMaker.Dissasembler
             }
             return modified;
         }
-        // Another generated code.
-        // THIS time its a ternary, that is value ? part1 : part 2
-        // but this code is not valid in game maker, atleast I don't think, I can't find info on it
-        // on their website.  It apperes in obj_shop1-4 (cut and paste?) with a wierd operand of 0
-        // Just going to match it so the error goes away
-        public bool SimplifyComplexTernaryOperatorPart2(List<ILNode> body, ILBasicBlock head, int pos)
-        {
-            Debug.Assert(body.Contains(head));
-            //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
-            //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
-            ILExpression condExpr;
-            ILLabel trueLabel;
-            ILLabel falseLabel;
-
-            ILExpression trueExpr;
-            ILLabel trueFall;
-
-            // ILExpression falseExpr;
-            //  ILLabel falseFall;
-
-            // List<ILExpression> finalFall;
-            //  ILLabel finalFalseFall;
-            //  ILLabel finalTrueFall;
-            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
-                  labelGlobalRefCount[trueLabel] == 1 &&
-               labelGlobalRefCount[falseLabel] == 1 &&
-                condExpr.Code == GMCode.Constant && (int)(condExpr.Operand as ILValue) == 0 &&
-                labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall)&&
-                labelToBasicBlock[trueFall].MatchAt(1, GMCode.Pop)) // <-- soo wierd
-            {
-                labelToBasicBlock[trueFall].Body.Insert(1, labelToBasicBlock[trueLabel].Body[1]);
-                body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
-                body.RemoveOrThrow(labelToBasicBlock[falseLabel]);
-                head.Body.RemoveTail(GMCode.Bt, GMCode.B);
-                head.Body.Add(new ILExpression(GMCode.B, trueFall));
-                //  ILBasicBlock tblock = labelToBasicBlock[trueFall];
-                // insert the push into the new 
-                //    
-                return true;
-            }
-            return false;
-        }
-        // So this one... ugh
-        // What happenes here is that the compiler combined two non-trivial compare to short if one fails
-        // or if the other succeeds.  Had I, at the start, converted all temp values to generated veriables
-        // I might beable to optimize this in another pass easier.  As it is, I have to match this patern
-        // and figure out how to optimize it.  It makes more sence before eveything was converted to Bt's
-        // So lets try to optmize part of it, so the rest is taken care off
-
-        public bool SimplifyComplexTernaryOperatorPart1(List<ILNode> body, ILBasicBlock head, int pos)
-        {
-            Debug.Assert(body.Contains(head));
-            //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
-            //     Debug.Assert((head.Body[0] as ILLabel).Name != "L1257");
-            ILExpression condExpr;
-            ILLabel trueLabel;
-            ILLabel falseLabel;
-
-            ILExpression trueExpr;
-            ILLabel trueFall;
-
-            // ILExpression falseExpr;
-            //  ILLabel falseFall;
-
-            // List<ILExpression> finalFall;
-            //  ILLabel finalFalseFall;
-            //  ILLabel finalTrueFall;
-            if (head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
-                 labelGlobalRefCount[trueLabel] == 1 &&
-                 labelGlobalRefCount[falseLabel] == 1)
-            {
-                if (labelToBasicBlock[trueLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
-                    trueExpr.Code == GMCode.Constant && (int)(trueExpr.Operand as ILValue) == 1)
-                {
-                    // So, what happens here is the "true" jump pushes a 1 for the next Bt to be true
-                    // Lets just get rid of the middle man and swap the labels and remove  this 1
-                    ILBasicBlock trueBlock = labelToBasicBlock[trueLabel];
-                    ILBasicBlock fallthoughBlock = labelToBasicBlock[trueBlock.GotoLabel()];
-                    (head.Body[head.Body.Count - 2] as ILExpression).Operand =
-                        (fallthoughBlock.Body[head.Body.Count - 2] as ILExpression).Operand; // swap the labels
-                                                                                             // remove the push block if only used once
-                    if (labelGlobalRefCount[trueLabel] == 1) body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
-                    return true;
-                }
-                if (labelToBasicBlock[falseLabel].MatchSingleAndBr(GMCode.Push, out trueExpr, out trueFall) &&
-                    trueExpr.Code == GMCode.Constant && (int)(trueExpr.Operand as ILValue) == 1)
-                {
-                    // So, what happens here is the "true" jump pushes a 1 for the next Bt to be true
-                    // Lets just get rid of the middle man and swap the labels and remove  this 1
-                    ILBasicBlock trueBlock = labelToBasicBlock[trueLabel];
-                    ILBasicBlock fallthoughBlock = labelToBasicBlock[trueBlock.GotoLabel()];
-                    (head.Body[head.Body.Count - 2] as ILExpression).Operand =
-                        (fallthoughBlock.Body[head.Body.Count - 2] as ILExpression).Operand; // swap the labels
-                                                                                             // remove the push block if only used once
-                    if (labelGlobalRefCount[trueLabel] == 1) body.RemoveOrThrow(labelToBasicBlock[trueLabel]);
-                    return true;
-                }
-            }
-            return false;
-        }
+       
         public ILExpression ResolveTernaryExpression(ILExpression condExpr, ILExpression trueExpr, ILExpression falseExpr)
         {
             int? falseLocVar = falseExpr.Operand is ILValue ? (falseExpr.Operand as ILValue).IntValue : null;
@@ -585,7 +532,7 @@ namespace GameMaker.Dissasembler
                 }
                 else if (fallBlock.MatchAt(1,GMCode.Pop)) { // generated? wierd instance?
                     finalFalseFall = fallBlock.EntryLabel();
-                    Context.Info("Wierd Generated Pop here", newExpr);
+                    error.Info("Wierd Generated Pop here", newExpr);
                     head.Body.Add(new ILExpression(GMCode.Push, null, newExpr));
                     // It should be combined in JoinBasicBlocks function
                     // so don't remove failblock
@@ -680,7 +627,7 @@ namespace GameMaker.Dissasembler
                 {
                     // we have an empty block that has data in it? throw it as an error.
                     // Might just be extra code like after an exit that was never used or a programer error but lets record it anyway
-                    Context.Warning("BasicBlock with data removed, not linked to anything so should be safe", head);
+                    error.Warning("BasicBlock with data removed, not linked to anything so should be safe", head);
                 }
                 body.RemoveOrThrow(head);
                 return true;

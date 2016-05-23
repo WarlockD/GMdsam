@@ -13,10 +13,12 @@ namespace GameMaker.Dissasembler
 {
     public static class NodeOperations
     {
-        public static void DebugSave(this ILBlock block, string MethodName, string FileName)
+
+
+       
+        public static void DebugSave(this ILBlock block, string FileName)
         {
-            using (var w = new Writers.BlockToCode( new Writers.DebugFormater(), FileName))
-                w.WriteMethod(MethodName, block);
+            new Writers.BlockToCode(new Writers.DebugFormater()).WriteFile(block, FileName);
         }
         public static bool TryParse(this ILValue node, out int value)
         {
@@ -34,6 +36,43 @@ namespace GameMaker.Dissasembler
     public abstract class ILNode
     {
         public string Comment = null;
+        ILNode _parent = null;
+        ILNode _next = null;
+        public ILNode Parent {  get { return _parent; } }
+        public ILNode Next { get { return _next; } }
+        public IEnumerable<ILNode> GetParents()
+        {
+            ILNode current = this;
+            while (true)
+            {
+                current = current._parent;
+                if (current == null)
+                    yield break;
+                yield return current;
+            }
+        }
+        public void ClearAndSetAllParents(bool skipVarAndConstants=true)
+        {
+            List<ILNode> nodes = this.GetSelfAndChildrenRecursive<ILNode>().ToList(); // cause we do this twice
+            foreach(var n in nodes) n._parent = n._next = null;
+            foreach (ILNode node in nodes)
+            {
+                ILNode previousChild = null;
+                foreach (ILNode child in node.GetChildren())
+                {
+                    if (skipVarAndConstants && (child is ILValue || child is ILVariable)) continue; // we want to skip these.
+                    if(child._parent != null)
+                    {
+                        throw new Exception("The following expression is linked from several locations: " + child.ToString());
+                    }
+                    child._parent = node;
+                    if (previousChild != null) previousChild._next = child;
+                    previousChild = child;
+                   
+                }
+                if (previousChild != null) previousChild._next = null;
+            }
+        }
         // hack
         public static string EnviromentOverride = null;
         // removed ILList<T>
@@ -135,7 +174,7 @@ namespace GameMaker.Dissasembler
         }
     }
 
-    public class ILValue : ILNode, IEquatable<ILValue>
+    public class ILValue : ILNode, IEquatable<ILValue>, IComparable<ILValue>
     {
         public object Value { get; private set; }
         public GM_Type Type { get; private set; }
@@ -195,6 +234,12 @@ namespace GameMaker.Dissasembler
                 else return other.Value.ToString() == Value.ToString(); // a bit hacky, but true
             }
             else return Value.Equals(other.Value);
+        }
+
+        public int CompareTo(ILValue other)
+        {
+            // all the operands are comparatlable to one another
+            return ((IComparable)Value).CompareTo(other.Value);
         }
 
         public static explicit operator int(ILValue c)
@@ -569,6 +614,7 @@ namespace GameMaker.Dissasembler
         {
             public ILExpression Value = null;
             public ILLabel Goto = null;
+
             public override IEnumerable<ILNode> GetChildren()
             {
                 if (Value != null) yield return this.Value;
@@ -586,10 +632,13 @@ namespace GameMaker.Dissasembler
         }
         public ILExpression Condition;      
         public List<ILCase> Cases = new List<ILCase>();
+        public ILLabel Default = null;
+
         public override IEnumerable<ILNode> GetChildren()
         {
             if (Condition != null) yield return Condition;
             foreach(var c in Cases) yield return c;
+            if (Default != null) yield return Default;
         }
         public override string ToString()
         {
@@ -602,7 +651,9 @@ namespace GameMaker.Dissasembler
         }
         public IEnumerable<ILLabel> GetLabels()
         {
-            return Cases.Select(x => x.Goto);
+            List<ILLabel> list = Cases.Select(x => x.Goto).ToList();
+            if (Default != null) list.Add(Default);
+            return list;
         }
     }
     public class ILSwitch : ILNode
@@ -611,6 +662,22 @@ namespace GameMaker.Dissasembler
         public class ILCase : ILBlock
         {
             public List<ILExpression> Values = new List<ILExpression>();
+            public override string ToString() // only really need this for debug as the writers don't use this
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append("{ ILSwitch.ILCase Values=");
+                if(Values.Count > 0)
+                {
+                    sb.Append(Writers.BlockToCode.DebugNodeToString(Values[0]));
+                    for(int i=1; i < Values.Count; i++)
+                    {
+                        sb.Append(", ");
+                        sb.Append(Writers.BlockToCode.DebugNodeToString(Values[1]));
+                    }
+                }
+                sb.Append("}");
+                return sb.ToString();
+            }
         }
         public ILExpression Condition;
         public List<ILCase> Cases = new List<ILCase>();

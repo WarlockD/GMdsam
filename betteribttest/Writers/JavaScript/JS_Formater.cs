@@ -23,13 +23,37 @@ namespace GameMaker.Writers.JavaScript
             this.writer = writer;
         }
         // since this is a debug writer we have to handle basicblock, otherwise we would never have this or use dynamic here
+        public void Write(ILSwitch f)
+        {
+            writer.Write("switch(");
+            writer.Write(f.Condition);
+            writer.WriteLine(") {");
+            writer.Indent++;
+           foreach(var c in f.Cases)
+            {
+                foreach(var v in c.Values)
+                {
+                    writer.Write("case ");
+                    writer.Write(v);
+                    writer.WriteLine(":");
+                }
+                writer.Write((ILBlock)c); // write it as a block
+            }
+            if(f.Default != null && f.Default.Body.Count > 0)
+            {
+                writer.Write("default:");
+                writer.Write(f.Default);
+            }
+            writer.Indent--;
+            writer.Write("}");
+        }
         public void Write(ILBasicBlock block)
         {
             throw new Exception("Should not run into basic block here");
         }
         public void Write(ILFakeSwitch f)
         {
-            throw new Exception("Should not run into basic block here");
+            throw new Exception("Should not have fake switch here, don't make it an ilnode?");
         }
         // this is a switch statement so we will just write it as such
         public void Write(ILElseIfChain chain)
@@ -293,18 +317,14 @@ namespace GameMaker.Writers.JavaScript
         }
         void WriteSingleLineOrBlock(ILBlock block)
         {
-            if (block.Body.Count > 1)
+            if (block.Body.Count == 1)
+                writer.Write(block, true);
+            else
             {
                 writer.WriteLine(" {");
                 writer.Write(block);
-                writer.Write("} "); // extra ';' here but can I live with that?
-            } else
-            {
-                writer.WriteLine();
-                writer.Indent++;
-                writer.WriteNode(block.Body.Single(), false);
-                writer.Indent--;
-            }
+                writer.Write("}"); // extra ';' here but can I live with that?
+            } 
         }
         public void Write(ILCondition condition)
         {
@@ -314,7 +334,7 @@ namespace GameMaker.Writers.JavaScript
             WriteSingleLineOrBlock(condition.TrueBlock);
             if (condition.FalseBlock != null && condition.FalseBlock.Body.Count > 0)
             {
-                writer.WriteLine("else");
+                writer.Write(" else ");
                 WriteSingleLineOrBlock(condition.FalseBlock);
             }
         }
@@ -322,7 +342,7 @@ namespace GameMaker.Writers.JavaScript
         {
             writer.Write("while(");
             writer.Write(loop.Condition); // want to make sure we are using the debug
-            writer.WriteLine(") ");
+            writer.Write(") ");
             WriteSingleLineOrBlock(loop.BodyBlock);
         }
         static int localGen = 0;
@@ -334,15 +354,22 @@ namespace GameMaker.Writers.JavaScript
             // the with function in code returns a ipairs table of either all the instances OR just the single instance
             // with must be able to tell the diffrence when a string, int or table is sent
             string localVar = "with_" + localGen++;
-            string env = BlockToCode.NiceNodeToString(with.Enviroment);
-            writer.WriteLine("var {0} = with({1})", localVar, env);
+            string cenvoment = writer.NodeToString(with.Enviroment);
+            string env = with.Enviroment.Code == GMCode.Constant ? Context.InstanceToString(with.Enviroment) : null;
+            writer.Write("var {0} = search_instances({0})", cenvoment);
+            if (env != null) writer.Write(" // Enviroment: {0}", env);
+            writer.WriteLine();
 
             writer.WriteLine("for(var ins=0; ins < {0}.length; ins++) {");
             writer.Indent++;
             writer.WriteLine("var self = {0}[ins]", localVar);
-            writer.WriteNodes(with.Body.Body, true, false); // manualy write it
+            writer.Write(with.Body, false, false);  // manuay write it
+            writer.Indent--;
             writer.Write("}");
-            writer.Write("// Enviroment: {0}", env);
+            writer.Write(" // end with({0})", cenvoment);
+            if (env != null) writer.Write(" // Enviroment: {0}", env);
+            writer.WriteLine();
+ 
         }
 
 

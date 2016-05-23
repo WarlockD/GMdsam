@@ -1,5 +1,6 @@
 ﻿using GameMaker.Dissasembler;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -16,52 +17,43 @@ namespace GameMaker.Writers
 
     public class AllWriter
     {
-        HashSet<ILVariable> globals = new HashSet<ILVariable>();
-        List<string> scrptnames = new List<string>();
-        List<string> objnames = new List<string>();
+        ConcurrentBag<string> globals_vars = new ConcurrentBag<string>();
+        ConcurrentBag<string> globals_arrays = new ConcurrentBag<string>();
+        ConcurrentBag<string> scrptnames;
+        ConcurrentBag<string> objnames;
         DirectoryInfo scriptDirectory = null;
         DirectoryInfo objectDirectory = null;
         List<Task> tasks = new List<Task>();
 
         public AllWriter()
         {
+     
         }
         void AddGlobals(BlockToCode output)
         {
-            lock (globals)
+            foreach(var n in output.VariablesUsed.Select(x => x.Node).Where(x => x.isGlobal))
             {
-                var list = output.VariablesUsed;
-                var nlist = output.VariablesUsed.Select(x => x.Node).Where(x => x.isGlobal).ToList();
-                globals.UnionWith(nlist);
+                if (n.isArray)
+                    globals_arrays.Add(n.Name);
+                else
+                    globals_vars.Add(n.Name);
             }
         }
-        IScriptWriter GetScriptWriter()
+        CodeWriter GetScriptWriter(BlockToCode output)
         {
             switch (Context.outputType)
             {
                 case OutputType.LoveLua:
-                    return (IScriptWriter)new Lua.ScriptWriter();
+                    return (CodeWriter)new Lua.Writer(output);
                 case OutputType.JavaScript:
-                    return (IScriptWriter) new JavaScript.ScriptWriter();
+                    return (CodeWriter) new JavaScript.Writer(output);
                 default:
                     throw new Exception("Bad output type");
 
             }
         }
-        IObjectWriter GetObjectWriter()
-        {
-            switch (Context.outputType)
-            {
-                case OutputType.LoveLua:
-                    return (IObjectWriter) new Lua.ObjectWriter();
-                case OutputType.JavaScript:
-                    return (IObjectWriter) new JavaScript.ObjectWriter();
-                default:
-                    throw new Exception("Bad output type");
-
-            }
-        }
-        BlockToCode CreateOutput(string filename)
+       
+        BlockToCode CreateOutput()
         {
             ICodeFormater formater = null;
             INodeMutater mutater = null;
@@ -77,26 +69,38 @@ namespace GameMaker.Writers
                 default:
                     throw new Exception("Bad output type type");
             }
-            BlockToCode output = new BlockToCode( formater, filename);
+            BlockToCode output = new BlockToCode(formater);
             output.Mutater = mutater;
             return output;
         }
         void Run(File.Script s, string filename=null)
         {
-            Context.DebugName = s.Name;
-            using (BlockToCode output = CreateOutput(filename))
-            {
-                GetScriptWriter().WriteScript( s, output);
-                if (Context.doGlobals) AddGlobals(output);
-            }
-        }
-        void Run(File.GObject obj, string filename=null)
-        {
-            BlockToCode output = CreateOutput(filename);
-            GetObjectWriter().WriteObject( obj, output);
+            BlockToCode output = CreateOutput();
+            GetScriptWriter(output).Write(s);
             if (Context.doGlobals) AddGlobals(output);
+            output.WriteAsyncToFile(filename);
         }
-        void RunTask(File.GObject obj, string path=null)
+     
+        void Run(File.GObject obj, string filename)
+        {
+#if false
+            using (BlockToCode output = CreateOutput())
+            {
+                GetScriptWriter(output).Write(obj);
+                if (Context.doGlobals) AddGlobals(output);
+                WriteTextAsync(output.CreateFileName(filename), output.ToString()).Wait();
+            }
+            //  await sourceStream.WriteAsync(encodedText, 0, encodedText.Length);
+#else
+
+            BlockToCode output = CreateOutput();
+            GetScriptWriter(output).Write(obj);
+            if (Context.doGlobals) AddGlobals(output);
+            output.WriteAsyncToFile(filename);
+#endif
+        }
+
+        void RunTask(File.GObject obj, string path)
         {
             if (Context.doThreads)
             {
@@ -127,12 +131,12 @@ namespace GameMaker.Writers
                 if (obj != null)
                 {
                     Context.Info("Found Object '{0}': ", obj.Name);
-                    RunTask(obj);
+                    RunTask(obj, obj.Name);
                     while(obj.Parent > -1)
                     {
                         var p = File.Objects[obj.Parent];
                         Context.Info("    Found Parent '{0}': ", p.Name);
-                        RunTask(p);
+                        RunTask(p,p.Name);
                         obj = p;
                     }
                     continue;
@@ -149,26 +153,33 @@ namespace GameMaker.Writers
         }
         public void StartWriteAllScripts()
         {
+            scrptnames = new ConcurrentBag<string>();
             scriptDirectory = Directory.CreateDirectory("scripts");
+            string full_name = scriptDirectory.FullName;
             foreach (var s in File.Scripts)
             {
                 if (s.Data == null) continue;
                 scrptnames.Add(s.Name);
-                string filename = Path.Combine(scriptDirectory.FullName, s.Name);
+                string filename = Path.Combine(full_name, s.Name);
                 RunTask(s, filename);
             }
         }
+        DateTime start;
         public void StartWriteAllObjects()
         {
             objectDirectory = Directory.CreateDirectory("objects");
-            foreach (var o in File.Objects)
+            objnames = new ConcurrentBag<string>();
+            string full_name = objectDirectory.FullName;
+
+            start = DateTime.Now;
+            foreach(var o in File.Objects)
             {
                 objnames.Add(o.Name);
-                string filename = Path.Combine(scriptDirectory.FullName, o.Name);
+                string filename = Path.Combine(full_name, o.Name);
                 RunTask(o, filename);
             }
         }
-        void ExceptionHandler(Task task)
+    void ExceptionHandler(Task task)
         {
             var exception = task.Exception;
             Console.WriteLine(exception);
@@ -179,16 +190,20 @@ namespace GameMaker.Writers
             if (tasks.Count > 0)
             {
                 Task.WaitAll(tasks.ToArray());
+                Task.WaitAll(tasks.ToArray());
+                DateTime stop = DateTime.Now;
+                TimeSpan time = stop.Subtract(start);
+                Debug.WriteLine("Time : {0}", time);
                 tasks.Clear();
             }
-            if(scrptnames.Count > 0)
+            if(scrptnames!= null && scrptnames.Count > 0)
             {
                 using (StreamWriter sw = new StreamWriter("loadScripts.lua"))
                 {
                     foreach (var s in scrptnames) sw.WriteLine("require 'scripts/{0}'", s);
                 }
             }
-           if(objnames.Count > 0)
+           if(objnames != null && objnames.Count > 0)
             {
                 using (StreamWriter sw = new StreamWriter("loadObjects.lua"))
                 {
@@ -201,17 +216,17 @@ namespace GameMaker.Writers
                 using (StreamWriter sw = new StreamWriter("globals.lua"))
                 {
                     sw.WriteLine("local g = {");
-                    bool need_comma = false;
-                    foreach (var v in globals)
+                    foreach (var v in globals_vars)
                     {
-                        if (need_comma) sw.Write(", ");
-                        else sw.Write("  ");
-                        sw.Write(v.Name);
-                        sw.Write(" = ");
-                        if (v.isArray) sw.Write("{}");
-                        else sw.Write("0");
-                        sw.WriteLine();
-                        need_comma = true;
+                        sw.Write("   ");
+                        sw.Write(v);
+                        sw.WriteLine(" = 0,");
+                    }
+                    foreach (var v in globals_arrays)
+                    {
+                        sw.Write("   ");
+                        sw.Write(v);
+                        sw.WriteLine(" = {},");
                     }
                     sw.WriteLine("} ");
                     sw.WriteLine("globals = g");

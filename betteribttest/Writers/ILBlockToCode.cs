@@ -9,19 +9,11 @@ using System.Threading.Tasks;
 
 namespace GameMaker.Writers
 {
-    public interface IScriptWriter
-    {
-        void WriteScript(File.Script script, BlockToCode output);
-    }
-
-    public interface IObjectWriter
-    {
-        void WriteObject(File.GObject obj, BlockToCode output);
-    }
     public interface ICodeFormater
     {
         ICodeFormater Clone();
         void SetStream(BlockToCode s);
+        void Write(ILSwitch f);
         void Write(ILFakeSwitch f);
         void Write(ILVariable v);
         void Write(ILAssign a);
@@ -44,17 +36,18 @@ namespace GameMaker.Writers
     {
         INodeMutater Clone();
         void SetStream(BlockToCode s);
-        ILCall MutateCall(ILBlock block, int pos, ILCall call);
-        ILAssign MutateAssign(ILBlock block, int pos, ILAssign assign);
+        ILCall MutateCall(ILCall call);
+        ILAssign MutateAssign(ILAssign assign);
+        ILVariable MutateVar(ILVariable v);
     }
     public class EmptyNodeMutater : INodeMutater // does nothing
     {
-        public ILAssign MutateAssign(ILBlock block, int pos, ILAssign assign)
+        public ILAssign MutateAssign(ILAssign assign)
         {
             return assign;
         }
 
-        public ILCall MutateCall(ILBlock block, int pos, ILCall call)
+        public ILCall MutateCall(ILCall call)
         {
             return call;
         }
@@ -66,6 +59,11 @@ namespace GameMaker.Writers
         public INodeMutater Clone()
         {
             return new EmptyNodeMutater();
+        }
+
+        public ILVariable MutateVar(ILVariable v)
+        {
+            return v;
         }
     }
 
@@ -110,11 +108,6 @@ namespace GameMaker.Writers
                 identCache[count] = identString = new string(' ', count * 4);
             return identString;
         }
-        public void Flush()
-        {
-            writer.Flush();
-        }
-
         static BlockToCode()
         {
         }
@@ -138,11 +131,10 @@ namespace GameMaker.Writers
             }
             return ret;
         }
-      
-        ILBlock currentBlock = null;
-        int currentIndex = 0;
         ICodeFormater formater = null;
         INodeMutater mutater = null;
+        StringBuilder buffer = null;
+        StringBuilder line = null;
         public INodeMutater Mutater
         {
             get { return mutater; }
@@ -167,66 +159,40 @@ namespace GameMaker.Writers
         }
         public void Clear()
         {
-            StringWriter sw = writer as StringWriter;
-            if (sw == null) throw new ArgumentException("Cannot clear a non  string writer", "writer");
-            sw.GetStringBuilder().Clear();
-            this.Indent = 0;
-            this.method = null;
-            this.MethodName = null;
-            this.Column = 0;
-            this.Line = 1;
-        }
-        public ILBlock method { get; private set; }
-        string method_name;
-
-        public string MethodName {
-            get { return method_name; }
-            private set
+            if (line == null) line = new StringBuilder(80);
+            else line.Clear();
+            if (buffer == null) buffer = new StringBuilder(max_seen_buffer);
+            else
             {
-              //  if (mutater != null) mutater.SetMethodName(method_name);
-                method_name = value;
+                if (this.buffer.Length > max_seen_buffer) max_seen_buffer = this.buffer.Length * 2;
+                buffer.Clear();
             }
+            Line = 1;
+            Indent = 0;
         }
         public int Line { get; private set; }
-        public int Column { get; private set; }
-        bool needIdent = false;
+        public int Column { get { return currentIdent.Length + line.Length; } }
         string currentIdent;
-        TextWriter writer;
-        bool ownedWriter;
         int ident = 0;
+        static int max_seen_buffer = 512;
+      
         void Init(ICodeFormater formater)
         {
             if (formater == null) throw new ArgumentNullException("Formater");
             this.formater = formater;
             formater.SetStream(this);
-            this.Indent = 0;
-            this.method = null;
-            this.MethodName = null;
-            this.Column = 0;
-            this.Line = 1;
+            Clear();
         }
 
-        public BlockToCode(ICodeFormater formater, TextWriter tw)
-        {
-            if (tw == null) throw new ArgumentNullException("tw");
-            Init(formater);
-            this.writer = tw;
-            this.ownedWriter = false;
-        }
         public BlockToCode(ICodeFormater formater)
         {
             Init(formater);
-            this.writer = new StringWriter();
-            this.ownedWriter = true;
-        }
-        public BlockToCode( ICodeFormater formater, string filename) {
-            if (filename == null) throw new ArgumentNullException("filename");
-            Init(formater);
-            filename = Path.ChangeExtension(filename, formater.Extension);
-            this.writer = new StreamWriter(filename);
-            this.ownedWriter = true;
         }
 
+        public string CreateFileName(string filename)
+        {
+            return Path.ChangeExtension(filename, formater.Extension);
+        }
         public int Indent
         {
             get { return ident; }
@@ -236,19 +202,10 @@ namespace GameMaker.Writers
                 currentIdent = FindIdent(ident);
             }
         }
-        public void WriteLine()
-        {
-            needIdent = true;
-            Column = 0;
-            Line++;
-            writer.WriteLine();
-        }
+        
         void _WriteNode<T>(T n) where T: ILNode
         {
-
-                formater.Write((dynamic) n);
-
-
+            formater.Write((dynamic) n);
         }
         public void WriteNodesComma<T>(IEnumerable<T> nodes, bool need_comma = false) where T : ILNode
         {
@@ -259,44 +216,69 @@ namespace GameMaker.Writers
                  need_comma = true;
             }
         }
+  
+        bool supressWriteLine = false;
+        public void WriteLine()
+        {
+            if (supressWriteLine)
+            {
+                line.Append("; ");
+            } else
+            {
+                buffer.Append(currentIdent);
+                buffer.AppendLine(line.ToString());
+                Line++;
+                line.Clear();
+            }
+        }
         public void Write(char c)
         {
-            if (needIdent)
-            {
-                writer.Write(currentIdent);
-                Column += currentIdent.Length;
-                needIdent = false;
-            }
-            Column++;
-            writer.Write(c);
+            line.Append(c);
         }
         public void Write(string s)
         {
-            for(int i=0;i < s.Length; i++)
-            {
-                char c = s[i];
-                if(c == '\r' || c == '\n')
-                {
-                    char p = s.ElementAtOrDefault(i + 1);
-                    if (p != c && (c == '\r' || c == '\n')) i++;
-                    WriteLine();
-                    continue;
-                }
-                Write(c);
-            }
+            line.Append(s);
         }
-        public void WriteLine(string s)
+        public void Write(string msg, object o)
         {
-            Write(s);
-            WriteLine();
+            line.AppendFormat(msg, o);
+        }
+        public void Write(string msg, object o, object o1)
+        {
+            line.AppendFormat(msg, o, o1);
+        }
+        public void Write(string msg, object o, object o1, object o2)
+        {
+            line.AppendFormat(msg, o, o1, o2);
         }
         public void Write(string msg, params object[] o)
         {
-            Write(string.Format(msg, o));
+            line.AppendFormat(msg, o);
+        }
+        public void WriteLine(string msg, object o)
+        {
+            line.AppendFormat(msg, o);
+            WriteLine();
+        }
+        public void WriteLine(string msg, object o, object o1)
+        {
+            line.AppendFormat(msg, o, o1);
+            WriteLine();
+        }
+        public void WriteLine(string msg, object o, object o1, object o2)
+        {
+            line.AppendFormat(msg, o, o1, o2);
+            WriteLine();
         }
         public void WriteLine(string msg, params object[] o)
         {
-            WriteLine(string.Format(msg, o));
+            line.AppendFormat(msg, o);
+            WriteLine();
+        }
+        public void WriteLine(string msg)
+        {
+            line.Append(msg);
+            WriteLine();
         }
         
       
@@ -310,21 +292,21 @@ namespace GameMaker.Writers
 
         public void Write(ILVariable v)
         {
-           
             if (formater == null) throw new NullReferenceException("Formatter is null");
+            if (mutater != null) v = mutater.MutateVar(v);
             varinfos.Add(new NodeInfo<ILVariable>(v,Line, Column,v.FullName));
             formater.Write(v);
         }
         public void Write(ILAssign a)
         {
-            if (mutater != null) a = mutater.MutateAssign(currentBlock, currentIndex, a);
+            if (mutater != null) a = mutater.MutateAssign(a);
             if (formater == null) throw new NullReferenceException("Formatter is null");
             assign_infos.Add(new NodeInfo<ILAssign>(a, Line, Column, a.Variable.FullName));
             formater.Write(a);
         }
         public void Write(ILCall c)
         {
-            if (mutater != null) c = mutater.MutateCall(currentBlock, currentIndex, c);
+            if (mutater != null) c = mutater.MutateCall(c);
             if (formater == null) throw new NullReferenceException("Formatter is null");
             call_infos.Add(new NodeInfo<ILCall>(c, Line, Column, c.Name));
             formater.Write(c);
@@ -333,25 +315,51 @@ namespace GameMaker.Writers
         {
             _WriteNode(n);
         }
+        public string NodeToString<T>(T n) where T : ILNode
+        {
+            StringBuilder sb = new StringBuilder();
+            supressWriteLine = true;
+            var backup = line;
+            line = sb;
+            _WriteNode(n);
+            line = backup;
+            supressWriteLine = false;
+            return sb.ToString();
+        }
+  
         public void Write(ILBlock block)
         { // this is why we feed eveythign though this thing
-            var backup = currentBlock;
-            currentBlock = block;
-            Indent++;
-            for(int i=0;i < block.Body.Count; i++)
+            Write(block, false, true);
+        }
+        // quick way to write a block
+        public void WriteFile(ILBlock block, string filename)
+        {
+            Write(block);
+            WriteAsyncToFile(filename);
+            Clear();
+        }
+        public void Write(ILBlock block, bool skip_last_newline, bool ident)
+        {
+            if(ident) Indent++;
+            for (int i = 0; i < block.Body.Count; i++)
             {
-                currentIndex = i;
-                WriteNode(block.Body[i],true);//    WriteNodes(block.Body, true, true);
+                if(skip_last_newline && (block.Body.Count -1) == i)
+                    WriteNode(block.Body[i], false);//    WriteNodes(block.Body, true, true);
+                else
+                    WriteNode(block.Body[i], true);//    WriteNodes(block.Body, true, true);
             }
-            Indent--;
-            currentBlock = backup;
+            if (ident) Indent--;
+        }
+        public void Write(ILBlock block, bool skip_last_newline)
+        {
+            Write(block, skip_last_newline, true);
         }
         public void WriteNode(ILNode n, bool newline = false)
         {
             _WriteNode(n);
             if (newline)
             {
-                if (formater.NodeEnding != null) writer.Write(formater.NodeEnding);
+                if (formater.NodeEnding != null) Write(formater.NodeEnding);
                 WriteLine();
             }
         }
@@ -364,30 +372,32 @@ namespace GameMaker.Writers
             }
             if (ident) Indent--;
         }
-
-        public virtual void WriteMethod(string MethodName, ILBlock Method, bool ident=true)
-        {
-            this.MethodName = MethodName;
-            this.method = Method;
-            WriteNodes(method.Body, true, ident);
-            this.MethodName = null;
-            this.method = null;
-        }
         // this is hevey so watch it
       
         public override string ToString()
         {
-            if (this.ownedWriter && writer is StringWriter)
-                return (writer as StringWriter).ToString();
-            else
+            return buffer.ToString();
+        }
+        public void WriteAsyncToFile(string filePath)
+        {
+            Task.Factory.StartNew(() =>
             {
-                StringBuilder sb = new StringBuilder();
-                sb.Append("{ ");
-                sb.AppendFormat("Type={0} ", this.GetType().ToString());
-                if (MethodName != null) sb.AppendFormat("MethodName=\"{0}\" ", MethodName);
-                sb.Append("}");
-                return sb.ToString();
-            }
+                if (string.IsNullOrWhiteSpace(Path.GetExtension(filePath))) 
+                    filePath = Path.ChangeExtension(filePath, formater.Extension);
+                string data = buffer.ToString();
+            using (StreamWriter sw = new StreamWriter(filePath))
+                sw.Write(data);
+            /*
+             * 
+                    byte[] encodedText = Encoding.Unicode.GetBytes(this.buffer.ToString());
+                using (FileStream sourceStream = new FileStream(filePath,
+               FileMode.Append, FileAccess.Write, FileShare.None,
+               bufferSize: 4096, useAsync: true))
+                {
+                    sourceStream.WriteAsync(encodedText, 0, encodedText.Length);
+                }
+                */
+            });
         }
         public string LineComment { get { return formater.LineComment; } }
         ~BlockToCode()
@@ -402,12 +412,8 @@ namespace GameMaker.Writers
         {
             if (!disposedValue)
             {
-                if (disposing && this.ownedWriter)
+                if (disposing)
                 {
-                    
-                    writer.Dispose();
-                    writer = null;
-                    this.ownedWriter = false;
                 }
                 disposedValue = true;
             }

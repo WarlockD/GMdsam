@@ -9,6 +9,11 @@ using System.Threading.Tasks;
 namespace GameMaker.Dissasembler
 {
     public static class InstructionHelper {
+        // Just because we don't have to buffer it
+        public static IEnumerable<T> MyReverse<T>(this List<T> list)
+        {
+            for (int j = list.Count - 1; j >= 0; j--) yield return list[j];
+        }
         public static void ReLinkList(this IEnumerable<Instruction> list)
         {
             Instruction prev = null;
@@ -320,29 +325,23 @@ namespace GameMaker.Dissasembler
             }
             return ret;
         }
-      
-        public static SortedList<int, Instruction> Dissasemble(Stream stream)
-        {
-            if (stream == null) throw new ArgumentNullException("stream");
-            if (!stream.CanRead) throw new IOException("Cannot read stream");
-            if(!stream.CanSeek) throw new IOException("Cannot seak stream");
-            stream.Position = 0;
-            BinaryReader r = new BinaryReader(stream);
-            var list = Dissasemble(r, stream.Length); 
-            if(Context.Debug)
-            {
-                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(list.Values, "debug.asm");
-            }
-            return list;
-        }
         // I had multipul passes on this so trying to combine it all to do one pass
-        public static  SortedList<int,Instruction> Dissasemble(BinaryReader r, long length)
+        public static  List<Instruction> Dissasemble(File.Code code, Context.ErrorContext error)
         {
-            if (r == null) throw new ArgumentNullException("stream");
+            if (code == null) throw new ArgumentNullException("code");
+            Stream rawStream = code.Data;
+            if (rawStream == null) throw new ArgumentNullException("stream");
+            if (!rawStream.CanRead) throw new IOException("Cannot read stream");
+            if (!rawStream.CanSeek) throw new IOException("Cannot seak stream");
+            
+            BinaryReader r = new BinaryReader(code.Data);
+            long length = r.BaseStream.Length;
+           
             if (r.BaseStream.CanRead != true) throw new IOException("Cannot read stream");
             int pc = 0;
-            long lastpc = r.BaseStream.Length / 4;
-            SortedList<int, Instruction> list = new SortedList<int, Instruction>();
+            long lastpc = length / 4;
+            List<Instruction> list = new List<Instruction>();
+            
             Dictionary<int,Label> labels = new Dictionary<int, Label>();
             Dictionary<int, Label> pushEnviroment = new Dictionary<int, Label>();
             List<Instruction> branches = new List<Instruction>();
@@ -380,9 +379,9 @@ namespace GameMaker.Dissasembler
                                 i.Operand = GiveInstructionALabel(i, i.Extra - 1);  // not a break, set the label BACK to the push as we are simulating a loop
                             }
                             else {
-                                foreach(Instruction ii in list.Values.Reverse())
+                                foreach(Instruction ii in list.MyReverse())
                                 {
-                                    if(ii.Code == GMCode.Pushenv)
+                                    if (ii.Code == GMCode.Pushenv)
                                     {
                                         i.Operand = GiveInstructionALabel(i, ii.Address); // we want to make these continues
                                         break;
@@ -431,29 +430,31 @@ namespace GameMaker.Dissasembler
                 i.Previous = prev;
                 if (prev == null) prev = i;
                 else prev.Next = i;
-                list.Add(i.Address, i);
+                list.Add( i);
             }
             if (list.Count == 0) return list; // return list, its empty
-            for(int i=0; i < list.Values.Count; i++)
+            for(int i=0; i < list.Count; i++)
             {
-                list.Values[i].Next = list.Values.ElementAtOrDefault(i + 1);
+                list[i].Next = list.ElementAtOrDefault(i + 1);
             }
-            Instruction last = list.Last().Value;
+            Instruction last = list.Last();
+            last.Next = null; 
             if(last.Code != GMCode.Exit || last.Code != GMCode.Ret)
             {
                 int address = last.Address + last.Size;
-                list.Add(address, new Instruction(address, GMCode.Exit));
+                list.Add(new Instruction(address, GMCode.Exit));
             } // must be done for graph and in case we have a branch that goes right outside.  Its implied in any event
+            Dictionary<int, Instruction> offsetToInstruction = list.ToDictionary(i => i.Address);
             foreach (var i in branches)
             {
                 Label l = i.Operand as Label;
                 if(l.Origin == null) // Link the label 
                 {
-                    l.Origin = list[l.Address];
-                    list[l.Address].Label = l;
+                    l.Origin = offsetToInstruction[l.Address];
+                    offsetToInstruction[l.Address].Label = l;
                 }
             }
-            return list;
+             return list;
         }
         public void WriteTo(ITextOutput output)
         {
