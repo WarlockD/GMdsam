@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using GameMaker.FlowAnalysis;
 using System.Diagnostics;
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
     public class LoopsAndConditions
     {

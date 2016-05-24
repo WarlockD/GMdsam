@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
     public class GotoRemoval
     {

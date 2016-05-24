@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GameMaker.Dissasembler;
+using GameMaker.Ast;
 using System.IO;
 using System.Threading;
 using GameMaker.Writers;
@@ -40,7 +41,7 @@ namespace GameMaker
                     error.Error("Could not create .dot file: {0} Ex:{1}", file_Name, e.Message);
                 }
             }
-            return new GameMaker.Dissasembler.ILAstBuilder().Build(instructionsNew, error);
+            return new ILAstBuilder().Build(instructionsNew, error);
         }
         const string ObjectNameHeader = "gml_Object_";
         enum MType{

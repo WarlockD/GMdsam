@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using GameMaker.FlowAnalysis;
 using System.Diagnostics;
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
     public static class ILAstOptimizerExtensionMethods
     {
@@ -236,12 +236,7 @@ namespace GameMaker.Dissasembler
             }
             return;
         }
-        // Bad programing here.  It seems GM dosn't remove code that is never used, like if somone
-        // puts code after an exit or return
-        public static void RemoveCodeAfterExit(ILBlock method)
-        {
 
-        }
         public static void RemoveRedundantCode(ILBlock method)
         {
             Dictionary<ILLabel, int> labelRefCount = new Dictionary<ILLabel, int>();

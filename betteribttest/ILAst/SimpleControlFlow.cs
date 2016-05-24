@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
     public class ControlFlowLabelMap
     {

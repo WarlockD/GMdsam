@@ -8,8 +8,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using GameMaker.Dissasembler;
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
     public static class NodeOperations
     {

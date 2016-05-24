@@ -1,12 +1,11 @@
-﻿
-using GameMaker.FlowAnalysis;
+﻿using GameMaker.Dissasembler;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
 
     public static class ILAstBuilderExtensions
@@ -910,7 +909,7 @@ namespace GameMaker.Dissasembler
             method.Body = ast;
             FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
                 
-            GameMaker.Dissasembler.Optimize.RemoveRedundantCode(method);
+            Optimize.RemoveRedundantCode(method);
             error.CheckDebugThenSave(method, "raw.txt");
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
             if (Context.Debug)

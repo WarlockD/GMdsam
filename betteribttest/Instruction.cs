@@ -30,7 +30,7 @@ namespace GameMaker
         NoType,
         ConstantExpression // used when an expression is constant
     }
-    public enum GMCode : byte
+    public enum GMCode : int
     {
         BadOp = 0x00, // used for as a noop, mainly for branches hard jump location is after this
         Conv = 0x03,

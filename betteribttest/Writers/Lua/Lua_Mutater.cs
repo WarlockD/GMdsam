@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using GameMaker.Ast;
 
 namespace GameMaker.Writers.Lua
 {

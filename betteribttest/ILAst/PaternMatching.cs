@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace GameMaker.Dissasembler
+namespace GameMaker.Ast
 {
     public static class PatternMatching {
 

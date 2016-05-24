@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
-
+using GameMaker.Ast;
 namespace GameMaker.Writers.JavaScript
 {
     public class Formater : ICodeFormater
