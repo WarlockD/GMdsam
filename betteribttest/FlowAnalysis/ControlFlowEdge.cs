@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.FlowAnalysis
+namespace GameMaker.FlowAnalysis
 {
     /// <summary>
     /// Describes the type of a control flow egde.

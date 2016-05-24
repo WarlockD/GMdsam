@@ -8,11 +8,11 @@ using System.Collections.ObjectModel;
 using System.Collections;
 using System.Diagnostics;
 
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 using System.Text.RegularExpressions;
 using System.Globalization;
 
-namespace betteribttest
+namespace GameMaker
 {
 
 
@@ -74,8 +74,10 @@ namespace betteribttest
         Switch = 0xf9,
         Case = 0xfa,
         Constant = 0xfb, 
-        Assign,
+   //     Assign,
         DefaultCase,
+        Concat, // -- filler for lua or string math
+        Array2D,
     }
     public static class GMCodeUtil
     {
@@ -108,6 +110,7 @@ namespace betteribttest
             {  (GMCode)0x16, 2 },
             { GMCode.LogicAnd, 2 },
             { GMCode.LogicOr, 2 },
+            { GMCode.Concat, 2 },
         };
         public static uint toUInt(this GMCode t, int operand)
         {
@@ -170,11 +173,13 @@ namespace betteribttest
             { (GMCode) 0x11, "<" },
             { (GMCode) 0x12, "<=" },
             { (GMCode) 0x13, "==" },
-            {  (GMCode)0x14, "!=" },
+          //  {  (GMCode)0x14, "!=" },
+          {  (GMCode)0x14, "~=" },
             {  (GMCode)0x15, ">=" },
             {  (GMCode)0x16, ">" },
-              { GMCode.LogicAnd, "&&" },
-            { GMCode.LogicOr, "||" },
+              { GMCode.LogicAnd, "and" },
+            { GMCode.LogicOr, "or" },
+            { GMCode.Concat, ".." },
         };
         public static Dictionary<int, string> instanceLookup = new Dictionary<int, string>()
         {
@@ -313,7 +318,7 @@ namespace betteribttest
         {
             return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.B;
         }
-        public static bool IsConditionalStatment(this GMCode code)
+        public static bool IsConditionalCode(this GMCode code)
         {
             switch (code)
             {
@@ -323,6 +328,9 @@ namespace betteribttest
                 case GMCode.Sle:
                 case GMCode.Sgt:
                 case GMCode.Slt:
+                case GMCode.Not:
+                case GMCode.LogicAnd:
+                case GMCode.LogicOr:
                     return true;
                 default:
                     return false;
@@ -333,6 +341,7 @@ namespace betteribttest
         {
             switch (i)
             {
+                case GMCode.Concat:
                 case GMCode.LogicAnd:
                 case GMCode.LogicOr:
                 case GMCode.Neg:
@@ -372,7 +381,7 @@ namespace betteribttest
                     throw new Exception("Need more info for pop");
                 case GMCode.Popz:
                 case GMCode.Ret:
-                case GMCode.B:
+             
                 case GMCode.Bt:
                 case GMCode.Bf:
                 case GMCode.Neg:
@@ -397,6 +406,7 @@ namespace betteribttest
                     return 2;
                 case GMCode.Var:
                 case GMCode.Constant:
+                case GMCode.B:
                     return 0;
                 default:
                     throw new Exception("Unkonwn opcode");

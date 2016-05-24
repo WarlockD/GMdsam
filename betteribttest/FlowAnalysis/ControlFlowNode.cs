@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 
-namespace betteribttest.FlowAnalysis
+namespace GameMaker.FlowAnalysis
 {
     /// <summary>
 	/// Type of the control flow node

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using betteribttest.Dissasembler;
+using GameMaker.Dissasembler;
 
-namespace betteribttest.FlowAnalysis
+namespace GameMaker.FlowAnalysis
 {
 
 	/// <summary>
@@ -148,17 +148,11 @@ namespace betteribttest.FlowAnalysis
 
                     switch (code)
                     {
-                        case GMCode.Pushenv:  // jump out of enviroment
-                            CreateEdge(node, node.End.Next, JumpType.PushEnviroment);
-                            break;
                         case GMCode.Popenv:
-                            // jump out of enviroment
-                            //    Debug.Assert(operandLabel != null); // figure out breaks
-                            if (node.End.Next == null) // bug, meh
-                                CreateEdge(node, regularExit, JumpType.PopEnviroment);
-                            else
-                                CreateEdge(node, node.End.Next, JumpType.PopEnviroment);
+                     
+                            CreateEdge(node, operandLabel, JumpType.Normal);
                             break;
+                        case GMCode.Pushenv:    // jump out of enviroment
                         case GMCode.Bt:
                         case GMCode.Bf:
                             NextInstructionEdge(node);
@@ -299,6 +293,7 @@ namespace betteribttest.FlowAnalysis
         {
             switch (opcode)
             {
+                case GMCode.Pushenv:
                 case GMCode.B:
                 case GMCode.Bf:
                 case GMCode.Bt:

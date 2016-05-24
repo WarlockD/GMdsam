@@ -3,10 +3,84 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 
-namespace betteribttest.FlowAnalysis
+namespace GameMaker.FlowAnalysis
 {
+    public static class StringExtensions
+    {
+        // I am using string extensions WAY to much
+        public static char CharAtOrDefault(this string s, int index)
+        {
+            if (index >= 0 && index < s.Length) return s[index];
+            else return default(char);
+        }
+        static readonly string EscapedNewLine;
+        static StringExtensions()
+        {
+            string s = Environment.NewLine;
+            // there are only a few standard cases
+            switch(Environment.NewLine)
+            {
+                case "\r": EscapedNewLine = "\\r"; break;
+                case "\n": EscapedNewLine = "\\n"; break;
+                case "\r\n": EscapedNewLine = "\\r\\n"; break;
+                default:
+                    Debug.Assert(false);
+                    break;
+            }
+        }
+
+        public static void EscapeString(this StringBuilder sb, string text, bool withQuotes = true, bool withEndingNewLine = false, string NewLineReplacment = null)
+        {
+            if (withQuotes) sb.Append('"');
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                char p = text.CharAtOrDefault(i + 1);
+                switch (c)
+                {
+                    case '\\':
+                        if (p != '\\') goto default;
+                        sb.Append("\\\\");
+                        break;
+                    case '\n':
+                    case '\r':
+                        if (p != c && (p == '\n' || p == '\r')) i++;
+                        // new line detected
+                        if (NewLineReplacment != null) sb.Append(NewLineReplacment);
+                        else sb.Append(EscapedNewLine);
+                        break;
+                    case '"':
+                        sb.Append("\\\"");
+                        break;
+                    default:
+                        sb.Append(c);
+                        break;
+                }
+            }
+            if (withEndingNewLine)
+            {
+                if (NewLineReplacment != null) sb.Append(NewLineReplacment);
+                else sb.Append(EscapedNewLine);
+            }
+            if (withQuotes) sb.Append('"');
+        }
+        public static string EscapeStringWithOutQuotes(this string text, string NewLineReplacment = null)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.EscapeString(text, false, false, NewLineReplacment);
+            return sb.ToString();
+        }
+        public static string EscapeStringWithEndingNewLine(this string text, string NewLineReplacment = null)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.EscapeString(text, true, true, NewLineReplacment);
+            return sb.ToString();
+        }
+
+    }
     /// <summary>
     /// GraphViz graph.
     /// </summary>
@@ -60,7 +134,7 @@ namespace betteribttest.FlowAnalysis
                 return text;
             }
             else {
-                return "\"" + text.Replace("\\", "\\\\").Replace("\r", "").Replace("\n", EscapeNewLineReplace).Replace("\"", "\\\"") + "\"";
+                return text.EscapeStringWithEndingNewLine(EscapeNewLineReplace);
             }
         }
 

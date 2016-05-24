@@ -5,13 +5,16 @@ using System.Collections.Generic;
 using System.Linq;
 
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public class GotoRemoval
     {
         Dictionary<ILNode, ILNode> parent = new Dictionary<ILNode, ILNode>();
         Dictionary<ILNode, ILNode> nextSibling = new Dictionary<ILNode, ILNode>();
 
+        public GotoRemoval()
+        {
+        }
         public void RemoveGotos(ILBlock method)
         {
             // Build the navigation data
@@ -21,8 +24,19 @@ namespace betteribttest.Dissasembler
                 ILNode previousChild = null;
                 foreach (ILNode child in node.GetChildren())
                 {
+                    ILExpression e = child as ILExpression;
+                    if (e != null && (e.Code == GMCode.Constant || e.Code == GMCode.Var || e.Code == GMCode.Call)) continue;
+                    if (child is ILValue || child is ILVariable) continue; // we want to skip these.
+                    // Added them as nodes so I don't have to dick with them latter with another AST
                     if (parent.ContainsKey(child))
+                    { // this throws on one single file and I don't know why the hell it does
+                        // its on obj_screen_Step_2  not sure why but its on an expression, so I am putting 
+                        // a hack to skip expressions that don't have any gotos in it.  Meh
+                        // debug, where the fuck is it
+                        var nodes = parent.Keys.Where(x => x == child);
                         throw new Exception("The following expression is linked from several locations: " + child.ToString());
+
+                    }
                     parent[child] = node;
                     if (previousChild != null)
                         nextSibling[previousChild] = child;
@@ -77,7 +91,7 @@ namespace betteribttest.Dissasembler
             // Remove redundant case blocks altogether
             foreach (ILSwitch ilSwitch in method.GetSelfAndChildrenRecursive<ILSwitch>())
             {
-                foreach (ILBlock ilCase in ilSwitch.CaseBlocks)
+                foreach (ILBlock ilCase in ilSwitch.Cases)
                 {
                     Debug.Assert(ilCase.EntryGoto == null);
 
@@ -93,13 +107,12 @@ namespace betteribttest.Dissasembler
                 }
                 // fix case block
 
-                var defaultCase = ilSwitch.CaseBlocks.SingleOrDefault(cb => cb.Values == null);
+                var defaultCase = ilSwitch.Cases.SingleOrDefault(cb => cb.Values == null);
                 // If there is no default block, remove empty case blocks
-                if (defaultCase == null || (defaultCase.Body.Count == 1 && defaultCase.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
+                if (ilSwitch.Default == null || (ilSwitch.Default.Body.Count == 1 && ilSwitch.Default.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
                 {
-                    ilSwitch.CaseBlocks.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
+                    ilSwitch.Cases.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
                 }
-
             }
  
             // Remove redundant return at the end of method
@@ -212,6 +225,11 @@ namespace betteribttest.Dissasembler
             {
                 return Exit(label, visitedNodes);
             }
+            ILAssign assign = node as ILAssign;
+            if (assign != null)
+            {
+                return Exit(assign, visitedNodes);
+            }
 
             ILExpression expr = node as ILExpression;
             if (expr != null)
@@ -255,7 +273,7 @@ namespace betteribttest.Dissasembler
                         return null;
                     }
                 }
-                else if (expr.Code == GMCode.BadOp)
+                else if (expr.Code == GMCode.BadOp  || expr.Code == GMCode.Constant || expr.Code == GMCode.Var)
                 {
                     return Exit(expr, visitedNodes);
                 }
