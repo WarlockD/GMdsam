@@ -1,0 +1,4 @@
+           Pushing Enviroment : obj_toroverworld3
+           path_start(7,3,0,1)
+           Poping  Envorment :  obj_toroverworld3
+           self.alarm[5] = 40

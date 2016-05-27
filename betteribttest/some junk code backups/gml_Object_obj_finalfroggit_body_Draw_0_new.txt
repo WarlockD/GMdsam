@@ -1,0 +1,13 @@
+           if self.pause != 1 then goto Label_0
+           self.siner = 0
+           self.x = self.parent.x
+Label_0:   
+           draw_sprite_ext(471,0,self.x + self.offx,self.offy + self.y + 90,2,2 - sin(self.siner / (Double)(3)) * 0.15,0,16777215,1)
+           if self.pause != 0 then goto Label_1
+           draw_sprite_ext(469,0,self.offx + self.x + sin(self.siner / (Double)(6)) * 10,self.offy + self.y + sin(self.siner / (Double)(3)) * 4,2,2,-(sin(self.siner / (Double)(6))) * 2,16777215,1)
+Label_1:   
+           if self.pause != 1 then goto Label_2
+           draw_sprite_ext(470,0,self.offx + self.x + sin(self.siner / (Double)(6)) * 10,self.offy + self.y + sin(self.siner / (Double)(3)) * 4,2,2,-(sin(self.siner / (Double)(6))) * 2,16777215,1)
+Label_2:   
+           self.siner = self.siner + 1
+           self.anim = self.anim + 1

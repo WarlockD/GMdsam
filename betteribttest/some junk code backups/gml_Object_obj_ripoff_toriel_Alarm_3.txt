@@ -1,0 +1,26 @@
+           if (self.mypart1.pause == 1) then goto Label_0
+           self.dmgwriter = instance_create(((self.x + (self.sprite_width / (Double)(2))) - 48),(self.y - 24),"obj_dmgwriter")
+           global.damage = self.takedamage
+           Pushing Enviroment : 
+           self.dmg = global.damage
+           Poping  Envorment :  
+           self.mypart1.pause = 1
+           snd_play("snd_damage")
+           self.alarm[8] = 11
+Label_0:   
+           if (self.sha != 0) then goto Label_1
+           self.sha = self.x
+Label_1:   
+           self.x = (self.sha + self.shudder)
+           if (self.shudder >= 0) then goto Label_2
+           self.shudder = -((self.shudder + 1))
+           goto Label_3
+Label_2:   
+           self.shudder = -(self.shudder)
+Label_3:   
+           if (self.shudder != 0) then goto Label_4
+           self.sha = 0
+           global.hurtanim[self.myself] = 2
+           Exit
+Label_4:   
+           self.alarm[3] = 2

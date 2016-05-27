@@ -403,7 +403,7 @@ namespace GameMaker.Ast
                 ILLabel newBlockLabel = ILLabel.Generate("FLOOP");
 
                 head.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Sle, GMCode.Bt, GMCode.B);
-                head.Body.Add(new ILAssign() { Variable = tempVar, Expression = start }); // add the starting value
+                head.Body.Add(new ILExpression(GMCode.B,  tempVar,  start )); // add the starting value
                 head.Body.Add(new ILExpression(GMCode.B, newBlockLabel)); // link it to the new while loop header
    
                 ILBasicBlock newLoopHeadder = new ILBasicBlock();
@@ -423,7 +423,7 @@ namespace GameMaker.Ast
                         )
                     { 
                         endBlock.Body.RemoveTail(GMCode.Push, GMCode.Sub, GMCode.Dup, GMCode.Bt, GMCode.B);
-                        endBlock.Body.Add(new ILAssign() { Variable = tempVar, Expression = new ILExpression(GMCode.Sub, null, tempVar.ToExpresion(), dec) });
+                        endBlock.Body.Add(new ILExpression(GMCode.Assign, tempVar, new ILExpression(GMCode.Sub, null, tempVar.ToExpresion(), dec))); // add the starting value
                         endBlock.Body.Add(new ILExpression(GMCode.B, newBlockLabel));
                     }
                 }

@@ -1,0 +1,20 @@
+           if (self.halt != 1) then goto Label_0
+           self.myletter = " "
+           self.stringpos = 1
+           self.stringno = (self.stringno + 1)
+           self.originalstring = self.mystring[self.stringno]
+           self.myx = self.writingx
+           self.myy = self.writingy
+           self.lineno = 0
+           self.halt = 0
+           self.alarm[0] = self.textspeed
+Label_0:   
+           if (self.halt != 2) then goto Label_1
+           instance_destroy()
+Label_1:   
+           if (self.halt != 4) then goto Label_2
+           global.myfight = 0
+           global.mnfight = 1
+           keyboard_clear(13)
+           instance_destroy()
+Label_2:   

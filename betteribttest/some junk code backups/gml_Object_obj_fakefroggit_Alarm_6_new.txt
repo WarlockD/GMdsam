@@ -1,0 +1,2 @@
+           instance_create(self.room_width + 40,self.y + self.sprite_height - 204,"obj_torieldisapprove")
+           self.alarm[10] = 40

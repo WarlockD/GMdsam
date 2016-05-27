@@ -1,0 +1,44 @@
+           self.blcon = instance_create(self.x + 100,self.y + 20,"obj_blconsm")
+           self.gg = floor(random(3))
+           self.mycommand = round(random(100))
+           if self.mycommand < 0 then goto Label_0
+           goto Label_1
+Label_0:   
+Label_1:   if !0 then goto Label_2
+           global.msg[0] = "Robbit,&robbit."
+Label_2:   
+           if self.mycommand < 30 then goto Label_3
+           goto Label_4
+Label_3:   
+Label_4:   if !0 then goto Label_5
+           global.msg[0] = "Creak,&creak."
+Label_5:   
+           if self.mycommand < 50 then goto Label_6
+           goto Label_7
+Label_6:   
+Label_7:   if !0 then goto Label_8
+           global.msg[0] = "Skip,&jump."
+Label_8:   
+           if self.mycommand < 80 then goto Label_9
+           goto Label_10
+Label_9:   
+Label_10:  if !0 then goto Label_11
+           global.msg[0] = "Woof."
+Label_11:  
+           if self.whatiheard != 1 then goto Label_12
+           global.msg[0] = "Shudder,&shudder."
+Label_12:  
+           if self.whatiheard != 3 then goto Label_13
+           global.msg[0] = "Nod,&nod."
+Label_13:  
+           if self.whatiheard != 4 then goto Label_14
+           global.msg[0] = "(Thought&-ful&croak)"
+Label_14:  
+           if self.impress != 1 then goto Label_15
+           global.msg[0] = "(Impress&-ed&ribbit)"
+Label_15:  
+           self.impress = 0
+           global.msg[1] = "%%%"
+           global.typer = 2
+           self.blconwd = instance_create(self.blcon.x + 15,self.blcon.y + 10,"OBJ_NOMSCWRITER")
+           global.border = 3

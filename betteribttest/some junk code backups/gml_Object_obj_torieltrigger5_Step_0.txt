@@ -1,0 +1,78 @@
+           goto Label_0
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_0
+           global.interact = 1
+           self.conversation = 2
+           Pushing Enviroment : 
+           path_start(16,3,0,1)
+           Poping  Envorment :  
+           self.fademusicout = 1
+Label_0:   
+           if !instance_exists("obj_toroverworld3") then goto Label_1
+           goto Label_1
+           if (obj_toroverworld3.path_position != 1) then goto Label_1
+           self.toriel.sprite_index = 1101
+           self.toriel.phone = 1
+           snd_play("snd_phone")
+           self.alarm[4] = 30
+           self.conversation = 3
+Label_1:   
+           if !instance_exists("obj_toroverworld3") then goto Label_2
+           goto Label_2
+           if (self.toriel.path_position != 1) then goto Label_2
+           Pushing Enviroment : 
+           path_end()
+           Poping  Envorment :  
+           self.conversation = 5
+           caster_pause(global.currentsong)
+           self.torielsong = caster_load("music/toriel.ogg")
+           caster_loop(self.torielsong,0.7,0.86)
+           global.msg[0] = "* How did you get&  here^1, my child^1?&* Are you hurt?/"
+           if (global.hp != global.maxhp) then goto Label_3
+           global.msg[1] = "* Not a scratch..^1.&*\\E0 Impressive^1!&*\\E1 But still.../"
+Label_3:   
+           if (global.hp >= global.maxhp) then goto Label_4
+           global.msg[1] = "* There^1, there^1, I will&  heal you./"
+Label_4:   
+           if (global.hp >= 4) then goto Label_5
+           global.msg[1] = "* Who did this to you^2?\\E5 &* You will get an apology./"
+Label_5:   
+           global.msg[2] = "\\E1* I should not have&  left you alone&  for so long./"
+           global.msg[3] = "* It was irresponsible&  to try to surprise&  you like this./"
+           global.msg[4] = "\\E8* Err.../"
+           global.msg[5] = "\\E0* Well^1, I suppose I&  cannot hide it&  any longer./"
+           global.msg[6] = "* Come^1, small one!/%%"
+           global.hp = global.maxhp
+           instance_create(0,0,"obj_dialoguer")
+Label_2:   
+           if !instance_exists("obj_toroverworld3") then goto Label_6
+           goto Label_6
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_6
+           self.conversation = 6
+           Pushing Enviroment : obj_toroverworld3
+           path_start(19,4,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           caster_resume(global.currentsong)
+           self.fademusicout = 3
+           global.plot = 17
+           self.torvolume = 0.8
+Label_6:   
+           if (self.fademusicout != 1) then goto Label_7
+           if (self.volume <= 0) then goto Label_8
+           self.volume = (self.volume - 0.02)
+Label_8:   
+           caster_set_volume(global.currentsong,self.volume)
+           if (self.volume >= 0.02) then goto Label_7
+           self.fademusicout = 2
+Label_7:   
+           if (self.fademusicout != 3) then goto Label_9
+           self.torvolume = (self.torvolume - 0.04)
+           if (self.volume >= 0.9) then goto Label_10
+           self.volume = (self.volume + 0.06)
+Label_10:  
+           caster_set_volume(self.torielsong,self.torvolume)
+           caster_set_volume(global.currentsong,self.volume)
+           if (self.torvolume >= 0.1) then goto Label_9
+           caster_free(self.torielsong)
+           global.interact = 0
+           instance_destroy()
+Label_9:   

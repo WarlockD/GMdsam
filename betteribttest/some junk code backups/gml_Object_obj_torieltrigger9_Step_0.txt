@@ -1,0 +1,31 @@
+           self.dingus = (self.dingus + 1)
+           goto Label_0
+           if (self.dingus != 2) then goto Label_0
+           instance_create(370,90,"obj_toroverworld3")
+Label_0:   
+           goto Label_1
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_1
+           Pushing Enviroment : obj_toroverworld3
+           path_start(41,4,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           global.plot = 22
+           global.interact = 0
+           instance_destroy()
+Label_1:   
+           if !instance_exists("obj_toroverworld3") then goto Label_2
+           if (self.conversation != 1) then goto Label_2
+           global.interact = 1
+           self.myinteract = 3
+           global.typer = 4
+           global.facechoice = 1
+           global.faceemotion = 2
+           global.msc = 0
+           global.msg[0] = "* You wish to know how&  to return \"home,\"&  do you not?/"
+           global.msg[1] = "* Ahead of us lies the&  end of the RUINS./"
+           global.msg[2] = "* A one-way exit to the&  rest of the underground./"
+           global.msg[3] = "* I am going to destroy&  it./"
+           global.msg[4] = "* No one will ever&  be able to leave&  again./"
+           global.msg[5] = "* Now be a good child&  and go upstairs./%%"
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")
+           self.conversation = 2
+Label_2:   

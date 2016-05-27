@@ -1,0 +1,21 @@
+           scr_monsterdefeat(0,0,0,0,0)
+           global.monster[0] = 1
+           Pushing Enviroment : obj_battlecontroller
+           self.visible = 0
+           Poping  Envorment :  obj_battlecontroller
+           global.xp = (global.xp + 150)
+           script_execute("scr_levelup")
+           global.border = 0
+           SCR_BORDERSETUP()
+           Pushing Enviroment : obj_hpname
+           instance_destroy()
+           Poping  Envorment :  obj_hpname
+           Pushing Enviroment : obj_battlebg
+           instance_destroy()
+           Poping  Envorment :  obj_battlebg
+           Pushing Enviroment : obj_btparent
+           instance_destroy()
+           Poping  Envorment :  obj_btparent
+           Pushing Enviroment : obj_borderparent
+           instance_destroy()
+           Poping  Envorment :  obj_borderparent

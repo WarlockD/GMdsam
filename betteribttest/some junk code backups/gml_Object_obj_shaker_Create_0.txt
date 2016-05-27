@@ -1,0 +1,7 @@
+           self.hshake = global.hshake
+           self.vshake = global.vshake
+           self.alarm[0] = 1
+           self.shakespeed = global.shakespeed
+           self.myview = self.view_current
+           self.myx = self.view_xview[self.myview]
+           self.myy = self.view_yview[self.myview]

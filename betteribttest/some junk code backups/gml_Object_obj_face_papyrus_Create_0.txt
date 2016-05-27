@@ -1,0 +1,20 @@
+           event_inherited()
+           self.image_speed = 0.25
+           if  instance_exists(obj_face_sans)                                                  then obj_face_sans.instance_destroy()
+           if  instance_exists(obj_face_undyne)                                                then obj_face_undyne.instance_destroy()
+           if  instance_exists(obj_face_alphys)                                                then obj_face_alphys.instance_destroy()
+           if  instance_exists(obj_face_asgore)                                                then obj_face_asgore.instance_destroy()
+           if  instance_exists(obj_face_torieltalk)                                            then obj_face_torieltalk.instance_destroy()
+           if  instance_exists(obj_face_torielblink)                                           then obj_face_torielblink.instance_destroy()
+           if  instance_exists(obj_torbody)                                                    then obj_torbody.instance_destroy()
+           if  instance_exists(obj_face_mettaton)                                              then obj_face_mettaton.instance_destroy()
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_papyrus)          then self.sprite_index = spr_face_papyrus
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_papyrusmad)       then self.sprite_index = spr_face_papyrusmad
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_papyruslaugh)     then self.sprite_index = spr_face_papyruslaugh
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_papyrusside)      then self.sprite_index = spr_face_papyrusside
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_papyrusevil)      then self.sprite_index = spr_face_papyrusevil
+           if  (global.faceemotion == 5)  &&  (self.sprite_index != spr_face_papyrusside)      then self.sprite_index = spr_face_papyrussweat
+           if  (global.faceemotion == 6)  &&  (self.sprite_index != spr_face_papyrusdejected)  then self.sprite_index = spr_face_papyrusdejected
+           if  (global.faceemotion == 7)  &&  (self.sprite_index != spr_face_papyruswacky)     then self.sprite_index = spr_face_papyruswacky
+           if  (global.faceemotion == 8)  &&  (self.sprite_index != spr_face_papyruscry)       then self.sprite_index = spr_face_papyruscry
+           if  (global.faceemotion == 9)  &&  (self.sprite_index != spr_face_papyruscool)      then self.sprite_index = spr_face_papyruscool

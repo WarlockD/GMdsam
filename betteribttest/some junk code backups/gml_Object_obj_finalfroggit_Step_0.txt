@@ -1,0 +1,163 @@
+           if global.mnfight != 3 then goto Label_0
+           self.attacked = 0
+Label_0:   
+           if self.alarm[5] <= 0 then goto Label_1
+           if global.monster[0] != 1 then goto Label_2
+           if global.monsterinstance[0].alarm[5] <= self.alarm[5] then goto Label_2
+           self.alarm[5] = global.monsterinstance[0].alarm[5]
+Label_2:   
+           if global.monster[1] != 1 then goto Label_3
+           if global.monsterinstance[1].alarm[5] <= self.alarm[5] then goto Label_3
+           self.alarm[5] = global.monsterinstance[1].alarm[5]
+Label_3:   
+           if global.monster[2] != 1 then goto Label_1
+           if global.monsterinstance[2].alarm[5] <= self.alarm[5] then goto Label_1
+           self.alarm[5] = global.monsterinstance[2].alarm[5]
+Label_1:   
+           if global.mnfight != 1 then goto Label_4
+           if self.talked != 0 then goto Label_4
+           self.alarm[5] = 110
+           self.alarm[6] = 1
+           self.talked = 1
+           global.heard = 0
+Label_4:   
+           if !keyboard_multicheck_pressed(13) then goto Label_5
+           if self.alarm[5] <= 5 then goto Label_6
+           if Instance(758).x != global.idealborder[0] then goto Label_6
+           goto Label_7
+Label_6:   
+Label_7:   if !0 then goto Label_5
+           self.alarm[5] = 2
+Label_5:   
+           if global.hurtanim[self.myself] != 1 then goto Label_8
+           self.shudder = 8
+           self.alarm[3] = global.damagetimer
+           global.hurtanim[self.myself] = 3
+Label_8:   
+           if global.hurtanim[self.myself] != 2 then goto Label_9
+           global.monsterhp[self.myself.monsterhp[self.myself] - self.takedamage] = self.alarm[6] < 0
+           self.dmgwriter.self.alarm[2] = 15
+           if global.monsterhp[self.myself] < 1 then goto Label_10
+           global.hurtanim[self.myself] = 0
+           global.myfight = 0
+           global.mnfight = 1
+           goto Label_9
+Label_10:  
+           global.myfight = 0
+           global.mnfight = 1
+           self.killed = 1
+           instance_destroy()
+Label_9:   
+           if global.hurtanim[self.myself] != 5 then goto Label_11
+           global.damage = 0
+           instance_create(self.x + self.sprite_width / (Double)(2) - 48,self.y - 24,"obj_dmgwriter")
+           189.self.alarm[2] = 30
+           global.myfight = 0
+           global.mnfight = 1
+           global.hurtanim[self.myself] = 0
+Label_11:  
+           if global.mnfight != 2 then goto Label_12
+           if self.attacked != 0 then goto Label_13
+           self.pop = scr_monstersum()
+           global.turntimer = 150
+           global.firingrate = 10
+           if !instance_exists(387) then goto Label_14
+           global.firingrate = global.firingrate + 5
+Label_14:  
+           if self.pop != 3 then goto Label_15
+           global.firingrate = global.firingrate * 2.8
+Label_15:  
+           if self.pop != 2 then goto Label_16
+           global.firingrate = global.firingrate * 1.8
+Label_16:  
+           if self.mycommand < 50 then goto Label_17
+           goto Label_18
+Label_17:  
+Label_18:  if !0 then goto Label_19
+           self.gen = instance_create(self.x,self.y,"obj_frogbullet_gen")
+           goto Label_20
+Label_19:  
+           self.gen = instance_create(self.x,self.y,"obj_megaflybulletgen")
+Label_20:  
+           if self.mycommand < 0 then goto Label_21
+           global.msg[0] = "* Final Froggit knows exactly&  why it\'s here."
+Label_21:  
+           if self.mycommand < 30 then goto Label_22
+           global.msg[0] = "* Final Froggit jumps ominously&  up and down."
+Label_22:  
+           if self.mycommand < 60 then goto Label_23
+           global.msg[0] = "* The battlefield is filled&  with the smell of mustard&  seed."
+Label_23:  
+           if self.mycommand < 80 then goto Label_24
+           global.msg[0] = "* You are intimidated by&  Final Froggit\'s strength^4.&* Truly."
+Label_24:  
+           if self.mercymod <= 100 then goto Label_25
+           global.msg[0] = "* Final Froggit seems reluctant&  to fight you."
+Label_25:  
+           if global.monsterhp[self.myself] >= global.monstermaxhp[self.myself] / (Double)(4) then goto Label_26
+           global.msg[0] = "* Final Froggit stands its&  ground."
+Label_26:  
+           self.attacked = 1
+Label_13:  
+           if self.mercymod != 999999 then goto Label_27
+           global.turntimer = -1
+           global.mnfight = 3
+Label_27:  
+           self.whatiheard = -1
+Label_12:  
+           if global.myfight != 2 then goto Label_28
+           if self.whatiheard == -1 then goto Label_28
+           if global.heard != 0 then goto Label_28
+           if self.whatiheard != 0 then goto Label_29
+           global.msc = 0
+           global.msg[0] = "* FINAL FROGGIT " + string(global.monsteratk[self.myself]) + " ATK " + string(global.monsterdef[self.myself]) + " DEF&* Its future looks brighter and&  brighter./^"
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           self.iii.self.halt = 0
+           self.whatiheard = 9
+Label_29:  
+           if self.whatiheard != 3 then goto Label_30
+           global.msc = 0
+           global.msg[0] = "* You compliment Final Froggit^1.&* It understood you perfectly^1.&* Its ATTACK d" +
+    "ropped./^"
+           global.monsteratk[self.myself.monsteratk[self.myself] - 2] = 3
+           self.mercymod = self.mercymod + 40
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           self.iii.self.halt = 0
+Label_30:  
+           if self.whatiheard != 1 then goto Label_31
+           global.msc = 0
+           global.msg[0] = "* You threaten Final Froggit^1.&* It understood you perfectly^1.&* Its DEFENSE dr" +
+    "opped./^"
+           global.monsterdef[self.myself.monsterdef[self.myself] - 20] = 3
+           self.mercymod = self.mercymod + 40
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           self.iii.self.halt = 0
+Label_31:  
+           if self.whatiheard != 4 then goto Label_32
+           global.msc = 0
+           if self.mercymod >= 200 then goto Label_33
+           global.msg[0] = "* You did something mysterious./"
+           global.msg[1] = "* Final Froggit recognizes it&  has more to learn from&  this world./^"
+           self.mercymod = 200
+           goto Label_34
+Label_33:  
+           global.msg[0] = "* You did something mysterious^1.&* But nothing happened./^"
+Label_34:  
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           self.iii.self.halt = 0
+Label_32:  
+           global.heard = 1
+Label_28:  
+           if global.myfight != 4 then goto Label_35
+           if global.mercyuse != 0 then goto Label_35
+           script_execute(163)
+           if self.mercy >= 0 then goto Label_35
+           instance_destroy()
+Label_35:  
+           if self.mercymod != 222 then goto Label_36
+           goto Label_37
+Label_36:  
+Label_37:  if !0 then goto Label_38
+           script_execute(163)
+           if self.mercy >= 0 then goto Label_38
+           instance_destroy()

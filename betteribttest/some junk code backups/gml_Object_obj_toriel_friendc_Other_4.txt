@@ -1,0 +1,3 @@
+           if (global.flag[7] != 0) then goto Label_0
+           instance_destroy()
+Label_0:   

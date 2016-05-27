@@ -1,0 +1,19 @@
+           if (self.flames != 0) then goto Label_0
+           instance_create(obj_toroverworld3.x,obj_toroverworld3.y,"obj_pbflame")
+Label_0:   
+           if (self.flames <= 3) then goto Label_1
+           caster_free(-3)
+           self.room_persistent = 1
+           self.alarm[2] = 34
+           global.battlegroup = 22
+           instance_create(0,0,"obj_battler")
+           goto Label_2
+Label_1:   
+           caster_stop(global.currentsong)
+           self.flames = (self.flames + 1)
+           snd_play("snd_noise")
+           obj_pbflame.image_alpha = (obj_pbflame.image_alpha + 0.25)
+           self.alarm[1] = 10
+           if (self.flames != 4) then goto Label_2
+           self.alarm[1] = 30
+Label_2:   

@@ -1,0 +1,91 @@
+           goto Label_0
+           if (obj_mainchara.x > 140) then goto Label_1
+           goto Label_2
+Label_1:   
+Label_2:   if !1 then goto Label_0
+           global.msc = 204
+           global.typer = 4
+           global.interact = 1
+           global.facechoice = 1
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 1
+Label_0:   
+           goto Label_3
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_3
+           global.interact = 0
+           self.conversation = 2
+           Pushing Enviroment : obj_toroverworld4
+           path_start(8,3,0,1)
+           Poping  Envorment :  obj_toroverworld4
+Label_3:   
+           if !instance_exists("obj_toroverworld4") then goto Label_4
+           goto Label_4
+           if (obj_toroverworld4.path_position != 1) then goto Label_4
+           self.conversation = 2.5
+           Pushing Enviroment : obj_toroverworld4
+           path_end()
+           Poping  Envorment :  obj_toroverworld4
+           if (global.plot >= 4) then goto Label_4
+           global.plot = 4
+           instance_create(obj_toroverworld4.x,obj_toroverworld4.y,"obj_torinteractable1")
+           Pushing Enviroment : obj_toroverworld4
+           instance_destroy()
+           Poping  Envorment :  obj_toroverworld4
+Label_4:   
+           goto Label_5
+           if (global.plot != 4.5) then goto Label_5
+           self.conversation = 3
+           if !instance_exists("obj_torinteractable1") then goto Label_6
+           instance_create(obj_torinteractable1.x,obj_torinteractable1.y,"obj_toroverworld4")
+           Pushing Enviroment : obj_torinteractable1
+           instance_destroy()
+           Poping  Envorment :  obj_torinteractable1
+Label_6:   
+           Pushing Enviroment : obj_toroverworld4
+           path_start(9,3,0,1)
+           Poping  Envorment :  obj_toroverworld4
+Label_5:   
+           if !instance_exists("obj_toroverworld4") then goto Label_7
+           goto Label_7
+           if (obj_toroverworld4.path_position != 1) then goto Label_7
+           self.conversation = 4
+           Pushing Enviroment : obj_toroverworld4
+           path_end()
+           Poping  Envorment :  obj_toroverworld4
+           instance_create(obj_toroverworld4.x,obj_toroverworld4.y,"obj_torinteractable2")
+           Pushing Enviroment : obj_toroverworld4
+           instance_destroy()
+           Poping  Envorment :  obj_toroverworld4
+Label_7:   
+           goto Label_8
+           if (global.plot != 5) then goto Label_9
+           if (instance_exists("obj_shaker") != 0) then goto Label_8
+Label_9:   
+           if !instance_exists("obj_torinteractable2") then goto Label_10
+           instance_create(obj_torinteractable2.x,obj_torinteractable2.y,"obj_toroverworld4")
+           Pushing Enviroment : obj_torinteractable2
+           instance_destroy()
+           Poping  Envorment :  obj_torinteractable2
+           Pushing Enviroment : obj_toroverworld4
+           self.facing = 3
+           Poping  Envorment :  obj_toroverworld4
+           Pushing Enviroment : obj_toroverworld4
+           self.sprite_index = self.lsprite
+           Poping  Envorment :  obj_toroverworld4
+Label_10:  
+           global.msc = 210
+           global.typer = 4
+           global.interact = 1
+           global.facechoice = 1
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 5
+Label_8:   
+           goto Label_11
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_11
+           self.conversation = 6
+           global.interact = 0
+           Pushing Enviroment : obj_toroverworld4
+           path_start(41,3,0,0)
+           Poping  Envorment :  obj_toroverworld4
+           instance_destroy()
+Label_11:  

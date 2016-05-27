@@ -1,0 +1,6 @@
+            Label 'Label_1' not used
+           if (self.argument0 != 0) then goto Label_0
+           return (obj_rborder.x - obj_lborder.x)
+Label_0:   
+           if (self.argument0 != 1) then goto Label_1
+           return (global.idealborder[1] - global.idealborder[0])

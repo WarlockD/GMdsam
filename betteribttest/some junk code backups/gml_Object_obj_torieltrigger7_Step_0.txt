@@ -1,0 +1,56 @@
+           goto Label_0
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_0
+           self.conversation = 2
+           Pushing Enviroment : obj_toroverworld3
+           self.x = (self.x - 10)
+           Poping  Envorment :  obj_toroverworld3
+           obj_toroverworld3.rsprite = 1113
+           obj_toroverworld3.usprite = 1116
+           obj_toroverworld3.sprite_index = 1113
+           obj_mainchara.visible = 0
+           Pushing Enviroment : obj_toroverworld3
+           path_start(21,2,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           Pushing Enviroment : obj_mainchara
+           path_start(21,2,0,0)
+           Poping  Envorment :  obj_mainchara
+Label_0:   
+           goto Label_1
+           if (self.conversation != 2) then goto Label_1
+           if (obj_toroverworld3.path_position != 1) then goto Label_1
+           obj_toroverworld3.usprite = 1111
+           obj_toroverworld3.rsprite = 1106
+           obj_mainchara.x = (obj_mainchara.x + 33)
+           self.alarm[2] = 1
+           obj_toroverworld3.y = (obj_toroverworld3.y - 1)
+           obj_toroverworld3.facing = 2
+           obj_toroverworld3.direction = 90
+           global.facing = 2
+           obj_mainchara.y = (obj_mainchara.y - 3)
+           global.msg[0] = "* A room of your own.&* I hope you like it!/%%"
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 3
+Label_1:   
+           goto Label_2
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_2
+           self.alarm[5] = 90
+           Pushing Enviroment : obj_toroverworld3
+           self.visible = 0
+           Poping  Envorment :  obj_toroverworld3
+           self.ruff = scr_marker(obj_toroverworld3.x,obj_toroverworld3.y,1100)
+           self.ruff.image_speed = 0.1
+           obj_mainchara.visible = 0
+           self.alarm[1] = 10
+           self.conversation = 4
+Label_2:   
+           goto Label_3
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_3
+           obj_toroverworld3.usprite = 1111
+           global.interact = 0
+           self.conversation = 2
+           Pushing Enviroment : obj_toroverworld3
+           path_start(20,6,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           global.plot = 19
+           instance_destroy()
+Label_3:   

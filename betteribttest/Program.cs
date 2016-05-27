@@ -48,15 +48,20 @@ namespace GameMaker
             {
                 InstructionError("Missing data.win file");
             }
+#if !DEBUG
             try
             {
+#endif
                 File.LoadDataWin(dataWinFileName);
                 File.LoadEveything();
+#if !DEBUG
             }
+
             catch (Exception e)
             {
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
+#endif
             string toSearch = null;
             int pos = 1;
             while (pos < args.Length)

@@ -1,0 +1,16 @@
+            Label 'Label_3' not used
+           if (self.hspeed >= 0) then goto Label_0
+           if (self.x >= (global.idealborder[0] - self.argument0)) then goto Label_0
+           instance_destroy()
+Label_0:   
+           if (self.hspeed <= 0) then goto Label_1
+           if (self.x <= (global.idealborder[1] + self.argument0)) then goto Label_1
+           instance_destroy()
+Label_1:   
+           if (self.vspeed >= 0) then goto Label_2
+           if (self.y >= (global.idealborder[2] - self.argument0)) then goto Label_2
+           instance_destroy()
+Label_2:   
+           if (self.vspeed <= 0) then goto Label_3
+           if (self.y <= (global.idealborder[3] + self.argument0)) then goto Label_3
+           instance_destroy()

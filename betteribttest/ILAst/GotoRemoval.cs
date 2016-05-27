@@ -225,11 +225,7 @@ namespace GameMaker.Ast
             {
                 return Exit(label, visitedNodes);
             }
-            ILAssign assign = node as ILAssign;
-            if (assign != null)
-            {
-                return Exit(assign, visitedNodes);
-            }
+ 
 
             ILExpression expr = node as ILExpression;
             if (expr != null)

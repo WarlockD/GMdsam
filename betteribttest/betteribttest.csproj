@@ -74,6 +74,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Constants.cs" />
+    <Compile Include="Dissasembler\IBuildAst.cs" />
+    <Compile Include="Dissasembler\NewByteCodeAst.cs" />
+    <Compile Include="Dissasembler\OldByteCodeAst.cs" />
     <Compile Include="ILAst\LoopAndConditions.cs" />
     <Compile Include="Dissasembler\OpCode.cs" />
     <Compile Include="ILAst\Optimize.cs" />

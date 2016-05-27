@@ -1,0 +1,6 @@
+            Label 'Label_1' not used
+           if (self.x >= (((self.room_width / (Double)(2)) - (self.sprite_width / (Double)(2))) + 240)) then goto Label_0
+           self.speed = 0
+Label_0:   
+           if (global.monster[0] != 0) then goto Label_1
+           self.image_index = 1

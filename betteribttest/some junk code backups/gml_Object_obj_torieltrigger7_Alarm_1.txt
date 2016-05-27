@@ -1,0 +1,7 @@
+           if !instance_exists(self.ruff) then goto Label_0
+           self.alarm[6] = 20
+           obj_toroverworld3.myinteract = 17
+           goto Label_1
+Label_0:   
+           obj_toroverworld3.myinteract = 0
+Label_1:   

@@ -1,0 +1,24 @@
+            Label 'Label_0' not used
+           self.count = 0
+           self.side = 0
+           global.facechange = 1
+           self.xx = self.view_xview[self.view_current]
+           self.yy = self.view_yview[self.view_current]
+           if !instance_exists("obj_mainchara") then goto Label_0
+           if (obj_mainchara.y <= (self.yy + 130)) then goto Label_1
+           self.side = 0
+           if (global.facechoice == 0) then goto Label_2
+           self.writer = instance_create((self.xx + 68),(self.yy - 5),"OBJ_WRITER")
+           script_execute("scr_facechoice")
+           goto Label_3
+Label_2:   
+           self.writer = instance_create((self.xx + 10),(self.yy - 5),"OBJ_WRITER")
+Label_3:   goto Label_0
+Label_1:   
+           self.side = 1
+           if (global.facechoice == 0) then goto Label_4
+           self.writer = instance_create((self.xx + 68),(self.yy + 150),"OBJ_WRITER")
+           script_execute("scr_facechoice")
+           goto Label_0
+Label_4:   
+           self.writer = instance_create((self.xx + 10),(self.yy + 150),"OBJ_WRITER")

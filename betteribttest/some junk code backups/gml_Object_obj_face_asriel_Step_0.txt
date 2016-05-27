@@ -1,0 +1,10 @@
+           self.sprite_index = self.u[global.faceemotion]
+           if !instance_exists(OBJ_WRITER) then goto Label_0
+           if (OBJ_WRITER.halt == 0) then goto Label_1
+           self.image_speed = 0
+           self.image_index = 0
+           goto Label_0
+Label_1:   
+           self.image_speed = 0.25
+Label_0:   
+           if  (global.facechoice == 0)  then instance_destroy()

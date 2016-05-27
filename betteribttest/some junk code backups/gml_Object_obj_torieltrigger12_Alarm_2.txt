@@ -1,0 +1,53 @@
+           global.border = 0
+           Pushing Enviroment : obj_pbflame
+           instance_destroy()
+           Poping  Envorment :  obj_pbflame
+           if (global.flag[45] != 3) then goto Label_0
+           caster_stop(global.currentsong)
+           caster_loop(global.currentsong,0.5,0.3)
+           obj_mainchara.y = (obj_mainchara.y + 8)
+           global.interact = 2
+           global.typer = 4
+           global.msc = 0
+           global.facechoice = 1
+           global.msg[0] = "\\E2* That is right./"
+           global.msg[1] = "* Go upstairs./%%"
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")
+           self.conversation = 9
+           global.mercy = 0
+           global.seriousbattle = 0
+           global.border = 0
+Label_0:   
+           if (global.flag[45] != 4) then goto Label_1
+           global.mercy = 0
+           global.seriousbattle = 0
+           global.border = 0
+           Pushing Enviroment : obj_toroverworld3
+           instance_destroy()
+           Poping  Envorment :  obj_toroverworld3
+           global.plot = 25
+           instance_destroy()
+Label_1:   
+           if (global.flag[45] != 5) then goto Label_2
+           global.mercy = 0
+           global.seriousbattle = 0
+           global.border = 0
+           obj_mainchara.x = (obj_toroverworld3.x + 6)
+           obj_mainchara.y = (obj_toroverworld3.y + 36)
+           obj_toroverworld3.direction = 270
+           caster_stop(global.currentsong)
+           global.currentsong = caster_load("music/toriel.ogg")
+           caster_loop(global.currentsong,0.8,0.75)
+           global.msc = 0
+           global.typer = 4
+           global.facechoice = 1
+           global.msg[0] = "\\E2* If you truly wish to&  leave the RUINS.../"
+           global.msg[1] = "* I will not stop you./"
+           global.msg[2] = "\\E2* However^1, when you&  leave.../"
+           global.msg[3] = "\\E1* Please do not come&  back./"
+           global.msg[4] = "\\E2* I hope you understand./%%"
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")
+           self.conversation = 6
+           global.interact = 2
+Label_2:   
+           global.mercy = 0

@@ -1,0 +1,7 @@
+           self.image_speed = 0
+           self.visible = 0
+           self.alarm[0] = 70
+           self.alarm[1] = 100
+           self.flashing = 1
+           self.image_xscale = 2
+           self.image_yscale = 2

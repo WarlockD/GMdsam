@@ -1,0 +1,312 @@
+            Label 'Label_103' not used
+           if (self.argument0 == 0) then goto Label_0
+           global.typer = self.argument0
+Label_0:   
+           if (global.typer != 1) then goto Label_1
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.x + (global.idealborder[1] - 55)),1,1,"{ Name = SND_TXT2 , filename = SND_TXT2.wav}",16,32)
+Label_1:   
+           if (global.typer != 2) then goto Label_2
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 190),43,2,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",9,20)
+Label_2:   
+           if (global.typer != 3) then goto Label_3
+           script_execute("fnt_curs",7,"Color(00808000)",self.x,self.y,(self.x + 100),39,3,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",10,10)
+Label_3:   
+           if (global.typer != 4) then goto Label_4
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txttor , filename = snd_txttor.wav}",8,18)
+Label_4:   
+           if (global.typer != 5) then goto Label_5
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",8,18)
+Label_5:   
+           if (global.typer != 6) then goto Label_6
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,1,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_6:   
+           if (global.typer != 7) then goto Label_7
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),2,2,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",9,20)
+Label_7:   
+           if (global.typer != 8) then goto Label_8
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,1,"{ Name = snd_txttor , filename = snd_txttor.wav}",9,20)
+Label_8:   
+           if (global.typer != 9) then goto Label_9
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",8,18)
+Label_9:   
+           if (global.typer != 10) then goto Label_10
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_nosound , filename = snd_nosound.wav}",8,18)
+Label_10:  
+           if (global.typer != 11) then goto Label_11
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,2,"{ Name = SND_TXT2 , filename = SND_TXT2.wav}",9,18)
+Label_11:  
+           if (global.typer != 12) then goto Label_12
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),1,3,"{ Name = snd_txttor2 , filename = snd_txttor2.wav}",10,20)
+Label_12:  
+           if (global.typer != 13) then goto Label_13
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),2,4,"{ Name = snd_txttor2 , filename = snd_txttor2.wav}",11,20)
+Label_13:  
+           if (global.typer != 14) then goto Label_14
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),3,5,"{ Name = snd_txttor2 , filename = snd_txttor2.wav}",14,20)
+Label_14:  
+           if (global.typer != 15) then goto Label_15
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,10,"{ Name = snd_txttor2 , filename = snd_txttor2.wav}",18,20)
+Label_15:  
+           if (global.typer != 16) then goto Label_16
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),1.2,2,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",8,18)
+Label_16:  
+           if (global.typer != 17) then goto Label_17
+           script_execute("fnt_comicsans",8,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtsans , filename = snd_txtsans.wav}",8,18)
+Label_17:  
+           if (global.typer != 19) then goto Label_18
+           global.typer = 18
+Label_18:  
+           if (global.typer != 18) then goto Label_19
+           script_execute("fnt_papyrus",9,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtpap , filename = snd_txtpap.wav}",11,18)
+Label_19:  
+           if (global.typer != 20) then goto Label_20
+           script_execute("fnt_plainbig",5,"Color(00000000)",self.x,self.y,(self.x + 200),0,2,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",25,20)
+Label_20:  
+           if (global.typer != 21) then goto Label_21
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,4,"{ Name = snd_nosound , filename = snd_nosound.wav}",10,18)
+Label_21:  
+           if (global.typer != 22) then goto Label_22
+           script_execute("fnt_papyrus",9,"Color(00000000)",(self.x + 10),self.y,(self.x + 200),1,1,"{ Name = snd_txtpap , filename = snd_txtpap.wav}",11,20)
+Label_22:  
+           if (global.typer != 23) then goto Label_23
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 310),0,1,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",8,18)
+Label_23:  
+           if (global.typer != 24) then goto Label_24
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 310),0,1,"{ Name = snd_tem , filename = snd_tem.wav}",8,18)
+Label_24:  
+           if (global.typer != 27) then goto Label_25
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,3,"{ Name = snd_mtt1 , filename = snd_mtt1.wav}",8,18)
+Label_25:  
+           if (global.typer != 28) then goto Label_26
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,2,"{ Name = snd_tem , filename = snd_tem.wav}",8,18)
+Label_26:  
+           if (global.typer != 30) then goto Label_27
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),9999,0,2,"{ Name = snd_txtasg , filename = snd_txtasg.wav}",20,36)
+Label_27:  
+           if (global.typer != 31) then goto Label_28
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),9999,0,2,"{ Name = snd_txtasg , filename = snd_txtasg.wav}",12,18)
+Label_28:  
+           if (global.typer != 32) then goto Label_29
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),9999,0,2,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",20,36)
+Label_29:  
+           if (global.typer != 33) then goto Label_30
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 190),43,1,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",9,20)
+Label_30:  
+           if (global.typer != 34) then goto Label_31
+           script_execute("fnt_wingdings",0,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,3,"{ Name = snd_wngdng1 , filename = snd_wngdng1.wav}",16,18)
+Label_31:  
+           if (global.typer != 35) then goto Label_32
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,2,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",10,18)
+Label_32:  
+           if (global.typer != 36) then goto Label_33
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,8,"{ Name = snd_txtasr2 , filename = snd_txtasr2.wav}",10,18)
+Label_33:  
+           if (global.typer != 37) then goto Label_34
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtund , filename = snd_txtund.wav}",8,18)
+Label_34:  
+           if (global.typer != 38) then goto Label_35
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,6,"{ Name = snd_txtund , filename = snd_txtund.wav}",8,18)
+Label_35:  
+           if (global.typer != 39) then goto Label_36
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),0,1,"{ Name = snd_txtund , filename = snd_txtund.wav}",9,20)
+Label_36:  
+           if (global.typer != 40) then goto Label_37
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),1,2,"{ Name = snd_txtund , filename = snd_txtund.wav}",9,20)
+Label_37:  
+           if (global.typer != 41) then goto Label_38
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),0,1,"{ Name = snd_txtund , filename = snd_txtund.wav}",9,20)
+Label_38:  
+           if (global.typer != 42) then goto Label_39
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),2,4,"{ Name = snd_txtund , filename = snd_txtund.wav}",9,20)
+Label_39:  
+           if (global.typer != 43) then goto Label_40
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),2,4,"{ Name = snd_txtund2 , filename = snd_txtund2.wav}",9,20)
+Label_40:  
+           if (global.typer != 44) then goto Label_41
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),2,5,"{ Name = snd_txtund3 , filename = snd_txtund3.wav}",9,20)
+Label_41:  
+           if (global.typer != 45) then goto Label_42
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),2,7,"{ Name = snd_txtund4 , filename = snd_txtund4.wav}",9,20)
+Label_42:  
+           if (global.typer != 47) then goto Label_43
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtal , filename = snd_txtal.wav}",8,18)
+Label_43:  
+           if (global.typer != 48) then goto Label_44
+           script_execute("fnt_comicsans",8,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtsans2 , filename = snd_txtsans2.wav}",8,18)
+Label_44:  
+           if (global.typer != 49) then goto Label_45
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 190),43,1,"{ Name = snd_txtal , filename = snd_txtal.wav}",9,20)
+Label_45:  
+           if (global.typer != 50) then goto Label_46
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 10),999,0,3,"{ Name = snd_mtt1 , filename = snd_mtt1.wav}",8,18)
+Label_46:  
+           if (global.typer != 51) then goto Label_47
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 20),(self.y + 16),999,0,3,"{ Name = snd_mtt1 , filename = snd_mtt1.wav}",8,18)
+Label_47:  
+           if (global.typer != 52) then goto Label_48
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 20),(self.y + 20),999,0,1,"{ Name = snd_txtal , filename = snd_txtal.wav}",8,18)
+Label_48:  
+           if (global.typer != 53) then goto Label_49
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 20),(self.y + 10),999,1.5,4,"{ Name = snd_mtt1 , filename = snd_mtt1.wav}",8,18)
+Label_49:  
+           if (global.typer != 54) then goto Label_50
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 20),(self.y + 10),999,0,7,"{ Name = snd_mtt1 , filename = snd_mtt1.wav}",8,18)
+Label_50:  
+           if (global.typer != 55) then goto Label_51
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 999),0,2,"{ Name = snd_nosound , filename = snd_nosound.wav}",9,20)
+Label_51:  
+           if (global.typer != 60) then goto Label_52
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,2,"{ Name = snd_txtasg , filename = snd_txtasg.wav}",8,18)
+Label_52:  
+           if (global.typer != 61) then goto Label_53
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.x + 99999),0,2,"{ Name = snd_nosound , filename = snd_nosound.wav}",16,32)
+Label_53:  
+           if (global.typer != 62) then goto Label_54
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,3,"{ Name = snd_txtasg , filename = snd_txtasg.wav}",9,20)
+Label_54:  
+           if (global.typer != 63) then goto Label_55
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,2,"{ Name = snd_txtasg , filename = snd_txtasg.wav}",9,20)
+Label_55:  
+           if (global.typer != 64) then goto Label_56
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),2,3,"{ Name = snd_txtasg , filename = snd_txtasg.wav}",9,20)
+Label_56:  
+           if (global.typer != 66) then goto Label_57
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,2,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_57:  
+           if (global.typer != 67) then goto Label_58
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.x + 999),2,5,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",16,32)
+Label_58:  
+           if (global.typer != 68) then goto Label_59
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 500),0,1,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_59:  
+           if (global.typer != 69) then goto Label_60
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 500),2,2,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",9,20)
+Label_60:  
+           if (global.typer != 70) then goto Label_61
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 500),1,3,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_61:  
+           if (global.typer != 71) then goto Label_62
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 500),2,5,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",9,20)
+Label_62:  
+           if (global.typer != 72) then goto Label_63
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 500),1,2,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_63:  
+           if (global.typer != 73) then goto Label_64
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.x + 99999),0,5,"{ Name = snd_nosound , filename = snd_nosound.wav}",16,32)
+Label_64:  
+           if (global.typer != 74) then goto Label_65
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 490),0,1,"{ Name = snd_txtal , filename = snd_txtal.wav}",9,20)
+Label_65:  
+           if (global.typer != 75) then goto Label_66
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 490),2,1,"{ Name = snd_txtal , filename = snd_txtal.wav}",9,20)
+Label_66:  
+           if (global.typer != 76) then goto Label_67
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",8,18)
+Label_67:  
+           if (global.typer != 77) then goto Label_68
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,4,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",9,20)
+Label_68:  
+           if (global.typer != 78) then goto Label_69
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),2,3,"{ Name = snd_floweytalk2 , filename = snd_floweytalk2.wav}",9,20)
+Label_69:  
+           if (global.typer != 79) then goto Label_70
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,2,"{ Name = snd_txtasr2 , filename = snd_txtasr2.wav}",8,18)
+Label_70:  
+           if (global.typer != 80) then goto Label_71
+           script_execute("fnt_comicsans",8,"Color(00000000)",self.x,self.y,(self.x + 200),0,1,"{ Name = snd_txtsans , filename = snd_txtsans.wav}",10,20)
+Label_71:  
+           if (global.typer != 81) then goto Label_72
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 190),0,1,"{ Name = snd_txtund , filename = snd_txtund.wav}",9,20)
+Label_72:  
+           if (global.typer != 82) then goto Label_73
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 490),2,3,"{ Name = snd_txtal , filename = snd_txtal.wav}",9,20)
+Label_73:  
+           if (global.typer != 83) then goto Label_74
+           script_execute("fnt_papyrus",9,"Color(00000000)",(self.x + 2),self.y,(self.x + 200),1,3,"{ Name = snd_txtpap , filename = snd_txtpap.wav}",11,20)
+Label_74:  
+           if (global.typer != 84) then goto Label_75
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),1,2,"{ Name = snd_txttor2 , filename = snd_txttor2.wav}",10,20)
+Label_75:  
+           if (global.typer != 85) then goto Label_76
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,2,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",9,20)
+Label_76:  
+           if (global.typer != 86) then goto Label_77
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 10),self.y,(self.x + 200),0,1,"{ Name = snd_txtasr2 , filename = snd_txtasr2.wav}",9,20)
+Label_77:  
+           if (global.typer != 87) then goto Label_78
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 10),self.y,(self.x + 200),0,3,"{ Name = snd_txtasr2 , filename = snd_txtasr2.wav}",9,20)
+Label_78:  
+           if (global.typer != 88) then goto Label_79
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 10),self.y,(self.x + 200),2,3,"{ Name = snd_txtasr2 , filename = snd_txtasr2.wav}",9,20)
+Label_79:  
+           if (global.typer != 89) then goto Label_80
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",8,18)
+Label_80:  
+           if (global.typer != 90) then goto Label_81
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,3,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",8,18)
+Label_81:  
+           if (global.typer != 91) then goto Label_82
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),9999,0,3,"{ Name = snd_txttor , filename = snd_txttor.wav}",10,18)
+Label_82:  
+           if (global.typer != 92) then goto Label_83
+           script_execute("fnt_plain",4,"Color(00FFFFFF)",self.x,self.y,(self.x + 190),43,1,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",9,20)
+Label_83:  
+           if (global.typer != 93) then goto Label_84
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),0,1,"{ Name = snd_txtund_hyper , filename = snd_txtund_hyper.wav}",9,20)
+Label_84:  
+           if (global.typer != 94) then goto Label_85
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),1,2,"{ Name = snd_txtund_hyper , filename = snd_txtund_hyper.wav}",9,20)
+Label_85:  
+           if (global.typer != 95) then goto Label_86
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),2,3,"{ Name = snd_txtund_hyper , filename = snd_txtund_hyper.wav}",9,20)
+Label_86:  
+           if (global.typer != 96) then goto Label_87
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,(self.x + 190),3,4,"{ Name = snd_txtund_hyper , filename = snd_txtund_hyper.wav}",9,20)
+Label_87:  
+           if (global.typer != 97) then goto Label_88
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 16),self.y,999,1,3,"{ Name = snd_mtt1 , filename = snd_mtt1.wav}",8,18)
+Label_88:  
+           if (global.typer != 98) then goto Label_89
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 8),self.y,(self.x + 200),0,1,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_89:  
+           if (global.typer != 99) then goto Label_90
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 8),self.y,(self.x + 200),1,1,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_90:  
+           if (global.typer != 100) then goto Label_91
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),0,1,"{ Name = snd_nosound , filename = snd_nosound.wav}",8,18)
+Label_91:  
+           if (global.typer != 101) then goto Label_92
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 8),self.y,(self.x + 200),1,2,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_92:  
+           if (global.typer != 102) then goto Label_93
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 8),self.y,(self.x + 200),2,3,"{ Name = snd_floweytalk1 , filename = snd_floweytalk1.wav}",9,20)
+Label_93:  
+           if (global.typer != 103) then goto Label_94
+           script_execute("fnt_plain",4,"Color(00000000)",(self.x + 8),self.y,(self.x + 200),2,5,"{ Name = snd_txtasr , filename = snd_txtasr.wav}",9,20)
+Label_94:  
+           if (global.typer != 104) then goto Label_95
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),999,0,4,"{ Name = snd_nosound , filename = snd_nosound.wav}",16,34)
+Label_95:  
+           if (global.typer != 105) then goto Label_96
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),999,0,3,"{ Name = snd_nosound , filename = snd_nosound.wav}",16,34)
+Label_96:  
+           if (global.typer != 106) then goto Label_97
+           script_execute("fnt_maintext",2,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),999,0,3,"{ Name = snd_nosound , filename = snd_nosound.wav}",8,18)
+Label_97:  
+           if (global.typer != 107) then goto Label_98
+           script_execute("fnt_comicsans",8,"Color(00000000)",(self.x + 5),self.y,(self.x + 200),0,2,"{ Name = snd_txtsans , filename = snd_txtsans.wav}",10,20)
+Label_98:  
+           if (global.typer != 108) then goto Label_99
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 200),0,4,"{ Name = snd_nosound , filename = snd_nosound.wav}",9,20)
+Label_99:  
+           if (global.typer != 109) then goto Label_100
+           script_execute("fnt_comicsans",8,"Color(00000000)",(self.x + 5),self.y,(self.x + 200),0,1,"{ Name = snd_txtsans , filename = snd_txtsans.wav}",10,20)
+Label_100: 
+           if (global.typer != 110) then goto Label_101
+           script_execute("fnt_main",1,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),9999,0,2,"{ Name = snd_txtsans , filename = snd_txtsans.wav}",20,36)
+Label_101: 
+           if (global.typer != 111) then goto Label_102
+           script_execute("fnt_plain",4,"Color(00000000)",self.x,self.y,(self.x + 190),43,1,"{ Name = SND_TXT1 , filename = SND_TXT1.wav}",9,20)
+Label_102: 
+           if (global.typer != 666) then goto Label_103
+           script_execute("fnt_wingdings",0,"Color(00FFFFFF)",(self.x + 20),(self.y + 20),(self.view_xview[self.view_current] + 290),1,4,"{ Name = snd_wngdng1 , filename = snd_wngdng1.wav}",16,18)

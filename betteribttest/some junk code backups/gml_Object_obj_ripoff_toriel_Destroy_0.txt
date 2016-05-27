@@ -1,0 +1,8 @@
+           goto Label_0
+           if (global.monsterhp[self.myself] != global.monstermaxhp[self.myself]) then goto Label_0
+           obj_solidthin.goldreward[(global.goldreward[3] + 40)] = -5
+Label_0:   
+           scr_monsterdefeat(0,0,0,0,0)
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  

@@ -1,0 +1,17 @@
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_papyrus)          then self.sprite_index = spr_face_papyrus
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_papyrusmad)       then self.sprite_index = spr_face_papyrusmad
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_papyruslaugh)     then self.sprite_index = spr_face_papyruslaugh
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_papyrusside)      then self.sprite_index = spr_face_papyrusside
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_papyrusevil)      then self.sprite_index = spr_face_papyrusevil
+           if  (global.faceemotion == 5)  &&  (self.sprite_index != spr_face_papyrussweat)     then self.sprite_index = spr_face_papyrussweat
+           if  (global.faceemotion == 6)  &&  (self.sprite_index != spr_face_papyrusdejected)  then self.sprite_index = spr_face_papyrusdejected
+           if  (global.faceemotion == 7)  &&  (self.sprite_index != spr_face_papyruswacky)     then self.sprite_index = spr_face_papyruswacky
+           if  (global.faceemotion == 8)  &&  (self.sprite_index != spr_face_papyruscry)       then self.sprite_index = spr_face_papyruscry
+           if  (global.faceemotion == 9)  &&  (self.sprite_index != spr_face_papyruscool)      then self.sprite_index = spr_face_papyruscool
+           if !instance_exists(OBJ_WRITER) then goto Label_10
+           if (OBJ_WRITER.halt == 0) then goto Label_11
+           self.image_speed = 0
+           goto Label_10
+Label_11:  
+           self.image_speed = 0.25
+Label_10:  

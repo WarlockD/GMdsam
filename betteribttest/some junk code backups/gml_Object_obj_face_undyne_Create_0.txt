@@ -1,0 +1,20 @@
+           event_inherited()
+           self.image_speed = 0.25
+           if  instance_exists(obj_face_sans)         then obj_face_sans.instance_destroy()
+           if  instance_exists(obj_face_papyrus)      then obj_face_papyrus.instance_destroy()
+           if  instance_exists(obj_face_alphys)       then obj_face_alphys.instance_destroy()
+           if  instance_exists(obj_face_asgore)       then obj_face_asgore.instance_destroy()
+           if  instance_exists(obj_face_torieltalk)   then obj_face_torieltalk.instance_destroy()
+           if  instance_exists(obj_face_torielblink)  then obj_face_torielblink.instance_destroy()
+           if  instance_exists(obj_torbody)           then obj_torbody.instance_destroy()
+           self.u[0] = spr_face_undyne0
+           self.u[1] = spr_face_undyne1
+           self.u[2] = spr_face_undyne2
+           self.u[3] = spr_face_undyne3
+           self.u[4] = spr_face_undyne4
+           self.u[5] = spr_face_undyne5
+           self.u[6] = spr_face_undyne6
+           self.u[7] = spr_face_undyne7
+           self.u[8] = spr_face_undyne8
+           self.u[9] = spr_face_undyne9
+           self.sprite_index = self.u[global.faceemotion]

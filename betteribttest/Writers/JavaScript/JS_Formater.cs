@@ -12,18 +12,9 @@ namespace GameMaker.Writers.JavaScript
 {
     public class Formater : ICodeFormater
     {
-        public ICodeFormater Clone()
-        {
-            return new Formater();
-        }
         string EnviromentOverride = null;
-        BlockToCode writer = null;
-        public void SetStream(BlockToCode writer)
-        {
-            this.writer = writer;
-        }
         // since this is a debug writer we have to handle basicblock, otherwise we would never have this or use dynamic here
-        public void Write(ILSwitch f)
+        public override void Write(ILSwitch f)
         {
             writer.Write("switch(");
             writer.Write(f.Condition);
@@ -47,16 +38,16 @@ namespace GameMaker.Writers.JavaScript
             writer.Indent--;
             writer.Write("}");
         }
-        public void Write(ILBasicBlock block)
+        public override void Write(ILBasicBlock block)
         {
             throw new Exception("Should not run into basic block here");
         }
-        public void Write(ILFakeSwitch f)
+        public override void Write(ILFakeSwitch f)
         {
             throw new Exception("Should not have fake switch here, don't make it an ilnode?");
         }
         // this is a switch statement so we will just write it as such
-        public void Write(ILElseIfChain chain)
+        public override void Write(ILElseIfChain chain)
         {
             ILExpression left = chain.Conditions[0].Condition.Arguments[0]; // should be the left one
             writer.Write("switch(");
@@ -118,9 +109,14 @@ namespace GameMaker.Writers.JavaScript
             { GMCode.LogicAnd, new ExpresionInfo("&&",2,2) },
             { GMCode.LogicOr, new ExpresionInfo("||",2,1) },
         };
+
+        public override string GMCodeToString(GMCode c)
+        {
+            return GMCodeToLua[c].Kind;
+        }
         // all this does is just check to see if the next tree is equal to the last tree of precidence
         // that is (4- 3) +3, the parms don't matter so don't print them, otherwise we need them
-        static int Precedence(GMCode code)
+        protected override int Precedence(GMCode code)
         {
             switch (code)
             {
@@ -153,25 +149,9 @@ namespace GameMaker.Writers.JavaScript
                     return 8;
             }
         }
-        static bool CheckParm(ILExpression expr, int index)
-        {
-            int ours = Precedence(expr.Code);
-            ILExpression e = expr.Arguments.ElementAtOrDefault(index);
-            if (e == null) return false;
-            int theirs = Precedence(e.Code);
-            if (theirs == 8) return false; // its a constant or something dosn't need a parm
-            if (theirs < ours) return true;
-            else return false;
-        }
-        void WriteParm(ILExpression expr, int index)
-        {
-            bool needParm = CheckParm(expr, index);
-            if (needParm) writer.Write('(');
-            writer.Write(expr.Arguments[index]);
-            if (needParm) writer.Write(')');
-        }
+ 
 
-        public void Write(ILExpression expr)
+        public override void Write(ILExpression expr)
         {
             ExpresionInfo info;
             if (GMCodeToLua.TryGetValue(expr.Code, out info))
@@ -228,7 +208,7 @@ namespace GameMaker.Writers.JavaScript
 
         //Write(expr.ToString()); // debug is the expressions to string
         static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
-        public void Write(ILVariable v)
+        public override void Write(ILVariable v)
         {
             if (!v.isResolved) throw new Exception(v.FullName + " is not resolved");
 
@@ -273,15 +253,15 @@ namespace GameMaker.Writers.JavaScript
                 writer.Write(']');
             }
         }
-        public void Write(ILValue v)
+        public override void Write(ILValue v)
         {
             writer.Write(v.ToString());
         }
-        public void Write(ILLabel label)
+        public override void Write(ILLabel label)
         {
             throw new Exception("Should not run into labels here in lua");
         }
-        public void Write(ILCall v)
+        public override void Write(ILCall v)
         {
             if (v.FullTextOverride != null) // we havea ful name override so just write that
             {
@@ -304,17 +284,7 @@ namespace GameMaker.Writers.JavaScript
             if (v.Comment != null) writer.Write(" */ {0}  */", v.Comment);
 
         }
-        public void Write(ILAssign assign)
-        {
-            writer.Write(assign.Variable);
-            writer.Write(" = ");
-            if (assign.TextToReplace != null)
-            {
-                writer.Write(assign.TextToReplace);
-                writer.Write(" -- Replaced: ");
-            }
-            writer.Write(assign.Expression); // want to make sure we are using the debug
-        }
+
         void WriteSingleLineOrBlock(ILBlock block)
         {
             if (block.Body.Count == 1)
@@ -326,7 +296,7 @@ namespace GameMaker.Writers.JavaScript
                 writer.Write("}"); // extra ';' here but can I live with that?
             } 
         }
-        public void Write(ILCondition condition)
+        public override void Write(ILCondition condition)
         {
             writer.Write("if(");
             writer.Write(condition.Condition); // want to make sure we are using the debug
@@ -338,7 +308,7 @@ namespace GameMaker.Writers.JavaScript
                 WriteSingleLineOrBlock(condition.FalseBlock);
             }
         }
-        public void Write(ILWhileLoop loop)
+        public override void Write(ILWhileLoop loop)
         {
             writer.Write("while(");
             writer.Write(loop.Condition); // want to make sure we are using the debug
@@ -346,7 +316,7 @@ namespace GameMaker.Writers.JavaScript
             WriteSingleLineOrBlock(loop.BodyBlock);
         }
         static int localGen = 0;
-        public void Write(ILWithStatement with)
+        public override void Write(ILWithStatement with)
         {
             // UGH Now I see why you use withs
             // This cycles though EACH object named in this instance, so it really IS a loop
@@ -373,9 +343,9 @@ namespace GameMaker.Writers.JavaScript
         }
 
 
-        public string LineComment { get { return "//"; } }
-        public string NodeEnding { get { return ";"; } }
-        public string Extension { get { return "js"; } }
+        public override string LineComment { get { return "//"; } }
+        public override string NodeEnding { get { return ";"; } }
+        public override string Extension { get { return "js"; } }
     }
 
     class LuaVarCheckCashe
@@ -428,12 +398,6 @@ namespace GameMaker.Writers.JavaScript
         public void AddVars(ILBlock method)
         { // what we do here is make sure
             foreach (var v in method.GetSelfAndChildrenRecursive<ILVariable>()) AddVar(v);
-            foreach (var a in method.GetSelfAndChildrenRecursive<ILAssign>())
-            {
-                string name = a.Variable.FullName;
-                var v = allvars[name];
-                allpinned.Add(v);
-            }
         }
         public IEnumerable<VarInfo> GetAll()
         {

@@ -1,0 +1,24 @@
+           if self.active != 0 then goto Label_0
+           if self.side != 0 then goto Label_1
+           move_towards_point(Instance(743).x + 36,Instance(743).y,6)
+           self.gravity = 0.16
+           self.gravity_direction = 180
+Label_1:   
+           if self.side != 1 then goto Label_2
+           move_towards_point(Instance(743).x + 15,Instance(743).y + 36,6)
+           self.gravity = 0.16
+           self.gravity_direction = 90
+Label_2:   
+           if self.side != 2 then goto Label_3
+           move_towards_point(Instance(743).x - 26,Instance(743).y + 10,6)
+           self.gravity = 0.16
+           self.gravity_direction = 0
+Label_3:   
+           if self.side != 3 then goto Label_4
+           move_towards_point(Instance(743).x,Instance(743).y - 26,6)
+           self.gravity = 0.16
+           self.gravity_direction = 270
+Label_4:   
+           self.sprite_index = 474
+Label_0:   
+           self.active = 1

@@ -1,0 +1,19 @@
+           scr_monstersetup()
+           self.image_speed = 0
+           self.part1 = 386
+           self.mypart1 = instance_create(self.x,self.y + 24,self.part1)
+           self.alarm[9] = 8
+           self.hurtanim = 0
+           self.hurtsound = 43
+           self.talked = 0
+           self.whatiheard = -1
+           self.attacked = 0
+           self.killed = 0
+           global.heard = 0
+           self.takedamage = 0
+           self.mercymod = 15
+           self.sha = 0
+           self.shb = 0
+           self.impress = 0
+           self.ht = 100
+           self.wd = 100

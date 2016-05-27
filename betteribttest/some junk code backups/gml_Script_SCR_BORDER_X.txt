@@ -1,0 +1,22 @@
+            Label 'Label_3' not used
+           self.xx = 0
+           self.yy = 0
+           if (self.argument0 != 0) then goto Label_0
+           self.xx = ((round(random((((global.idealborder[1] - global.idealborder[0]) - self.argument2) - self.sprite_width))) + global.idealborder[0]) + self.argument2)
+           self.yy = (global.idealborder[2] - self.argument1)
+Label_0:   
+           if (self.argument0 != 1) then goto Label_1
+           self.xx = ((round(random((((global.idealborder[1] - global.idealborder[0]) - self.argument2) - self.sprite_width))) + global.idealborder[0]) + self.argument2)
+           self.yy = global.idealborder[3]
+           if (self.argument1 <= self.sprite_height) then goto Label_1
+           self.yy = (self.yy + (self.argument1 - self.sprite_height))
+Label_1:   
+           if (self.argument0 != 2) then goto Label_2
+           self.yy = ((round(random((((global.idealborder[3] - global.idealborder[2]) - self.argument2) - self.sprite_height))) + global.idealborder[2]) + (self.argument2 / (Double)(2)))
+           self.xx = (global.idealborder[0] - self.argument1)
+Label_2:   
+           if (self.argument0 != 3) then goto Label_3
+           self.yy = ((round(random((((global.idealborder[3] - global.idealborder[2]) - self.argument2) - self.sprite_height))) + global.idealborder[2]) + (self.argument2 / (Double)(2)))
+           self.xx = global.idealborder[1]
+           if (self.argument1 <= self.sprite_width) then goto Label_3
+           self.xx = (self.xx + (self.argument1 - self.sprite_width))

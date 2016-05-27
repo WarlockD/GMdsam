@@ -1,0 +1,12 @@
+room_water_undyneyard
+room_kitchen_final
+obj_mysteryman
+room_mysteryman
+TESTROOM
+room_spritecheck
+room_f_start
+room_floweyx
+room_fire10A_old might be tile world
+room_battle used for battle rooms THANK GOD, looks 640x480 though humm
+room_afinaltest
+65A581D0-BBE6-0133-2C07-00259089258E

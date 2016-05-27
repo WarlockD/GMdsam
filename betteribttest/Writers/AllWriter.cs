@@ -53,7 +53,7 @@ namespace GameMaker.Writers
             }
         }
        
-        BlockToCode CreateOutput()
+        public static BlockToCode CreateOutput()
         {
             ICodeFormater formater = null;
             INodeMutater mutater = null;

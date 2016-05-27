@@ -1,0 +1,5 @@
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_sans)         then self.sprite_index = spr_face_sans
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_sanschuckle)  then self.sprite_index = spr_face_sanschuckle
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_sanswink)     then self.sprite_index = spr_face_sanswink
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_sansblink)    then self.sprite_index = spr_face_sansblink
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_sansnoeyes)   then self.sprite_index = spr_face_sansnoeyes

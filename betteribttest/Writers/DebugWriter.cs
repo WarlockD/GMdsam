@@ -11,13 +11,8 @@ namespace GameMaker.Writers
 {
     public class DebugFormater : ICodeFormater 
     {
-        public ICodeFormater Clone()
-        {
-            return new DebugFormater();
-        }
-        BlockToCode writer = null;
 
-        public string LineComment
+        public override string LineComment
         {
             get
             {
@@ -25,12 +20,22 @@ namespace GameMaker.Writers
             }
         }
 
-        public string NodeEnding
+        public override string NodeEnding
         {
             get
             {
                 return null;
             }
+        }
+        protected override int Precedence(GMCode c)
+        {
+            throw new NotImplementedException();
+            // we don't use this cause we put parms on eveything
+        }
+        public override string GMCodeToString(GMCode c)
+        {
+            // don't use
+            return null;
         }
         void WriteField<T>(string field, T n) where T: ILNode
         {
@@ -39,24 +44,18 @@ namespace GameMaker.Writers
             writer.Write('=');
             writer.WriteNode(n,false);
         }
-        public void SetStream(BlockToCode writer)
+
+
+        public override void Write(ILBasicBlock block)
         {
-            this.writer = writer;
-        }
-        public void Write(ILBasicBlock block)
-        {
-            ILLabel start = block.Body.First() as ILLabel;
-            ILExpression end = block.Body.Last() as ILExpression;
-            writer.WriteLine("BasicBlock Entry={0}", start.ToString());
-            for (int i = 1; i < block.Body.Count - 1; i++)
-                writer.WriteNode(block.Body[i], true);
-            if (end != null)
-                writer.WriteLine("BasicBlock Exit={0}", end.Code == GMCode.B ? end.Operand.ToString() : end.ToString());
-            else
-                writer.WriteNode(block.Body.Last()); 
+            writer.WriteLine("BasicBlock:");
+            writer.Indent++;
+            foreach (var n in block.Body)
+                writer.WriteNode(n, true);
+            writer.Indent--;
             // The if and loop replace the last goto, so watch for that on basic blocks
         }
-        public void Write(ILFakeSwitch f)
+        public override void Write(ILFakeSwitch f)
         {
             writer.WriteLine("ILFakeSwitch Condition={0}", f.Condition);
             writer.Indent++;
@@ -70,7 +69,7 @@ namespace GameMaker.Writers
             }
             writer.Indent--;
         }
-        public void Write(ILSwitch f)
+        public override void Write(ILSwitch f)
         {
             writer.WriteLine("ILSwitch Condition={0}", f.Condition);
             writer.Indent++;
@@ -89,7 +88,7 @@ namespace GameMaker.Writers
             }
             writer.Indent--;
         }
-        public  void Write(ILElseIfChain chain)
+        public override void Write(ILElseIfChain chain)
         {
             
             for(int i=0; i < chain.Conditions.Count; i++)
@@ -110,81 +109,48 @@ namespace GameMaker.Writers
         }
 
 
-        public void Write(ILExpression expr)
+        public override void Write(ILExpression expr)
         {
-            writer.Write("{ Code=");
-            writer.Write(expr.Code.ToString());
-            //  if (Code.isExpression())
-            //      WriteExpressionLua(output);
-            // ok, big one here, important to get this right
-            if(expr.Operand != null) writer.Write(" , Operand=");
-            switch (expr.Code)
+            if ((expr.Parent is ILBlock || expr.Parent is ILBasicBlock))
             {
-                case GMCode.Call:
-                    if (expr.Operand is string)
-                    {
-                        writer.Write(" , FuncName=");
-                        writer.Write(expr.Operand as string);
-                    }
-                    else writer.Write(expr.Operand as ILCall);
-                    break;
-                case GMCode.Constant: // primitive c# type
-                    if (expr.Operand != null) writer.Write(expr.Operand as ILValue);
-                    break;
-                case GMCode.Var:  // should be ILVariable
-                    if (expr.Operand != null) writer.Write(expr.Operand as ILVariable);
-                    break;
-                case GMCode.B:
-                case GMCode.Bf:
-                case GMCode.Bt:
-                    if (expr.Operand != null) writer.Write(expr.Operand as ILLabel);
-                    break;
-                default:
-                    if (expr.Operand != null)
-                        writer.Write(expr.Operand.ToString());
-                    break;
-                 
-            }
-            if (expr.Arguments.Count > 0)
-            {
-                writer.Write(" ,Arguments=");
-                foreach (var e in expr.Arguments) writer.Write(e);
-            }
-            writer.Write(" }");
+                StringBuilder sb = new StringBuilder();
+                expr.AppendHeader(sb);
+                expr.ToStringBuilder(sb, 0);
+                writer.Write(sb.ToString());
+            }else writer.Write(expr.ToString());
         }
-        public void Write(ILVariable v)
-        {
-            writer.Write("{ Name=");
-            writer.Write(v.Name);
-            if (!v.isResolved)
-            {
-                writer.Write("?");
-                if (v.isArray) writer.Write(" ,isArray=true");
-            }
-            if (v.Instance != null) WriteField("Instance", v.Instance);
-            if (v.Index != null) WriteField("Index", v.Index);
-            writer.Write(" }");
-        }
-        public  void Write(ILValue v)
+        public override void Write(ILVariable v)
         {
             writer.Write(v.ToString());
         }
-        public  void Write(ILLabel label)
+        void WriteObject(object o)
+        {
+            if (o is ILNode)
+            {
+                if (o is ILValue) writer.Write(o as ILValue);
+                else if (o is ILVariable) writer.Write(o as ILVariable);
+                else if (o is ILCall) writer.Write(o as ILCall);
+                else if (o is ILLabel) writer.Write(o as ILLabel);
+                else if (o is string) writer.Write("$'" + o.ToString() + "'$");
+                else writer.WriteNode(o as ILNode, false);
+            }
+            else if (o.GetType().IsPrimitive)
+                writer.Write(o.ToString());
+            else writer.Write("?" + o.ToString() + "?");
+        }
+        public override void Write(ILValue v)
+        {
+            writer.Write(v.ToString());
+        }
+        public override void Write(ILLabel label)
         {
             writer.Write(":{0}:", label.Name);
         }
-        public  void Write(ILCall v)
+        public override void Write(ILCall v)
         {
             writer.Write("ILCall?");
         }
-        public  void Write(ILAssign assign)
-        {
-            writer.Write("ILAssign ");
-            writer.Write(assign.Variable);
-            writer.Write(" = ");
-            writer.Write(assign.Expression); // want to make sure we are using the debug
-        }
-        public  void Write(ILCondition condition)
+        public override void Write(ILCondition condition)
         {
             writer.Write("ILCondition If ");
             writer.Write(condition.Condition); // want to make sure we are using the debug
@@ -197,7 +163,7 @@ namespace GameMaker.Writers
             }
             writer.WriteLine("ILCondition end");
         }
-        public  void Write(ILWhileLoop loop)
+        public override void Write(ILWhileLoop loop)
         {
             writer.Write("ILWhileLoop If ");
             writer.Write(loop.Condition); // want to make sure we are using the debug
@@ -205,7 +171,7 @@ namespace GameMaker.Writers
             writer.Write(loop.BodyBlock);
             writer.WriteLine("ILWhileLoop end");
         }
-        public  void Write(ILWithStatement with)
+        public override void Write(ILWithStatement with)
         {
             writer.Write("ILWithStatement with ");
             writer.Write(with.Enviroment); // want to make sure we are using the debug
@@ -213,7 +179,9 @@ namespace GameMaker.Writers
             writer.Write(with.Body);
             writer.WriteLine("ILWithStatement end");
         }
-        public string Extension { get { return "_d.txt"; } }
+
+
+        public override string Extension { get { return "_d.txt"; } }
 
     }
 }

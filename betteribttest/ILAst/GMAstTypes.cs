@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -14,9 +15,70 @@ namespace GameMaker.Ast
 {
     public static class NodeOperations
     {
-
-
-       
+        static Dictionary<int, string> identCache = new Dictionary<int, string>();
+        // better than making a new string each ident level
+        public static void Ident(this StringBuilder sb, int ident) {
+            string sident;
+            if (!identCache.TryGetValue(ident, out sident))
+                identCache.Add(ident, sident = new string('\t', ident));
+            sb.Append(sident);
+        }
+        public static bool Append<T>(this StringBuilder sb, T node, int ident) where T : ILNode
+        {
+            if (node != null) return node.ToStringBuilder(sb,ident);
+            sb.Append("?null?");
+            return false;
+        }
+        public static bool Append<T>(this StringBuilder sb, T node) where T : ILNode
+        {
+            if (node != null) return node.ToStringBuilder(sb, 0);
+            sb.Append("?null?");
+            return false;
+        }
+        public static void AppendLines<T>(this StringBuilder sb, IEnumerable<T> body, int ident) where T : ILNode
+        {
+            ident++;
+            foreach (var n in body)
+            {
+                sb.Ident(ident);
+                if (!n.ToStringBuilder(sb, ident)) sb.AppendLine();
+            }
+            ident--;
+        }
+        public static void AppendBlock(this StringBuilder sb, ILBlock block,int ident) 
+        {
+            if (block == null || block.Body.Count == 0) sb.AppendLine("{}");
+            else
+            {
+                sb.AppendLine("{");
+                sb.AppendLines(block.Body, ident);
+                sb.Ident(ident);
+                sb.AppendLine("}");
+            }
+            
+        }
+        public static bool AppendArguments(this StringBuilder sb, IEnumerable<string> strings) 
+        {
+            bool need_comma = false;
+            foreach (var s in strings)
+            {
+                if (need_comma) sb.Append(',');
+                else need_comma = true;
+                sb.Append(s);
+            }
+            return need_comma;
+        }
+        public static bool AppendArguments<T>(this StringBuilder sb, IEnumerable<T> nodes) where T : ILNode
+        {
+            bool need_comma = false;
+            foreach(var n in nodes)
+            {
+                if (need_comma) sb.Append(',');
+                else need_comma = true;
+                n.ToStringBuilder(sb,0);
+            }
+            return false;
+        }
         public static void DebugSave(this ILBlock block, string FileName)
         {
             new Writers.BlockToCode(new Writers.DebugFormater()).WriteFile(block, FileName);
@@ -103,17 +165,14 @@ namespace GameMaker.Ast
         {
             yield break;
         }
-        void WriteNode(ILNode n, Writers.BlockToCode o)
-        {
-            o.WriteNode(n, false);
-        }
+        // returns true when ending with a new line
+        public abstract bool ToStringBuilder(StringBuilder sb,int ident);
+
         public override string ToString()
         {
-            using (var w = new Writers.BlockToCode(new Writers.DebugFormater()))
-            {
-                w.WriteNode(this);
-                return w.ToString();
-            }
+            StringBuilder sb = new StringBuilder();
+            ToStringBuilder(sb,0);
+            return sb.ToString();
         }
     }
     public class ILBasicBlock : ILNode
@@ -123,6 +182,12 @@ namespace GameMaker.Ast
         public override IEnumerable<ILNode> GetChildren()
         {
             return this.Body;
+        }
+        public override bool ToStringBuilder(StringBuilder sb,int ident)
+        {
+            sb.Append("ILBasicBlock: ");
+            sb.AppendLines(Body, ident);
+            return true;
         }
     }
     public class ILBlock : ILNode
@@ -142,24 +207,21 @@ namespace GameMaker.Ast
                 yield return child;
             }
         }
-      
-    }
-    // We make this a seperate node so that it dosn't interfere with anything else
-    // We are not trying to optimize game maker code here:P
-    public class ILAssign : ILNode
-    {
-        public string TextToReplace = null;
-        public ILVariable Variable;
-        public ILExpression Expression;
-        public override IEnumerable<ILNode> GetChildren()
+        public void DebugSaveFile(string filename)
         {
-            if (this.Variable != null)
-                yield return this.Variable;
-            if (this.Expression != null)
-                yield return this.Expression;
+            this.DebugSave(filename);
+        }
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.Append("ILBlock ");
+            sb.Append("EntryGoto=");
+            sb.Append(EntryGoto);
+            sb.AppendLine(": ");
+            sb.AppendBlock(this,ident);
+            return true;
         }
     }
-
+  
     public class ILCall : ILNode
     {
         public string Name;
@@ -168,7 +230,16 @@ namespace GameMaker.Ast
         public string FullTextOverride = null;
         public List<ILExpression> Arguments = new List<ILExpression>();
         public GM_Type Type = GM_Type.NoType; // return type
-
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.Append("(");
+            sb.Append("Name=");
+            sb.Append(Name);
+            sb.Append(" Arguments=");
+            sb.AppendArguments(Arguments);
+            sb.Append(" )");
+            return false;
+        }
         public override IEnumerable<ILNode> GetChildren()
         {
             return Arguments;
@@ -195,9 +266,6 @@ namespace GameMaker.Ast
             else this.Value = o;
             Type = type;
         }
-        public ILValue(ILVariable v) { this.Value = v; Type = GM_Type.Var; }
-        public ILValue(ILValue v) { this.Value = v.Value; Type = v.Type; this.ValueText = v.ValueText; }
-        public ILValue(ILExpression e) { this.Value = e; Type = GM_Type.ConstantExpression; }
         public int? IntValue
         {
             get
@@ -206,9 +274,23 @@ namespace GameMaker.Ast
                 else return null;
             }
         }
-        public override string ToString()
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
         {
-            return ValueText ?? Value.ToString();
+         
+            if (Value is ILNode) ((ILNode)Value).ToStringBuilder(sb, ident);
+            else if (Value.GetType().IsPrimitive) sb.Append(Value.ToString());
+            else if (Value is string) sb.EscapeAndAppend(Value as string);
+            else
+            {
+                sb.Append("(");
+                sb.Append("Type=");
+                sb.Append(Value.GetType().ToString());
+                sb.Append(' ');
+                sb.Append(Value.ToString());
+                sb.Append(')');
+            }
+          
+            return false;
         }
         public override bool Equals(object obj)
         {
@@ -229,11 +311,6 @@ namespace GameMaker.Ast
             if (object.ReferenceEquals(other, this)) return true;
             if (other.Type != Type) return false;
             if (Type == GM_Type.NoType) return true; // consider this null or nothing
-            if (Type == GM_Type.ConstantExpression)
-            {
-                if (object.ReferenceEquals(other.Value, Value)) return true;
-                else return other.Value.ToString() == Value.ToString(); // a bit hacky, but true
-            }
             else return Value.Equals(other.Value);
         }
 
@@ -279,6 +356,7 @@ namespace GameMaker.Ast
         }
         public string Name;
         public Label OldLabel = null;
+        public int Offset;
         public object UserData = null; // usally old dsam label
         public bool isExit = false;
         public bool Equals(ILLabel other)
@@ -296,6 +374,16 @@ namespace GameMaker.Ast
         {
             return Name.GetHashCode();
         }
+
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.Append("(Name=");
+            sb.Append(Name);
+            sb.Append(" Offset=");
+            sb.Append(Offset);
+            sb.Append(")");
+            return false;
+        }
     }
     public class ILVariable : ILNode, IEquatable<ILVariable>
     {
@@ -304,7 +392,10 @@ namespace GameMaker.Ast
         public static ILVariable GenerateTemp(string name = "gen")
         {
             name = string.Format("{0}_{1}", name, static_gen++);
-            return new ILVariable() { Name = name, isGenerated = true, isArray = false, isResolved = true };
+            var v =  new ILVariable(name, -1);
+            Debug.Assert(v.isResolved);
+            v.isLocal = true;
+            return v;
         }
         // hack
         // Side note, we "could" make this a node
@@ -312,17 +403,49 @@ namespace GameMaker.Ast
         // Unless I ever get a type/var anyisys system up, its going to stay like this
         public bool isLocal = false; // used when we 100% know self is not used
         public string Name;
-        public ILNode Instance = null; // We NEED this, unless its local or generated
-        string instance_name = null;
-
+        
+        int _instance;
+        ILNode _instance_node = null; // We NEED this, unless its local or generated
+        public ILNode Instance
+        {
+            get { return _instance_node; }
+            set
+            { // simplify 
+                ILExpression e = value as ILExpression;
+                if (e != null && (e.Code == GMCode.Constant || e.Code == GMCode.Var))
+                    _instance_node = e.Operand as ILNode;
+                else
+                    _instance_node = value;
+                ILValue v = _instance_node as ILValue;
+                if (v != null) _instance = (int)v;
+            }
+        }
         public string InstanceName
         {
-            get {
-                if (isLocal || Instance == null) return null;
-                Debug.Assert(instance_name != null);
-                return instance_name;
+            get
+            {
+                if (isLocal) return null;
+                StringBuilder sb = new StringBuilder();
+                if (_instance != 0)
+                    sb.Append(Context.InstanceToString(_instance));
+                else
+                    Instance.ToStringBuilder(sb, 0);
+                return sb.ToString();
             }
-            set { instance_name = value; }
+        }
+        public ILVariable(string name, int instance, bool isarray = false)
+        {
+            Debug.Assert(name != null);
+            this._instance = instance;
+            this._instance_node = new ILValue(instance);
+            this.isResolved = !isarray && instance != 0;
+            this.Name = name;
+            this.Index = null;
+            this.isArray = isarray;
+        }
+        ILVariable()
+        {
+
         }
         public bool isGenerated = false;
         public ILExpression Index = null; // not null if we have an index
@@ -336,16 +459,18 @@ namespace GameMaker.Ast
             get
             {
                 StringBuilder sb = new StringBuilder();
-                if (Instance != null)  {
-                    sb.Append((InstanceName ?? Instance.ToString()));
+                if (!isLocal) {
+                    if (_instance != 0)
+                        sb.Append(Context.InstanceToString(_instance));
+                    else
+                        Instance.ToStringBuilder(sb, 0);
                     sb.Append('.');
                 }
                 sb.Append(Name);
                 if(isArray)
                 {
                     sb.Append('[');
-                    if(Index != null && Index.Code == GMCode.Constant) sb.Append(Index.Operand.ToString());
-
+                    if (Index != null && Index.Code == GMCode.Constant) Index.ToStringBuilder(sb,0);    
                     sb.Append(']');
                 }
                 return sb.ToString();
@@ -355,7 +480,7 @@ namespace GameMaker.Ast
         {
             get
             {
-                return InstanceName == "global"; // mabye check the instance number.
+                return !isLocal && _instance == -7;
             }
         }
         public bool isFixedVar {  get
@@ -367,7 +492,8 @@ namespace GameMaker.Ast
         {
             if (obj.isArray != this.isArray || obj.isLocal != this.isLocal) return false; // easy
             if (isLocal) return obj.Name == Name;
-            else return obj.Name == Name && obj.InstanceName == InstanceName;
+            if (obj._instance == 0 || _instance == 0) return false; // stack values are not resolved and not equal
+            else return obj.Name == Name && obj._instance == _instance;
         }
         public override bool Equals(object obj)
         {
@@ -380,47 +506,96 @@ namespace GameMaker.Ast
         {
             return Name.GetHashCode();
         }
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            if (!isLocal)
+            {
+                if (_instance != 0)
+                    sb.Append(Context.InstanceToString(_instance));
+                else
+                    Instance.ToStringBuilder(sb, 0);
+                sb.Append('.');
+            }
+           
+         
+            if (!isResolved) sb.Append('?');
+            sb.Append(Name);
+            if (!isResolved) sb.Append('?');
+            if (isArray)
+            {
+                sb.Append('[');
+                sb.Append(Index);
+                sb.Append(']');
+            }
+            return false;
+        }
     }
-    public struct ILRange
+    public class ILRange : IComparable<ILRange>
     {
-        public readonly int From;
-        public readonly int To;   // Exlusive
+        public int From;
+        public int To;   // Exlusive
 
         public ILRange(int @from, int to)
         {
             this.From = @from;
             this.To = to;
         }
-
+        public ILRange(int @from)
+        {
+            this.To = this.From = @from;
+        }
         public override string ToString()
         {
-            return string.Format("{0:X2}-{1:X2}", From, To);
+            if (From == To)
+                return To.ToString();
+            else
+                return From.ToString() + "-" + To.ToString();
         }
-
+        public bool Contains(int value) { return value == From || value == To || (value > From && value < To); }
+        public static void OrderAndJoin(List<ILRange> input)
+        {
+            if (input == null) throw new ArgumentNullException("Input is null!");
+            input.Sort(); // sort it
+            bool modified;
+            do
+            {
+                modified = false;
+                for (int i = 0; i < input.Count - 1;)
+                {
+                    ILRange curr = input[i];
+                    ILRange next = input[i + 1];
+                    // Merge consequtive ranges if they intersect
+                    if (curr.From <= next.From && next.From <= curr.To)
+                    {
+                        curr.To = Math.Max(curr.To, next.To);
+                        input.RemoveAt(i + 1);
+                        modified = true;
+                    }
+                    else if ((curr.To + 1) == next.From) // if the two are just touching, we add this cause our byte code is not in bytes
+                    {
+                        curr.To = next.To;
+                        input.RemoveAt(i + 1);
+                        modified = true;
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+            } while (modified);
+            List<ILRange> ranges = input.Where(r => r != null).OrderBy(r => r.From).ToList();
+        }
         public static List<ILRange> OrderAndJoin(IEnumerable<ILRange> input)
         {
             if (input == null)
                 throw new ArgumentNullException("Input is null!");
 
-            List<ILRange> result = new List<ILRange>();
-            foreach (ILRange curr in input.OrderBy(r => r.From))
-            {
-                if (result.Count > 0)
-                {
-                    // Merge consequtive ranges if possible
-                    ILRange last = result[result.Count - 1];
-                    if (curr.From <= last.To)
-                    {
-                        result[result.Count - 1] = new ILRange(last.From, Math.Max(last.To, curr.To));
-                        continue;
-                    }
-                }
-                result.Add(curr);
-            }
-            return result;
+            List<ILRange> ranges = input.Where(r => r != null).ToList();
+            OrderAndJoin(ranges);
+            return ranges;
         }
 
-        public static List<ILRange> Invert(IEnumerable<ILRange> input, int codeSize)
+        public static IEnumerable<ILRange> Invert(IEnumerable<ILRange> input, int codeSize)
         {
             if (input == null)
                 throw new ArgumentNullException("Input is null!");
@@ -428,28 +603,39 @@ namespace GameMaker.Ast
             if (codeSize <= 0)
                 throw new ArgumentException("Code size must be grater than 0");
 
-            List<ILRange> ordered = OrderAndJoin(input);
-            List<ILRange> result = new List<ILRange>(ordered.Count + 1);
+            var ordered = OrderAndJoin(input);
             if (ordered.Count == 0)
             {
-                result.Add(new ILRange(0, codeSize));
+                yield return new ILRange( 0, codeSize );
             }
             else {
                 // Gap before the first element
                 if (ordered.First().From != 0)
-                    result.Add(new ILRange(0, ordered.First().From));
+                    yield return new ILRange( 0, ordered.First().From) ;
 
                 // Gaps between elements
                 for (int i = 0; i < ordered.Count - 1; i++)
-                    result.Add(new ILRange(ordered[i].To, ordered[i + 1].From));
+                    yield return new ILRange(ordered[i].To,  ordered[i + 1].From );
 
                 // Gap after the last element
                 Debug.Assert(ordered.Last().To <= codeSize);
                 if (ordered.Last().To != codeSize)
-                    result.Add(new ILRange(ordered.Last().To, codeSize));
+                    yield return new ILRange( ordered.Last().To,  codeSize );
             }
-            return result;
         }
+
+        public int CompareTo(ILRange other)
+        {
+            return From.CompareTo(other.From);
+        }
+        /*
+void ReportUnassignedILRanges(ILBlock method)
+{
+   var unassigned = ILRange.Invert(method.GetSelfAndChildrenRecursive<ILExpression>().SelectMany(e => e.ILRanges), context.CurrentMethod.Body.CodeSize).ToList();
+   if (unassigned.Count > 0)
+       Debug.WriteLine(string.Format("Unassigned ILRanges for {0}.{1}: {2}", this.context.CurrentMethod.DeclaringType.Name, this.context.CurrentMethod.Name, string.Join(", ", unassigned.Select(r => r.ToString()))));
+}
+*/
     }
 
     public class ILExpression : ILNode
@@ -491,15 +677,9 @@ namespace GameMaker.Ast
             return new ILExpression(GMCode.Constant, v);
         }
         // used to make a temp self holder value
-        public static ILExpression MakeVariable(string name, bool local = true)
+        public static ILExpression MakeVariable(string name)
         {
-            ILVariable v = new ILVariable() { Name = name, isLocal = local, isResolved = true, isGenerated = true };
-            if (!local)
-            {
-                v.Instance = new ILValue(-1);
-                v.InstanceName = "self";
-            }
-            return new ILExpression(GMCode.Var, v);
+            return new ILExpression(GMCode.Var, ILVariable.GenerateTemp(name));
         }
         public ILExpression(ILExpression i, List<ILRange> range = null) // copy it
         {
@@ -565,6 +745,120 @@ namespace GameMaker.Ast
                 return new ILLabel[] { };
             }
         }
+        // prints a formated line Header
+        const int headerSize = 10;
+        public void AppendHeader(StringBuilder sb)
+        {
+            int len = sb.Length+ headerSize;
+
+            sb.Append('(');
+            if (ILRanges != null && ILRanges.Count > 0)
+            {
+                var range = ILRange.OrderAndJoin(GetSelfAndChildrenRecursive<ILExpression>().SelectMany(x => x.ILRanges));
+                sb.AppendArguments(range.Select(x => x.ToString()));
+            }
+            sb.Append(")");
+            if (len > sb.Length) sb.Append(' ', len-sb.Length);
+            sb.Append(':');
+        }
+        void WriteLeaf(StringBuilder sb, string op)
+        {
+            sb.Append(op);
+            sb.Append('(');
+            sb.Append(Arguments.ElementAtOrDefault(0));
+            sb.Append(')');
+        }
+        void WriteTree(StringBuilder sb, string op)
+        {
+            sb.Append('(');
+            sb.Append(Arguments.ElementAtOrDefault(0));
+            sb.Append(op);
+            sb.Append(Arguments.ElementAtOrDefault(1));
+            sb.Append(')');
+        }
+        void WriteOperand(StringBuilder sb)
+        {
+            if (Operand is ILValue) (Operand as ILValue).ToStringBuilder(sb,0);
+            else if (Operand is ILVariable) (Operand as ILVariable).ToStringBuilder(sb, 0);
+            else if (Operand is ILCall) (Operand as ILCall).ToStringBuilder(sb, 0);
+            else if (Operand is ILLabel) (Operand as ILLabel).ToStringBuilder(sb, 0);
+            else
+            {
+                sb.Append('?');
+                sb.Append(Operand.ToString());
+                sb.Append('?');
+            }
+        }
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            switch (Code)
+            {
+                case GMCode.Not:
+                    if (Arguments.Count != 1) goto default;
+                    WriteLeaf(sb, "!"); break;
+                case GMCode.Neg:
+                    if (Arguments.Count != 1) goto default;
+                    WriteLeaf(sb, "-"); break;
+                case GMCode.Mul: if (Arguments.Count != 2) goto default; WriteTree(sb, "*"); break;
+                case GMCode.Div: if (Arguments.Count != 2) goto default; WriteTree(sb, "/"); break;
+                case GMCode.Mod: if (Arguments.Count != 2) goto default; WriteTree(sb, "%"); break;
+                case GMCode.Add: if (Arguments.Count != 2) goto default; WriteTree(sb, "+"); break;
+                case GMCode.Sub: if (Arguments.Count != 2) goto default; WriteTree(sb, "-"); break;
+                case GMCode.Concat: if (Arguments.Count != 2) goto default; WriteTree(sb, ".."); break;
+                case GMCode.Sne: if (Arguments.Count != 2) goto default; WriteTree(sb, "!="); break;
+                case GMCode.Sge: if (Arguments.Count != 2) goto default; WriteTree(sb, ">="); break;
+                case GMCode.Slt: if (Arguments.Count != 2) goto default; WriteTree(sb, "<"); break;
+                case GMCode.Sgt: if (Arguments.Count != 2) goto default; WriteTree(sb, ">"); break;
+                case GMCode.Seq: if (Arguments.Count != 2) goto default; WriteTree(sb, "=="); break;
+                case GMCode.Sle: if (Arguments.Count != 2) goto default; WriteTree(sb, "<="); break;
+                case GMCode.LogicAnd: if (Arguments.Count != 2) goto default; WriteTree(sb, "&&"); break;
+                case GMCode.LogicOr: if (Arguments.Count != 2) goto default; WriteTree(sb, "||"); break;
+                case GMCode.Constant:
+                case GMCode.Var:
+                    WriteOperand(sb);
+                    break;
+                case GMCode.Assign:
+                    WriteOperand(sb);
+                    sb.Append(" = ");
+                    Arguments.Single().ToStringBuilder(sb, 0);
+                    break;
+                case GMCode.Call:
+                    if (Operand is ILCall) WriteOperand(sb);
+                    else // not processed
+                    {
+                        sb.Append('(');
+                        sb.Append("Name=?");
+                        sb.Append(Operand.ToString());
+                        sb.Append("? ArgCount=");
+                        sb.Append(Extra);
+                        sb.Append(" )");
+                    }
+                    break;
+                case GMCode.LoopOrSwitchBreak:
+                    sb.Append("break");
+                    break;
+                case GMCode.LoopContinue:
+                    sb.Append("continue");
+                    break;
+                default:
+                    // specal code for extra processing down the road
+                  
+                    sb.Append(" Code=");
+                    sb.Append(Code.ToString());
+                    if (Operand != null)
+                    {
+                        sb.Append(" Operand=");
+                        WriteOperand(sb);
+                    }
+                    if (Arguments != null && Arguments.Count > 0)
+                    {
+                        sb.Append(" Arguments=");
+                        sb.AppendArguments(Arguments);
+                    }
+                    break;
+            }
+            return false;
+        }
     }
 
     public class ILWhileLoop : ILNode
@@ -579,6 +873,15 @@ namespace GameMaker.Ast
             if (this.BodyBlock != null)
                 yield return this.BodyBlock;
         }
+
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.Append("while(");
+            sb.Append(Condition);
+            sb.Append(")");
+            sb.AppendBlock(BodyBlock, ident);
+            return true;
+        }
     }
     // mainly for lua, we chain if statements together to make an ElseIf chain
     public class ILElseIfChain : ILNode
@@ -589,6 +892,27 @@ namespace GameMaker.Ast
         {
             foreach (var c in Conditions) yield return c;
             if (Else != null) yield return Else;
+        }
+        public override bool ToStringBuilder(StringBuilder sb,int ident)
+        {
+            bool elseif = false;
+            foreach(var c in Conditions)
+            {
+                if (!elseif)
+                {
+                    sb.Append("if(");
+                    elseif = true;
+                } else sb.Append("elseif(");
+                sb.Append(c.Condition);
+                sb.Append(")");
+                sb.AppendBlock(c.TrueBlock, ident);
+            }
+            if (Else != null && Else.Body.Count >0) 
+            {
+                sb.Append("else ");
+                sb.AppendBlock(Else, ident);
+            }
+            return true;
         }
     }
     public class ILCondition : ILNode
@@ -607,6 +931,19 @@ namespace GameMaker.Ast
                 yield return this.FalseBlock;
         }
 
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.Append("if(");
+            sb.Append(Condition);
+            sb.Append(")");
+            sb.AppendBlock(TrueBlock, ident);
+            if(FalseBlock != null && FalseBlock.Body.Count > 0)
+            {
+                sb.Append("else ");
+                sb.AppendBlock(FalseBlock, ident);
+            }
+            return true;
+        }
     }
     // Used as a place holder for the loop switch detection
     public class ILFakeSwitch : ILNode
@@ -629,6 +966,12 @@ namespace GameMaker.Ast
                 sb.Append(" Goto=");
                 sb.Append(Writers.BlockToCode.DebugNodeToString(Goto));
                 return sb.ToString();
+            }
+
+            public override bool ToStringBuilder(StringBuilder sb, int ident)
+            {
+                sb.AppendLine("ILSwitch.ILCase");
+                return true;
             }
         }
         public ILExpression Condition;      
@@ -655,6 +998,12 @@ namespace GameMaker.Ast
             List<ILLabel> list = Cases.Select(x => x.Goto).ToList();
             if (Default != null) list.Add(Default);
             return list;
+        }
+
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.AppendLine("ILFakeSwitch");
+            return true;
         }
     }
     public class ILSwitch : ILNode
@@ -689,6 +1038,11 @@ namespace GameMaker.Ast
             foreach(var c in this.Cases) yield return c;
             if (this.Default != null) yield return this.Default;
         }
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.AppendLine("ILSwitch");
+            return true;
+        }
     }
 
     public class ILWithStatement : ILNode
@@ -700,6 +1054,14 @@ namespace GameMaker.Ast
         {
             if (Enviroment != null) yield return Enviroment;
             if (this.Body != null) yield return this.Body;
+        }
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.Append("with(");
+            sb.Append(Enviroment);
+            sb.Append(")");
+            sb.AppendBlock(Body, ident);
+            return true;
         }
     }
 
@@ -728,6 +1090,11 @@ namespace GameMaker.Ast
                 yield return this.FaultBlock;
             if (this.FinallyBlock != null)
                 yield return this.FinallyBlock;
+        }
+        public override bool ToStringBuilder(StringBuilder sb, int ident)
+        {
+            sb.AppendLine("ILTryCatchBlock");
+            return true;
         }
     }
 }

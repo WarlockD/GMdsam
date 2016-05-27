@@ -194,10 +194,6 @@ namespace GameMaker.Writers.Lua
             return call;
         }
 
-        public ILAssign MutateAssign(ILAssign assign)
-        {
-            return assign;
-        }
         public ILVariable MutateVar(ILVariable v)
         {
             return v;

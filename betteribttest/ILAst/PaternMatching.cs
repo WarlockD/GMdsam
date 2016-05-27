@@ -64,10 +64,13 @@ namespace GameMaker.Ast
                 if (label != null) { labels.Add(label); continue; }
             }
         }
-        public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges)
+        public static void AddILRange(this ILExpression expr, IEnumerable<ILRange> ilranges)
         {
             expr.ILRanges.AddRange(ilranges);
-            return expr;
+        }
+        public static void AddILRange(this ILExpression expr, int address)
+        {
+            expr.ILRanges.Add(new ILRange(address));
         }
         public static bool MatchConstant(this ILNode node, GM_Type type, out ILValue value)
         {

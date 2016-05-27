@@ -1,0 +1,1702 @@
+Name = Name = obj_backgrounder_parent       
+Name = Name = obj_musicobjectparent         
+Name = Name = obj_solidsmall                  Parrent = obj_solidparent                 Sprite = spr_solidsmall                
+Name = Name = obj_solidthin                   Parrent = obj_solidsmall                  Sprite = spr_solidsmallthin            
+Name = Name = obj_solidtall_2                 Parrent = obj_solidparent                 Sprite = spr_solidtall_2               
+Name = Name = obj_solidextall_2               Parrent = obj_solidparent                 Sprite = spr_solidextall_2             
+Name = Name = obj_solidexwide                 Parrent = obj_solidparent                 Sprite = spr_solidexwide               
+Name = Name = obj_solidline                   Parrent = obj_solidparent                 Sprite = spr_hline                     
+Name = Name = obj_solidwide                   Parrent = obj_solidparent                 Sprite = spr_solidwide                 
+Name = Name = obj_diagoparent               
+Name = Name = obj_sdr                         Parrent = obj_diagoparent                 Sprite = spr_sdr                       
+Name = Name = obj_sdl                         Parrent = obj_diagoparent                 Sprite = spr_sdl                       
+Name = Name = obj_sur                         Parrent = obj_diagoparent                 Sprite = spr_sur                       
+Name = Name = obj_sul                         Parrent = obj_diagoparent                 Sprite = spr_sul                       
+Name = Name = obj_solidtall                   Parrent = obj_solidsmall                  Sprite = spr_solidtall                 
+Name = Name = obj_solidlong                   Parrent = obj_solidsmall                  Sprite = spr_solidlong                 
+Name = Name = obj_solidlongleft               Parrent = obj_solidsmall                  Sprite = spr_solidlongother            
+Name = Name = obj_core_bridgeleg              Sprite = spr_corebridgepiece           
+Name = Name = obj_core_glowbg                 Sprite = spr_glowbg                    
+Name = Name = obj_core_glowtotem              Sprite = spr_glowtotem                 
+Name = Name = obj_core_glowwall               Sprite = spr_core_glowwall             
+Name = Name = obj_core_lightline_l            Sprite = spr_core_lightst_left         
+Name = Name = obj_core_lightline_m            Sprite = spr_core_lightst_m            
+Name = Name = obj_core_lightline_r            Sprite = spr_core_lightst_r            
+Name = Name = obj_core_lightstrip             Parrent = obj_coreobj_parent              Sprite = spr_core_wallstrip_l          
+Name = Name = obj_core_lightstrip_m           Parrent = obj_coreobj_parent              Sprite = spr_core_wallstrip_m          
+Name = Name = obj_coreobj_parent            
+Name = Name = obj_coredoor_anim               Parrent = obj_coreobj_parent              Sprite = spr_coredoor                  
+Name = Name = obj_bigcoredoor_anim            Parrent = obj_coreobj_parent              Sprite = spr_bigcoredoor               
+Name = Name = obj_coresign                    Parrent = obj_coreobj_parent              Sprite = spr_coresign                  
+Name = Name = obj_darktotem_anim              Parrent = obj_coreobj_parent              Sprite = spr_darknesstotem             
+Name = Name = obj_elev_floorsign              Sprite = spr_floorsign_l1              
+Name = Name = obj_elevatorgem                 Sprite = spr_elevatorgem_r             
+Name = Name = obj_soundtest                 
+Name = Name = obj_mkid_goner                  Parrent = obj_readablesolid               Sprite = spr_mkid_goner_d              
+Name = Name = obj_gaster_follower_a           Parrent = obj_readablesolid               Sprite = spr_g_follower_2              
+Name = Name = obj_gaster_follower_b           Parrent = obj_readablesolid               Sprite = spr_g_follower_1              
+Name = Name = obj_gaster_follower_c           Parrent = obj_readablesolid               Sprite = spr_g_follower_3              
+Name = Name = obj_greydoor                    Parrent = obj_interactable                Sprite = spr_greydoor                  
+Name = Name = obj_mysteryman                  Parrent = obj_interactable                Sprite = spr_mysteryman                
+Name = Name = obj_wrongnumbersong             Sprite = spr_event                     
+Name = Name = obj_otherphonecall              Sprite = spr_event                     
+Name = Name = obj_magicglass                  Sprite = spr_magicglass                
+Name = Name = obj_magicglass_personal         Sprite = spr_magicglass                
+Name = Name = obj_cosmeticpillar_a            Sprite = spr_vinespillar               
+Name = Name = obj_cosmeticpillar_b            Sprite = spr_brokenpillar              
+Name = Name = obj_icecavewall                 Sprite = spr_icecavewall               
+Name = Name = obj_icetosteam                
+Name = Name = obj_waterfall_waterfall         Sprite = spr_waterfall_midtop          
+Name = Name = obj_brightwaterfall             Sprite = spr_waterfall_bright_mt       
+Name = Name = obj_dockanim                    Sprite = spr_dockanim                  
+Name = Name = obj_cogsmall                    Sprite = spr_cogsmall_e                
+Name = Name = obj_hotland_bottomedge          Sprite = spr_hotland_leftedge          
+Name = Name = obj_hotland_rededge             Sprite = spr_hotland_rededge           
+Name = Name = obj_hotland_rededge_x           Sprite = spr_hotland_rededge           
+Name = Name = obj_piper_bluejet               Sprite = spr_steamer_bottom            
+Name = Name = obj_piper_steam                 Sprite = spr_steamer_bottom            
+Name = Name = obj_redpipev                    Sprite = spr_redpipe_middle            
+Name = Name = obj_steamplume2                 Sprite = spr_steamplume2               
+Name = Name = obj_lighttower                  Sprite = spr_lighttower                
+Name = Name = obj_gaster_room               
+Name = Name = obj_endcastlemusic              Parrent = obj_musicobjectparent         
+Name = Name = obj_pitsound                    Parrent = obj_musicobjectparent         
+Name = Name = obj_menumusictest             
+Name = Name = obj_ruinsmusic                  Parrent = obj_musicobjectparent         
+Name = Name = obj_coremusic                   Parrent = obj_musicobjectparent         
+Name = Name = obj_sansmusic                   Parrent = obj_musicobjectparent         
+Name = Name = obj_lavamusic                   Parrent = obj_musicobjectparent         
+Name = Name = obj_hotelmusic                  Parrent = obj_musicobjectparent         
+Name = Name = obj_lavaoogmusic                Parrent = obj_musicobjectparent         
+Name = Name = obj_coreambiencemusic           Parrent = obj_musicobjectparent         
+Name = Name = obj_tundramusic                 Parrent = obj_musicobjectparent         
+Name = Name = obj_townmusic                   Parrent = obj_musicobjectparent         
+Name = Name = obj_ambientwater                Parrent = obj_musicobjectparent         
+Name = Name = obj_ambientrain                 Parrent = obj_musicobjectparent         
+Name = Name = obj_watermusic                  Parrent = obj_musicobjectparent         
+Name = Name = obj_undynecoolmusic             Parrent = obj_musicobjectparent         
+Name = Name = obj_quietwatermusic             Parrent = obj_musicobjectparent         
+Name = Name = obj_temvillagemusic             Parrent = obj_musicobjectparent         
+Name = Name = obj_labmusic                    Parrent = obj_musicobjectparent         
+Name = Name = obj_truelabmusic                Parrent = obj_musicobjectparent         
+Name = Name = obj_mysterymusic                Parrent = obj_musicobjectparent         
+Name = Name = obj_castle_part1music           Parrent = obj_musicobjectparent         
+Name = Name = obj_castle_part2music           Parrent = obj_musicobjectparent         
+Name = Name = obj_tundramusicspecial1         Parrent = obj_musicobjectparent         
+Name = Name = obj_housemusic                  Parrent = obj_musicobjectparent         
+Name = Name = obj_basementmusic               Parrent = obj_musicobjectparent         
+Name = Name = obj_musicchecker              
+Name = Name = obj_birbnoise                 
+Name = Name = obj_walknoise                 
+Name = Name = obj_soundcombo                
+Name = Name = obj_foodsound                 
+Name = Name = obj_musfadeout                
+Name = Name = obj_musfadepause              
+Name = Name = obj_undertaletitle              Sprite = spr_undertaletitle            
+Name = Name = obj_intromenu                 
+Name = Name = obj_introlast                   Sprite = spr_introlast                 
+Name = Name = obj_titleimage                  Sprite = spr_titleimage                
+Name = Name = obj_introfader                  Sprite = spr_pixblk                    
+Name = Name = obj_introtangle               
+Name = Name = obj_introimage                  Sprite = spr_introimage                
+Name = Name = obj_ct_fallobj                
+Name = Name = obj_joypadmenu                
+Name = Name = obj_controltest                 Sprite = spr_roachdance                
+Name = Name = obj_lightray                  
+Name = Name = obj_trianglelightray          
+Name = Name = obj_roomofdog                   Sprite = spr_tobdogl                   
+Name = Name = obj_genanim                   
+Name = Name = obj_genafterimage             
+Name = Name = obj_confetti                    Sprite = spr_confetti                  
+Name = Name = obj_bouncer                   
+Name = Name = obj_pollener                  
+Name = Name = obj_fx_waver                  
+Name = Name = obj_whitesploder              
+Name = Name = obj_glowparticle_1              Sprite = spr_glowparticle_1            
+Name = Name = obj_glowparticlegen_1         
+Name = Name = obj_bg_glower                   Sprite = spr_shop1_bg                  
+Name = Name = obj_imageview                 
+Name = Name = obj_flasher                     Sprite = spr_whitefader                
+Name = Name = obj_glowfly1                    Parrent = obj_interactable                Sprite = spr_glowfly                   
+Name = Name = obj_icecave_fader             
+Name = Name = obj_watercave_fader           
+Name = Name = obj_waterstar_bg                Parrent = obj_backgrounder_parent         Sprite = spr_twinklestar               
+Name = Name = obj_backgrounder_dock           Parrent = obj_backgrounder_parent       
+Name = Name = obj_backgrounder_tundra         Parrent = obj_backgrounder_parent       
+Name = Name = obj_backgrounder_core           Parrent = obj_backgrounder_parent       
+Name = Name = obj_backgrounder_lava         
+Name = Name = obj_backgrounder_lastruins      Parrent = obj_backgrounder_parent       
+Name = Name = obj_backgrounder_castle         Parrent = obj_backgrounder_parent       
+Name = Name = obj_garden_overlayshadow      
+Name = Name = obj_backgrounder_pillar         Sprite = spr_foregroundpillar          
+Name = Name = obj_finalbarrier              
+Name = Name = obj_hotlandparalava             Sprite = spr_hotlandlava               
+Name = Name = obj_hotlandrock_bg            
+Name = Name = obj_mainend                   
+Name = Name = obj_endflowey                 
+Name = Name = obj_endflowey_regret          
+Name = Name = obj_credits_short               Sprite = spr_undertaletitle            
+Name = Name = obj_screen                    
+Name = Name = obj_quittingmessage             Sprite = spr_quittingmessage           
+Name = Name = obj_battleblcon                 Sprite = spr_exc                       
+Name = Name = obj_transheart                  Sprite = spr_heartsmall                
+Name = Name = obj_battler                   
+Name = Name = obj_battlerflowey               Parrent = obj_battler                   
+Name = Name = obj_battlerquick                Parrent = obj_battler                   
+Name = Name = obj_battlerstory                Parrent = obj_battler                   
+Name = Name = obj_tempblack                 
+Name = Name = obj_fader                       Sprite = spr_pixblk                    
+Name = Name = obj_persistentfader             Sprite = spr_pixblk                    
+Name = Name = obj_unfader                     Sprite = spr_pixblk                    
+Name = Name = obj_whitefader                  Sprite = spr_whitefader                
+Name = Name = obj_transitioner              
+Name = Name = obj_musfadein                 
+Name = Name = obj_gameover                  
+Name = Name = obj_battlecontroller          
+Name = Name = obj_vaporized_new             
+Name = Name = obj_vaporized_old             
+Name = Name = obj_vaporized                 
+Name = Name = obj_vaporizedspare            
+Name = Name = obj_spared                    
+Name = Name = obj_vaporacquirer             
+Name = Name = obj_friendgraph               
+Name = Name = obj_graphparent               
+Name = Name = obj_egggraph                    Parrent = obj_graphparent                 Sprite = spr_egggraph                  
+Name = Name = obj_specialgraph                Parrent = obj_graphparent               
+Name = Name = obj_daygraph                    Parrent = obj_graphparent                 Sprite = spr_sunicon                   
+Name = Name = obj_crimegraph                  Parrent = obj_graphparent                 Sprite = spr_crimegraph                
+Name = Name = obj_radar                       Parrent = obj_graphparent               
+Name = Name = obj_populationgraph             Parrent = obj_graphparent               
+Name = Name = obj_papdate                     Sprite = spr_papdate                   
+Name = Name = obj_adate                     
+Name = Name = obj_alphys_fly                  Sprite = spr_adate_intotrash           
+Name = Name = obj_ua_throwtest                Sprite = spr_ua_pet                    
+Name = Name = obj_adate_papyrus               Sprite = spr_adate_papyrus             
+Name = Name = obj_garbagebg                 
+Name = Name = obj_adate_trashcan              Sprite = spr_adate_trashcan_bottom     
+Name = Name = obj_adate_body                  Sprite = spr_adate_body                
+Name = Name = obj_adate_ubody                 Sprite = spr_adate_ubody               
+Name = Name = obj_instantnoodleitem         
+Name = Name = obj_blackborderer             
+Name = Name = obj_gameoverbg                  Sprite = spr_gameoverbg                
+Name = Name = obj_battlefader                 Sprite = spr_pixblk                    
+Name = Name = obj_dustcloud                   Sprite = spr_dustcloud                 
+Name = Name = obj_hpname                      Sprite = spr_hpname                    
+Name = Name = obj_shaker                    
+Name = Name = obj_battlebg                    Sprite = spr_battlebg                  
+Name = Name = obj_blconsm                     Sprite = spr_blconsm                   
+Name = Name = obj_blconwdflowey               Sprite = spr_blconwdshrt               
+Name = Name = obj_blconwideslave              Sprite = spr_blconwdshrt               
+Name = Name = obj_dmgwriter                 
+Name = Name = obj_dmgwriter_old             
+Name = Name = obj_whtpxlgrav                  Sprite = spr_pixwht                    
+Name = Name = obj_blkpxlgrav                  Sprite = spr_pixblk                    
+Name = Name = obj_blkpxltall                  Sprite = spr_pixeltall                 
+Name = Name = obj_blkpxl0tall                 Sprite = spr_pixeltall                 
+Name = Name = obj_coverup                     Sprite = spr_pxbg                      
+Name = Name = obj_torieldisapprove            Sprite = spr_torieldisapprove          
+Name = Name = obj_guidearrows                 Sprite = spr_guidearrows               
+Name = Name = obj_floweybattle1               Sprite = spr_floweynice                
+Name = Name = obj_dummymonster                Parrent = obj_monsterparent               Sprite = spr_dummybattle               
+Name = Name = obj_torielcutscene              Sprite = spr_torielside1               
+Name = Name = obj_floweydraw                
+Name = Name = obj_winkstar                    Sprite = spr_winkstar                  
+Name = Name = obj_fakefroggit                 Parrent = obj_monsterparent               Sprite = spr_froggit                   
+Name = Name = object391                       Parrent = obj_monsterparent               Sprite = spr_froggit                   
+Name = Name = obj_testmonster                 Parrent = obj_monsterparent               Sprite = spr_froggit                   
+Name = Name = obj_whimsun                     Parrent = obj_monsterparent               Sprite = spr_whimsun                   
+Name = Name = obj_migosp                      Parrent = obj_monsterparent               Sprite = spr_migosp                    
+Name = Name = obj_vegetoid                    Parrent = obj_monsterparent               Sprite = spr_vegetoid                  
+Name = Name = obj_loox                        Parrent = obj_monsterparent               Sprite = spr_loox                      
+Name = Name = obj_napstablook                 Parrent = obj_monsterparent               Sprite = spr_napstabattle              
+Name = Name = obj_torielboss                  Parrent = obj_monsterparent               Sprite = spr_torielboss                
+Name = Name = obj_moldsmal                    Parrent = obj_monsterparent               Sprite = spr_moldsmal                  
+Name = Name = obj_froggit                     Parrent = obj_fakefroggit                 Sprite = spr_froggit                   
+Name = Name = obj_froglegs                    Parrent = obj_monsterparent               Sprite = spr_froglegs                  
+Name = Name = obj_froghead                    Parrent = obj_monsterparent               Sprite = spr_froghead                  
+Name = Name = obj_icecap                      Parrent = obj_monsterparent               Sprite = spr_icecap                    
+Name = Name = obj_jerry                       Parrent = obj_monsterparent               Sprite = spr_jerry                     
+Name = Name = obj_icecube                     Parrent = obj_monsterparent               Sprite = spr_icecube                   
+Name = Name = obj_dogeparent                  Parrent = obj_monsterparent             
+Name = Name = obj_lesserdoge                  Parrent = obj_dogeparent                  Sprite = spr_lesserdoge                
+Name = Name = obj_lesserdogetail              Parrent = obj_dogeBtail                   Sprite = spr_lesserdogetail            
+Name = Name = obj_lesserdogehead              Parrent = obj_dogeBtail                   Sprite = spr_lesserdogehead            
+Name = Name = obj_dogeBtail                   Sprite = spr_dogeBtail                 
+Name = Name = obj_greatdog                    Parrent = obj_dogeparent                  Sprite = spr_greatdog                  
+Name = Name = obj_glydeshot                   Parrent = blt_parent_noborder             Sprite = spr_glydeshot                 
+Name = Name = obj_bigglydeshot                Parrent = blt_parent_noborder             Sprite = spr_glydeshot                 
+Name = Name = obj_glyde_body                  Sprite = spr_glyde_hurt                
+Name = Name = obj_glydeb                      Parrent = obj_monsterparent               Sprite = spr_glyde_hurt                
+Name = Name = obj_papyrusdeadhead             Sprite = spr_papyrusboss_head          
+Name = Name = obj_papyrusdeadbody             Sprite = spr_papyrusboss_body          
+Name = Name = obj_papyrusbody                 Parrent = obj_monsterparent               Sprite = spr_papyrusboss_anim          
+Name = Name = obj_papyrusboss                 Parrent = obj_monsterparent               Sprite = spr_papyrusboss               
+Name = Name = obj_gyftrotgift                 Sprite = spr_gyfgift                   
+Name = Name = obj_gyfcloud                    Sprite = spr_gyftcloud                 
+Name = Name = obj_gyftrot                     Parrent = obj_monsterparent               Sprite = spr_gyftrot                   
+Name = Name = obj_gyftrothead                 Parrent = obj_monsterparent               Sprite = spr_gyftrothead               
+Name = Name = obj_gyftrotbody                 Parrent = obj_monsterparent               Sprite = spr_gyftrotbody               
+Name = Name = obj_gyftrotmouth                Parrent = obj_monsterparent               Sprite = spr_gyftrotmouth              
+Name = Name = obj_greatdogbody                Parrent = obj_monsterparent               Sprite = spr_greatdog_n                
+Name = Name = obj_dogeB                       Parrent = obj_dogeparent                  Sprite = spr_dogeB                     
+Name = Name = obj_mandogbody                  Parrent = obj_monsterparent               Sprite = spr_mandognormal              
+Name = Name = obj_womandogbody                Parrent = obj_monsterparent               Sprite = spr_womandognormal            
+Name = Name = obj_mandogax                    Parrent = obj_monsterparent               Sprite = spr_mandogax                  
+Name = Name = obj_womandogax                  Parrent = obj_monsterparent               Sprite = spr_womandogax                
+Name = Name = obj_mandog                      Parrent = obj_dogeparent                  Sprite = spr_mandoge                   
+Name = Name = obj_womandog                    Parrent = obj_dogeparent                  Sprite = spr_womandoge                 
+Name = Name = obj_movedoge                    Parrent = obj_dogeparent                  Sprite = spr_movedoge                  
+Name = Name = obj_movedogehead                Parrent = obj_monsterparent               Sprite = spr_movedogeheada             
+Name = Name = obj_movedogebody                Parrent = obj_monsterparent               Sprite = spr_movedogebody              
+Name = Name = obj_movedogearms                Parrent = obj_monsterparent               Sprite = spr_movedogearms              
+Name = Name = obj_movedogetail                Parrent = obj_monsterparent               Sprite = spr_movedogetail              
+Name = Name = obj_snowdrake                   Parrent = obj_monsterparent               Sprite = spr_snowdrake                 
+Name = Name = obj_chilldrake                  Parrent = obj_monsterparent               Sprite = spr_snowdrake                 
+Name = Name = obj_drakehead                   Parrent = obj_monsterparent               Sprite = spr_snowdrake_head            
+Name = Name = obj_drakebody                   Parrent = obj_monsterparent               Sprite = spr_snowdrake_body            
+Name = Name = obj_woshua                      Parrent = obj_monsterparent               Sprite = spr_woshua                    
+Name = Name = obj_woshpart                  
+Name = Name = obj_woshbody                    Parrent = obj_monsterparent               Sprite = spr_woshbody                  
+Name = Name = obj_shyren                      Parrent = obj_monsterparent               Sprite = spr_shyren                    
+Name = Name = obj_shyrenbody                  Parrent = obj_monsterparent               Sprite = spr_shyren_hide               
+Name = Name = obj_agentbody                   Parrent = obj_monsterparent               Sprite = spr_shyren_agent              
+Name = Name = obj_undynesiner2              
+Name = Name = obj_spearblocker              
+Name = Name = obj_greenspeargen             
+Name = Name = obj_blockbullet                 Sprite = spr_bullet_test               
+Name = Name = obj_blockbullet2                Parrent = obj_blockbullet                 Sprite = spr_bullet_testx              
+Name = Name = obj_boxsiner                  
+Name = Name = obj_risespearbullet             Sprite = spr_risespearbullet           
+Name = Name = obj_risespearbulletgen        
+Name = Name = obj_spearbulletfollowgen      
+Name = Name = obj_spearbullet_follow          Sprite = spr_whitespearbullet          
+Name = Name = obj_undyneboss                  Parrent = obj_monsterparent               Sprite = spr_undyneb                   
+Name = Name = obj_undyneb_body              
+Name = Name = obj_undynebody2                 Sprite = spr_undyneb2                  
+Name = Name = obj_undynebattle2               Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_rotspeargen_gen           
+Name = Name = obj_rotspeargen               
+Name = Name = obj_rotspear                    Sprite = spr_followspear_2             
+Name = Name = obj_followspeargen_2          
+Name = Name = obj_followspear_2               Sprite = spr_followspear_2             
+Name = Name = obj_undynex_body                Sprite = spr_undynex_example           
+Name = Name = obj_undyne_ex                   Parrent = obj_monsterparent               Sprite = spr_undyneb                   
+Name = Name = obj_mkid_b_body                 Sprite = spr_mkid_battle_etc           
+Name = Name = obj_mkid_battle                 Parrent = obj_monsterparent               Sprite = spr_mkid_battle_etc           
+Name = Name = obj_generalsiner              
+Name = Name = obj_gladdummy                   Parrent = obj_monsterparent               Sprite = spr_dummybattle_glad          
+Name = Name = obj_maddummy                    Parrent = obj_monsterparent               Sprite = spr_dummybattle               
+Name = Name = obj_maddum_drawer             
+Name = Name = obj_aaron                       Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_aaronbody                   Parrent = obj_monsterparent               Sprite = spr_aaronbody                 
+Name = Name = obj_tembattle                   Parrent = obj_monsterparent               Sprite = spr_tembattle                 
+Name = Name = obj_moldsmalx_part              Sprite = spr_moldsmalx_part            
+Name = Name = obj_moldsmalx                   Parrent = obj_monsterparent               Sprite = spr_moldsmal                  
+Name = Name = obj_tembody                     Parrent = obj_monsterparent               Sprite = spr_tembody                   
+Name = Name = obj_moldsmalx_body              Parrent = obj_monsterparent               Sprite = spr_moldsmal                  
+Name = Name = obj_shockermaker              
+Name = Name = obj_mettatonb_quiz              Parrent = obj_monsterparent               Sprite = spr_mettatonb                 
+Name = Name = obj_mettatonb_second            Parrent = obj_monsterparent               Sprite = spr_mettatonb                 
+Name = Name = obj_mettatonb_third             Parrent = obj_monsterparent               Sprite = spr_mettatonb                 
+Name = Name = obj_mettatonnn_writer         
+Name = Name = obj_mettatonb_body              Sprite = spr_mettatonb                 
+Name = Name = obj_mettatonb_body2             Sprite = spr_mettatonb                 
+Name = Name = obj_zoomaton                    Sprite = spr_mettatonb_shirt           
+Name = Name = obj_jarfly                      Sprite = spr_jarfly                    
+Name = Name = obj_flyjar                      Sprite = spr_flyjar                    
+Name = Name = obj_answernodule              
+Name = Name = obj_questionasker               Sprite = spr_alphyshelper              
+Name = Name = obj_greenarmor                  Sprite = spr_greenarmor                
+Name = Name = obj_bara01                      Parrent = obj_monsterparent               Sprite = spr_bara01hurt                
+Name = Name = obj_bara02                      Parrent = obj_monsterparent               Sprite = spr_bara02hurt                
+Name = Name = obj_bara03                      Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_bara04                      Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_warplinegen                 Parrent = obj_bulletgenparent           
+Name = Name = obj_xbulletgen                  Parrent = obj_bulletgenparent           
+Name = Name = obj_xbullet                     Parrent = blt_parent_noborder             Sprite = spr_xbullet                   
+Name = Name = obj_warplinebullet            
+Name = Name = obj_sweat99                     Sprite = spr_sweat99                   
+Name = Name = obj_barabody                  
+Name = Name = obj_exhaustbullet               Parrent = blt_parent                      Sprite = spr_incendiaryflame           
+Name = Name = obj_vertplanegreen              Sprite = spr_vertplanegreen            
+Name = Name = obj_vertplanebullet             Parrent = blt_parent_noborder             Sprite = spr_vertplane                 
+Name = Name = obj_vertplanegen                Parrent = obj_bulletgenparent           
+Name = Name = obj_incendiary                  Parrent = blt_parent_noborder             Sprite = spr_incendiaryflame           
+Name = Name = obj_incendiarybomb              Parrent = blt_parent_noborder             Sprite = spr_incendiarybomb            
+Name = Name = obj_sideplanebullet             Parrent = blt_parent_noborder             Sprite = spr_sideplanebullet           
+Name = Name = obj_incendiarygen               Parrent = obj_bulletgenparent           
+Name = Name = obj_tsunderplane                Parrent = obj_monsterparent               Sprite = spr_tsunderplane              
+Name = Name = obj_planeexhaust                Sprite = spr_tsunderplanecloud         
+Name = Name = obj_tsunderplane_body           Sprite = spr_tsunderplane              
+Name = Name = obj_vulkinlightning             Parrent = blt_parent                      Sprite = spr_vulkinlightning           
+Name = Name = obj_vulkincloudbul              Parrent = blt_parent_noborder             Sprite = spr_vulkincloudbul            
+Name = Name = obj_lavabullet                  Parrent = blt_parent_noborder             Sprite = spr_lavaflame                 
+Name = Name = obj_sidelava                    Parrent = blt_parent_noborder             Sprite = spr_lavaside                  
+Name = Name = obj_lavafiregen                 Parrent = obj_bulletgenparent           
+Name = Name = obj_vulkincloud                 Sprite = spr_vulkincloud               
+Name = Name = obj_vulkinbody                  Sprite = spr_vulkinbody                
+Name = Name = obj_vulkin                      Parrent = obj_monsterparent               Sprite = spr_vulkinhurt                
+Name = Name = obj_orangefire                  Parrent = blt_parent_noborder             Sprite = spr_orangefire                
+Name = Name = obj_ropebul                     Parrent = blt_parent_noborder             Sprite = spr_ropebul                   
+Name = Name = obj_ropebulgen                  Parrent = obj_bulletgenparent           
+Name = Name = obj_heatwaver                 
+Name = Name = obj_pyropebody                  Sprite = spr_pyropebody                
+Name = Name = obj_pyrope                      Parrent = obj_monsterparent               Sprite = spr_pyropehurt                
+Name = Name = obj_blastbul                    Parrent = blt_parent_noborder             Sprite = spr_bombexplosion             
+Name = Name = obj_bombbul                     Parrent = blt_parent_noborder             Sprite = spr_bombd                     
+Name = Name = obj_bombgen                     Parrent = obj_bulletgenparent           
+Name = Name = obj_grosscupcake2               Sprite = spr_cupcakemonster            
+Name = Name = obj_spiderbulletparent          Parrent = blt_parent_noborder           
+Name = Name = obj_hideouscupcake              Sprite = spr_hideouscupcake            
+Name = Name = obj_fakeborderdraw            
+Name = Name = obj_donutbullet                 Parrent = obj_spiderbullet                Sprite = spr_donutbullet               
+Name = Name = obj_spiderbulletgen             Parrent = obj_bulletgenparent           
+Name = Name = obj_spiderbullet                Parrent = obj_spiderbulletparent          Sprite = spr_spiderbullet1             
+Name = Name = obj_vertspider                  Parrent = obj_spiderbulletparent          Sprite = spr_spiderbullet1             
+Name = Name = obj_croissant                   Parrent = obj_spiderbullet                Sprite = spr_croissantr                
+Name = Name = obj_vertcroissant               Parrent = obj_spiderbullet                Sprite = spr_croissantr                
+Name = Name = obj_signspider                  Sprite = spr_tinyspider                
+Name = Name = obj_telegramspider              Sprite = spr_tinyspider                
+Name = Name = obj_sadspider                   Sprite = spr_tinyspider                
+Name = Name = obj_spiderb                     Parrent = obj_monsterparent               Sprite = spr_muffethurt                
+Name = Name = obj_spiderpour                  Sprite = spr_spiderpour                
+Name = Name = obj_spiderb_body                Sprite = spr_spiderb_head              
+Name = Name = obj_purpleheart                 Sprite = spr_heartpurple_center        
+Name = Name = obj_crosszap                    Parrent = blt_parent                      Sprite = spr_crosszap                  
+Name = Name = obj_wizardorb_wall              Parrent = obj_bulletgenparent             Sprite = spr_wizard_orb2               
+Name = Name = obj_wizardorb_chaser            Parrent = obj_bulletgenparent             Sprite = spr_wizard_orb2               
+Name = Name = obj_orbsprinkle                 Sprite = spr_wizard_orbsprinkle        
+Name = Name = obj_wizardbody                  Sprite = spr_wizard_full               
+Name = Name = obj_wizard                      Parrent = obj_monsterparent               Sprite = spr_wizardhurt                
+Name = Name = obj_hammergen                   Parrent = obj_bulletgenparent           
+Name = Name = obj_knighthammer                Parrent = blt_parent_noborder             Sprite = spr_knighthammer              
+Name = Name = obj_sunbullet                   Parrent = blt_parent_noborder             Sprite = spr_sunbullet                 
+Name = Name = obj_meteorshine                 Sprite = spr_meteorshine               
+Name = Name = obj_meteorbullet                Parrent = blt_parent_noborder             Sprite = spr_moonmeteor                
+Name = Name = obj_skymoon                     Parrent = obj_bulletgenparent             Sprite = spr_skymoon                   
+Name = Name = obj_sunmoon                     Parrent = obj_bulletgenparent             Sprite = spr_sunmoon                   
+Name = Name = obj_skyorb                      Parrent = obj_bulletgenparent             Sprite = spr_skyorb                    
+Name = Name = obj_finalknight                 Parrent = obj_monsterparent               Sprite = spr_knighthurt                
+Name = Name = obj_finalknight_body            Sprite = spr_finalknight               
+Name = Name = obj_megaflybulletgen            Parrent = obj_bulletgenparent           
+Name = Name = obj_megaflybullet               Parrent = blt_parent_noborder             Sprite = spr_megaflybullet             
+Name = Name = obj_frogbullet_gen              Parrent = obj_bulletgenparent           
+Name = Name = obj_frogbullet_ex               Parrent = blt_parent_noborder             Sprite = spr_frogbullet_stop           
+Name = Name = obj_frogbullet_ex_old           Parrent = blt_parent_noborder             Sprite = spr_frogbullet_stop           
+Name = Name = obj_finalfroggit                Parrent = obj_monsterparent               Sprite = spr_finalfroggithurt          
+Name = Name = obj_finalfroggit_body           Sprite = spr_finalfroggit              
+Name = Name = obj_astigmatism                 Parrent = obj_monsterparent               Sprite = spr_astigmatismhurt           
+Name = Name = obj_astigmatism_body            Sprite = spr_astigmatism_anim2         
+Name = Name = obj_stromboli                   Parrent = blt_parent_noborder             Sprite = spr_circlebulletmed_ex        
+Name = Name = obj_astigmatismgen              Parrent = obj_bulletgenparent           
+Name = Name = obj_stromboligen                Parrent = obj_bulletgenparent           
+Name = Name = obj_sonbullet                   Parrent = blt_parent_noborder             Sprite = spr_circlebulletmed_ex        
+Name = Name = obj_astigmatism_bullet          Parrent = blt_parent_noborder             Sprite = spr_circlebulletlarge_ex      
+Name = Name = obj_whimsalot                   Parrent = obj_monsterparent               Sprite = spr_whimsalothurt             
+Name = Name = obj_butterflybullet_2           Parrent = blt_parent_noborder             Sprite = spr_butterflybullet           
+Name = Name = obj_whimsalot_body              Sprite = spr_whimsalot                 
+Name = Name = obj_butterflybullet_gen_2       Parrent = obj_bulletgenparent           
+Name = Name = obj_butterflybullet_gen         Parrent = obj_bulletgenparent           
+Name = Name = obj_butterflybullet             Parrent = blt_parent_noborder             Sprite = spr_butterflybullet           
+Name = Name = obj_battlebomb_body             Sprite = spr_battlebomb                
+Name = Name = obj_battlebomb                  Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_ratingsmaster             
+Name = Name = obj_mettatonex                  Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_stagecloud                  Sprite = spr_stagecloud_bad            
+Name = Name = obj_mett_bossintro            
+Name = Name = obj_mettshine                   Sprite = spr_mettshine                 
+Name = Name = obj_fallofflimb               
+Name = Name = obj_mettb_body                  Sprite = spr_mettb_upperbody           
+Name = Name = obj_essaystuff                
+Name = Name = obj_startroom_pl              
+Name = Name = obj_gameover_test_pl          
+Name = Name = obj_nextbattle_pl             
+Name = Name = obj_metttestbulletparent      
+Name = Name = obj_mettattackgen             
+Name = Name = obj_happybreaktime              Sprite = spr_happybreaktime            
+Name = Name = obj_legline_l                   Parrent = obj_metttestbulletparent        Sprite = spr_mettlegbullet_l           
+Name = Name = obj_legline_r                   Parrent = obj_metttestbulletparent        Sprite = spr_mettlegbullet_r           
+Name = Name = obj_bulletblocker               Parrent = obj_metttestbulletparent        Sprite = spr_blackbox_pl               
+Name = Name = obj_bulletbomb                  Parrent = obj_metttestbulletparent        Sprite = spr_plusbomb                  
+Name = Name = obj_mettheart_parent          
+Name = Name = obj_mettheart_1                 Parrent = obj_mettheart_parent            Sprite = spr_mettheart                 
+Name = Name = obj_mettheart_2                 Parrent = obj_mettheart_parent            Sprite = spr_mettheart                 
+Name = Name = obj_mettheart_3                 Parrent = obj_mettheart_parent            Sprite = spr_mettheart                 
+Name = Name = obj_mettheart_4                 Parrent = obj_mettheart_parent            Sprite = spr_mettheart                 
+Name = Name = obj_brokenpiece                 Sprite = spr_parasolmett               
+Name = Name = obj_discoball_pl                Parrent = obj_metttestbulletparent        Sprite = spr_discoball_pl              
+Name = Name = obj_bobskids                    Sprite = spr_eggbullet_pl              
+Name = Name = obj_bigbob                      Sprite = spr_bigbob                    
+Name = Name = obj_eggbullet_pl                Sprite = spr_eggbullet_pl              
+Name = Name = obj_eggcarton_pl                Sprite = spr_eggcarton_pl              
+Name = Name = obj_mettfodder                  Parrent = obj_metttestbulletparent        Sprite = spr_parasolmett               
+Name = Name = obj_dancemett                   Sprite = spr_tinydancemett             
+Name = Name = obj_mettlightning_pl            Parrent = obj_metttestbulletparent        Sprite = spr_mettlightning_pl          
+Name = Name = obj_kissybullet_pl              Parrent = obj_metttestbulletparent        Sprite = spr_kissbullet                
+Name = Name = obj_blackbox_rewinder           Sprite = spr_recbox                    
+Name = Name = obj_mettstick                   Sprite = spr_mettstick                 
+Name = Name = obj_metthand_l                  Parrent = obj_metttestbulletparent        Sprite = spr_metthand_pl               
+Name = Name = obj_metthand_r                  Parrent = obj_metttestbulletparent        Sprite = spr_metthand_r                
+Name = Name = obj_mettleg_l                   Parrent = obj_metttestbulletparent        Sprite = spr_mettlegbullet_l           
+Name = Name = obj_mettleg_r                   Parrent = obj_metttestbulletparent        Sprite = spr_mettlegbullet_l           
+Name = Name = obj_plusbomb_explosion          Parrent = obj_metttestbulletparent        Sprite = spr_plusbomb_coreblast        
+Name = Name = obj_blackbox_pl                 Parrent = obj_metttestbulletparent        Sprite = spr_blackbox_pl               
+Name = Name = obj_upbox_pl                    Sprite = spr_upbox                     
+Name = Name = obj_upbox_new_pl                Sprite = spr_upbox                     
+Name = Name = obj_plusbomb                    Parrent = obj_metttestbulletparent        Sprite = spr_plusbomb                  
+Name = Name = obj_heartshot_pl                Sprite = spr_yellowbullet_pl           
+Name = Name = obj_heart_pl                    Sprite = spr_yellowheart_pl            
+Name = Name = obj_starburst_x                 Sprite = spr_starburst_x               
+Name = Name = obj_mettheart_burst             Sprite = spr_mettheart_centered        
+Name = Name = obj_mettaton_neo                Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_mneo_body                 
+Name = Name = obj_doodleball                  Sprite = spr_doodlebullet              
+Name = Name = obj_doodlebug_body              Sprite = spr_doodlebug                 
+Name = Name = obj_doodlebug                   Parrent = obj_monsterparent               Sprite = spr_doodlebug                 
+Name = Name = obj_doodlebullet                Parrent = blt_parent_noborder             Sprite = spr_doodlebullet              
+Name = Name = obj_sorry_trashball             Parrent = blt_parent_noborder             Sprite = spr_sorrytrashball            
+Name = Name = obj_sorrybody                   Sprite = spr_sorry_example             
+Name = Name = obj_sosorry                     Parrent = obj_monsterparent               Sprite = spr_sorry_d                   
+Name = Name = obj_randomhandgen             
+Name = Name = obj_handbulletgen             
+Name = Name = obj_handbullet_new              Sprite = spr_handbullet_old_r          
+Name = Name = obj_firestormgen                Sprite = spr_firebullet_center_generous
+Name = Name = obj_asgorebulparent           
+Name = Name = obj_asgoreattackgen           
+Name = Name = obj_sidedam                     Parrent = obj_asgorebulparent           
+Name = Name = obj_sinefiregen_asg_lv1       
+Name = Name = obj_sinefiregen_asg_lv2_usethis
+Name = Name = obj_sinefiregen_asglv3        
+Name = Name = obj_helixfiregen              
+Name = Name = obj_cfiregen                  
+Name = Name = obj_sided_fire                  Parrent = obj_asgorebulparent             Sprite = spr_firebullet_noc            
+Name = Name = obj_genericfire                 Parrent = obj_asgorebulparent             Sprite = spr_firebullet_center_generous
+Name = Name = obj_cfire                       Parrent = obj_asgorebulparent             Sprite = spr_firebullet_center_generous
+Name = Name = obj_sinefire_asghelix           Parrent = obj_asgorebulparent             Sprite = spr_firebullet_center_generous
+Name = Name = obj_asgore_spearswipe           Parrent = obj_asgorebulparent             Sprite = spr_asgore_swipe_nospear      
+Name = Name = obj_asgore_spearswipegen        Sprite = spr_asgore_flashsilhouette    
+Name = Name = obj_eyeflash                    Sprite = spr_asgore_eyeflash           
+Name = Name = obj_asgoreb                     Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_mercybutton_part            Sprite = spr_mercybutton_shatter       
+Name = Name = obj_mercybutton_shatter         Sprite = spr_mercybutton_normal        
+Name = Name = obj_asgorefakespear             Sprite = spr_asgorespear               
+Name = Name = obj_asgore_finalintro           Sprite = spr_asgore_prebrandish        
+Name = Name = obj_purplegradienter          
+Name = Name = obj_orangeparticlegen         
+Name = Name = obj_orangeparticle              Sprite = spr_orangeparticle            
+Name = Name = obj_spearafterimage           
+Name = Name = obj_spearafterimage2            Sprite = spr_asgorespear               
+Name = Name = obj_asgoreb_body              
+Name = Name = obj_asgorespear                 Sprite = spr_asgorespear               
+Name = Name = obj_asgfakeheart                Sprite = spr_torheart_again            
+Name = Name = obj_spinbullet_last             Sprite = spr_spinbullet_outline        
+Name = Name = obj_spinbullet_lastgen        
+Name = Name = obj_asgore_lastcutscene         Sprite = spr_asgore_kneel              
+Name = Name = obj_floweygonk                  Sprite = spr_floweygonk                
+Name = Name = obj_gameshake                 
+Name = Name = obj_truechara                   Sprite = spr_truechara                 
+Name = Name = obj_sansbullet_parent         
+Name = Name = obj_gasterblaster               Parrent = obj_sansbullet_parent           Sprite = spr_gasterblaster             
+Name = Name = obj_sans_bonebul                Parrent = obj_sansbullet_parent           Sprite = spr_s_bonebul_top             
+Name = Name = obj_bonewall_normal             Parrent = obj_sansbullet_parent           Sprite = spr_s_bonewall_wide           
+Name = Name = obj_bonewall                    Parrent = obj_sansbullet_parent           Sprite = spr_s_bonewall                
+Name = Name = obj_bonestab                    Parrent = obj_sansbullet_parent         
+Name = Name = obj_boneloop_v                  Parrent = obj_sansbullet_parent           Sprite = spr_s_boneloop                
+Name = Name = obj_menubone_bottom             Parrent = obj_sansbullet_parent           Sprite = spr_s_boneloop_out            
+Name = Name = obj_menubone                    Parrent = obj_sansbullet_parent           Sprite = spr_s_boneloop_out            
+Name = Name = obj_s_fakefightbt               Sprite = spr_fightbt                   
+Name = Name = obj_emptyborder_s               Sprite = spr_emptyborder               
+Name = Name = obj_sans_z_battle               Sprite = spr_sans_z_battle             
+Name = Name = obj_strike_temp                 Sprite = spr_strike                    
+Name = Name = obj_menubone_maker            
+Name = Name = obj_sansshadowgen             
+Name = Name = obj_sans_shaker               
+Name = Name = obj_vplatgen                  
+Name = Name = obj_3platgen                  
+Name = Name = obj_boneplat                  
+Name = Name = obj_heart_sansbattle            Sprite = spr_heart_battle_pl           
+Name = Name = obj_sansb_body                  Sprite = spr_sansb_face                
+Name = Name = obj_gasterbl_gen              
+Name = Name = obj_sansb                       Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_white_ender               
+Name = Name = obj_black_ender               
+Name = Name = obj_flowey_wilt                 Sprite = spr_flowey_wilted             
+Name = Name = obj_storybattle_gen           
+Name = Name = obj_melonbulgen                 Parrent = obj_bulletgenparent           
+Name = Name = obj_melonbullet                 Parrent = blt_parent_noborder             Sprite = spr_melonbullet               
+Name = Name = obj_melontooth                  Parrent = blt_parent_noborder             Sprite = spr_melontooth                
+Name = Name = obj_meloneye                    Parrent = blt_parent_noborder             Sprite = spr_melonbullet               
+Name = Name = obj_lemonbread                  Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_lemonbread_body             Sprite = spr_lemonbread_head           
+Name = Name = obj_amalgambul_parent         
+Name = Name = obj_clawfailuregen              Parrent = obj_bulletgenparent           
+Name = Name = obj_clawbullet_failure          Parrent = obj_amalgambul_parent           Sprite = spr_clawbullet                
+Name = Name = obj_clawbullet_gravityfailure   Parrent = obj_amalgambul_parent           Sprite = spr_clawbullet                
+Name = Name = obj_strangeman_head             Parrent = obj_amalgambul_parent           Sprite = spr_strangeman_floathead      
+Name = Name = obj_butterflyhead               Parrent = obj_amalgambul_parent           Sprite = spr_strangeman_headless_walk  
+Name = Name = obj_strangeman_headloss         Parrent = obj_amalgambul_parent           Sprite = spr_strangeman_headless_walk  
+Name = Name = obj_strangeman_butterfly        Parrent = obj_amalgambul_parent           Sprite = spr_butterfly_bullet2         
+Name = Name = obj_strangeman_intro            Sprite = spr_strangeman_walk           
+Name = Name = obj_insanetri                 
+Name = Name = obj_insanesq                  
+Name = Name = obj_freakbulletgen              Parrent = obj_bulletgenparent             Sprite = spr_freakbullet               
+Name = Name = obj_freakbullet                 Parrent = obj_amalgambul_parent           Sprite = spr_freakbullet               
+Name = Name = obj_dogmissle                   Parrent = obj_amalgambul_parent           Sprite = spr_dogmissle                 
+Name = Name = obj_amalgam_laserdog            Parrent = obj_amalgambul_parent           Sprite = spr_nofacedog                 
+Name = Name = obj_amalgam_rocketdog           Parrent = obj_amalgambul_parent           Sprite = spr_nofacedog_legtuck         
+Name = Name = obj_amalgam_tooth               Parrent = blt_parent_noborder             Sprite = spr_amalgam_tooth             
+Name = Name = obj_amalgam_biter               Parrent = obj_bulletgenparent           
+Name = Name = obj_heart_deletelater         
+Name = Name = obj_reaperbird_body             Sprite = spr_reaperbird_head           
+Name = Name = obj_reaperbird                  Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_snowdrakemom_body           Sprite = spr_snowdrakesmom             
+Name = Name = obj_snowdrakemom                Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_memoryhead_body             Sprite = spr_memoryhead                
+Name = Name = obj_memoryhead                  Parrent = obj_monsterparent               Sprite = spr_froggit                   
+Name = Name = obj_endogeny                    Parrent = obj_dogeparent                  Sprite = spr_aaron                     
+Name = Name = obj_endogeny_body               Sprite = spr_endogeny                  
+Name = Name = obj_screenwhiter              
+Name = Name = obj_ripoff_undyne               Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_ripoff_papyrus              Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_ripoff_sans                 Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_ripoff_alphys               Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_ripoff_toriel               Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_ripoff_asgore               Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_asrielb                     Parrent = obj_monsterparent               Sprite = spr_asriel_afterimager        
+Name = Name = obj_asrielfinal                 Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_asrielpanels                Sprite = spr_asrielpanels              
+Name = Name = obj_heart_another               Sprite = spr_another_heart_placeholder 
+Name = Name = obj_afinal_body               
+Name = Name = obj_asriel_body                 Sprite = spr_asriel_afterimager        
+Name = Name = obj_roundedge                 
+Name = Name = obj_afterimage_asriel         
+Name = Name = obj_handlightning             
+Name = Name = obj_ultimatarget                Sprite = spr_redtarget                 
+Name = Name = obj_blastorb                    Sprite = spr_beamcircle                
+Name = Name = obj_ultimagen                 
+Name = Name = obj_ultimabullet                Parrent = obj_asbulletparent              Sprite = spr_ultimabullet              
+Name = Name = obj_lastbeam                  
+Name = Name = obj_explodestar               
+Name = Name = obj_regstar_blt                 Parrent = obj_asbulletparent              Sprite = spr_regstar                   
+Name = Name = obj_stormstar_gen             
+Name = Name = obj_stormstar                   Sprite = spr_stormstar                 
+Name = Name = obj_gunarm_bolt                 Parrent = obj_asbulletparent              Sprite = spr_asriel_gunbolt            
+Name = Name = obj_gunarm_firepattern          Parrent = obj_asbulletparent              Sprite = spr_asriel_gunarm_shot        
+Name = Name = obj_rainbowtarget               Sprite = spr_rainbowtarget             
+Name = Name = obj_rainbowbolt_testgen       
+Name = Name = obj_rainbowbolt_realgen       
+Name = Name = obj_rainbowbolt                 Parrent = obj_asbulletparent              Sprite = spr_rainbowbolt               
+Name = Name = obj_swordtwinkle                Parrent = obj_asbulletparent              Sprite = spr_asriel_swordtwinkle       
+Name = Name = obj_asriel_swordmaster          Sprite = spr_swordmaster               
+Name = Name = obj_asriel_swordarm             Parrent = obj_asbulletparent              Sprite = spr_asriel_swordlessarm       
+Name = Name = obj_asbulletparent            
+Name = Name = obj_hg_wholescreen            
+Name = Name = obj_hg_debris                   Parrent = obj_asbulletparent              Sprite = spr_hg_debris_small           
+Name = Name = obj_hg_body                     Parrent = obj_asbulletparent              Sprite = spr_hypergoner                
+Name = Name = obj_migospel                    Parrent = obj_monsterparent               Sprite = spr_migospel_hurt             
+Name = Name = obj_migospel_body               Sprite = spr_migospel_hurt             
+Name = Name = obj_parsnik                     Parrent = obj_monsterparent               Sprite = spr_parsnik_hurt              
+Name = Name = obj_parsnik_body                Sprite = spr_parsnik_hurt              
+Name = Name = obj_moldessa_body             
+Name = Name = obj_moldessa                    Parrent = obj_monsterparent               Sprite = spr_moldessa_hurt             
+Name = Name = obj_torboss_2ndtime             Sprite = spr_torielboss_kneel          
+Name = Name = obj_hard_dog                    Sprite = spr_tobdogl                   
+Name = Name = obj_monster_extrabody         
+Name = Name = obj_basicmonster                Parrent = obj_monsterparent               Sprite = spr_aaron                     
+Name = Name = obj_monsterparent             
+Name = Name = obj_torielflame_X               Sprite = spr_torielflame               
+Name = Name = obj_radialfakegen             
+Name = Name = obj_radialfakegenx            
+Name = Name = obj_friendlypellet              Sprite = spr_spinbullet                
+Name = Name = obj_fakepellet                  Sprite = spr_spinbullet                
+Name = Name = blt_chasefire1                  Parrent = blt_parent                      Sprite = spr_firebullet                
+Name = Name = blt_floatfire                   Parrent = blt_parent                      Sprite = spr_firebullet                
+Name = Name = blt_chasefire2                  Parrent = blt_parent                      Sprite = spr_firebullet                
+Name = Name = blt_handbullet1                 Parrent = blt_parent                      Sprite = spr_handbullet                
+Name = Name = blt_handbullet2                 Parrent = blt_parent                      Sprite = spr_handbullet                
+Name = Name = blt_hoopbullet1                 Parrent = blt_parent                      Sprite = spr_circlebulletmed2          
+Name = Name = blt_firehelix1                  Parrent = blt_parent                      Sprite = spr_firebullet                
+Name = Name = blt_minihelix                   Parrent = blt_parent                      Sprite = spr_firebullet                
+Name = Name = blt_avoidfire                   Parrent = blt_parent                      Sprite = spr_firebullet                
+Name = Name = blt_hoopbullet2                 Parrent = blt_parent                      Sprite = spr_circlebulletmd1           
+Name = Name = blt_blookhat                    Sprite = spr_blookhat                  
+Name = Name = blt_splinterbig                 Parrent = blt_parent                      Sprite = spr_bulletmd                  
+Name = Name = blt_splinter                    Parrent = blt_parent                      Sprite = spr_bulletsm                  
+Name = Name = blt_butterfly1                  Parrent = blt_parent                      Sprite = spr_butterflybllt             
+Name = Name = blt_leapfrog                    Parrent = blt_parent                      Sprite = spr_smallfrogbullet           
+Name = Name = blt_roachdance                  Parrent = blt_parent                      Sprite = spr_roachdance                
+Name = Name = blt_butterfly2                  Parrent = blt_parent                      Sprite = spr_butterflybllt             
+Name = Name = blt_roachbullet                 Parrent = blt_parent                      Sprite = spr_roachbullet               
+Name = Name = blt_vegbullet                   Parrent = blt_parent                      Sprite = spr_vegbullet                 
+Name = Name = blt_gravbullet                  Parrent = blt_parent_noborder             Sprite = spr_carrotbullet              
+Name = Name = blt_flybullet                   Parrent = blt_parent                      Sprite = spr_flybullet                 
+Name = Name = blt_crybullet                   Parrent = blt_parent                      Sprite = spr_teardrop                  
+Name = Name = blt_crybullet2                  Parrent = blt_parent                      Sprite = spr_teardrop                  
+Name = Name = blt_streambullet                Parrent = blt_parent                      Sprite = spr_streambullet              
+Name = Name = blt_pollendrop                  Parrent = blt_parent                      Sprite = spr_bulletmd                  
+Name = Name = blt_scootdog                    Parrent = blt_sizebone                    Sprite = spr_tobydogscoot              
+Name = Name = blt_coolbus                     Parrent = blt_sizebone                    Sprite = spr_coolbus                   
+Name = Name = blt_superbone                   Parrent = blt_sizebone                    Sprite = spr_superbone                 
+Name = Name = blt_tobydogbone                 Sprite = spr_tobydogeat                
+Name = Name = blt_potentiallyblue             Parrent = blt_parent_noborder           
+Name = Name = blt_dogspear                    Parrent = blt_parent_noborder             Sprite = spr_dogspear                  
+Name = Name = blt_barkbullet                  Parrent = blt_parent_noborder             Sprite = spr_barkbullet                
+Name = Name = blt_sadbullet                   Parrent = blt_parent_noborder             Sprite = spr_smheartbullet             
+Name = Name = blt_hat                         Parrent = blt_parent_noborder             Sprite = spr_hatbullet                 
+Name = Name = blt_icicle                      Parrent = blt_parent_noborder             Sprite = spr_iciclebullet              
+Name = Name = blt_clawbullet_white            Parrent = blt_parent_noborder             Sprite = spr_rotclawbullet             
+Name = Name = blt_4sidebullet                 Parrent = blt_parent_noborder             Sprite = spr_clawbullet                
+Name = Name = blt_tinypom_leap                Parrent = blt_parent                      Sprite = spr_tinypomwag                
+Name = Name = blt_whitespear                  Parrent = blt_bluespear                   Sprite = spr_whitespear                
+Name = Name = obj_iceteeth                    Parrent = blt_bluespear                 
+Name = Name = blt_sizebone                    Parrent = blt_parent_noborder             Sprite = spr_bonetop                   
+Name = Name = blt_topbone                     Parrent = blt_sizebone                    Sprite = spr_bonebottom                
+Name = Name = blt_bluespear                   Parrent = blt_parent                      Sprite = spr_bluespear                 
+Name = Name = blt_pblueattack                 Parrent = blt_parent                      Sprite = spr_bluespear                 
+Name = Name = blt_bluesword                   Parrent = blt_parent                      Sprite = spr_bluesword                 
+Name = Name = blt_whiteax                     Parrent = blt_parent_noborder             Sprite = spr_bluesword                 
+Name = Name = blt_loopbulletgrow              Parrent = blt_parent                      Sprite = spr_smheartbullet             
+Name = Name = blt_dummyknife                  Parrent = blt_parent_noborder             Sprite = spr_dummyknife                
+Name = Name = blt_dummybullet                 Parrent = blt_parent_noborder             Sprite = spr_dummybullet               
+Name = Name = blt_dummyshot                   Parrent = blt_parent_noborder             Sprite = spr_dummyshot                 
+Name = Name = blt_dummymissle                 Parrent = blt_parent_noborder             Sprite = spr_hotlandmissle             
+Name = Name = obj_maintem                     Sprite = spr_temfront                  
+Name = Name = obj_temleg                    
+Name = Name = blt_musbul1                     Parrent = blt_parent_noborder             Sprite = spr_musbul_1                  
+Name = Name = blt_growbullet                  Parrent = blt_parent_noborder             Sprite = spr_waterbul                  
+Name = Name = blt_soapbul                     Parrent = blt_parent_noborder             Sprite = spr_soapbul                   
+Name = Name = blt_shinebullet                 Sprite = spr_glitterbul                
+Name = Name = blt_stalk1                      Parrent = blt_parent_noborder             Sprite = spr_wormbul                   
+Name = Name = blt_stalk2                      Parrent = blt_parent_noborder             Sprite = spr_wormbul                   
+Name = Name = blt_stalkloop                   Parrent = blt_parent                      Sprite = spr_circlebulletb             
+Name = Name = blt_temhand                     Sprite = spr_temhand                   
+Name = Name = blt_sweatdrop                   Parrent = blt_parent_noborder             Sprite = spr_teardrop                  
+Name = Name = blt_uspear                      Parrent = blt_parent_noborder             Sprite = spr_uspearbul                 
+Name = Name = blt_muscbul                     Parrent = blt_parent_noborder             Sprite = spr_muscbul1                  
+Name = Name = obj_blackboxtest                Parrent = blt_parent_noborder             Sprite = spr_blackboxbl                
+Name = Name = obj_blackboxpart                Sprite = spr_blackboxpart              
+Name = Name = obj_bluelaser_b               
+Name = Name = blt_parent                    
+Name = Name = blt_parent_noborder             Parrent = blt_parent                    
+Name = Name = blt_direct                      Parrent = blt_parent                      Sprite = spr_bulletmd                  
+Name = Name = blt_thatch                      Parrent = blt_parent                      Sprite = spr_dirbullet                 
+Name = Name = blt_gen                         Parrent = blt_parent                      Sprite = spr_bulletgenmd               
+Name = Name = blt_laser                     
+Name = Name = obj_giftgen                     Parrent = obj_bulletgenparent           
+Name = Name = obj_blueattackgen             
+Name = Name = obj_sleepdog                    Parrent = blt_parent_noborder             Sprite = spr_sleepdog                  
+Name = Name = obj_loopdog                     Parrent = blt_parent                      Sprite = spr_tinypombark               
+Name = Name = obj_loopbulletgrowgen           Parrent = obj_bulletgenparent           
+Name = Name = obj_musbulgen                   Parrent = obj_bulletgenparent           
+Name = Name = obj_woshspiralgen               Parrent = obj_bulletgenparent           
+Name = Name = obj_stalkergen                  Parrent = obj_bulletgenparent           
+Name = Name = obj_8smallgen                   Parrent = obj_bulletgenparent           
+Name = Name = obj_sweatbulgen                 Parrent = obj_bulletgenparent           
+Name = Name = obj_muscbulgen                  Parrent = obj_bulletgenparent           
+Name = Name = obj_quickgen                    Parrent = obj_bulletgenparent           
+Name = Name = obj_blackbulletgen1             Parrent = obj_bulletgenparent           
+Name = Name = obj_carrotshot                  Parrent = blt_parent_noborder             Sprite = spr_carrotshot                
+Name = Name = obj_stardrop                    Parrent = blt_parent_noborder             Sprite = spr_stardrop                  
+Name = Name = obj_carrotstargen               Parrent = obj_bulletgenparent           
+Name = Name = obj_torgen                      Sprite = spr_torielboss_side           
+Name = Name = obj_rotategen                   Parrent = obj_bulletgenparent           
+Name = Name = obj_butterfly2gen               Parrent = obj_bulletgenparent           
+Name = Name = obj_bulletgenthatched           Parrent = obj_bulletgenparent           
+Name = Name = obj_lasergen1                   Parrent = obj_bulletgenparent           
+Name = Name = obj_bulletgenparent           
+Name = Name = obj_bulletgen1                  Parrent = obj_bulletgenparent           
+Name = Name = obj_crygen1                     Parrent = obj_bulletgenparent           
+Name = Name = obj_crygen2                     Parrent = obj_bulletgenparent           
+Name = Name = obj_crygen3                     Parrent = obj_bulletgenparent           
+Name = Name = obj_sadmsggen                   Parrent = obj_bulletgenparent             Sprite = spr_bulletNapstaSad           
+Name = Name = obj_allaroundgen                Parrent = obj_bulletgenparent           
+Name = Name = obj_4sidegen                    Parrent = obj_bulletgenparent           
+Name = Name = obj_1sidegen                    Parrent = obj_bulletgenparent           
+Name = Name = obj_gyftgen                     Parrent = obj_bulletgenparent           
+Name = Name = obj_hoopgen1                    Parrent = obj_bulletgenparent           
+Name = Name = obj_lightpunch                  Sprite = spr_regfist                   
+Name = Name = obj_strongpunch                 Sprite = spr_hyperfist                 
+Name = Name = obj_battlethingparent         
+Name = Name = obj_targetparent              
+Name = Name = obj_fadebar                     Sprite = spr_fadebar                   
+Name = Name = obj_xtarget                     Parrent = obj_targetparent                Sprite = spr_targetchoice              
+Name = Name = obj_ztarget                     Parrent = obj_targetparent                Sprite = spr_targetchoice              
+Name = Name = obj_fisttargettest              Parrent = obj_battlethingparent           Sprite = spr_dumbtarget                
+Name = Name = obj_knifetargettest             Parrent = obj_battlethingparent           Sprite = spr_dumbtarget                
+Name = Name = obj_shoetargettest              Parrent = obj_battlethingparent           Sprite = spr_dumbtarget                
+Name = Name = obj_notebook_attackanim         Sprite = spr_notebook_attack           
+Name = Name = obj_gunshot_stab                Sprite = spr_gunshot_stab              
+Name = Name = obj_gunshot_star                Sprite = spr_gunshot_stab              
+Name = Name = obj_gunshot_2                   Sprite = spr_gunshot_remnant           
+Name = Name = obj_frypan_star                 Sprite = spr_frypan_star               
+Name = Name = obj_frypan_impact               Sprite = spr_frypan_impact             
+Name = Name = obj_pressZ                      Sprite = spr_pressz                    
+Name = Name = obj_slice                       Sprite = spr_strike                    
+Name = Name = obj_targetchoice                Sprite = spr_targetchoice              
+Name = Name = obj_targetchoiceshoe            Sprite = spr_targetchoice              
+Name = Name = obj_targetchoicefist            Sprite = spr_targetchoice              
+Name = Name = obj_targetchoiceHITSEVERYONE    Sprite = spr_targetchoice              
+Name = Name = obj_target                      Sprite = spr_target                    
+Name = Name = obj_heartshot                   Sprite = spr_heartbullet               
+Name = Name = obj_heartshot_bounceaway        Sprite = spr_heartbullet               
+Name = Name = obj_growheart                   Sprite = spr_heartyellow_center        
+Name = Name = obj_cutsceneheart               Sprite = spr_heartred_center           
+Name = Name = obj_heart                       Sprite = spr_heart                     
+Name = Name = obj_heartdefeated               Sprite = spr_heart                     
+Name = Name = obj_torheart                    Sprite = spr_torheart                  
+Name = Name = obj_heartshard                  Sprite = spr_heartshards               
+Name = Name = obj_theartshard                 Sprite = spr_theartshards              
+Name = Name = obj_fakeheart                   Sprite = spr_heart                     
+Name = Name = obj_dateheart                   Sprite = spr_heart                     
+Name = Name = obj_fightbt                     Parrent = obj_btparent                    Sprite = spr_fightbt                   
+Name = Name = obj_talkbt                      Parrent = obj_btparent                    Sprite = spr_talkbt                    
+Name = Name = obj_itembt                      Parrent = obj_btparent                    Sprite = spr_itembt                    
+Name = Name = obj_spellbt                     Parrent = obj_btparent                    Sprite = spr_spellbt                   
+Name = Name = obj_sparebt                     Parrent = obj_btparent                    Sprite = spr_sparebt                   
+Name = Name = obj_btparent                    Sprite = spr_fightbt                   
+Name = Name = obj_anybt                       Sprite = spr_fightbt                   
+Name = Name = obj_borderparent              
+Name = Name = obj_lborder                     Parrent = obj_borderparent                Sprite = spr_border                    
+Name = Name = obj_uborder                     Parrent = obj_borderparent                Sprite = spr_border                    
+Name = Name = obj_rborder                     Parrent = obj_borderparent                Sprite = spr_border                    
+Name = Name = obj_dborder                     Parrent = obj_borderparent                Sprite = spr_border                    
+Name = Name = obj_growshrink                  Sprite = spr_border                    
+Name = Name = obj_torface                     Parrent = obj_face                      
+Name = Name = obj_torbody                     Parrent = obj_face                        Sprite = spr_face_torielbody           
+Name = Name = obj_face_torieltalk             Parrent = obj_torface                     Sprite = spr_face_torielhappytalk      
+Name = Name = obj_face_torglasses             Parrent = obj_torface                     Sprite = spr_face_torielglasses        
+Name = Name = obj_face_torielblink            Parrent = obj_torface                     Sprite = spr_face_torielhappyblink     
+Name = Name = obj_face_floweytalk             Parrent = obj_floface                     Sprite = spr_floweynice                
+Name = Name = obj_floface                     Parrent = obj_face                      
+Name = Name = obj_face_alphys                 Parrent = obj_torface                     Sprite = spr_alphysface_0              
+Name = Name = obj_face_asgore                 Parrent = obj_torface                     Sprite = spr_asgore_face0              
+Name = Name = obj_face_asriel                 Parrent = obj_torface                     Sprite = spr_face_asriel0              
+Name = Name = obj_face_mettaton               Parrent = obj_torface                     Sprite = spr_mettface_general          
+Name = Name = obj_face                      
+Name = Name = obj_face_papyrus                Parrent = obj_torface                     Sprite = spr_face_papyrus              
+Name = Name = obj_face_sans                   Parrent = obj_torface                     Sprite = spr_face_sans                 
+Name = Name = obj_face_undyne                 Parrent = obj_torface                     Sprite = spr_face_undyne0              
+Name = Name = obj_storagemenu               
+Name = Name = obj_dialoguer                 
+Name = Name = OBJ_WRITERCREATOR             
+Name = Name = OBJ_BLCON                       Sprite = spr_blconsm                   
+Name = Name = OBJ_WRITER                    
+Name = Name = obj_choicer                     Sprite = spr_heartsmall                
+Name = Name = OBJ_NOMSCWRITER                 Parrent = OBJ_WRITER                    
+Name = Name = OBJ_INSTAWRITER                 Parrent = OBJ_WRITER                    
+Name = Name = obj_door_t                      Parrent = obj_doorparent                  Sprite = spr_doorX                     
+Name = Name = obj_door_u                      Parrent = obj_doorparent                  Sprite = spr_doorX                     
+Name = Name = obj_door_ruins13                Parrent = obj_doorparent                  Sprite = spr_doorX                     
+Name = Name = obj_door_s_musfade              Parrent = obj_doorparent                  Sprite = spr_doorX                     
+Name = Name = obj_door_w                      Parrent = obj_doorparent                  Sprite = spr_doorX                     
+Name = Name = obj_door_v                      Parrent = obj_doorparent                  Sprite = spr_doorX                     
+Name = Name = obj_demodoorA                   Parrent = obj_doorparent                  Sprite = spr_doorA                     
+Name = Name = obj_doorparent                
+Name = Name = obj_markerB                     Sprite = spr_markerB                   
+Name = Name = obj_markerC                     Sprite = spr_markerC                   
+Name = Name = obj_markerD                     Sprite = spr_markerD                   
+Name = Name = obj_markerX                     Sprite = spr_markerX                   
+Name = Name = obj_markerw                     Sprite = spr_markerX                   
+Name = Name = obj_markerv                     Sprite = spr_markerX                   
+Name = Name = obj_markeru                     Sprite = spr_markerX                   
+Name = Name = obj_markert                     Sprite = spr_markerX                   
+Name = Name = obj_markers                     Sprite = spr_markerX                   
+Name = Name = obj_markerr                     Sprite = spr_markerX                   
+Name = Name = obj_exitmarker3               
+Name = Name = obj_doorA                       Parrent = obj_doorparent                  Sprite = spr_doorA                     
+Name = Name = obj_doorB                       Parrent = obj_doorparent                  Sprite = spr_doorB                     
+Name = Name = obj_doorC                       Parrent = obj_doorparent                  Sprite = spr_doorC                     
+Name = Name = obj_doorD                       Parrent = obj_doorparent                  Sprite = spr_doorD                     
+Name = Name = obj_doorCmusicfade              Parrent = obj_doorparent                  Sprite = spr_doorC                     
+Name = Name = obj_doorDmusicfade              Parrent = obj_doorparent                  Sprite = spr_doorD                     
+Name = Name = obj_doorAmusicfade              Parrent = obj_doorA                       Sprite = spr_doorA                     
+Name = Name = obj_doorXmusicfade              Parrent = obj_doorA                       Sprite = spr_doorX                     
+Name = Name = obj_doorBmusicfade              Parrent = obj_doorB                       Sprite = spr_doorB                     
+Name = Name = obj_markerA                     Sprite = spr_markerA                   
+Name = Name = obj_stairstep                   Sprite = spr_stepmask                  
+Name = Name = obj_solidrailing                Parrent = obj_solidsmall                  Sprite = spr_railing                   
+Name = Name = obj_solidrailing2               Parrent = obj_solidsmall                  Sprite = spr_railing2                  
+Name = Name = obj_solidrailing3               Parrent = obj_solidsmall                  Sprite = spr_railingpiece1             
+Name = Name = obj_staircollission             Parrent = obj_solidsmall                  Sprite = spr_stairmask                 
+Name = Name = obj_solidparent               
+Name = Name = obj_redswitch_1                 Parrent = obj_readablesolid               Sprite = spr_colorswitch               
+Name = Name = obj_blueswitch_1                Parrent = obj_redswitch_1                 Sprite = spr_colorswitch               
+Name = Name = obj_greenswitch_1               Parrent = obj_redswitch_1                 Sprite = spr_colorswitch               
+Name = Name = obj_bigpie                      Sprite = spr_bigpie                    
+Name = Name = obj_readable_flowers1           Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_switch1            Parrent = obj_readable                    Sprite = spr_switch                    
+Name = Name = obj_switchadvice1               Parrent = obj_readable                    Sprite = spr_tornote                   
+Name = Name = obj_switchadvice2               Parrent = obj_readable                    Sprite = spr_tornote                   
+Name = Name = obj_readable_plaque_1           Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_plaque_2           Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_nastytree                   Parrent = obj_solidnpcparent              Sprite = spr_nastytree                 
+Name = Name = obj_cactus                      Parrent = obj_readablesolid               Sprite = spr_cactus                    
+Name = Name = obj_hearthflame                 Parrent = obj_readablesolid               Sprite = spr_hearthflame               
+Name = Name = obj_smallfrog                   Parrent = obj_readablesolid               Sprite = spr_smallfrog                 
+Name = Name = obj_smallfrog_xadvice           Parrent = obj_readablesolid               Sprite = spr_smallfrog                 
+Name = Name = obj_smallchair                  Parrent = obj_readablesolid               Sprite = spr_smallchair                
+Name = Name = obj_kitchentable                Parrent = obj_solidparent                 Sprite = spr_diningtable               
+Name = Name = obj_lchair                      Parrent = obj_solidparent                 Sprite = spr_leftchair                 
+Name = Name = obj_rchair                      Parrent = obj_solidparent                 Sprite = spr_rightchair                
+Name = Name = obj_uchair                      Parrent = obj_solidparent                 Sprite = spr_topchair                  
+Name = Name = obj_nastrytree_bottom           Parrent = obj_readable                    Sprite = spr_nastytreebottom           
+Name = Name = obj_dummy1                      Parrent = obj_solidnpcparent              Sprite = spr_dummy                     
+Name = Name = obj_readable_sign1              Parrent = obj_readablesolid               Sprite = spr_npc_sign                  
+Name = Name = obj_readable_sign2              Parrent = obj_readablesolid               Sprite = spr_npc_sign                  
+Name = Name = obj_papyrussign                 Parrent = obj_readablesolid               Sprite = spr_npc_sign                  
+Name = Name = obj_ribbon_pickup               Parrent = obj_readablesolid               Sprite = spr_ribbon                    
+Name = Name = obj_knife_pickup                Parrent = obj_readablesolid               Sprite = spr_groundknife               
+Name = Name = obj_pie_pickup                  Parrent = obj_readablesolid               Sprite = spr_pieslice                  
+Name = Name = obj_cheesetable1                Parrent = obj_readablesolid               Sprite = spr_cheesetable               
+Name = Name = obj_napstablook1                Parrent = obj_readablesolid               Sprite = spr_napstablook_gr            
+Name = Name = obj_vegetoid_overworld          Parrent = obj_readablesolid               Sprite = spr_vegetableoutside          
+Name = Name = obj_napstablook2                Parrent = obj_readablesolid               Sprite = spr_napstablook_grsm          
+Name = Name = obj_candydish1                  Parrent = obj_readablesolid               Sprite = spr_candydish                 
+Name = Name = obj_candydish2                  Parrent = obj_readablesolid               Sprite = spr_candydish_bad             
+Name = Name = obj_smallweb                    Parrent = obj_readablesolid               Sprite = spr_smallweb                  
+Name = Name = obj_bigweb                      Parrent = obj_readablesolid               Sprite = spr_bigweb                    
+Name = Name = obj_pillar_1                    Parrent = obj_solidsmall                  Sprite = spr_pillar                    
+Name = Name = obj_downstairs                  Sprite = spr_downstairs                
+Name = Name = obj_toroverworld2               Parrent = obj_toroverworld1               Sprite = spr_toriel_d                  
+Name = Name = obj_toroverworld1               Sprite = spr_toriel_d                  
+Name = Name = obj_toroverworld3               Parrent = obj_toroverworld1               Sprite = spr_toriel_d                  
+Name = Name = obj_toroverworld4               Parrent = obj_toroverworld3               Sprite = spr_toriel_d                  
+Name = Name = obj_torhandhold1                Parrent = obj_toroverworld3               Sprite = spr_toriel_handhold_r         
+Name = Name = obj_toroverworld5               Parrent = obj_toroverworld3               Sprite = spr_toriel_d                  
+Name = Name = obj_toroverworld6               Parrent = obj_toroverworld1               Sprite = spr_toriel_d                  
+Name = Name = obj_toroverworld7               Parrent = obj_toroverworld1               Sprite = spr_toriel_lt                 
+Name = Name = obj_torinteractable1            Parrent = obj_readablesolid               Sprite = spr_toriel_lt                 
+Name = Name = obj_torinteractable7            Parrent = obj_readablesolid               Sprite = spr_toriel_lt                 
+Name = Name = obj_chairiel                    Parrent = obj_readablesolid               Sprite = spr_chairiel                  
+Name = Name = obj_torinteractable2            Parrent = obj_torinteractable1            Sprite = spr_toriel_l                  
+Name = Name = obj_torinteractable3            Parrent = obj_torinteractable1            Sprite = spr_toriel_l                  
+Name = Name = obj_torinteractable4            Parrent = obj_torinteractable1            Sprite = spr_toriel_dt                 
+Name = Name = obj_torinteractable5            Parrent = obj_torinteractable1            Sprite = spr_toriel_rt                 
+Name = Name = obj_torinteractable6            Parrent = obj_torinteractable1            Sprite = spr_toriel_dt                 
+Name = Name = obj_floweytalker1               Sprite = spr_flowey                    
+Name = Name = obj_pbflame                     Sprite = spr_pbflame                   
+Name = Name = obj_toribuster                  Sprite = spr_whitefader                
+Name = Name = obj_floweytrigger               Sprite = spr_event                     
+Name = Name = obj_floweytrigger2              Sprite = spr_event                     
+Name = Name = obj_torieltrigger1              Sprite = spr_event                     
+Name = Name = obj_torieltrigger2              Sprite = spr_event                     
+Name = Name = obj_torieltrigger3              Sprite = spr_event                     
+Name = Name = obj_torieltrigger4              Sprite = spr_event                     
+Name = Name = obj_tordogcall                  Sprite = spr_event                     
+Name = Name = obj_torieltrigger5              Sprite = spr_event                     
+Name = Name = obj_torieltrigger6              Sprite = spr_event                     
+Name = Name = obj_torieltrigger7              Sprite = spr_event                     
+Name = Name = obj_torieltrigger8              Sprite = spr_event                     
+Name = Name = obj_torieltrigger9              Sprite = spr_event                     
+Name = Name = obj_torieltrigger10             Sprite = spr_event                     
+Name = Name = obj_torieltrigger11             Sprite = spr_event                     
+Name = Name = obj_torieltrigger12             Sprite = spr_event                     
+Name = Name = obj_switchhelptrigger           Sprite = spr_event                     
+Name = Name = obj_torgen_house1             
+Name = Name = obj_encountertrigger1           Sprite = spr_event                     
+Name = Name = obj_plotwall1                   Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_plotwall2                   Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_plotwall3                   Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_plotwall4                   Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_plotwall5                   Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_plotwall6                   Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_rock_activator              Sprite = spr_event                     
+Name = Name = obj_torielcall1                 Sprite = spr_event                     
+Name = Name = obj_torielcall2                 Sprite = spr_event                     
+Name = Name = obj_torielcall3                 Sprite = spr_event                     
+Name = Name = obj_torielcall4                 Sprite = spr_event                     
+Name = Name = obj_torielcall5                 Sprite = spr_event                     
+Name = Name = obj_finaldoor                   Sprite = spr_ruinsdoor1                
+Name = Name = obj_spiketile1                  Sprite = spr_spiketile                 
+Name = Name = obj_spiketile2                  Parrent = obj_solidsmall                  Sprite = spr_spiketile                 
+Name = Name = obj_pushrock1                   Sprite = spr_rock                      
+Name = Name = obj_pushrock2                   Parrent = obj_pushrock1                   Sprite = spr_rock                      
+Name = Name = obj_pushrock3                   Parrent = obj_pushrock1                   Sprite = spr_rock                      
+Name = Name = obj_goofyrock                   Parrent = obj_readablesolid               Sprite = spr_rock                      
+Name = Name = obj_holedown                    Sprite = spr_holemask                  
+Name = Name = obj_holedown3                   Parrent = obj_holedown                    Sprite = spr_holemask3                 
+Name = Name = obj_holedown2                   Parrent = obj_holedown                    Sprite = spr_event                     
+Name = Name = obj_sockdrawer                  Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_asriellamp                  Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_asrielbed                   Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_cosmetichole                Sprite = spr_hole                      
+Name = Name = obj_holeup                      Sprite = spr_solidlong                 
+Name = Name = obj_holeup2                     Sprite = spr_solidlong                 
+Name = Name = obj_floorswitch1                Sprite = spr_groundswitch1             
+Name = Name = obj_wallswitchcut1              Sprite = spr_switch                    
+Name = Name = obj_plotswitch1                 Parrent = obj_switchbasic                 Sprite = spr_switch                    
+Name = Name = obj_mousehole                   Parrent = obj_interactable                Sprite = spr_mousehole                 
+Name = Name = obj_plotswitch2                 Parrent = obj_switchbasic                 Sprite = spr_switch                    
+Name = Name = obj_ruinsdoor1                  Sprite = spr_ruinsdoor1                
+Name = Name = obj_mirrorreflection            Sprite = spr_maincharad                
+Name = Name = obj_plotswitch3                 Parrent = obj_switchbasic                 Sprite = spr_switch                    
+Name = Name = obj_singletree                  Parrent = obj_solidsmall                  Sprite = spr_singletree                
+Name = Name = obj_ladiesfishingrod            Parrent = obj_readablesolid               Sprite = spr_fishingrod                
+Name = Name = obj_dogtreat                    Parrent = obj_readablesolid               Sprite = spr_dogtreat                  
+Name = Name = obj_chewtoy                     Parrent = obj_readablesolid               Sprite = spr_chewtoy                   
+Name = Name = obj_doggiebed                   Parrent = obj_readablesolid               Sprite = spr_dogbed                    
+Name = Name = obj_dogfood                     Parrent = obj_readablesolid               Sprite = spr_dogbowl                   
+Name = Name = obj_sanssnowman                 Parrent = obj_readablesolid               Sprite = spr_snowsans                  
+Name = Name = obj_papyrussnowman              Parrent = obj_readablesolid               Sprite = spr_snowpap                   
+Name = Name = obj_smalldoghouse               Parrent = obj_readablesolid               Sprite = spr_doghousesmall             
+Name = Name = obj_snowpoff                    Parrent = obj_readablesolid               Sprite = spr_snowpoff                  
+Name = Name = obj_snowdecahedron              Parrent = obj_readablesolid               Sprite = spr_rollsnow                  
+Name = Name = obj_switch                      Parrent = obj_readablesolid               Sprite = spr_specialswitch             
+Name = Name = obj_spaghetti                   Parrent = obj_readablesolid               Sprite = spr_spaghetti                 
+Name = Name = obj_microwave                   Parrent = obj_readablesolid               Sprite = spr_microwave                 
+Name = Name = obj_spagnot                     Parrent = obj_readablesolid               Sprite = spr_notepaper                 
+Name = Name = obj_papcheckpoint               Parrent = obj_readablesolid               Sprite = spr_papcheckpoint             
+Name = Name = obj_sanscheckpoint              Parrent = obj_readablesolid               Sprite = spr_sanscheck                 
+Name = Name = obj_nicecreamguy                Parrent = obj_readablesolid               Sprite = spr_icecreamguy_sad           
+Name = Name = obj_crossword                   Parrent = obj_readablesolid               Sprite = spr_notepaper                 
+Name = Name = obj_nicesnowman                 Parrent = obj_readablesolid               Sprite = spr_sadsnowman                
+Name = Name = obj_dtrapfire                   Sprite = spr_dtrapfire                 
+Name = Name = obj_dogpillar3                  Parrent = obj_dogpillarparent             Sprite = spr_dogpillar3                
+Name = Name = obj_dogpillar4                  Parrent = obj_dogpillarparent             Sprite = spr_dogpillar4                
+Name = Name = obj_dogpillar5                  Parrent = obj_dogpillarparent             Sprite = spr_dogpillar5                
+Name = Name = obj_dogpillarparent             Parrent = obj_readablesolid               Sprite = spr_dogpillar1                
+Name = Name = obj_dogneck2                    Parrent = obj_dogneckparent               Sprite = spr_dogneck2                  
+Name = Name = obj_dogneck3                    Parrent = obj_dogneckparent               Sprite = spr_dogneck3                  
+Name = Name = obj_dogneck4                    Parrent = obj_dogneckparent               Sprite = spr_dogneck4                  
+Name = Name = obj_dogneck5                    Parrent = obj_dogneckparent               Sprite = spr_dogneck5                  
+Name = Name = obj_dogneckparent               Parrent = obj_readablesolid               Sprite = spr_dogneck1                  
+Name = Name = obj_dogpillar2                  Parrent = obj_dogpillarparent             Sprite = spr_dogpillar2                
+Name = Name = obj_sansbasemententer           Sprite = spr_event                     
+Name = Name = obj_teleigloo                   Sprite = spr_igloo                     
+Name = Name = obj_ruins_reentrance            Sprite = spr_ruins_reentrance          
+Name = Name = obj_waterdivot_test             Sprite = spr_waterdivot_blue           
+Name = Name = obj_icecube_room                Sprite = spr_waterice                  
+Name = Name = obj_icecube_water1              Sprite = spr_waterice                  
+Name = Name = obj_tinybgman                   Sprite = spr_tinybgman                 
+Name = Name = obj_tinybghouse                 Sprite = spr_tinybghouse               
+Name = Name = obj_tinybgpuff                  Sprite = spr_tinybgpuff                
+Name = Name = obj_fogmaker                  
+Name = Name = obj_fogmaker_complex          
+Name = Name = obj_dogpoff                     Sprite = spr_dogpoff                   
+Name = Name = obj_xoxo                        Sprite = spr_xoxo                      
+Name = Name = obj_xoxocontroller1             Sprite = spr_groundswitch1             
+Name = Name = obj_falltransition            
+Name = Name = obj_superdrophole               Sprite = spr_event_small               
+Name = Name = obj_specialdrophole             Parrent = obj_superdrophole               Sprite = spr_event_small               
+Name = Name = obj_dogehouse                   Sprite = spr_dogstandfront             
+Name = Name = obj_dogehouseback               Sprite = spr_doghouseback              
+Name = Name = obj_tundragatebar               Sprite = spr_tundragatebar             
+Name = Name = obj_stick                       Parrent = obj_readable                    Sprite = spr_stick                     
+Name = Name = obj_fakedarksans                Sprite = spr_sans_r_dark               
+Name = Name = obj_snowfloor                   Sprite = spr_pixwht                    
+Name = Name = obj_creeptree1                  Sprite = spr_treeshadow                
+Name = Name = obj_creeptree_stickbreak        Parrent = obj_creeptree1                  Sprite = spr_treeshadow                
+Name = Name = obj_creeptree_sansmaker         Parrent = obj_creeptree1                  Sprite = spr_treeshadow                
+Name = Name = obj_convenientlamp              Parrent = obj_readable                    Sprite = spr_convenientlamp            
+Name = Name = obj_darksanstrigger             Sprite = spr_event                     
+Name = Name = obj_sansbyetrigger              Sprite = spr_event                     
+Name = Name = obj_papyrus1                    Sprite = spr_event                     
+Name = Name = obj_specialtile               
+Name = Name = obj_shockblock                  Sprite = spr_shockblock                
+Name = Name = obj_orbhead                     Sprite = spr_orb                       
+Name = Name = obj_mandog_actor                Sprite = spr_mandogwalk                
+Name = Name = obj_womandog_actor              Parrent = obj_mandog_actor                Sprite = spr_womandogwalk              
+Name = Name = obj_papyrus2                    Sprite = spr_event                     
+Name = Name = obj_papyrus3                    Sprite = spr_event                     
+Name = Name = obj_papyrus4                    Sprite = spr_event                     
+Name = Name = obj_papyrus5                    Sprite = spr_event                     
+Name = Name = obj_papyrus6                    Sprite = spr_event                     
+Name = Name = obj_papyrus7                    Sprite = spr_event                     
+Name = Name = obj_papyrus8                    Sprite = spr_event                     
+Name = Name = obj_golfedge                    Sprite = spr_event                     
+Name = Name = obj_papyrussteps                Sprite = spr_papyrus_steps             
+Name = Name = obj_puzzlewall1                 Sprite = spr_event                     
+Name = Name = obj_puzzlewall2                 Sprite = spr_event                     
+Name = Name = obj_dogetrigger1                Sprite = spr_event                     
+Name = Name = obj_dogringbell                 Parrent = obj_interactable                Sprite = spr_event                     
+Name = Name = obj_forcedright                 Sprite = spr_event                     
+Name = Name = obj_pofftrigger                 Sprite = spr_event                     
+Name = Name = obj_fakesanstrigger             Sprite = spr_event                     
+Name = Name = obj_rollsnowgen               
+Name = Name = obj_golfhole                    Sprite = spr_hole2                     
+Name = Name = obj_rollgrow                    Sprite = spr_rollsnow                  
+Name = Name = obj_rollsnow                    Sprite = spr_rollsnow                  
+Name = Name = obj_iceflag                     Sprite = spr_iceflag                   
+Name = Name = object466                       Sprite = spr_rollsnow                  
+Name = Name = obj_darksans1                   Sprite = spr_sans_r_dark               
+Name = Name = obj_sans_interactable1          Parrent = obj_readablesolid               Sprite = spr_sans_d                    
+Name = Name = obj_sans_room                   Parrent = obj_readablesolid               Sprite = spr_sans_d                    
+Name = Name = obj_doublesans                  Parrent = obj_readablesolid               Sprite = spr_sans_d                    
+Name = Name = obj_dogroom_npc                 Parrent = obj_readablesolid               Sprite = spr_faun                      
+Name = Name = obj_papyrusparent               Parrent = obj_readablesolid             
+Name = Name = obj_papyrus_room                Parrent = obj_papyrusparent               Sprite = spr_papyrus_d                 
+Name = Name = obj_papyrus_guide               Parrent = obj_papyrusparent               Sprite = spr_papyrus_d                 
+Name = Name = obj_papyrus_hisroom             Parrent = obj_papyrusparent               Sprite = spr_papyrus_d                 
+Name = Name = obj_papyrus_houseoutside        Parrent = obj_papyrusparent               Sprite = spr_papyrus_d                 
+Name = Name = obj_sanssteps                   Parrent = obj_readable                    Sprite = spr_sanssteps                 
+Name = Name = obj_papyrus_actor_mad           Sprite = spr_papyrus_d                 
+Name = Name = obj_papyrus_actor               Sprite = spr_papyrus_d                 
+Name = Name = obj_sans_actor                  Sprite = spr_sans_d                    
+Name = Name = obj_telescope                   Parrent = obj_readablesolid               Sprite = spr_telescope                 
+Name = Name = obj_starchecker                 Sprite = spr_starcheckeredit           
+Name = Name = obj_undyneencounter1            Sprite = spr_event                     
+Name = Name = obj_undyneencounter2            Sprite = spr_event                     
+Name = Name = obj_undyneencounter3            Sprite = spr_event                     
+Name = Name = obj_undyneencounter4            Sprite = spr_event                     
+Name = Name = obj_magicstar                   Sprite = spr_magicstar                 
+Name = Name = obj_nospear                     Sprite = spr_nospear                   
+Name = Name = obj_undynespear                 Sprite = spr_undynespear               
+Name = Name = obj_undynespear_shadow          Sprite = spr_undynespear               
+Name = Name = obj_spearshadow                 Sprite = spr_undynespearshadow         
+Name = Name = obj_uspeargen                 
+Name = Name = obj_speartilegen              
+Name = Name = obj_speartilefake               Sprite = spr_tilespear_fullbottom      
+Name = Name = obj_speartile                   Sprite = spr_tilespear                 
+Name = Name = obj_napstafridge                Parrent = obj_readable                    Sprite = spr_fridge_smallhitbox        
+Name = Name = obj_garbagepile                 Parrent = obj_readable                    Sprite = spr_trashheap                 
+Name = Name = obj_garbagefridge               Parrent = obj_readable                    Sprite = spr_rustfridge                
+Name = Name = obj_undynetrash                 Parrent = obj_readable                    Sprite = spr_trashcan                  
+Name = Name = obj_garbagecooler               Parrent = obj_readablesolid               Sprite = spr_cooler_water              
+Name = Name = obj_assortedtrash               Parrent = obj_readablesolid               Sprite = spr_dvdcase_water             
+Name = Name = obj_damndummy                   Parrent = obj_readablesolid               Sprite = spr_dummy                     
+Name = Name = obj_bonedrawer                  Sprite = spr_bonedrawer                
+Name = Name = obj_potstir                   
+Name = Name = obj_bonedrawer_check            Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_spaghot                     Sprite = spr_spaghot_a                 
+Name = Name = obj_potheat                   
+Name = Name = obj_undyne_actor                Sprite = spr_undyne_d                  
+Name = Name = obj_controlspear                Sprite = spr_undynespear_end           
+Name = Name = obj_undynedate_inside         
+Name = Name = obj_undynedate_outside        
+Name = Name = obj_undynedate_afterward        Sprite = spr_event                     
+Name = Name = obj_glassshard                  Sprite = spr_glassshard                
+Name = Name = obj_undynewindow_foreground     Sprite = spr_undynewindow_foreground   
+Name = Name = obj_undynewindow                Sprite = spr_undynewindow              
+Name = Name = obj_undyne_throwspear           Sprite = spr_undyne_throwspear         
+Name = Name = obj_undynespear_anim1           Sprite = spr_undynespear               
+Name = Name = obj_papyrus_window              Sprite = spr_papyrus_windowjump        
+Name = Name = obj_foodbreak                   Sprite = spr_teaboxes                  
+Name = Name = obj_riverman                    Sprite = spr_riverman                  
+Name = Name = obj_dogboat_thing               Parrent = obj_interactable                Sprite = spr_dogboat                   
+Name = Name = obj_dogboat_pillar              Sprite = spr_waterpillar               
+Name = Name = obj_onionsan_event              Sprite = spr_event                     
+Name = Name = obj_onionbody                   Sprite = spr_onionblue                 
+Name = Name = obj_oniont                      Sprite = spr_oniontblue                
+Name = Name = obj_water_doomreminder          Sprite = spr_event                     
+Name = Name = obj_blookdiary                  Parrent = obj_readablesolid               Sprite = spr_book                      
+Name = Name = obj_blookhouses                 Sprite = spr_blookhouses               
+Name = Name = obj_foreground_waterfall        Sprite = spr_waterfall_anim            
+Name = Name = obj_glowstone                   Sprite = spr_magicalcrystal            
+Name = Name = obj_waterpillar                 Sprite = spr_waterpillar               
+Name = Name = obj_inwaterspot                 Sprite = spr_event_small               
+Name = Name = obj_indryspot                   Sprite = spr_event_small               
+Name = Name = obj_wakeupchara               
+Name = Name = obj_tobdog_pendant              Sprite = spr_tobdogl                   
+Name = Name = obj_sentrystation_bg            Sprite = spr_sanscheck                 
+Name = Name = obj_sans_sentry2                Parrent = obj_readablesolid               Sprite = spr_sans_d                    
+Name = Name = obj_grasssounder              
+Name = Name = obj_tallgrass                   Sprite = spr_tallgrass                 
+Name = Name = obj_starker                     Sprite = spr_starkshadow               
+Name = Name = obj_quicheguilt               
+Name = Name = obj_waterripple                 Sprite = spr_waterripple               
+Name = Name = obj_proxglower                  Sprite = spr_smallstar                 
+Name = Name = obj_glowshroompuzzle          
+Name = Name = obj_darknesspuzzle            
+Name = Name = obj_darkness_undyne           
+Name = Name = obj_undyne_echoflower           Parrent = obj_readablesolid               Sprite = spr_echoflower                
+Name = Name = obj_glowshroom                  Parrent = obj_readablesolid               Sprite = spr_glowshroom                
+Name = Name = obj_darknesslantern             Parrent = obj_readable                    Sprite = spr_glowshroom                
+Name = Name = obj_cosmetic_glowstar           Sprite = spr_glowstar                  
+Name = Name = obj_cosmeticecho                Sprite = spr_echoflower                
+Name = Name = obj_groundtorch                 Parrent = obj_readablesolid               Sprite = spr_groundtorch_off           
+Name = Name = obj_torchpuzzle               
+Name = Name = obj_boardride_a                 Sprite = spr_waterboard                
+Name = Name = obj_runaway                     Sprite = spr_waterboard                
+Name = Name = obj_fakedoor                    Parrent = obj_interactable                Sprite = spr_fakedoor                  
+Name = Name = obj_waterboardpuzzle1         
+Name = Name = obj_bellblossom                 Parrent = obj_readablesolid               Sprite = spr_bellblossom               
+Name = Name = obj_waterspot                   Sprite = spr_event                     
+Name = Name = obj_waterstop                   Sprite = spr_whitefader                
+Name = Name = obj_waterboard                  Parrent = obj_interactable                Sprite = spr_bridgeseed                
+Name = Name = obj_mkid_actor                  Sprite = spr_mkid_d                    
+Name = Name = obj_mkid_shadow                 Sprite = spr_mkid_r_shadow             
+Name = Name = obj_undynea_actor               Sprite = spr_undynea_d                 
+Name = Name = obj_undynea_chaser              Sprite = spr_undyne_helmet_d           
+Name = Name = obj_undynea_actor2              Sprite = spr_undynea_d                 
+Name = Name = obj_monsterkidtrigger1          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger2          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger3          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger4          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger5          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger6          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger7          Sprite = spr_event                     
+Name = Name = obj_monsterkidtrigger8        
+Name = Name = obj_undynetrigger_boss2         Sprite = spr_event                     
+Name = Name = obj_undynetrigger_boss        
+Name = Name = obj_dummytrigger                Sprite = spr_event                     
+Name = Name = obj_napstablookfriendtrigger    Sprite = spr_event                     
+Name = Name = obj_napstablook_actor           Parrent = obj_readablesolid               Sprite = spr_napstablook_u_headphone   
+Name = Name = obj_napstablookdate             Sprite = spr_event                     
+Name = Name = obj_napstablookdate_music     
+Name = Name = obj_napstablook_cd              Parrent = obj_readablesolid               Sprite = spr_book                      
+Name = Name = obj_waterpushrockgen          
+Name = Name = obj_waterpushrock               Parrent = obj_solidsmall                  Sprite = spr_waterpushrock             
+Name = Name = obj_waterpushrock_2             Sprite = spr_waterpushrock             
+Name = Name = obj_orangeattackNPC             Parrent = obj_readablesolid               Sprite = spr_npc_bunbun                
+Name = Name = obj_snail2                      Parrent = obj_readablesolid               Sprite = spr_snail                     
+Name = Name = obj_snail3                      Parrent = obj_readablesolid               Sprite = spr_slug                      
+Name = Name = obj_snailguy                    Parrent = obj_readablesolid               Sprite = spr_snailguy                  
+Name = Name = obj_stable                      Parrent = obj_readable                    Sprite = spr_stable                    
+Name = Name = obj_redacted_a                  Parrent = obj_readablesolid               Sprite = spr_redacted_a                
+Name = Name = obj_napstablook_farm1           Parrent = obj_readablesolid               Sprite = spr_napstablook_d             
+Name = Name = obj_napstablook_farm2           Parrent = obj_readablesolid               Sprite = spr_napstablook_d             
+Name = Name = obj_rarependant                 Parrent = obj_readablesolid               Sprite = spr_magicpendant              
+Name = Name = obj_fearundynenpc1              Parrent = obj_readablesolid               Sprite = spr_npc_rabbitkid             
+Name = Name = obj_umbrellabox                 Parrent = obj_readablesolid               Sprite = spr_umbrellaholder            
+Name = Name = obj_statueplink                 Sprite = spr_statueplink               
+Name = Name = obj_normalplink                 Sprite = spr_statueplink               
+Name = Name = obj_statuedrop                  Sprite = spr_statuedrop                
+Name = Name = obj_normaldrop                  Sprite = spr_statuedrop                
+Name = Name = obj_puddle                      Sprite = spr_puddle1                   
+Name = Name = obj_umbrellamask                Sprite = spr_umbrellamask              
+Name = Name = obj_rainer                    
+Name = Name = obj_musicstatue                 Parrent = obj_readablesolid               Sprite = spr_statue                    
+Name = Name = obj_echoflower                  Parrent = obj_readablesolid               Sprite = spr_echoflower                
+Name = Name = obj_fearundynenpc2              Parrent = obj_readablesolid               Sprite = spr_npc_reddemon              
+Name = Name = obj_carrybird                   Parrent = obj_readablesolid               Sprite = spr_smallbird                 
+Name = Name = obj_undyne1                     Sprite = spr_event                     
+Name = Name = obj_papyrus_undyne1_actor       Sprite = spr_papyrus_r_stark           
+Name = Name = obj_shyrenstrewn                Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_undyne1_old                 Sprite = spr_event                     
+Name = Name = obj_shyrentrigger               Sprite = spr_event                     
+Name = Name = obj_undyne_blockwrecker         Sprite = spr_event                     
+Name = Name = obj_purpledude                  Parrent = obj_readable                    Sprite = spr_purpledude                
+Name = Name = obj_piano                       Parrent = obj_readablesolid               Sprite = spr_uprightpiano              
+Name = Name = obj_paino                     
+Name = Name = obj_alphys_npc                  Parrent = obj_readablesolid               Sprite = spr_alphys_d                  
+Name = Name = obj_alphys_actor                Sprite = spr_alphys_d                  
+Name = Name = obj_mettaton_actor              Sprite = spr_mettaton_talk             
+Name = Name = obj_mettaton_npc                Parrent = obj_readablesolid               Sprite = spr_mettaton_talk             
+Name = Name = obj_flychara_placeholder        Sprite = spr_flychara_placeholder      
+Name = Name = obj_failegg                     Sprite = spr_mettfaileggyolk           
+Name = Name = obj_milkofhell_splatter         Sprite = spr_milk_of_hell_splatter     
+Name = Name = obj_milkofhell_drop             Sprite = spr_milk_of_hell_droplet      
+Name = Name = obj_sugarbullet_drop            Sprite = spr_sugarbullet_hit           
+Name = Name = obj_milkofhell_shot             Sprite = spr_milk_of_hell_shot         
+Name = Name = obj_sugarbullet                 Sprite = spr_sugarbullet               
+Name = Name = obj_mett_eggbullet              Sprite = spr_mett_eggbullet            
+Name = Name = obj_trueflymett                 Sprite = spr_mett_eggcarton            
+Name = Name = obj_kitchenforcefield           Parrent = obj_readable                    Sprite = spr_event                     
+Name = Name = obj_cookhud                     Sprite = spr_goalhud                   
+Name = Name = obj_jetpackchara                Sprite = spr_maincharau                
+Name = Name = obj_mettsugar                   Parrent = obj_readable                    Sprite = spr_mettflour                 
+Name = Name = obj_metteggs                    Parrent = obj_readable                    Sprite = spr_mettflour                 
+Name = Name = obj_bouncelight                 Sprite = spr_flylightning              
+Name = Name = obj_flylight_a                  Sprite = spr_flylightning              
+Name = Name = obj_flymett                     Sprite = spr_flymett1                  
+Name = Name = obj_mettmilk                    Parrent = obj_readable                    Sprite = spr_event                     
+Name = Name = obj_mettcounter                 Sprite = spr_mettcounter               
+Name = Name = obj_countermiddle               Parrent = obj_interactable                Sprite = spr_event                     
+Name = Name = obj_chefhat                     Sprite = spr_chefhat                   
+Name = Name = obj_cookshowevent               Sprite = spr_event                     
+Name = Name = obj_counterscroller             Sprite = spr_countertop                
+Name = Name = obj_chimesparkle                Sprite = spr_chimesparkle1             
+Name = Name = obj_killervisage                Sprite = spr_killervisage              
+Name = Name = obj_phonetojetpack              Sprite = spr_yellowphone_o             
+Name = Name = obj_flamedrawer                 Sprite = spr_hearthflame               
+Name = Name = obj_cherrygen                 
+Name = Name = obj_cherrypetal                 Sprite = spr_cherrypetal               
+Name = Name = obj_playmovement                Sprite = spr_event                     
+Name = Name = obj_textdrawtest              
+Name = Name = obj_songwriter                  Sprite = spr_event                     
+Name = Name = obj_mettaton_flightdress        Sprite = spr_mettaton_dressflight      
+Name = Name = obj_mettaton_dress1             Sprite = spr_mettaton_dress1           
+Name = Name = obj_mettaton_dress2             Parrent = obj_solidsmall                  Sprite = spr_mettaton_noarm            
+Name = Name = obj_tilehud                     Sprite = spr_timehud_vert              
+Name = Name = obj_multitileevent            
+Name = Name = obj_insidiousconveyor           Sprite = spr_event_small               
+Name = Name = obj_tileguy                     Sprite = spr_maincharad                
+Name = Name = obj_tileguytileparent         
+Name = Name = obj_tilered                     Parrent = obj_tileguytileparent           Sprite = spr_tilered                   
+Name = Name = obj_tilepurple                  Parrent = obj_tileguytileparent           Sprite = spr_tilepurple                
+Name = Name = obj_tilepink                    Parrent = obj_tileguytileparent           Sprite = spr_tilepink                  
+Name = Name = obj_tileyellow                  Parrent = obj_tileguytileparent           Sprite = spr_tileyellow                
+Name = Name = obj_tileorange                  Parrent = obj_tileguytileparent           Sprite = spr_tileorange                
+Name = Name = obj_tileblue                    Parrent = obj_tileguytileparent           Sprite = spr_tileblue                  
+Name = Name = obj_tileblueactsyellow          Parrent = obj_tileyellow                  Sprite = spr_tileblue                  
+Name = Name = obj_tilegreen                   Parrent = obj_tileguytileparent           Sprite = spr_tilegreen                 
+Name = Name = obj_mettnews_artifact           Parrent = obj_readablesolid               Sprite = spr_tobdogl_still             
+Name = Name = obj_mettanchor                  Sprite = spr_mettanchor_shufflepaper   
+Name = Name = obj_mettnewsevent               Sprite = spr_event                     
+Name = Name = obj_mettnews_battleobj          Parrent = obj_readable                    Sprite = spr_tobdog_sleep_fire         
+Name = Name = obj_doomtimer                 
+Name = Name = obj_mettnews_part             
+Name = Name = obj_wordburst                   Sprite = spr_bombburst                 
+Name = Name = obj_wordfall_word               Sprite = spr_wordfall1                 
+Name = Name = obj_wordfall                    Sprite = spr_wordtest_full             
+Name = Name = obj_mettnews_ticker           
+Name = Name = obj_spidertable                 Sprite = spr_spidertable_items         
+Name = Name = obj_spidertalkevent             Sprite = spr_event                     
+Name = Name = obj_highspider                  Sprite = spr_purplespider_overworld    
+Name = Name = obj_slowdownwalk                Sprite = spr_event                     
+Name = Name = obj_slowdownwalk_x              Sprite = spr_event                     
+Name = Name = obj_spiderstrand                Sprite = spr_webpl                     
+Name = Name = obj_spidergirl_shop             Parrent = obj_readablesolid               Sprite = spr_muffet_overworld          
+Name = Name = obj_targetguy                   Sprite = spr_targetguy                 
+Name = Name = obj_whitebox_o                  Sprite = spr_whitebox_o                
+Name = Name = obj_blackbox_o_shatter          Sprite = spr_blackbox_o_shatter        
+Name = Name = obj_blackbox_o                  Sprite = spr_blackbox_o                
+Name = Name = obj_shotguy                     Sprite = spr_shotguy                   
+Name = Name = obj_shootguy                    Parrent = obj_readable                    Sprite = spr_shootguy                  
+Name = Name = obj_killerboysnightout_event    Sprite = spr_event                     
+Name = Name = obj_killerlab_event             Sprite = spr_event                     
+Name = Name = obj_alphysfollow_event          Sprite = spr_event                     
+Name = Name = obj_mettdestroyed_event         Sprite = spr_event                     
+Name = Name = obj_mettboss_event              Sprite = spr_event                     
+Name = Name = obj_speedline                   Sprite = spr_speedline                 
+Name = Name = obj_scrollaway_event          
+Name = Name = obj_warrior_event               Sprite = spr_event                     
+Name = Name = obj_theend_forcefield           Sprite = spr_event                     
+Name = Name = obj_powerlaser_event            Sprite = spr_event                     
+Name = Name = obj_core_laserswitch            Parrent = obj_interactable                Sprite = spr_onoffswitch_off           
+Name = Name = obj_core_enemyevent             Sprite = spr_event                     
+Name = Name = obj_core_enemyevent2            Sprite = spr_event                     
+Name = Name = obj_precore_event               Sprite = spr_event                     
+Name = Name = obj_undyne_lettercall           Sprite = spr_event                     
+Name = Name = obj_darkman_actor               Sprite = spr_darkman_l                 
+Name = Name = obj_sans_prefinaldate           Parrent = obj_readablesolid               Sprite = spr_sans_d                    
+Name = Name = obj_sansdate3                   Sprite = spr_event                     
+Name = Name = obj_bottomglower              
+Name = Name = obj_restaurant_darker         
+Name = Name = obj_triswitchevent              Sprite = spr_event                     
+Name = Name = obj_triswitch                   Parrent = obj_interactable                Sprite = spr_onoffswitch_off           
+Name = Name = obj_boysnightout                Sprite = spr_event                     
+Name = Name = obj_waveguy                     Sprite = spr_darkman_l                 
+Name = Name = obj_elevatorpanel               Parrent = obj_interactable                Sprite = spr_elevatorpanel             
+Name = Name = obj_finalelevatorpanel          Parrent = obj_interactable                Sprite = spr_elevatorpanel             
+Name = Name = obj_elevatordoor                Parrent = obj_interactable                Sprite = spr_elevatordoorframe         
+Name = Name = obj_failuredog                  Sprite = spr_balancehotdog             
+Name = Name = obj_hotdog                      Sprite = spr_balancehotdog             
+Name = Name = obj_hotdoggen                 
+Name = Name = obj_conveyorsnapper           
+Name = Name = obj_conveyorpuzzle1           
+Name = Name = obj_chipdoor_trigger            Sprite = spr_event                     
+Name = Name = obj_chipdoor_l                  Parrent = obj_readable                    Sprite = spr_chipdoor_red              
+Name = Name = obj_chipdoor_r                  Sprite = spr_chipdoor_red              
+Name = Name = obj_orangelaser_o               Parrent = obj_bluelaser_o                 Sprite = spr_lasermachine              
+Name = Name = obj_bluelaser_o                 Sprite = spr_lasermachine_b            
+Name = Name = obj_sideconveyorl               Parrent = obj_conveyor_parent             Sprite = spr_event                     
+Name = Name = obj_alphysconveyor              Parrent = obj_conveyor_parent             Sprite = spr_event                     
+Name = Name = obj_discoball                   Sprite = spr_discoball                 
+Name = Name = obj_mettwallhole                Parrent = obj_readable                    Sprite = spr_mettatonhole              
+Name = Name = obj_dogfoodbag                  Parrent = obj_readable                    Sprite = spr_dogfoodbag                
+Name = Name = obj_switch_room                 Parrent = obj_interactable                Sprite = spr_onoffswitch_off           
+Name = Name = obj_laserswitch1                Parrent = obj_readable                    Sprite = spr_onoffswitch_off           
+Name = Name = obj_alphystrigger1              Sprite = spr_event                     
+Name = Name = obj_alphystrigger2              Sprite = spr_event                     
+Name = Name = obj_slidingdoor                 Sprite = spr_slidingdoorframe          
+Name = Name = obj_sans_sleep                  Sprite = spr_sans_sleep                
+Name = Name = obj_zzz                         Sprite = spr_zzz                       
+Name = Name = obj_snoozer                     Sprite = spr_zzz                       
+Name = Name = obj_undynefall                  Parrent = obj_readablesolid               Sprite = spr_undynea_rfall             
+Name = Name = obj_undynetrigger_dry           Sprite = spr_event                     
+Name = Name = obj_autowater                   Sprite = spr_event                     
+Name = Name = obj_watercooler                 Parrent = obj_readablesolid               Sprite = spr_watercooler_devoid        
+Name = Name = obj_watercooler_old             Parrent = obj_readablesolid               Sprite = spr_snail                     
+Name = Name = obj_true_antiwaver              Sprite = spr_event                     
+Name = Name = obj_true_lavawaver              Sprite = obj_hugelavawave              
+Name = Name = obj_hotlandsign               
+Name = Name = obj_labcamera                   Sprite = spr_bigmonitor                
+Name = Name = obj_labdarkness               
+Name = Name = obj_disembodiedfoxhead          Parrent = obj_readablesolid               Sprite = spr_disembodiedfoxhead        
+Name = Name = obj_royal_rabbitbounce          Parrent = obj_readablesolid               Sprite = spr_royalguard_rabbit_d       
+Name = Name = obj_alabdoor_l                  Parrent = obj_interactable                Sprite = spr_labdoor_hang_r            
+Name = Name = obj_outsideworld_event          Sprite = spr_event                     
+Name = Name = obj_underground_exit            Sprite = spr_event                     
+Name = Name = obj_friendc_event               Sprite = spr_event                     
+Name = Name = obj_toriel_friendc              Parrent = obj_readablesolid               Sprite = spr_toriel_dt                 
+Name = Name = obj_sans_friendc                Parrent = obj_readablesolid               Sprite = spr_sans_d                    
+Name = Name = obj_undyne_friendc              Parrent = obj_readablesolid               Sprite = spr_undyne_dt                 
+Name = Name = obj_papyrus_friendc             Parrent = obj_readablesolid               Sprite = spr_papyrus_dt                
+Name = Name = obj_alphys_friendc              Parrent = obj_readablesolid               Sprite = spr_alphys_d                  
+Name = Name = obj_asgore_friendc              Parrent = obj_readablesolid               Sprite = spr_asgore_dt                 
+Name = Name = obj_barrierevent              
+Name = Name = obj_earlystorybattle          
+Name = Name = obj_lock_and_key                Parrent = obj_readablesolid               Sprite = spr_key_and_note              
+Name = Name = obj_latchkey                    Parrent = obj_readablesolid               Sprite = spr_smallkey                  
+Name = Name = obj_asgore_prebarrier_event     Sprite = spr_event                     
+Name = Name = obj_asgore_actor                Sprite = spr_asgore_u                  
+Name = Name = obj_asgoremeet_event            Sprite = spr_event                     
+Name = Name = obj_coffin                      Sprite = spr_coffin_closed             
+Name = Name = obj_lastsans_trigger            Sprite = spr_event                     
+Name = Name = obj_sans_shift_tester         
+Name = Name = obj_story_engager               Sprite = spr_event                     
+Name = Name = obj_lastruins_bg              
+Name = Name = obj_asgore_otest                Sprite = spr_asgore_r                  
+Name = Name = obj_lchair_grey                 Sprite = spr_lchair_grey               
+Name = Name = obj_asgorethrone                Sprite = spr_asgorethrone              
+Name = Name = obj_torielthrone                Sprite = spr_torielthrone              
+Name = Name = obj_rchair_grey                 Sprite = spr_rchair_grey               
+Name = Name = obj_uchair_grey                 Sprite = spr_uchair_grey               
+Name = Name = obj_diningtable_grey            Sprite = spr_diningtable_grey          
+Name = Name = obj_heartcontainer              Sprite = spr_heartcontainer_appear     
+Name = Name = obj_cosmeticblcon               Sprite = spr_exc                       
+Name = Name = obj_musblcon                    Sprite = spr_musblc                    
+Name = Name = obj_stalkerflowey               Sprite = spr_floweysink                
+Name = Name = obj_trigger_room                Sprite = spr_event                     
+Name = Name = obj_phonecall_room              Sprite = spr_event                     
+Name = Name = obj_notify_room                 Sprite = spr_event                     
+Name = Name = obj_knock_room                  Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_room1              Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_room2              Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_room3              Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_room4              Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_room5              Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_readable_room_editor        Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_spikes_room                 Sprite = spr_spiketile                 
+Name = Name = obj_savepoint                   Parrent = obj_readablesolid               Sprite = spr_savepoint                 
+Name = Name = obj_sign_room                   Parrent = obj_readablesolid               Sprite = spr_npc_sign                  
+Name = Name = obj_sansbox                     Parrent = obj_readablesolid               Sprite = spr_chestbox                  
+Name = Name = obj_plotwall_room               Parrent = obj_solidparent                 Sprite = spr_event                     
+Name = Name = obj_mainchara_actor             Sprite = spr_maincharad                
+Name = Name = obj_lazyencounterer             Sprite = spr_event                     
+Name = Name = obj_lazyencounterer_core        Sprite = spr_event                     
+Name = Name = obj_npc_room                    Parrent = obj_readablesolid               Sprite = spr_regnpc_1                  
+Name = Name = obj_mysterydoor                 Sprite = spr_mysterydoor               
+Name = Name = obj_iceroom_dog                 Parrent = obj_readablesolid               Sprite = spr_tobdog_sleep_trash        
+Name = Name = obj_iceroom_fakedog             Parrent = obj_readablesolid               Sprite = spr_tobdogl_still             
+Name = Name = obj_switchbasic                 Parrent = obj_interactable                Sprite = spr_switch                    
+Name = Name = obj_npc_marker                
+Name = Name = obj_wanderparent                Parrent = obj_solidnpcparent              Sprite = spr_test_d                    
+Name = Name = obj_solidnpcparent              Parrent = obj_interactable              
+Name = Name = obj_npctest                     Parrent = obj_solidparent                 Sprite = spr_npc_d                     
+Name = Name = obj_readable                    Parrent = obj_interactable              
+Name = Name = obj_interactable              
+Name = Name = obj_readablesolid               Parrent = obj_solidnpcparent            
+Name = Name = obj_iceevent                    Parrent = obj_doorparent                  Sprite = spr_event_small               
+Name = Name = obj_iceeventx4                  Parrent = obj_iceevent                    Sprite = spr_event                     
+Name = Name = obj_iceeventup                  Parrent = obj_doorparent                  Sprite = spr_solidtall                 
+Name = Name = obj_iceeventright               Parrent = obj_doorparent                  Sprite = spr_solidlong                 
+Name = Name = obj_fakefalls                   Sprite = spr_fakefalls                 
+Name = Name = obj_fakefalls_bg                Sprite = spr_fakefalls                 
+Name = Name = obj_fakebridge                  Sprite = spr_fakebridge                
+Name = Name = obj_fakewaterl                  Parrent = obj_fakewater                   Sprite = spr_fakewaterl                
+Name = Name = obj_fakewaterm                  Parrent = obj_fakewater                   Sprite = spr_fakewaterm                
+Name = Name = obj_fakewaterr                  Parrent = obj_fakewater                   Sprite = spr_fakewaterr                
+Name = Name = obj_fakewatershadowl            Parrent = obj_fakewater                   Sprite = spr_fakewatershadowl          
+Name = Name = obj_fakewatershadowm            Parrent = obj_fakewater                   Sprite = spr_fakewatershadowm          
+Name = Name = obj_fakewatershadowr            Parrent = obj_fakewater                   Sprite = spr_fakewatershadowr          
+Name = Name = obj_fakewateropenl              Parrent = obj_fakewater                   Sprite = spr_fakewateropenl            
+Name = Name = obj_fakewateropenm              Parrent = obj_fakewater                   Sprite = spr_fakewateropenm            
+Name = Name = obj_fakewateropenr              Parrent = obj_fakewater                   Sprite = spr_fakewateropenr            
+Name = Name = obj_fakewater                 
+Name = Name = obj_encountererparent         
+Name = Name = obj_encount_fire1               Parrent = obj_encountererparent         
+Name = Name = obj_encount_core1               Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_water1          Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_water2          Parrent = obj_encountererparent         
+Name = Name = obj_encounter_ruins2            Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_ruins3          Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_ruins4          Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_ruins6          Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_ruins5          Parrent = obj_encountererparent         
+Name = Name = obj_encounter_ruins1            Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_tundra1         Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_jerry           Parrent = obj_encountererparent         
+Name = Name = obj_encoutnerer_gyftrot         Parrent = obj_encountererparent         
+Name = Name = obj_encounterer_glyde           Parrent = obj_encountererparent         
+Name = Name = obj_burgerpants_body            Sprite = spr_bpants_face               
+Name = Name = obj_shop5_body                  Sprite = spr_5_temexampl               
+Name = Name = obj_shopmouth1                  Sprite = spr_shopkeeper1mouth          
+Name = Name = obj_shopkeeper2               
+Name = Name = obj_shopeyes1                   Sprite = spr_shopkeeper1eyes           
+Name = Name = obj_shopkeeper_catty            Sprite = spr_cattybody                 
+Name = Name = obj_shopkeeper_bratty           Sprite = spr_brattybody                
+Name = Name = obj_shop1                     
+Name = Name = obj_shop2                     
+Name = Name = obj_shop3                     
+Name = Name = obj_shop4                     
+Name = Name = obj_shop5                     
+Name = Name = obj_kitchenchecker              Sprite = spr_heartblue                 
+Name = Name = obj_darkroom_event            
+Name = Name = obj_treadmill_event           
+Name = Name = obj_trashnado                   Sprite = spr_trash_paperball           
+Name = Name = obj_paptrash                    Parrent = obj_readable                    Sprite = spr_trashcan                  
+Name = Name = obj_papstove                    Parrent = obj_readable                    Sprite = spr_stove                     
+Name = Name = obj_papfridge                   Parrent = obj_readable                    Sprite = spr_fridge                    
+Name = Name = obj_sansdoor                    Parrent = obj_readable                    Sprite = spr_sansdoor                  
+Name = Name = obj_papcouch                    Parrent = obj_readable                    Sprite = spr_papcouch                  
+Name = Name = obj_carbed                      Parrent = obj_readable                    Sprite = spr_carbed                    
+Name = Name = obj_papbookshelf                Parrent = obj_readable                    Sprite = spr_bookshelf                 
+Name = Name = obj_papcomputer                 Parrent = obj_readable                    Sprite = spr_computer                  
+Name = Name = obj_actiontable                 Parrent = obj_readable                    Sprite = spr_actionfigures             
+Name = Name = obj_bonebox                     Parrent = obj_readable                    Sprite = spr_bonebox                   
+Name = Name = obj_papdoor                     Parrent = obj_readable                    Sprite = spr_papdoor                   
+Name = Name = obj_paphouse_entrance           Parrent = obj_readable                    Sprite = spr_papdoor                   
+Name = Name = obj_booktable                   Parrent = obj_readable                    Sprite = spr_minitable                 
+Name = Name = obj_papsink                     Parrent = obj_readable                    Sprite = spr_papsink                   
+Name = Name = obj_paptable                    Parrent = obj_solidsmall                  Sprite = spr_table                     
+Name = Name = obj_paptv                       Parrent = obj_readablesolid               Sprite = spr_flattv_off                
+Name = Name = obj_iceconveyorbelt             Sprite = spr_conveyorbelt_single       
+Name = Name = obj_throwwolf                   Sprite = spr_wolfthrow                 
+Name = Name = obj_silo1                       Sprite = spr_silo1                     
+Name = Name = obj_flyingiceblock              Sprite = spr_iceblock                  
+Name = Name = obj_paphouse                    Sprite = spr_papyrushouse              
+Name = Name = obj_libcounter                  Sprite = spr_libcounter                
+Name = Name = obj_cutetable                   Sprite = spr_cutetable                 
+Name = Name = obj_papshed                     Sprite = spr_awfulshed                 
+Name = Name = obj_papmailbox                  Parrent = obj_readablesolid               Sprite = spr_mailbox                   
+Name = Name = obj_sansmailbox                 Parrent = obj_readablesolid               Sprite = spr_sansmailbox               
+Name = Name = obj_xmastree                    Parrent = obj_readablesolid               Sprite = spr_xmastree                  
+Name = Name = obj_booth                       Parrent = obj_solidsmall                  Sprite = spr_booths                    
+Name = Name = obj_bottomtable                 Parrent = obj_solidsmall                  Sprite = spr_bottomtable               
+Name = Name = obj_pokertable                  Parrent = obj_solidsmall                  Sprite = spr_pokertable                
+Name = Name = obj_lessdogtable                Parrent = obj_solidsmall                  Sprite = spr_lessdogtable              
+Name = Name = obj_innevent1                 
+Name = Name = obj_townnpc_bunlady             Parrent = obj_readablesolid               Sprite = spr_npc_bunbun                
+Name = Name = obj_townnpc_innlady             Parrent = obj_readablesolid               Sprite = spr_npc_innkeep               
+Name = Name = obj_townnpc_bunboy              Parrent = obj_readablesolid               Sprite = spr_npc_rabbitkid             
+Name = Name = obj_townnpc_bear1               Parrent = obj_readablesolid               Sprite = spr_npc_bear                  
+Name = Name = obj_townnpc_beartree            Parrent = obj_readablesolid               Sprite = spr_npc_giftbear              
+Name = Name = obj_townnpc_reddemon            Parrent = obj_readablesolid               Sprite = spr_npc_reddemon              
+Name = Name = obj_townnpc_unfunny             Parrent = obj_readablesolid               Sprite = spr_npc_wrapmouse             
+Name = Name = obj_townnpc_hatescity           Parrent = obj_readablesolid               Sprite = spr_punkhamster               
+Name = Name = obj_townnpc_slimedad            Parrent = obj_readablesolid               Sprite = spr_npc_dadslime              
+Name = Name = obj_townnpc_icewolf             Parrent = obj_readablesolid               Sprite = spr_icewolf                   
+Name = Name = obj_townnpc_slimeson            Parrent = obj_readablesolid               Sprite = spr_npc_kidslime1             
+Name = Name = obj_townnpc_slimedaughter       Parrent = obj_readablesolid               Sprite = spr_npc_kidslime2             
+Name = Name = obj_grillbynpc_hotandbothered   Parrent = obj_readablesolid               Sprite = spr_npc_buncrazy              
+Name = Name = obj_grillbynpc_hot2             Parrent = obj_readablesolid               Sprite = spr_npc_redbird               
+Name = Name = obj_grillbynpc_grillby          Parrent = obj_readablesolid               Sprite = spr_npc_grillby               
+Name = Name = obj_townnpc_weirdfish           Parrent = obj_readablesolid               Sprite = spr_npc_uglyfish              
+Name = Name = obj_grillbynpc_sansdate         Sprite = spr_sans_u                    
+Name = Name = obj_grillbynpc_snowman1         Parrent = obj_readablesolid               Sprite = spr_fashionsnowman            
+Name = Name = obj_grillbynpc_snowman2         Parrent = obj_readablesolid               Sprite = spr_regsnowman                
+Name = Name = obj_grillbynpc_foodmonster      Parrent = obj_readablesolid               Sprite = spr_bigmouth                  
+Name = Name = obj_grillbynpc_womandog         Parrent = obj_readablesolid               Sprite = spr_womandogwalk              
+Name = Name = obj_grillbynpc_mandog           Parrent = obj_readablesolid               Sprite = spr_mandogwalk                
+Name = Name = obj_grillbynpc_doggo            Parrent = obj_readablesolid               Sprite = spr_movedoge_o                
+Name = Name = obj_grillbynpc_lesserdog        Parrent = obj_readablesolid               Sprite = spr_lessdog_table             
+Name = Name = obj_townnpc_fightingbear        Parrent = obj_readablesolid               Sprite = spr_movedoge_o                
+Name = Name = obj_librarynpc_lizard1          Parrent = obj_readablesolid               Sprite = spr_npc_liblizard             
+Name = Name = obj_librarynpc_wordsearch       Parrent = obj_readablesolid               Sprite = spr_npc_ladygarf              
+Name = Name = obj_librarynpc_jumbler          Parrent = obj_readablesolid               Sprite = spr_npc_mikewazowski          
+Name = Name = obj_librarynpc_lizard2          Parrent = obj_readablesolid               Sprite = spr_npc_scarflady             
+Name = Name = obj_readable_modernbook         Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_bigdog                      Parrent = obj_readablesolid               Sprite = spr_npc_bigdog                
+Name = Name = obj_townnpc_monsterkid1         Parrent = obj_readablesolid               Sprite = spr_mkid_d                    
+Name = Name = obj_muffetnpc2                  Parrent = obj_readablesolid               Sprite = spr_muffet_overworld          
+Name = Name = obj_heatsflamesman              Parrent = obj_readablesolid               Sprite = spr_heatsf_normal             
+Name = Name = obj_saddragon                   Parrent = obj_readablesolid               Sprite = spr_saddragon                 
+Name = Name = obj_artclass_sign               Parrent = obj_interactable                Sprite = spr_npc_sign                  
+Name = Name = obj_diamondkid                  Parrent = obj_readablesolid               Sprite = spr_diamondboy                
+Name = Name = obj_ficus                       Parrent = obj_readablesolid               Sprite = spr_ficus                     
+Name = Name = obj_slimejanitor                Parrent = obj_readablesolid               Sprite = spr_slimejanitor              
+Name = Name = obj_hotelreceptionist           Parrent = obj_readablesolid               Sprite = spr_hotel_receptionist1       
+Name = Name = obj_shamblingmass               Parrent = obj_readablesolid               Sprite = spr_shamblingmass             
+Name = Name = obj_clamguy                     Parrent = obj_readablesolid               Sprite = spr_clamguy_a                 
+Name = Name = obj_clamgirl                    Parrent = obj_readablesolid               Sprite = spr_clamgirl_a                
+Name = Name = obj_businessmanticore           Parrent = obj_readablesolid               Sprite = spr_businessmanticore         
+Name = Name = obj_snowdrakedad                Parrent = obj_readablesolid               Sprite = spr_snowdrakedad              
+Name = Name = obj_vulkinnpc                   Parrent = obj_readablesolid               Sprite = spr_vulkinpc                  
+Name = Name = obj_darksausagenpc              Parrent = obj_readablesolid               Sprite = spr_darkman_laugh             
+Name = Name = obj_pyropenpc                   Parrent = obj_readablesolid               Sprite = spr_pyropenpc                 
+Name = Name = obj_tsunderplanenpc             Parrent = obj_readablesolid               Sprite = spr_tsunderplanenpc           
+Name = Name = obj_bedlump                     Sprite = spr_bedlump                   
+Name = Name = obj_mttfountain                 Sprite = spr_mttfountain               
+Name = Name = obj_iceflower                   Sprite = spr_iceflower                 
+Name = Name = obj_snowdinlogo                 Parrent = obj_readable                    Sprite = spr_snowdinlogo               
+Name = Name = obj_snowhat                     Sprite = spr_snowhat                   
+Name = Name = obj_snowhatparticle             Sprite = spr_snowhatparticle           
+Name = Name = obj_chilldrakenpc               Parrent = obj_readablesolid               Sprite = spr_chilldrakenpc             
+Name = Name = obj_gyftrotnpc                  Parrent = obj_readablesolid               Sprite = spr_gyftrotnpc                
+Name = Name = obj_snowdrakenpc                Parrent = obj_readablesolid               Sprite = spr_snowdrakenpc              
+Name = Name = obj_icecap_npcb                 Parrent = obj_readablesolid               Sprite = spr_icecapb_npc               
+Name = Name = obj_icecap_npcr                 Parrent = obj_readablesolid               Sprite = spr_icecapr_npc               
+Name = Name = obj_icecap_npcg                 Parrent = obj_readablesolid               Sprite = spr_icecapg_npc               
+Name = Name = obj_puzzlehater                 Parrent = obj_readablesolid               Sprite = spr_puzzlehater               
+Name = Name = obj_puzzlehaterbox              Parrent = obj_readablesolid               Sprite = spr_puzzlehater_box           
+Name = Name = obj_icegen_undynef2             Sprite = spr_waterice                  
+Name = Name = obj_shyrensisternpc             Parrent = obj_readablesolid               Sprite = spr_amalgam_save_npc          
+Name = Name = obj_sistertext                
+Name = Name = obj_shyrenmovenpc               Sprite = spr_shyren_overworld          
+Name = Name = obj_temnpc                      Parrent = obj_readablesolid               Sprite = spr_temmie_lt                 
+Name = Name = obj_longsnail                   Parrent = obj_readablesolid               Sprite = spr_longsnail                 
+Name = Name = obj_hivestem                    Parrent = obj_readablesolid               Sprite = spr_temmie_lt                 
+Name = Name = obj_judgeshroom                 Parrent = obj_readablesolid               Sprite = spr_mushroomdance_prep        
+Name = Name = obj_aaronnpc                    Parrent = obj_readablesolid               Sprite = spr_aaronnpc                  
+Name = Name = obj_woshuanpc                   Parrent = obj_readablesolid               Sprite = spr_woshuanpc                 
+Name = Name = obj_nothingness_event         
+Name = Name = obj_golddisplay                 Sprite = spr_heartyellow_flip          
+Name = Name = obj_itemswapper               
+Name = Name = obj_overworldcontroller         Sprite = spr_heartgtfo                 
+Name = Name = object59                        Sprite = spr_froggit                   
+Name = Name = obj_bouncersteam                Sprite = spr_bouncersteam              
+Name = Name = obj_bouncetilecontoller       
+Name = Name = obj_bouncetileparent          
+Name = Name = obj_bounceleft                  Parrent = obj_bounceright                 Sprite = spr_venter_l                  
+Name = Name = obj_bounceup                    Parrent = obj_bounceright                 Sprite = spr_venter_u                  
+Name = Name = obj_bouncedown                  Parrent = obj_bounceright                 Sprite = spr_venter_d                  
+Name = Name = obj_bounceright                 Parrent = obj_bouncetileparent            Sprite = spr_venter_r                  
+Name = Name = obj_conveyor_parent           
+Name = Name = obj_conveyorr                   Parrent = obj_conveyor_parent             Sprite = spr_solidlong                 
+Name = Name = obj_conveyorl                   Parrent = obj_conveyor_parent             Sprite = spr_solidlongother            
+Name = Name = obj_conveyoru                   Parrent = obj_conveyor_parent             Sprite = spr_event                     
+Name = Name = obj_conveyord                   Parrent = obj_conveyor_parent             Sprite = spr_solidtall                 
+Name = Name = obj_rblock                      Parrent = obj_solidsmall                  Sprite = spr_doorX                     
+Name = Name = obj_rtile                       Sprite = spr_rtile                     
+Name = Name = obj_lab_powerswitch             Parrent = obj_readable                    Sprite = spr_interactable              
+Name = Name = obj_bed_key                     Parrent = obj_readable                    Sprite = spr_bed_dark_nosheet          
+Name = Name = obj_bed_watcher                 Parrent = obj_readable                    Sprite = spr_bed_dark_nosheet          
+Name = Name = obj_labfan                      Sprite = spr_wallfan                   
+Name = Name = obj_labtv_event                 Parrent = obj_interactable                Sprite = spr_interactable              
+Name = Name = obj_mirror_overlay              Sprite = spr_mirror_overlay            
+Name = Name = obj_darkplant                   Parrent = obj_readablesolid               Sprite = spr_plant_dark                
+Name = Name = obj_operatingtable              Parrent = obj_readablesolid               Sprite = spr_operatingtable            
+Name = Name = obj_torn_note                   Parrent = obj_readable                    Sprite = spr_tornnote                  
+Name = Name = obj_darkfridge                  Parrent = obj_readable                    Sprite = spr_fridge_dark               
+Name = Name = obj_bed_dark                    Parrent = obj_readable                    Sprite = spr_bed_dark                  
+Name = Name = obj_wallmonitor                 Sprite = spr_monitor_dark              
+Name = Name = obj_labfog                      Sprite = spr_amalgam_dogball           
+Name = Name = obj_amalgam_dogpiece            Sprite = spr_amalgam_dogpiece          
+Name = Name = obj_amalgam_dogevent            Sprite = spr_amalgam_dogball           
+Name = Name = obj_amalgam_save                Parrent = obj_readablesolid               Sprite = spr_savepoint                 
+Name = Name = obj_amalgam_fridge              Parrent = obj_readablesolid               Sprite = spr_fridge_dark               
+Name = Name = obj_amalgam_exc                 Sprite = spr_amalgam_exc               
+Name = Name = obj_darksink                    Parrent = obj_readable                    Sprite = spr_sink_dark                 
+Name = Name = obj_showercurtain               Parrent = obj_interactable                Sprite = spr_showercurtain_empty       
+Name = Name = obj_colorlever                  Parrent = obj_readable                    Sprite = spr_lever_noeye               
+Name = Name = obj_labdoor                     Sprite = spr_darkelevator_l            
+Name = Name = obj_labelevator_a             
+Name = Name = obj_labelevator_b               Sprite = spr_event                     
+Name = Name = obj_labelevator_open          
+Name = Name = obj_spritecheck               
+Name = Name = obj_time                      
+Name = Name = obj_mainchara                   Sprite = spr_maincharad                
+Name = Name = obj_f_frasier                 
+Name = Name = obj_f_gamestart               
+Name = Name = obj_transheart_fake             Sprite = spr_ourheart                  
+Name = Name = obj_floweybattler2            
+Name = Name = obj_floweyfacer                 Sprite = spr_tv_floweyface             
+Name = Name = obj_fileerased_part             Sprite = spr_fileerased_parts          
+Name = Name = obj_mainchara_fake              Sprite = spr_f_maincharad              
+Name = Name = obj_savepoint_fake              Parrent = obj_interactable                Sprite = spr_savepoint                 
+Name = Name = obj_gamemenu_fake             
+Name = Name = obj_gameintro_fake              Sprite = spr_fakeintro                 
+Name = Name = obj_vsflowey_heart              Sprite = spr_ourheart                  
+Name = Name = obj_vsflowey_shaker           
+Name = Name = obj_fx_bgen                   
+Name = Name = obj_flowey_bulletmaster       
+Name = Name = obj_flowey_master             
+Name = Name = obj_floweybodyparent          
+Name = Name = obj_floweyx_tv                  Parrent = obj_floweybodyparent            Sprite = spr_floweyx_tv                
+Name = Name = obj_fleshface                   Parrent = obj_floweybodyparent            Sprite = spr_floweyx_fleshmound        
+Name = Name = obj_floweyx_flipeye             Parrent = obj_floweybodyparent            Sprite = spr_flipeye_holder            
+Name = Name = obj_floweyx_mouth               Parrent = obj_floweybodyparent            Sprite = spr_floweyx_mouthl            
+Name = Name = obj_floweyx_lefteye             Parrent = obj_floweybodyparent            Sprite = spr_lefteye_overlay           
+Name = Name = obj_floweyx_behind              Sprite = spr_floweyx_behind            
+Name = Name = obj_floweypipetest              Parrent = obj_floweybodyparent            Sprite = spr_pipepart                  
+Name = Name = obj_floweypipetest_2            Parrent = obj_floweybodyparent            Sprite = spr_pipepart                  
+Name = Name = obj_floweypipetest_3            Parrent = obj_floweybodyparent            Sprite = spr_pipepart                  
+Name = Name = obj_flowey_fightbt              Parrent = obj_centeract_parent            Sprite = spr_fightbt_center            
+Name = Name = obj_floweyslice                 Sprite = spr_slice_o                   
+Name = Name = obj_flowey_writer             
+Name = Name = obj_floweydmgwriter           
+Name = Name = obj_vsflowey_heartdefeated      Sprite = spr_ourheart                  
+Name = Name = obj_6parent                   
+Name = Name = obj_6flasher                  
+Name = Name = obj_6soul_helpcutscene          Sprite = spr_allsoul                   
+Name = Name = obj_6soul_lastcutscene          Sprite = spr_allsoul                   
+Name = Name = obj_6bparent                    Parrent = obj_6parent                     Sprite = spr_6gun_bullet               
+Name = Name = obj_6heal                       Sprite = spr_6pan_egg                  
+Name = Name = obj_6gun_bullet                 Parrent = obj_6bparent                    Sprite = spr_6gun_bullet               
+Name = Name = obj_6gun_crosshair              Parrent = obj_6parent                     Sprite = spr_6gun_crosshair            
+Name = Name = obj_6gun                        Parrent = obj_6bparent                    Sprite = spr_6gun                      
+Name = Name = obj_6gun_act                    Parrent = obj_centeract_parent            Sprite = spr_actbt_center              
+Name = Name = obj_6shoe_musicnote             Parrent = obj_6bparent                    Sprite = spr_6shoe_musicnote           
+Name = Name = obj_6shoe_part                  Parrent = obj_6bparent                    Sprite = spr_6shoe                     
+Name = Name = obj_6shoe_act                   Parrent = obj_centeract_parent            Sprite = spr_actbt_center              
+Name = Name = obj_6shoe_master                Parrent = obj_6parent                   
+Name = Name = obj_6glove_part                 Parrent = obj_6bparent                    Sprite = spr_6glove                    
+Name = Name = obj_6glove_act                  Parrent = obj_centeract_parent            Sprite = spr_actbt_center              
+Name = Name = obj_6glove_boss                 Parrent = obj_6parent                   
+Name = Name = obj_6pan_fire                   Parrent = obj_6bparent                    Sprite = spr_6pan_fire                 
+Name = Name = obj_6pan                        Parrent = obj_6bparent                    Sprite = spr_6pan                      
+Name = Name = obj_6pan_act                    Parrent = obj_centeract_parent            Sprite = spr_actbt_center              
+Name = Name = obj_centeract_parent            Parrent = obj_6parent                     Sprite = spr_actbt_center              
+Name = Name = obj_6book_wordbullet            Parrent = obj_6bparent                    Sprite = spr_wordbullet_mask           
+Name = Name = obj_6book_act                   Parrent = obj_centeract_parent            Sprite = spr_actbt_center              
+Name = Name = obj_6book_master                Parrent = obj_6parent                   
+Name = Name = obj_6knife                      Parrent = obj_6bparent                    Sprite = spr_6knife_big                
+Name = Name = obj_6knife_act                  Parrent = obj_centeract_parent            Sprite = spr_actbt_center              
+Name = Name = obj_floweybullet_parent       
+Name = Name = obj_f_handfork                  Parrent = obj_floweybullet_parent         Sprite = spr_f_handknife               
+Name = Name = obj_f_handgun                   Sprite = spr_f_handgun_neo             
+Name = Name = obj_f_shotflame                 Sprite = spr_floweyx_flame_move        
+Name = Name = obj_mouthball                   Parrent = obj_floweybullet_parent         Sprite = spr_mouthball                 
+Name = Name = obj_mouthball_s                 Parrent = obj_floweybullet_parent         Sprite = spr_mouthball                 
+Name = Name = obj_eyewarning                  Sprite = spr_eyewarning                
+Name = Name = obj_floweynukesplosion          Parrent = obj_floweybullet_parent         Sprite = spr_floweynuke_explosion      
+Name = Name = obj_floweynuke                  Parrent = obj_floweybullet_parent         Sprite = spr_floweynuke                
+Name = Name = obj_eyeshot_a                   Parrent = obj_floweybullet_parent         Sprite = spr_eyeshot_a                 
+Name = Name = obj_gigavine                    Parrent = obj_floweybullet_parent         Sprite = spr_gigavine                  
+Name = Name = obj_gigavine_preview          
+Name = Name = obj_mouthbeam                   Parrent = obj_floweybullet_parent         Sprite = spr_mouthbeam                 
+Name = Name = obj_floweyx_flamethrower        Parrent = obj_floweybullet_parent         Sprite = spr_floweyx_flamethrower      
+Name = Name = obj_floweyx_oldflamethrower     Sprite = spr_floweyx_flamethrower      
+Name = Name = obj_floweyx_flame_old           Parrent = obj_floweybullet_parent         Sprite = spr_floweyx_flame             
+Name = Name = obj_floweyx_flame               Parrent = obj_floweybullet_parent         Sprite = spr_floweyx_flame_move        
+Name = Name = obj_chaosbomb                   Parrent = obj_floweybullet_parent         Sprite = spr_chaosbomb                 
+Name = Name = obj_spinbullet_huge_gen_preview
+Name = Name = obj_spinbullet_huge_gen       
+Name = Name = obj_spinbullet_final_gen      
+Name = Name = obj_spinbullet_huge             Parrent = obj_floweybullet_parent         Sprite = spr_spinbullet_huge           
+Name = Name = obj_floweyfly_burst             Sprite = spr_floweyfly_burst           
+Name = Name = obj_floweyfly                   Parrent = obj_floweybullet_parent         Sprite = spr_floweyfly                 
+Name = Name = obj_venus_pl_bg                 Parrent = obj_floweybullet_parent         Sprite = spr_venus_bg                  
+Name = Name = obj_venus_pl                    Parrent = obj_floweybullet_parent         Sprite = spr_venus_placeholder         
+Name = Name = obj_flowey_bgdraw               Sprite = spr_red_edge                  
+Name = Name = obj_bgpipe                      Parrent = obj_floweybodyparent            Sprite = spr_bgpipe                    
+Name = Name = obj_sidestalk                   Parrent = obj_floweybodyparent            Sprite = spr_sidestalk                 
+Name = Name = obj_floweyarm                   Parrent = obj_floweybodyparent            Sprite = spr_floweyarm                 
+Name = Name = obj_vines_flowey                Parrent = obj_floweybodyparent            Sprite = spr_vines_flowey              
+Name = Name = obj_dentata_full                Sprite = spr_dentata_none              
+Name = Name = obj_randomfacer                 Sprite = spr_tvinside_old              
+Name = Name = obj_tv_inside                   Parrent = obj_floweybodyparent            Sprite = spr_tvinside_old              
+Name = Name = obj_bringitinguys             
+Name = Name = obj_strangetangle             
+Name = Name = obj_asrielappear                Sprite = spr_kidasriel_back            
+Name = Name = obj_friendprotector             Sprite = spr_firebullet_center2        
+Name = Name = obj_spinbullet_friendscene      Sprite = spr_spinbullet_outline2       
+Name = Name = obj_spinbulletgen_friendscene 
+Name = Name = obj_flowey_friendscene          Sprite = spr_flowey_riseanim           
+Name = Name = obj_friendscene_gigavine        Sprite = spr_gigavine_highhitbox       
+Name = Name = obj_objshake                  
+Name = Name = obj_friendparent              
+Name = Name = obj_papyrus_friendscene         Parrent = obj_friendparent                Sprite = spr_papdate                   
+Name = Name = obj_alphys_friendscene          Parrent = obj_friendparent                Sprite = spr_adate_bodycoat            
+Name = Name = obj_sans_friendscene            Parrent = obj_friendparent                Sprite = spr_sans_bbody                
+Name = Name = obj_sadgore                     Parrent = obj_friendparent                Sprite = spr_sadgore                   
+Name = Name = obj_friendscene               
+Name = Name = obj_undyne_endingbody           Parrent = obj_friendparent                Sprite = spr_undyneb_noanim            
+Name = Name = obj_asgore_firehit              Sprite = spr_asgore_prebrandish        
+Name = Name = obj_tblcon                      Sprite = spr_blconwdshrt               
+Name = Name = obj_torielbody                  Parrent = obj_friendparent                Sprite = spr_toriel_bodyonly           
+Name = Name = obj_wrapshock                   Sprite = spr_toriel_wrap               
+Name = Name = obj_FinalWriter               
+Name = Name = obj_barriercut                
+Name = Name = obj_mhd                         Sprite = spr_monsterheart_place        
+Name = Name = obj_asriel_overworldanim        Sprite = spr_asriel_d                  
+Name = Name = obj_timersplits               
+Name = Name = obj_monster_pl                  Sprite = spr_monster_pl                
+Name = Name = obj_castroll                  
+Name = Name = obj_the_end_really            
+Name = Name = obj_creditsword               
+Name = Name = obj_ebottfadein                 Sprite = spr_mtebott                   
+Name = Name = obj_endmyroom                   Sprite = spr_myroom_doorbg             
+Name = Name = obj_endmettevent                Sprite = spr_mett_individual           
+Name = Name = obj_endschoolanim               Sprite = spr_mkid_r                    
+Name = Name = obj_tinyleaf                    Sprite = spr_tinyleaf                  
+Name = Name = obj_tinymusicnote               Sprite = spr_tinymusicnote             
+Name = Name = obj_endcaranim                  Sprite = spr_papyrus_cape_flip         
+Name = Name = obj_beachdebris                 Sprite = spr_beachdebris               
+Name = Name = obj_endbeachanim                Sprite = spr_undyne_torso_shuffle      
+Name = Name = obj_creditsheart                Sprite = spr_heart                     
+Name = Name = obj_creditboss                
+Name = Name = obj_creditbullet              
+Name = Name = obj_creditsloader             

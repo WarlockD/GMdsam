@@ -1,0 +1,264 @@
+           if (global.mnfight != 3) then goto Label_0
+           self.attacked = 0
+Label_0:   
+           if (self.alarm[5] <= 0) then goto Label_1
+           if (global.monster[0] != 1) then goto Label_2
+           if (global.monsterinstance[0].alarm[5] <= self.alarm[5]) then goto Label_2
+           self.alarm[5] = global.monsterinstance[0].alarm[5]
+Label_2:   
+           if (global.monster[1] != 1) then goto Label_3
+           if (global.monsterinstance[1].alarm[5] <= self.alarm[5]) then goto Label_3
+           self.alarm[5] = global.monsterinstance[1].alarm[5]
+Label_3:   
+           if (global.monster[2] != 1) then goto Label_1
+           if (global.monsterinstance[2].alarm[5] <= self.alarm[5]) then goto Label_1
+           self.alarm[5] = global.monsterinstance[2].alarm[5]
+Label_1:   
+           if (global.mnfight != 1) then goto Label_4
+           if (self.talked != 0) then goto Label_4
+           self.alarm[5] = 110
+           self.alarm[6] = 1
+           self.talked = 1
+           global.heard = 0
+Label_4:   
+           if !keyboard_multicheck_pressed(13) then goto Label_5
+           goto Label_5
+           if (obj_lborder.x != global.idealborder[0]) then goto Label_6
+           if (self.alarm[6] >= 0) then goto Label_5
+Label_6:   
+           self.alarm[5] = 2
+Label_5:   
+           if (global.hurtanim[self.myself] != 1) then goto Label_7
+           self.shudder = 8
+           self.alarm[3] = global.damagetimer
+           global.hurtanim[self.myself] = 3
+Label_7:   
+           if (global.hurtanim[self.myself] != 2) then goto Label_8
+           Pushing Enviroment : 
+           self.alarm[2] = 15
+           Poping  Envorment :  
+           if (global.monsterhp[self.myself] < 1) then goto Label_9
+           global.hurtanim[self.myself] = 0
+           self.mypart1.pause = 0
+           global.myfight = 0
+           global.mnfight = 1
+           goto Label_8
+Label_9:   
+           global.myfight = 0
+           global.mnfight = 1
+           self.killed = 1
+           instance_destroy()
+Label_8:   
+           if (global.hurtanim[self.myself] != 5) then goto Label_10
+           global.damage = 0
+           instance_create(((self.x + (self.sprite_width / (Double)(2))) - 48),(self.y - 24),"obj_dmgwriter")
+           Pushing Enviroment : obj_dmgwriter
+           self.alarm[2] = 30
+           Poping  Envorment :  obj_dmgwriter
+           global.myfight = 0
+           global.mnfight = 1
+           global.hurtanim[self.myself] = 0
+Label_10:  
+           if (global.mnfight != 2) then goto Label_11
+           if (self.attacked != 0) then goto Label_12
+           self.pop = scr_monstersum()
+           global.turntimer = 150
+           global.firingrate = 10
+           if (self.pop != 3) then goto Label_13
+           global.firingrate = (global.firingrate * 2.5)
+Label_13:  
+           if (self.pop != 2) then goto Label_14
+           global.firingrate = (global.firingrate * 1.8)
+Label_14:  
+           if (self.mycommand < 50) then goto Label_15
+           global.turntimer = 190
+           self.gen = instance_create(0,0,"obj_randomhandgen")
+           self.gen.factor = 35
+           self.gen.dmg = 9
+           goto Label_16
+Label_15:  
+           global.turntimer = 180
+           self.gen = instance_create(0,0,"obj_cfiregen")
+           self.gen.diff = 1
+           self.gen.dmg = 9
+Label_16:  
+           self.turnoff = 1
+           global.msg[0] = "* The Lost Souls stand there."
+           self.attacked = 1
+Label_12:  
+           if (self.mercymod != 999999) then goto Label_17
+           global.turntimer = -1
+           global.mnfight = 3
+Label_17:  
+           self.whatiheard = -1
+Label_11:  
+           if (global.myfight != 2) then goto Label_18
+           if (self.whatiheard == -1) then goto Label_18
+           if (global.heard != 0) then goto Label_18
+           if (self.whatiheard != 0) then goto Label_19
+           global.msc = 0
+           Pushing Enviroment : obj_monsterparent
+           self.totalmercy = (self.totalmercy + 1)
+           Poping  Envorment :  obj_monsterparent
+           self.mercyno = (self.mercyno + 1)
+           global.msg[0] = "* You tell the Lost Soul that&  you have to go if you\'re&  going to free everyone" +
+    "./"
+           global.msg[1] = "* Something is stirring within&  her.../^"
+           if (self.totalmercy < 4) then goto Label_20
+           global.msg[1] = "* Something stirs within her..^1.&* It\'s all flooding back!/%%"
+           self.saved = 1
+           global.mnfight = 5
+           if (obj_ripoff_asgore.mercyno != 0) then goto Label_20
+           global.msg[1] = "* Suddenly^1, her memories are&  flooding back!/"
+           global.msg[2] = "* Seeing her remember you^1, the&  male Lost Soul tried hard&  to remember you^1," +
+    " too!/%%"
+Label_20:  
+           OBJ_WRITER.halt = 3
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           Pushing Enviroment : 
+           self.halt = 0
+           Poping  Envorment :  
+           self.whatiheard = 9
+Label_19:  
+           if (self.whatiheard != 3) then goto Label_21
+           global.msc = 0
+           Pushing Enviroment : obj_monsterparent
+           self.totalmercy = (self.totalmercy + 1)
+           Poping  Envorment :  obj_monsterparent
+           self.mercyno = (self.mercyno + 1)
+           global.msg[0] = "* You refuse to fight the Lost&  Soul./"
+           global.msg[1] = "* Something about this&  is so familiar to her.../^"
+           if (self.totalmercy < 4) then goto Label_22
+           global.msg[1] = "* Suddenly^1, the memories are&  flooding back!/%%"
+           self.saved = 1
+           global.mnfight = 5
+           if (obj_ripoff_asgore.mercyno != 0) then goto Label_22
+           global.msg[1] = "* Suddenly^1, her memories are&  flooding back!/"
+           global.msg[2] = "* Seeing her remember you^1, the&  male Lost Soul tried hard&  to remember you^1," +
+    " too!/%%"
+Label_22:  
+           OBJ_WRITER.halt = 3
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           Pushing Enviroment : 
+           self.halt = 0
+           Poping  Envorment :  
+Label_21:  
+           if (self.whatiheard != 1) then goto Label_23
+           global.msc = 0
+           Pushing Enviroment : obj_monsterparent
+           self.totalmercy = (self.totalmercy + 1)
+           Poping  Envorment :  obj_monsterparent
+           self.mercyno = (self.mercyno + 1)
+           global.msg[0] = "* You hug the Lost Soul and&  tell her that you\'re going&  to see her again./"
+           global.msg[1] = "* Something about this&  is so familar to her.../^"
+           if (self.totalmercy < 4) then goto Label_24
+           global.msg[1] = "* Suddenly^1, the memories are&  flooding back!/%%"
+           self.saved = 1
+           global.mnfight = 5
+           if (obj_ripoff_asgore.mercyno != 0) then goto Label_24
+           global.msg[1] = "* Suddenly^1, her memories are&  flooding back!/"
+           global.msg[2] = "* Seeing her remember you^1, the&  male Lost Soul tried hard&  to remember you^1," +
+    " too!/%%"
+Label_24:  
+           OBJ_WRITER.halt = 3
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           Pushing Enviroment : 
+           self.halt = 0
+           Poping  Envorment :  
+Label_23:  
+           if (self.whatiheard != 4) then goto Label_25
+           global.msc = 0
+           Pushing Enviroment : obj_monsterparent
+           self.totalmercy = (self.totalmercy + 1)
+           Poping  Envorment :  obj_monsterparent
+           self.mercyno = (self.mercyno + 1)
+           if (global.flag[46] != 1) then goto Label_26
+           global.msg[0] = "* You tell the Lost Soul you&  prefer butterscotch instead&  of cinnamon./"
+Label_26:  
+           if (global.flag[46] != 0) then goto Label_27
+           global.msg[0] = "* You tell the Lost Soul you&  prefer cinnamon instead&  of butterscotch./"
+Label_27:  
+           global.msg[1] = "* Somehow^1, she faintly recalls&  hearing this before.../^"
+           if (self.totalmercy < 4) then goto Label_28
+           global.msg[1] = "* Suddenly^1, her memories&  are flooding back!/%%"
+           self.saved = 1
+           global.mnfight = 5
+           if (obj_ripoff_asgore.mercyno != 0) then goto Label_28
+           global.msg[1] = "* Suddenly^1, her memories are&  flooding back!/"
+           global.msg[2] = "* Seeing her remember you^1, the&  male Lost Soul tried hard&  to remember you^1," +
+    " too!/%%"
+Label_28:  
+           OBJ_WRITER.halt = 3
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           Pushing Enviroment : 
+           self.halt = 0
+           Poping  Envorment :  
+Label_25:  
+           global.heard = 1
+Label_18:  
+           if (global.myfight != 4) then goto Label_29
+           if (global.mercyuse != 0) then goto Label_29
+           script_execute(null)
+           if (self.mercy >= 0) then goto Label_29
+           instance_destroy()
+Label_29:  
+           goto Label_30
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_30
+           script_execute(null)
+           if (self.mercy >= 0) then goto Label_30
+           instance_destroy()
+Label_30:  
+           goto Label_31
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_31
+           if (self.saved != 1) then goto Label_32
+           if (global.hp >= global.maxhp) then goto Label_33
+           global.hp = global.maxhp
+           snd_play("snd_heal_c")
+Label_33:  
+           Pushing Enviroment : obj_strangetangle
+           instance_destroy()
+           Poping  Envorment :  obj_strangetangle
+           global.faceemotion = 0
+           instance_create(0,0,"obj_flasher")
+           snd_play("snd_break2")
+           self.saved = 2
+           self.alarm[11] = 3
+           Pushing Enviroment : obj_ripoff_asgore
+           self.mypart1.face = 0
+           Poping  Envorment :  obj_ripoff_asgore
+Label_32:  
+           if (self.saved != 3) then goto Label_34
+           global.faceemotion = 0
+           global.msc = 0
+           global.typer = 8
+           global.msg[0] = "Your fate is up to&you now!/%%"
+           scr_blcon_x(160,20)
+           Pushing Enviroment : obj_ripoff_asgore
+           global.msc = 0
+           global.typer = 63
+           global.msg[0] = "You are our future!     /%%"
+           scr_blcon_x(160,140)
+           self.blcon.sprite_index = 30
+           Poping  Envorment :  obj_ripoff_asgore
+           self.saved = 4
+Label_34:  
+           goto Label_35
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_35
+           instance_create(-10,-10,"obj_screenwhiter")
+           self.saved = 5
+           instance_create(0,0,"obj_screenwhiter")
+           self.alarm[11] = 34
+Label_35:  
+           if (self.saved != 6) then goto Label_31
+           global.battlegroup = 256
+           global.flag[508] = 1
+           room_restart()
+Label_31:  
+           goto Label_36
+           if (global.turntimer > 0) then goto Label_36
+           self.dont = 0
+           global.turntimer = -1
+           self.turnoff = 0
+           global.mnfight = 3
+           global.myfight = -1
+Label_36:  

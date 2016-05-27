@@ -1,0 +1,2 @@
+           self.hspeed = -4
+           self.image_index = 3

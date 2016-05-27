@@ -1,0 +1,39 @@
+           goto Label_0
+           if !instance_exists("obj_toroverworld4") then goto Label_0
+           if (obj_toroverworld4.path_position != 1) then goto Label_0
+           global.currentsong = caster_load("music/toriel.ogg")
+           caster_loop(global.currentsong,0.7,0.86)
+           Pushing Enviroment : 
+           path_end()
+           Poping  Envorment :  
+           Pushing Enviroment : 
+           self.direction = 180
+           Poping  Envorment :  
+           Pushing Enviroment : 
+           self.facing = 3
+           Poping  Envorment :  
+           Pushing Enviroment : 
+           self.sprite_index = 1109
+           Poping  Envorment :  
+           global.msc = 220
+           global.typer = 4
+           global.facechoice = 1
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 4
+           global.phone[0] = 201
+           global.phone[1] = 203
+           global.phone[2] = 204
+           global.phone[3] = 205
+           global.menuchoice[2] = 1
+           instance_create(160,100,"obj_stalkerflowey")
+Label_0:   
+           goto Label_1
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_1
+           instance_create(0,0,"obj_tordogcall")
+           Pushing Enviroment : 
+           path_start(41,3,0,0)
+           Poping  Envorment :  
+           script_execute(null)
+           global.interact = 0
+           instance_destroy()
+Label_1:   

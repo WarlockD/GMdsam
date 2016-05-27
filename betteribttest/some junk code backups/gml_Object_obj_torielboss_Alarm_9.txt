@@ -1,0 +1,16 @@
+            Label 'Label_3' not used
+           if (instance_exists(self.blconwriter) != 0) then goto Label_0
+           if (global.flag[6] != 0) then goto Label_1
+           self.alarm[10] = 2
+           goto Label_2
+Label_1:   
+           self.destroyed = -1
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+           self.tr = instance_create(self.x,self.y,"obj_torboss_2ndtime")
+           self.visible = 0
+           self.conversation = -20
+Label_2:   goto Label_3
+Label_0:   
+           self.alarm[9] = 2

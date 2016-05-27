@@ -1,0 +1,6 @@
+           draw_set_color(255)
+           draw_set_font(2)
+           if !instance_exists("obj_mainchara") then goto Label_0
+           draw_text(20,60,obj_mainchara.x)
+           draw_text(20,80,obj_mainchara.y)
+Label_0:   

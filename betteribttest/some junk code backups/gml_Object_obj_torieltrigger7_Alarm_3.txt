@@ -1,0 +1,4 @@
+           Pushing Enviroment : obj_mainchara
+           self.x = 38
+           self.y = 144
+           Poping  Envorment :  obj_mainchara

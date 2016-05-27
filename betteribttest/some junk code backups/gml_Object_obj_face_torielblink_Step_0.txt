@@ -1,0 +1,11 @@
+           if  (self.image_index == 0)  &&  instance_exists(OBJ_WRITER)  &&  (OBJ_WRITER.halt == 0)  then instance_change(765,1)
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_torielhappyblink)       then self.sprite_index = spr_face_torielhappyblink
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_torielblinkside)        then self.sprite_index = spr_face_torielblinkside
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_torielblink)            then self.sprite_index = spr_face_torielblink
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_torielwhat)             then self.sprite_index = spr_face_torielwhat
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_torielwhatside)         then self.sprite_index = spr_face_torielwhatside
+           if  (global.faceemotion == 5)  &&  (self.sprite_index != spr_face_torielrevenge)          then self.sprite_index = spr_face_torielrevenge
+           if  (global.faceemotion == 6)  &&  (self.sprite_index != spr_face_torielcold)             then self.sprite_index = spr_face_torielcoldblink
+           if  (global.faceemotion == 7)  &&  (self.sprite_index != spr_face_torielmad)              then self.sprite_index = spr_face_torielmadblink
+           if  (global.faceemotion == 8)  &&  (self.sprite_index != spr_face_torielembarrassed)      then self.sprite_index = spr_face_torielembarrassed
+           if  (global.faceemotion == 9)  &&  (self.sprite_index != spr_face_toriel_goawayasgore)    then self.sprite_index = spr_face_toriel_goawayasgore

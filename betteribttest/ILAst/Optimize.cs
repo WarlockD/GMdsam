@@ -60,10 +60,31 @@ namespace GameMaker.Ast
 
         public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges)
         {
-            expr.ILRanges.AddRange(ilranges);
+            if(ilranges!= null) expr.ILRanges.AddRange(ilranges);
+            return expr;
+        }
+        public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges1, IEnumerable<ILRange> ilranges2)
+        {
+            if (ilranges1 != null) expr.ILRanges.AddRange(ilranges1);
+            if (ilranges2 != null) expr.ILRanges.AddRange(ilranges2);
+            return expr;
+        }
+        public static ILExpression WithILRangesAndJoin(this ILExpression expr, IEnumerable<ILRange> ilranges)
+        {
+            if (ilranges != null)
+            {
+                expr.ILRanges.AddRange(ilranges);
+                ILRange.OrderAndJoin(expr.ILRanges);
+            }
             return expr;
         }
 
+        public static ILExpression WithILRangesAndJoin(this ILExpression expr, IEnumerable<ILRange> ilranges1, IEnumerable<ILRange> ilranges2)
+        {
+            expr.WithILRanges(ilranges1, ilranges2);
+            if (ilranges1 !=null || ilranges2 != null) ILRange.OrderAndJoin(expr.ILRanges);
+            return expr;
+        }
         public static void RemoveTail(this IList<ILNode> body, params GMCode[] codes)
         {
             int bodyIndex = body.Count - codes.Length;
@@ -128,19 +149,29 @@ namespace GameMaker.Ast
         /// <returns>True if its a push</returns>
         public static bool FixPushExpression(this ILNode n)
         {
+            // This should ONLY be run at the start
             ILExpression e = n as ILExpression;
             if (e == null || e.Code != GMCode.Push) return false; // not an expresson or null
-            if (e.Operand != null) // already processed
+            if (e.Operand == null)
             {
-                ILExpression arg = null;
-                object o = e.Operand;
-                if (o is ILValue) arg = new ILExpression(GMCode.Constant, o as ILValue);
-                else if (o is ILVariable) arg = new ILExpression(GMCode.Var, o as ILVariable);
-                else if (o is ILCall) arg = new ILExpression(GMCode.Call, o);
-                Debug.Assert(arg != null);
-                e.Arguments.Clear(); // make sure
-                e.Arguments.Add(arg);
-                e.Operand = null;
+                ILExpression arg = e.Arguments.Single();
+                if (arg.Code != GMCode.Constant || arg.Code != GMCode.Var) throw new Exception("sanity check");
+
+            }
+            else  // already processed
+            {
+                if (e.Code == GMCode.Constant || e.Code == GMCode.Var)
+                {
+                    ILExpression arg = null;
+                    object o = e.Operand;
+                    if (o is ILValue) arg = new ILExpression(GMCode.Constant, o as ILValue);
+                    else if (o is ILVariable) arg = new ILExpression(GMCode.Var, o as ILVariable);
+                    else if (o is ILCall) arg = new ILExpression(GMCode.Call, o);
+                    Debug.Assert(arg != null);
+                    e.Arguments.Clear(); // make sure
+                    e.Arguments.Add(arg);
+                    e.Operand = null;
+                }
             }
             return true;
         }
@@ -328,7 +359,7 @@ namespace GameMaker.Ast
                 }
             }
         }
-        public static bool FixLuaStringAddExpression(ILNode expr)
+        public static bool FixLuaStringAddExpression(ILExpression expr)
         {
             bool haveString = false; // check if we have a single string in the expression
             var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
@@ -375,7 +406,7 @@ namespace GameMaker.Ast
             bool modified = false; // may need to optimzie this, can we just go though all the nodes?
             // it makes sure where a concat can exisit it should, but we need to do a lot of refactoring
             // on this latter
-            foreach(var a in head.GetSelfAndChildrenRecursive<ILAssign>())
+            foreach(var a in head.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Assign))
             {
                 modified |= FixLuaStringAddExpression(a);
             }

@@ -1,0 +1,13 @@
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+           Pushing Enviroment : obj_toroverworld3
+           self.visible = 1
+           Poping  Envorment :  obj_toroverworld3
+           self.conversation = 5
+           global.faceemotion = 1
+           obj_mainchara.visible = 1
+           global.msg[0] = "* Is something burning...?&* Um^1, make yourself&  at home!/%%"
+           obj_toroverworld3.phone = 0
+           obj_toroverworld3.usprite = 1111
+           instance_create(0,0,"obj_dialoguer")

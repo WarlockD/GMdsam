@@ -8,8 +8,33 @@ namespace GameMaker
 {
     public static class Constants
     {
-       //static Dictionary<string, int> allConstants = new Dictionary<string, int>();
-     //   static Dictionary<string, int> intConstants;
+        public static string DebugHex(this int i)
+        {
+            return string.Format("({0,-8} , {0:X8})", i);
+        }
+        //static Dictionary<string, int> allConstants = new Dictionary<string, int>();
+        //   static Dictionary<string, int> intConstants;
+        public static string GMTypeToPostfix(this GM_Type t)
+        {
+            switch (t)
+            {
+                case GM_Type.Double: return ".d";
+                case GM_Type.Float: return ".f";
+                case GM_Type.Int: return ".i";
+                case GM_Type.Long: return ".l";
+                case GM_Type.Bool: return ".b";
+                case GM_Type.Var: return ".v";
+                case GM_Type.String: return ".s";
+                case GM_Type.Short: return ".e";
+                default:
+                    return ".0";
+            }
+        }
+        public static bool Contains(this List<GameMaker.Ast.ILRange> range, int value)
+        {
+            return range.Any(x => x.Contains(value));
+        }
+     
         class EventInfo
         {
             public string Name;

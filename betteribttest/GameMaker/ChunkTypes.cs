@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace GameMaker
 {
-    public partial class File
+    public  static partial class File
     {
         public interface INamedResrouce
         {
@@ -20,7 +20,7 @@ namespace GameMaker
         {
             void ReadRaw(BinaryReader r);
         }
-        public interface IFileDataResource
+        public interface IFileDataResource: INamedResrouce
         {
             Stream Data { get; }
         }
@@ -157,6 +157,18 @@ namespace GameMaker
        
         public class Texture : GameMakerStructure, IFileDataResource
         {
+            string _cachedName;
+            // Don't really need this but have to implment Name in IFileDataResource
+            public string Name { get
+                { // soo hacky too
+                    if (_cachedName == null)
+                    {
+                        for (int i = 0; i < File.textures.Count; i++)
+                            if (File.Textures[i] == this) _cachedName = "texture_" + i.ToString() + ".png";
+                    }
+                    return _cachedName;
+                }
+            }
             int _pngLength;
             int _pngOffset;
             // I could read a bitmap here like I did in my other library however
@@ -177,7 +189,7 @@ namespace GameMaker
                 _pngOffset = r.ReadInt32(); // offset to texture
                 r.BaseStream.Position = _pngOffset;
                 string sig = r.ReadFixedString(8);
-
+                _cachedName = null;
                 if (sig != pngSig) throw new Exception("Texture not a png");
                 // to get the texture lengh, we have to read all the chunks and add them together
                 // once this is done, we can create a proper stream
@@ -1003,6 +1015,20 @@ namespace GameMaker
 
         public class RawAudio : GameMakerStructure, IFileDataResource
         {
+            string _cachedName;
+            // Don't really need this but have to implment Name in IFileDataResource
+            public string Name
+            {
+                get
+                { // soo hacky too
+                    if (_cachedName == null)
+                    {
+                        for (int i = 0; i < File.rawAudio.Count; i++)
+                            if (File.rawAudio[i] == this) _cachedName = "rawAudio_" + i.ToString() + ".wav";
+                    }
+                    return _cachedName;
+                }
+            }
             public int Size { get; private set; }
             public Stream Data
             {
@@ -1063,11 +1089,43 @@ namespace GameMaker
                     return new MemoryStream(File.rawData, this.Position + 8, Size, false, false);
                 }
             }
+          
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());
                 Debug.Assert(!Name.Contains("gotobattle"));
                 Size = r.ReadInt32();
+            }
+        }
+        public class NewCode : GameMakerStructure, IFileDataResource
+        {
+            public string Name { get; set; }
+            public int Size { get; private set; }
+            public short LocalCount { get; private set; }
+            public short ArgumentCount { get; private set; }
+            int codePosition;
+            int wierd;
+            int offset;
+
+            public Stream Data
+            {
+                get
+                {
+                   // int position = -(stream_0.Position - struct39_0.Code.OutputBase
+                    return new MemoryStream(File.rawData, codePosition, Size, false, false);
+                }
+            }
+
+            protected override void InternalRead(BinaryReader r)
+            {
+                Name = string.Intern(r.ReadStringFromNextOffset());
+                Size = r.ReadInt32();
+                LocalCount = r.ReadInt16();
+                ArgumentCount = r.ReadInt16();
+                wierd = r.ReadInt32();
+                codePosition = (int)r.BaseStream.Position+ wierd-4;
+                // this kind of some silly  encryption?
+                offset = r.ReadInt32();
             }
         }
     }

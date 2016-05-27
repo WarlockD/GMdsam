@@ -1,0 +1,2 @@
+           self.view_xview[self.myview] = self.myx
+           self.view_yview[self.myview] = self.myy

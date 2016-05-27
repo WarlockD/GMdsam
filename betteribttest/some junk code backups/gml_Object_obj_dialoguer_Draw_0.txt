@@ -1,0 +1,31 @@
+           if (self.side != 0) then goto Label_0
+           self.yy = self.view_yview[self.view_current]
+           if !instance_exists(self.writer) then goto Label_1
+           if (self.writer.writingy <= (self.yy + 80)) then goto Label_1
+           (self.writer.writingy - 155).writingy = self.writer
+Label_1:   
+           if !instance_exists("obj_face") then goto Label_2
+           if (obj_face.y <= (self.yy + 80)) then goto Label_2
+           obj_face.y = (obj_face.y - 155)
+Label_2:   
+           draw_set_color(16777215)
+           draw_rectangle((self.view_xview[self.view_current] + 16),(self.view_yview[self.view_current] + 5),(self.view_xview[self.view_current] + 304),(self.view_yview[self.view_current] + 80),0)
+           draw_set_color(0)
+           draw_rectangle((self.view_xview[self.view_current] + 19),(self.view_yview[self.view_current] + 8),(self.view_xview[self.view_current] + 301),(self.view_yview[self.view_current] + 77),0)
+           goto Label_3
+Label_0:   
+           self.yy = self.view_yview[self.view_current]
+           if !instance_exists(self.writer) then goto Label_4
+           if (self.writer.writingy >= (self.yy + 80)) then goto Label_4
+           (self.writer.writingy + 155).writingy = self.writer
+Label_4:   
+           if !instance_exists("obj_face") then goto Label_5
+           if (obj_face.y >= (self.yy + 80)) then goto Label_5
+           obj_face.y = (obj_face.y + 155)
+Label_5:   
+           draw_set_color(16777215)
+           draw_rectangle((self.view_xview[self.view_current] + 16),(self.view_yview[self.view_current] + 160),(self.view_xview[self.view_current] + 304),(self.view_yview[self.view_current] + 235),0)
+           draw_set_color(0)
+           draw_rectangle((self.view_xview[self.view_current] + 19),(self.view_yview[self.view_current] + 163),(self.view_xview[self.view_current] + 301),(self.view_yview[self.view_current] + 232),0)
+Label_3:   
+           self.count = 1

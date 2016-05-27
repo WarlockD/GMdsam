@@ -1,0 +1,1 @@
+           self.mypart1.parent = global.monsterinstance[self.myself]

@@ -1,0 +1,25 @@
+           if (self.hshake == 0) then goto Label_0
+           if (self.hshake >= 0) then goto Label_1
+           self.myview.view_xview[(self.view_xview[-1] + self.hshake)] = -1
+           self.hshake = (self.hshake + 1)
+Label_1:   
+           if (self.hshake <= 0) then goto Label_2
+           self.myview.view_xview[(self.view_xview[-1] + self.hshake)] = -1
+Label_2:   
+           self.hshake = -(self.hshake)
+Label_0:   
+           if (self.vshake == 0) then goto Label_3
+           if (self.vshake <= 0) then goto Label_4
+           self.myview.view_yview[(self.view_yview[-1] + self.vshake)] = -1
+Label_4:   
+           if (self.vshake >= 0) then goto Label_5
+           self.myview.view_yview[(self.view_yview[-1] + self.vshake)] = -1
+           self.vshake = (self.vshake + 1)
+Label_5:   
+           self.vshake = -(self.vshake)
+Label_3:   
+           self.alarm[self.myview] = self.shakespeed
+           if (self.hshake != 0) then goto Label_6
+           if (self.vshake != 0) then goto Label_6
+           instance_destroy()
+Label_6:   

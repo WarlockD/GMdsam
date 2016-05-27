@@ -1,0 +1,32 @@
+           self.dmg = 1
+           self.sum = scr_monstersum()
+           self.alarm[0] = 1
+           self.fr1 = instance_create(global.idealborder[0] + c_borderwidth(0) / (Double)(2),global.idealborder[3] - 20,"obj_frogbullet_ex")
+           if self.sum != 4 then goto Label_0
+           self.no2 = choose(1,2,3)
+           self.fr2 = instance_create(global.idealborder[0] + c_borderwidth(0) / (Double)(2),global.idealborder[2] + 20,"obj_frogbullet_ex")
+           if self.no2 != 2 then goto Label_1
+Label_1:   
+           if self.no2 != 1 then goto Label_2
+Label_2:   
+           if self.no2 != 3 then goto Label_3
+Label_3:   
+           if self.no2 != 3 then goto Label_4
+           self.no3 = choose(1,2)
+Label_4:   
+           if self.no2 != 1 then goto Label_5
+           self.no3 = choose(2,3)
+Label_5:   
+           if self.no2 != 2 then goto Label_6
+           self.no3 = choose(1,3)
+Label_6:   
+           if self.no2 != 99 then goto Label_0
+           if self.no2 == 1 then goto Label_7
+           self.no3 = 1
+Label_7:   
+           self.fr3 = instance_create(320,270,"obj_frogbullet_ex")
+           if self.no3 != 2 then goto Label_8
+Label_8:   
+           if self.no3 != 1 then goto Label_9
+Label_9:   
+           if self.no3 != 3 then goto Label_0

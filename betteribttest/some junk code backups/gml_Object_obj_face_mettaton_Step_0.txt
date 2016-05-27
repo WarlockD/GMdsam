@@ -1,0 +1,2 @@
+           self.image_index = global.faceemotion
+           if  (global.facechoice == 0)  then instance_destroy()

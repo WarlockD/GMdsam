@@ -1,0 +1,5 @@
+           self.blconwd.instance_destroy()
+           self.blcon.instance_destroy()
+           self.talked = 0
+           global.mnfight = 2
+           global.border = 3

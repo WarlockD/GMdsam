@@ -1,0 +1,3 @@
+           Pushing Enviroment : obj_dmgwriter
+           instance_destroy()
+           Poping  Envorment :  obj_dmgwriter

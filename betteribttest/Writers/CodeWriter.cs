@@ -62,12 +62,6 @@ namespace GameMaker.Writers
             public void AddVars(ILBlock method)
             { // what we do here is make sure
                 foreach (var v in method.GetSelfAndChildrenRecursive<ILVariable>()) AddVar(v);
-                foreach (var a in method.GetSelfAndChildrenRecursive<ILAssign>())
-                {
-                    string name = a.Variable.FullName;
-                    var v = allvars[name];
-                    allpinned.Add(v);
-                }
             }
             public IEnumerable<VarInfo> GetAll()
             {
@@ -124,8 +118,6 @@ namespace GameMaker.Writers
                     int arg = int.Parse(match.Groups[1].Value) + 1; // we want the count
                     if (arg > arguments) arguments = arg;
                     v.isLocal = true; // arguments are 100% local
-                    v.Instance = null;
-                    v.InstanceName = null; // clear all this out
                 }
             }
             WriteScript(script, block, arguments);

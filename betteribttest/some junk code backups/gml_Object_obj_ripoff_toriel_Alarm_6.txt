@@ -1,0 +1,28 @@
+           self.blcon = instance_create((self.x + 140),self.y,"obj_blconsm")
+           self.gg = floor(random(3))
+           self.mycommand = round(random(100))
+           global.msg[0] = "Default"
+           if (self.talkt != 0) then goto Label_0
+           global.msg[0] = "This is&for your&own&good."
+Label_0:   
+           if (self.talkt != 1) then goto Label_1
+           global.msg[0] = "No one&will&leave&again."
+Label_1:   
+           if (self.talkt != 2) then goto Label_2
+           global.msg[0] = "..."
+Label_2:   
+           if (self.talkt != 2) then goto Label_3
+           self.talkt = 0
+Label_3:   
+           if (self.talkt != 1) then goto Label_4
+           self.talkt = 2
+Label_4:   
+           if (self.talkt != 0) then goto Label_5
+           self.talkt = 1
+Label_5:   
+           global.msg[1] = "%%%"
+           global.typer = 8
+           self.blconwd = instance_create((self.blcon.x + 22),(self.blcon.y + 10),"OBJ_NOMSCWRITER")
+           global.border = 29
+           obj_heart.x = (round(((global.idealborder[0] + global.idealborder[1]) / (Double)(2))) - 8)
+           obj_heart.y = (round(((global.idealborder[2] + global.idealborder[3]) / (Double)(2))) - 8)

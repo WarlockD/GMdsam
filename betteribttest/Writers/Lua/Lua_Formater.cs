@@ -13,29 +13,20 @@ namespace GameMaker.Writers.Lua
 {
     public class Formater : ICodeFormater
     {
-        public ICodeFormater Clone()
-        {
-            return new Formater();
-        }
         string EnviromentOverride = null;
-        BlockToCode writer = null;
-        public void SetStream(BlockToCode writer)
-        {
-            this.writer = writer;
-        }
-        public void Write(ILSwitch f)
+        public override void Write(ILSwitch f)
         {
             throw new Exception("Switch here, should not reach");
         }
-        public void Write(ILBasicBlock block)
+        public override void Write(ILBasicBlock block)
         {
             throw new Exception("Should not run into basic block here");
         }
-        public void Write(ILFakeSwitch f)
+        public override void Write(ILFakeSwitch f)
         {
             throw new Exception("Should not run into basic block here");
         }
-        public void Write(ILElseIfChain chain)
+        public override void Write(ILElseIfChain chain)
         {
             for (int i = 0; i < chain.Conditions.Count; i++)
             {
@@ -86,9 +77,13 @@ namespace GameMaker.Writers.Lua
             { GMCode.LogicAnd, new ExpresionInfo("and",2,2) },
             { GMCode.LogicOr, new ExpresionInfo("or",2,1) },
         };
+        public override string GMCodeToString(GMCode c)
+        {
+            return GMCodeToLua[c].Kind;
+        }
         // all this does is just check to see if the next tree is equal to the last tree of precidence
         // that is (4- 3) +3, the parms don't matter so don't print them, otherwise we need them
-        static int Precedence(GMCode code)
+        protected override int Precedence(GMCode code)
         {
             switch (code)
             {
@@ -120,25 +115,9 @@ namespace GameMaker.Writers.Lua
                     return 8;
             }
         }
-        static bool CheckParm(ILExpression expr, int index)
-        {
-            int ours = Precedence(expr.Code);
-            ILExpression e = expr.Arguments.ElementAtOrDefault(index);
-            if (e == null) return false;
-            int theirs = Precedence(e.Code);
-            if (theirs == 8) return false; // its a constant or something dosn't need a parm
-            if (theirs < ours) return true;
-            else return false;
-        }
-        void WriteParm(ILExpression expr, int index)
-        {
-            bool needParm = CheckParm(expr, index);
-            if (needParm) writer.Write('(');
-            writer.Write(expr.Arguments[index]);
-            if (needParm) writer.Write(')');
-        }
 
-        public void Write(ILExpression expr)
+
+        public override void Write(ILExpression expr)
         {
             ExpresionInfo info;
             if (GMCodeToLua.TryGetValue(expr.Code, out info)) {
@@ -184,6 +163,11 @@ namespace GameMaker.Writers.Lua
                     case GMCode.LoopContinue:
                         writer.Write("continue");
                         break;
+                    case GMCode.Assign:
+                        writer.Write(expr.Operand as ILVariable);
+                        writer.Write(" = ");
+                        writer.Write(expr.Arguments.Single());
+                        break;
                     default:
                         throw new Exception("Not Implmented! ugh");
                 }
@@ -193,7 +177,7 @@ namespace GameMaker.Writers.Lua
 
         //Write(expr.ToString()); // debug is the expressions to string
         static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
-        public void Write(ILVariable v)
+        public override void Write(ILVariable v)
         {
             if (!v.isResolved) throw new Exception(v.FullName + " is not resolved");
 
@@ -235,11 +219,11 @@ namespace GameMaker.Writers.Lua
                 writer.Write(']');
             }
         }
-        public void Write(ILValue v)
+        public override void Write(ILValue v)
         {
             writer.Write(v.ToString());
         }
-        public void Write(ILLabel label)
+        public override void Write(ILLabel label)
         {
             throw new Exception("Should not run into labels here in lua");
         }
@@ -248,7 +232,7 @@ namespace GameMaker.Writers.Lua
             "script_execute",
             "instance_destroy",
         };
-        public void Write(ILCall v)
+        public override void Write(ILCall v)
         {
             if(v.FullTextOverride != null) // we havea ful name override so just write that
             {
@@ -270,17 +254,8 @@ namespace GameMaker.Writers.Lua
             if(v.Comment != null) writer.Write(" --[[ {0} --]]", v.Comment);
 
         }
-        public void Write(ILAssign assign)
-        {
-            writer.Write(assign.Variable);
-            writer.Write(" = ");
-            if (assign.TextToReplace != null) {
-                writer.Write(assign.TextToReplace);
-                writer.Write(" -- Replaced: ");
-            }
-            writer.Write(assign.Expression); // want to make sure we are using the debug
-        }
-        public void Write(ILCondition condition)
+
+        public override void Write(ILCondition condition)
         {
             writer.Write("if ");
             writer.Write(condition.Condition); // want to make sure we are using the debug
@@ -294,7 +269,7 @@ namespace GameMaker.Writers.Lua
             writer.Write("end"); // Side note: ILBlock puts the writeline here
             return;
         }
-        public void Write(ILWhileLoop loop)
+        public override void Write(ILWhileLoop loop)
         {
             writer.Write("while ");
             writer.Write(loop.Condition); // want to make sure we are using the debug
@@ -303,7 +278,7 @@ namespace GameMaker.Writers.Lua
             writer.Write("end"); // Side note: ILBlock puts the writeline here
         }
         static int localGen = 0;
-        public void Write(ILWithStatement with)
+        public override void Write(ILWithStatement with)
         {
             // UGH Now I see why you use withs
             // This cycles though EACH object named in this instance, so it really IS a loop
@@ -324,15 +299,15 @@ namespace GameMaker.Writers.Lua
         }
 
 
-        public string LineComment { get { return "--"; } }
+        public override string LineComment { get { return "--"; } }
 
-        public string NodeEnding
+        public override string NodeEnding
         {
             get
             {
                 return null;
             }
         }
-        public string Extension { get { return "lua"; } }
+        public override string Extension { get { return "lua"; } }
     }
 }

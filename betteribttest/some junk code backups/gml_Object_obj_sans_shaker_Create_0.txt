@@ -1,0 +1,8 @@
+           self.intensity = 10
+           self.alarm[0] = 1
+           self.self_d = 0
+           self.self_d = (self.self_d + 1)
+           512.event_user(0)
+           self.self_d = 1
+           self.view_xview[0] = 0
+           self.view_yview[0] = 0

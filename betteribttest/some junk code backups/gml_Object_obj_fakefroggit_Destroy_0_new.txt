@@ -1,0 +1,13 @@
+           if self.mercymod != 30 then goto Label_0
+           goto Label_1
+Label_0:   
+Label_1:   if !0 then goto Label_2
+           if self.mercymod <= 10 then goto Label_3
+           goto Label_4
+Label_3:   
+Label_4:   if !0 then goto Label_2
+           global.goldreward[Instance(3).goldreward[3] + 2] = global.monsterhp[self.myself] == global.monstermaxhp[self.myself]
+Label_2:   
+           scr_monsterdefeat(0,0,0,0,0)
+           self.mypart1.instance_destroy()
+           self.mypart2.instance_destroy()

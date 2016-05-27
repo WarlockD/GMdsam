@@ -1,0 +1,38 @@
+           if !instance_exists(517) then goto Label_0
+           self.reduce = 0
+           if (Instance(517).lac >= 4) then goto Label_1
+           if (Instance(517).damageturn != 0) then goto Label_2
+           global.km = (global.km + self.innate_karma)
+           if (self.innate_karma < 2) then goto Label_3
+           self.innage_karma = 1
+Label_3:   
+           if (self.innate_karma < 3) then goto Label_4
+           self.innate_karma = 2
+Label_4:   
+           if (self.innate_karma < 5) then goto Label_5
+           self.innate_karma = 3
+Label_5:   
+           517.event_user(2)
+Label_2:   goto Label_0
+Label_1:   
+           if (global.hp < 60) then goto Label_6
+           global.km = (global.km + self.innate_karma)
+           if (self.innate_karma < 2) then goto Label_7
+           self.innage_karma = 1
+Label_7:   
+           if (self.innate_karma < 3) then goto Label_8
+           self.innate_karma = 2
+Label_8:   
+           if (self.innate_karma < 5) then goto Label_9
+           self.innate_karma = 3
+Label_9:   
+           517.event_user(2)
+           goto Label_0
+Label_6:   
+           if (global.hp < 30) then goto Label_10
+           global.km = (global.km + 1)
+           517.event_user(2)
+           goto Label_0
+Label_10:  
+           517.event_user(2)
+Label_0:   

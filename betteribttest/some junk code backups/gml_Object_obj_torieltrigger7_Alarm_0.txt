@@ -1,0 +1,8 @@
+           self.toriel = instance_create(54,120,"obj_toroverworld3")
+           self.toriel.facing = 3
+           self.toriel.sprite_index = 1107
+           self.toriel = (self.direction == 180)
+           Pushing Enviroment : obj_mainchara
+           self.x = 38
+           self.y = 144
+           Poping  Envorment :  obj_mainchara

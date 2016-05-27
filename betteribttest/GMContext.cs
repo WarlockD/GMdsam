@@ -41,7 +41,7 @@ namespace GameMaker
                     error.Error("Could not create .dot file: {0} Ex:{1}", file_Name, e.Message);
                 }
             }
-            return new ILAstBuilder().Build(instructionsNew, error);
+            return new ILAstBuilder().Build(code);
         }
         const string ObjectNameHeader = "gml_Object_";
         enum MType{
@@ -66,16 +66,20 @@ namespace GameMaker
         }
         public static ErrorContext MakeErrorContext(File.Code code)
         {
-            return new ErrorContext(code);
+            return new ErrorContext(code.Name);
+        }
+        public static ErrorContext MakeErrorContext(File.NewCode code)
+        {
+            return new ErrorContext(code.Name);
         }
         public class ErrorContext
         {
-            File.Code code;
+            string code;
             List<Message> cache = new List<Message>();
             public string MakeDebugFileName(string filename) {
                 return Context.MakeDebugFileName(code, filename);
             }
-            internal ErrorContext(File.Code code)
+            internal ErrorContext(string code)
             {
                 this.code = code;
             }
@@ -100,7 +104,7 @@ namespace GameMaker
 
                 var time = DateTime.Now;
                 if (o != null && o.Length > 0) msg = string.Format(msg, o);
-                Message m = new Message() { DebugName = code.Name, TimeStamp = time, Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), code.Name), Msg = msg, Node = node };
+                Message m = new Message() { DebugName = code, TimeStamp = time, Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), code), Msg = msg, Node = node };
                 lock (messages) messages.Add(m);
                 ToConsole(m);
                 if (type == MType.Fatal)
@@ -114,7 +118,7 @@ namespace GameMaker
                 if (block.Body.Count > 0)
                 {
                     var debug = new LoopsAndConditions(this);
-                    string final_filename = Context.MakeDebugFileName(code.Name, filename);
+                    string final_filename = Context.MakeDebugFileName(code, filename);
                     FlowAnalysis.ControlFlowGraph graph;
                     ILLabel l = block.EntryGoto.Operand as ILLabel;
                     if (l == null && block.Body.First() is ILExpression)
@@ -375,12 +379,20 @@ namespace GameMaker
                     else return v.ToString();
             }
         }
-        public static IEnumerable<string> InternalSimpleEscape(string s)
+        static IEnumerable<string> InternalSimpleEscape(string s)
         {
             yield return "\"";
             foreach (var c in s) yield return EscapeChar(c);
             yield return "\"";
         }
+        // escapes the string and appeneds it
+        public static void EscapeAndAppend(this StringBuilder sb, string s)
+        {
+            sb.Append('"');
+            foreach (var c in s) sb.Append(EscapeChar(c));
+            sb.Append('"');
+        }
+       
         public static string EscapeString(string s)
         {
             return string.Concat(InternalSimpleEscape(s));
@@ -430,44 +442,37 @@ namespace GameMaker
                     // 
             }
         }
-        static public string InstanceToString(ILExpression instance, BlockToCode output=null)
+        static public string InstanceToString(ILValue value)
         {
-            string ret = null;
-            if (instance.Code == GMCode.Constant)
+            if (value.Type == GM_Type.Short || value.Type == GM_Type.Int)
             {
-                ILValue value = instance.Operand as ILValue;
-                if (value.Type == GM_Type.Short || value.Type == GM_Type.Int)
-                {
-                    switch ((int)value)
-                    {
-                        case 0: ret = "stack"; break;
-                        case -1:
-                            ret = "self"; break;
-                        case -2:
-                            ret = "other"; break;
-                        case -3:
-                            ret = "all"; break;
-                        case -4:
-                            ret = "noone"; break;
-                        case -5:
-                            ret = "global"; break;
-                        default:
-                            ret = "\"" + File.Objects[(int)value].Name + "\"";
-                            break;
-                    }
-                }
+                return InstanceToString((int)value);
             }
-            else
-            {
-                if (output != null)
-                    ret = output.NodeToString(instance);
-                else
-                    ret = Writers.BlockToCode.NiceNodeToString(instance);
-            }
-            System.Diagnostics.Debug.Assert(ret != null);
-            return ret;
+            throw new Exception("bad");
         }
-
+        static public string InstanceToString(ILNode instance, BlockToCode output = null)
+        {
+            ILExpression e = instance as ILExpression;
+            if (e != null)
+            {
+                if (e.Code == GMCode.Constant)
+                    return InstanceToString(e.Operand as ILValue);
+                else if (e.Code == GMCode.Var)
+                    return InstanceToString(e.Operand as ILVariable);
+                if (output != null) return output.NodeToString(e);
+                    else return BlockToCode.DebugNodeToString(e);
+            }
+            ILValue value = instance as ILValue;
+            if (value != null) return InstanceToString(value);
+            ILVariable v = instance as ILVariable;
+            if (v != null)
+            {
+                if (output != null) return output.NodeToString(v);
+                else return BlockToCode.DebugNodeToString(v);
+            }
+            throw new Exception("Cannot display instance");
+        }
+ 
         static public ILExpression InstanceToExpression(ILExpression instance)
         {
             switch (instance.Code)

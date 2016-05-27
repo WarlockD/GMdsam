@@ -1,0 +1,1 @@
+           self.innate_karma = 6

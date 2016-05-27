@@ -1,0 +1,9 @@
+           self.in_border = 0
+           if (self.x <= global.idealborder[0]) then goto Label_0
+           if (self.y <= global.idealborder[2]) then goto Label_1
+           if (self.x >= (global.idealborder[1] - self.sprite_width)) then goto Label_1
+           if (self.y >= (global.idealborder[3] - self.sprite_height)) then goto Label_0
+Label_1:   
+           self.in_border = 1
+Label_0:   
+           return self.in_border
