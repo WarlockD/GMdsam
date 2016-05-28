@@ -1,0 +1,22 @@
+           event_inherited()
+           self.image_speed = 0
+           self.image_index = 0
+           self.alarm[0] = (20 + round(random(30)))
+           if  instance_exists(obj_face_sans)                                                      then obj_face_sans.instance_destroy()
+           if  instance_exists(obj_face_undyne)                                                    then obj_face_undyne.instance_destroy()
+           if  instance_exists(obj_face_papyrus)                                                   then obj_face_papyrus.instance_destroy()
+           if  instance_exists(obj_face_alphys)                                                    then obj_face_alphys.instance_destroy()
+           if  instance_exists(obj_face_asgore)                                                    then obj_face_asgore.instance_destroy()
+           if (global.faceemotion != 99) then goto Label_5
+           instance_create(self.x,self.y,obj_face_torglasses)
+           global.faceemotion = 0
+Label_5:   
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_torielhappyblink)     then self.sprite_index = spr_face_torielhappyblink
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_torielblinkside)      then self.sprite_index = spr_face_torielblinkside
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_torielblink)          then self.sprite_index = spr_face_torielblink
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_torielwhat)           then self.sprite_index = spr_face_torielwhat
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_torielwhatside)       then self.sprite_index = spr_face_torielwhatside
+           if  (global.faceemotion == 6)  &&  (self.sprite_index != spr_face_torielcold)           then self.sprite_index = spr_face_torielcold
+           if  (global.faceemotion == 7)  &&  (self.sprite_index != spr_face_torielmad)            then self.sprite_index = spr_face_torielmad
+           if  (global.faceemotion == 8)  &&  (self.sprite_index != spr_face_torielembarrassed)    then self.sprite_index = spr_face_torielembarrassed
+           if  (global.faceemotion == 9)  &&  (self.sprite_index != spr_face_toriel_goawayasgore)  then self.sprite_index = spr_face_toriel_goawayasgore

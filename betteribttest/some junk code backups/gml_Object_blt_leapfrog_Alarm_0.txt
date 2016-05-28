@@ -1,0 +1,6 @@
+           self.direction = 145 - random(20)
+           self.gravity_direction = 280
+           self.gravity = 0.4
+           self.speed = 7 + random(3)
+           self.image_index = 1
+           self.dmg = self.dmg * 1.8

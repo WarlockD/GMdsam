@@ -1,0 +1,24 @@
+           if !instance_exists("OBJ_NOMSCWRITER") then goto Label_0
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+Label_0:   
+           if !instance_exists("obj_blconsm") then goto Label_1
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+Label_1:   
+           if !instance_exists("obj_blconwdflowey") then goto Label_2
+           Pushing Enviroment : obj_blconwdflowey
+           instance_destroy()
+           Poping  Envorment :  obj_blconwdflowey
+Label_2:   
+           self.talked = 0
+           self.whatiheard = -1
+           global.mnfight = 2
+           if (self.mycommand < 40) then goto Label_3
+           goto Label_4
+Label_3:   
+Label_4:   if !1 then goto Label_5
+           global.border = 7
+Label_5:   

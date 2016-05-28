@@ -1,0 +1,55 @@
+           goto Label_0
+           if !instance_exists("obj_toroverworld4") then goto Label_0
+           self.tor.facing = 0
+           global.msc = 211
+           global.typer = 4
+           global.facechoice = 1
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 1.5
+Label_0:   
+           goto Label_1
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_1
+           Pushing Enviroment : 
+           path_start(11,4,0,0)
+           Poping  Envorment :  
+           global.interact = 0
+           self.conversation = 2
+Label_1:   
+           goto Label_2
+           if !instance_exists("obj_toroverworld4") then goto Label_2
+           if (obj_toroverworld4.path_position != 1) then goto Label_2
+           self.tor2 = instance_create(self.tor.x,self.tor.y,"obj_torinteractable4")
+           Pushing Enviroment : 
+           self.direction = 270
+           Poping  Envorment :  
+           Pushing Enviroment : obj_toroverworld4
+           instance_destroy()
+           Poping  Envorment :  obj_toroverworld4
+           global.plot = 5.5
+           self.conversation = 3
+Label_2:   
+           goto Label_3
+           if (self.conversation != 3) then goto Label_3
+           if (global.flag[10] == 1) then goto Label_4
+           if (global.flag[11] == 1) then goto Label_4
+           if (global.flag[12] == 1) then goto Label_4
+           goto Label_5
+Label_4:   
+Label_5:   if !1 then goto Label_3
+           global.interact = 1
+           self.alarm[7] = 15
+           self.conversation = 4
+Label_3:   
+           if (self.conversation != 4) then goto Label_6
+           global.interact = 1
+Label_6:   
+           goto Label_7
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_7
+           Pushing Enviroment : 
+           path_start(12,3,0,0)
+           Poping  Envorment :  
+           global.plot = 7
+           self.conversation = 8
+           global.interact = 0
+           instance_destroy()
+Label_7:   

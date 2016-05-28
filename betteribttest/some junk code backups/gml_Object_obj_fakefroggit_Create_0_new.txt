@@ -1,0 +1,16 @@
+           scr_monstersetup(0,0,0,0,0)
+           self.image_speed = 0
+           self.mypart1 = instance_create(self.x,self.y,"obj_froghead")
+           self.mypart2 = instance_create(self.x,self.y,"obj_froglegs")
+           self.hurtanim = 0
+           self.hurtsound = 43
+           self.talked = 0
+           self.whatiheard = -1
+           self.attacked = 0
+           self.killed = 0
+           global.heard = 0
+           self.takedamage = 0
+           self.mercymod = 3
+           global.flag[30] = 1
+           self.ht = 100
+           self.wd = 100

@@ -1,0 +1,106 @@
+           self.myx = self.writingx
+           self.myy = self.writingy
+           self.n = 1
+Label_27:  
+           if (self.n >= (self.stringpos + 1)) then goto Label_0
+           if (string_char_at(self.originalstring,self.n) != "&") then goto Label_1
+           script_execute(null)
+           self.n = (self.n + 1)
+Label_1:   
+           if (string_char_at(self.originalstring,self.n) != "^") then goto Label_2
+           self.n = (self.n + 2)
+Label_2:   
+           if (string_char_at(self.originalstring,self.n) != "\\") then goto Label_3
+           if (string_char_at(self.originalstring,(self.n + 1)) != "R") then goto Label_4
+           self.mycolor = 255
+Label_4:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "W") then goto Label_5
+           self.mycolor = 16777215
+Label_5:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "X") then goto Label_6
+           self.mycolor = 0
+Label_6:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "Y") then goto Label_7
+           self.mycolor = 65535
+Label_7:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "G") then goto Label_8
+           self.mycolor = 65280
+Label_8:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "B") then goto Label_9
+           self.mycolor = 16711680
+Label_9:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "p") then goto Label_10
+           self.mycolor = 13941759
+Label_10:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "P") then goto Label_11
+           script_execute(149,4,255,self.x,self.y,(self.x + 150),43,4,94,null)
+Label_11:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "C") then goto Label_12
+           if (global.inbattle != 0) then goto Label_13
+           if (instance_exists("obj_choicer") != 0) then goto Label_14
+           self.choicer = instance_create(0,0,"obj_choicer")
+Label_14:  
+           self.choicer.creator = self.id
+Label_13:  
+           if (global.inbattle != 1) then goto Label_12
+           self.halt = 5
+Label_12:  
+           self.n = (self.n + 2)
+Label_3:   
+           if (string_char_at(self.originalstring,self.n) != "/") then goto Label_15
+           self.halt = 1
+           if (string_char_at(self.originalstring,(self.n + 1)) != "%") then goto Label_16
+           self.halt = 2
+Label_16:  goto Label_0
+Label_15:  
+           if (string_char_at(self.originalstring,self.n) != "%") then goto Label_17
+           if (string_char_at(self.originalstring,(self.n + 1)) != "%") then goto Label_18
+           instance_destroy()
+           goto Label_0
+Label_18:  
+           self.stringpos = 1
+           self.stringno = (self.stringno + 1)
+           self.originalstring = self.mystring[self.stringno]
+           self.myx = self.writingx
+           self.myy = self.writingy
+           self.lineno = 0
+           self.alarm[0] = self.textspeed
+           self.myletter = " "
+           goto Label_0
+Label_17:  
+           if (self.myx <= self.writingxend) then goto Label_19
+           script_execute(null)
+Label_19:  
+           self.myletter = string_char_at(self.originalstring,self.n)
+           draw_set_font(self.myfont)
+           draw_set_color(self.mycolor)
+           if (self.shake <= 38) then goto Label_20
+           if (self.shake != 39) then goto Label_21
+           self.direction = (self.direction + 10)
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+Label_21:  
+           if (self.shake != 40) then goto Label_22
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+Label_22:  
+           if (self.shake != 41) then goto Label_23
+           self.direction = (self.direction + (10 * self.n))
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+           self.direction = (self.direction - (10 * self.n))
+Label_23:  
+           if (self.shake != 42) then goto Label_24
+           self.direction = (self.direction + (20 * self.n))
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+           self.direction = (self.direction - (20 * self.n))
+Label_24:  
+           if (self.shake != 43) then goto Label_25
+           self.direction = (self.direction + (30 * self.n))
+           draw_text(((self.myx + (self.hspeed * 0.7)) + 10),(self.myy + (self.vspeed * 0.7)),self.myletter)
+           self.direction = (self.direction - (30 * self.n))
+Label_25:  goto Label_26
+Label_20:  
+           draw_text((self.myx + (random(self.shake) - (self.shake / (Double)(2)))),(self.myy + (random(self.shake) - (self.shake / (Double)(2)))),self.myletter)
+Label_26:  
+           self.myx = (self.myx + self.spacing)
+           self.n = (self.n + 1)
+           goto Label_27
+Label_0:   

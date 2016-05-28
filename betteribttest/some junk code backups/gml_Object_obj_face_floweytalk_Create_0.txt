@@ -1,0 +1,8 @@
+           event_inherited()
+           self.image_speed = 0.25
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_floweynice)        then self.sprite_index = spr_floweynice
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_floweynicesideum)  then self.sprite_index = spr_floweynicesideum
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_floweysassy)       then self.sprite_index = spr_floweysassy
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_floweypissed)      then self.sprite_index = spr_floweypissed
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_floweyevil)        then self.sprite_index = spr_floweyevil
+           if  (global.faceemotion == 5)  &&  (self.sprite_index != spr_floweygrin)        then self.sprite_index = spr_floweygrin

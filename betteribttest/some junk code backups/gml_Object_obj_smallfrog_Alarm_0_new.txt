@@ -1,0 +1,89 @@
+           self.myinteract = 3
+           global.msc = 0
+           global.msg[0] = "* Ribbit^1, ribbit^1.&* (Excuse me^1, human.)/"
+           global.msg[1] = "* (I have some advice&  for you about battling&  monsters.)/"
+           global.msg[2] = "\\W* (If you \\YACT\\W a certain way&  or \\YFIGHT\\W until you&  almost defeat them.." +
+    ".)/"
+           global.msg[3] = "* (They might not want to&  battle you anymore.)/"
+           global.msg[4] = "* (If a monster does not&  want to fight you^1, please...)/"
+           global.msg[5] = "\\W* (Use some \\YMERCY^1,\\W human.^1)&* Ribbit./%%"
+           if global.flag[6] != 1 then goto Label_0
+           global.msg[0] = "* Ribbit^1, ribbit^1.&* (Excuse me^1, human.)/"
+           global.msg[1] = "* (I have some advice&  for you about battling&  monsters.)/"
+           global.msg[2] = "* (The monsters in this world&  are very dangerous and&  aggressive.)/"
+           global.msg[3] = "* (In this place^1, running away&  will not work on the&  first turn.)/"
+           global.msg[4] = "* (It may be better to try&  another option.^1)&* Ribbit./%%"
+Label_0:   
+           if global.flag[7] != 1 then goto Label_1
+           global.msg[0] = "* Ribbit^1, ribbit^1.&* (Excuse me^1, human.)/"
+           global.msg[1] = "* (You seem like you have&  grown into a thoughtful and&  conscientious person.)/" +
+    ""
+           global.msg[2] = "* (Whether that was from my&  advice or not...^1)&* (I\'m quite proud.)/"
+           global.msg[3] = "* Ribbit./%%"
+Label_1:   
+           global.typer = 5
+           global.facechoice = 0
+           global.faceemotion = 0
+           if self.room != 29 then goto Label_2
+           global.msg[0] = "* Ribbit^1, ribbit^1.&* (Just between you and me...)/"
+           global.msg[1] = "\\W* (I saw \\BTORIEL\\W come out of&  here just a little&  while ago.)/"
+           global.msg[2] = "* (She was carrying some&  groceries.)/"
+           global.msg[3] = "* (I didn\'t ask what they&  were for...)/"
+           global.msg[4] = "* (We\'re all too intimidated&  to talk to her.^1)&* Ribbit./%%"
+           if global.flag[7] != 1 then goto Label_3
+           global.msg[0] = "* Ribbit^1, ribbit^1.&* (Seems like the RUINS have&  finally opened up.)/"
+           global.msg[1] = "* (Maybe we should finally&  go out to the rest of&  the underground.)/"
+           global.msg[2] = "* (Huh^1? The barrier\'s open^1,&  too...?)/"
+           global.msg[3] = "* (... let\'s just take this&  one step at a time^1, OK?)/%%"
+Label_3:   
+           if global.flag[6] != 1 then goto Label_2
+           global.msg[0] = "* Ribbit^1, ribbit^1.&* (Just between you and me...)/"
+           global.msg[1] = "\\W* (I saw \\BTORIEL\\W come out of&  here just a little&  while ago.)/"
+           global.msg[2] = "* (Normally^1, she carries&  groceries out of here.)/"
+           global.msg[3] = "* (But this time^1, she wasn\'t&  carrying anything.)/"
+           global.msg[4] = "* (She looked disappointed.^1)&* Ribbit./%%"
+Label_2:   
+           if self.room != 21 then goto Label_4
+           if self.x <= 300 then goto Label_4
+           goto Label_5
+Label_4:   
+Label_5:   if !0 then goto Label_6
+           global.msc = 0
+           global.msg[0] = "* Ribbit ribbit^1.&* (I heard using \"F4\" can make&  you have a \"full screen.\")/"
+           global.msg[1] = "* (But what does \"F4\" stand for?^1)&* (\"Four frogs\"?)/"
+           global.msg[2] = "* (I have only seen a maximum of&  three frogs in this room...)/"
+           global.msg[3] = "* (This is troubling^1, to say&  the least.^1)&* Ribbit./%%"
+           if global.flag[7] != 1 then goto Label_6
+           global.msg[0] = "* Ribbit ribbit^1.&* (Did you ever find this&  room\'s fourth frog?)/%%"
+Label_6:   
+           if self.room != 21 then goto Label_7
+           goto Label_8
+Label_7:   
+Label_8:   if !0 then goto Label_9
+           if global.flag[22] != 0 then goto Label_10
+           global.msc = 748
+Label_10:  
+           if global.flag[22] != 1 then goto Label_11
+           global.msc = 751
+Label_11:  
+           if global.flag[22] != 2 then goto Label_12
+           global.msc = 753
+Label_12:  
+           if global.flag[7] != 1 then goto Label_9
+           global.msc = 0
+           if global.flag[22] != 0 then goto Label_13
+           global.msg[0] = "* Ribbit ribbit^1.&* (Yellow names were nice for&  a while.)/"
+           global.msg[1] = "* (Next time^1, we should try a&  relaxing shade of green.)/%%"
+Label_13:  
+           if global.flag[22] != 1 then goto Label_14
+           global.msg[0] = "* Ribbit ribbit^1.&* (How was your adventure?)/"
+           global.msg[1] = "* (It must have been difficult&  without being able to tell&  the enemy\'s feeling" +
+    "s.)/%%"
+Label_14:  
+           if global.flag[22] != 2 then goto Label_9
+           global.msg[0] = "* Ribbit ribbit^1.&* (Finally^1, we can all remove&  these aging pink names.)/"
+           global.msg[1] = "* (Everyone gave you a big favor&  today.^1)&* (Try to respect that!)/%%"
+Label_9:   
+           if instance_exists(782) != 0 then goto Label_15
+           global.interact = 1
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")

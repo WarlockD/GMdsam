@@ -1,0 +1,29 @@
+           self.dingus = (self.dingus + 1)
+           goto Label_0
+           if (self.dingus != 2) then goto Label_0
+           instance_create(140,90,"obj_toroverworld3")
+           obj_toroverworld3.facing = 2
+           obj_toroverworld3.direction = 90
+Label_0:   
+           goto Label_1
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_1
+           Pushing Enviroment : obj_toroverworld3
+           path_start(39,4,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           global.plot = 24
+           global.interact = 0
+           instance_destroy()
+Label_1:   
+           if !instance_exists("obj_toroverworld3") then goto Label_2
+           if (self.conversation != 1) then goto Label_2
+           global.interact = 1
+           self.myinteract = 3
+           global.typer = 4
+           global.facechoice = 1
+           global.faceemotion = 6
+           global.msc = 0
+           global.msg[0] = "* Do not try to stop me./"
+           global.msg[1] = "* This is your final&  warning./%%"
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")
+           self.conversation = 2
+Label_2:   

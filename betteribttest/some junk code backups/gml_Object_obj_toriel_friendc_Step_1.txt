@@ -1,0 +1,10 @@
+           scr_depth(0,0,0,0,0)
+           if (self.fun != 0) then goto Label_0
+           if !instance_exists("obj_face_torieltalk") then goto Label_1
+           self.image_index = obj_face_torieltalk.image_index
+           goto Label_2
+Label_1:   
+           self.image_index = 0
+Label_2:   
+           script_execute(106,null)
+Label_0:   

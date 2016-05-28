@@ -1,0 +1,4 @@
+           self.hspeed = -8
+           self.flashing = 0
+           self.visible = 1
+           self.image_speed = 0.25

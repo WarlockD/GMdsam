@@ -1,0 +1,10 @@
+           goto Label_0
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_0
+           global.interact = 0
+           self.conversation = 2
+           Pushing Enviroment : 
+           path_start(41,4,0,0)
+           Poping  Envorment :  
+           global.plot = 18
+           instance_destroy()
+Label_0:   

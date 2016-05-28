@@ -1,0 +1,7 @@
+           self.image_xscale = 50
+           self.conversation = 0
+           if (global.plot <= 16) then goto Label_0
+           instance_destroy()
+Label_0:   
+           self.volume = 1
+           self.fademusicout = 0

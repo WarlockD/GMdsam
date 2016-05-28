@@ -1,0 +1,10 @@
+           if (global.plot <= 9.7) then goto Label_0
+           instance_destroy()
+           goto Label_1
+Label_0:   
+           goto Label_1
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_1
+           global.plot = 9.8
+           global.interact = 0
+           instance_destroy()
+Label_1:   

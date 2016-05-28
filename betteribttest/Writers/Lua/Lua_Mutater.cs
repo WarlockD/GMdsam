@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using GameMaker.Ast;
 
 namespace GameMaker.Writers.Lua
 {
@@ -193,10 +194,6 @@ namespace GameMaker.Writers.Lua
             return call;
         }
 
-        public ILAssign MutateAssign(ILAssign assign)
-        {
-            return assign;
-        }
         public ILVariable MutateVar(ILVariable v)
         {
             return v;

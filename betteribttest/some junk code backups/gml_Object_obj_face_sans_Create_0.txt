@@ -1,0 +1,15 @@
+           event_inherited()
+           self.image_speed = 0.25
+           if  instance_exists(obj_face_undyne)                                            then obj_face_undyne.instance_destroy()
+           if  instance_exists(obj_face_papyrus)                                           then obj_face_papyrus.instance_destroy()
+           if  instance_exists(obj_face_alphys)                                            then obj_face_alphys.instance_destroy()
+           if  instance_exists(obj_face_asgore)                                            then obj_face_asgore.instance_destroy()
+           if  instance_exists(obj_face_torieltalk)                                        then obj_face_torieltalk.instance_destroy()
+           if  instance_exists(obj_face_torielblink)                                       then obj_face_torielblink.instance_destroy()
+           if  instance_exists(obj_torbody)                                                then obj_torbody.instance_destroy()
+           if  instance_exists(obj_face_mettaton)                                          then obj_face_mettaton.instance_destroy()
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_sans)         then self.sprite_index = spr_face_sans
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_sanschuckle)  then self.sprite_index = spr_face_sanschuckle
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_sanswink)     then self.sprite_index = spr_face_sanswink
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_sansblink)    then self.sprite_index = spr_face_sansblink
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_sansnoeyes)   then self.sprite_index = spr_face_sansnoeyes

@@ -1,0 +1,20 @@
+           script_execute(null)
+           self.stringno = 0
+           self.stringpos = 1
+           self.lineno = 0
+           self.halt = 0
+           self.myx = self.writingx
+           self.myy = self.writingy
+           self.x = round(self.x)
+           self.y = round(self.y)
+           script_execute(1,null)
+           self.n = 0
+Label_1:   
+           if (global.msg[self.n] == "%%%") then goto Label_0
+           self.mystring[self.n] = global.msg[self.n]
+           self.n = (self.n + 1)
+           goto Label_1
+Label_0:   
+           self.originalstring = self.mystring[0]
+           self.dfy = 0
+           self.stringpos = string_length(self.originalstring)

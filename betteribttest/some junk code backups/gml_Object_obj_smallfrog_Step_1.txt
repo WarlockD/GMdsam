@@ -1,0 +1,15 @@
+           scr_depth(0,0,0,0,0)
+           if global.kills <= 16 then goto Label_0
+           instance_destroy()
+Label_0:   
+           if self.room != 29 then goto Label_1
+           goto Label_2
+Label_1:   
+Label_2:   if !0 then goto Label_3
+           instance_destroy()
+Label_3:   
+           if self.room != 12 then goto Label_4
+           goto Label_5
+Label_4:   
+Label_5:   if !0 then goto Label_6
+           instance_destroy()

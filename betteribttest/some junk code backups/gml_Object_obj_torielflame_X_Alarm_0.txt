@@ -1,0 +1,9 @@
+           if (self.flashing != 1) then goto Label_0
+           if (self.visible != 1) then goto Label_1
+           self.visible = 0
+           goto Label_2
+Label_1:   
+           self.visible = 1
+Label_2:   
+           self.alarm[0] = 1
+Label_0:   

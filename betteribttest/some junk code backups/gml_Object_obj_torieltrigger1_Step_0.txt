@@ -1,0 +1,37 @@
+           goto Label_0
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_0
+           global.interact = 1
+           self.conversation = 2
+           Pushing Enviroment : obj_toroverworld3
+           path_start(6,3,0,1)
+           Poping  Envorment :  obj_toroverworld3
+Label_0:   
+           if !instance_exists("obj_toroverworld3") then goto Label_1
+           goto Label_1
+           if (obj_toroverworld3.path_position != 1) then goto Label_1
+           self.conversation = 2.5
+           Pushing Enviroment : obj_wallswitchcut1
+           self.on = 1
+           Poping  Envorment :  obj_wallswitchcut1
+           Pushing Enviroment : obj_toroverworld3
+           path_end()
+           Poping  Envorment :  obj_toroverworld3
+           obj_toroverworld3.direction = 90
+           self.alarm[4] = 20
+Label_1:   
+           goto Label_2
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_2
+           self.conversation = 4
+           global.interact = 0
+           global.plot = 3
+Label_2:   
+           if !instance_exists("obj_toroverworld3") then goto Label_3
+           goto Label_3
+           if (obj_toroverworld3.path_position != 1) then goto Label_4
+           if (abs((obj_mainchara.y - obj_toroverworld3.y)) >= 50) then goto Label_3
+Label_4:   
+           self.conversation = 5
+           Pushing Enviroment : obj_toroverworld3
+           path_start(39,3,0,0)
+           Poping  Envorment :  obj_toroverworld3
+Label_3:   

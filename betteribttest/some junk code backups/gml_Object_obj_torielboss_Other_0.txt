@@ -1,0 +1,11 @@
+           if (self.outside != 0) then goto Label_0
+           OBJ_WRITER.halt = 3
+           global.monster[self.myself] = 0
+           if (global.mnfight != 2) then goto Label_1
+           global.mnfight = 1
+Label_1:   
+           self.outside = 1
+           instance_destroy()
+           global.flag[13] = 1
+           global.flag[14] = 3
+Label_0:   

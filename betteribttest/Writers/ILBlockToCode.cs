@@ -6,46 +6,63 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using GameMaker.Ast;
 
 namespace GameMaker.Writers
 {
-    public interface ICodeFormater
+    public abstract class ICodeFormater
     {
-        ICodeFormater Clone();
-        void SetStream(BlockToCode s);
-        void Write(ILSwitch f);
-        void Write(ILFakeSwitch f);
-        void Write(ILVariable v);
-        void Write(ILAssign a);
-        void Write(ILCall bb);
-        void Write(ILValue bb);
-        void Write(ILLabel bb);
-        void Write(ILBasicBlock bb);
-        void Write(ILCondition bb);
-        void Write(ILExpression bb);
-        void Write(ILWithStatement bb);
-        void Write(ILWhileLoop bb);
-        void Write(ILElseIfChain bb);
-      //  void Write(ILBlock block);
+        protected BlockToCode writer;
+        public void SetStream(BlockToCode s) { writer = s; }
+        protected abstract int Precedence(GMCode c);
+        public abstract string GMCodeToString(GMCode c);
+        protected bool CheckParm(ILExpression expr, int index)
+        {
+            int ours = Precedence(expr.Code);
+            ILExpression e = expr.Arguments.ElementAtOrDefault(index);
+            if (e == null) return false;
+            int theirs = Precedence(e.Code);
+            if (theirs == 8) return false; // its a constant or something dosn't need a parm
+            if (theirs < ours) return true;
+            else return false;
+        }
+        protected void WriteParm(ILExpression expr, int index)
+        {
+            bool needParm = CheckParm(expr, index);
+            if (needParm) writer.Write('(');
+            writer.Write(expr.Arguments[index]);
+            if (needParm) writer.Write(')');
+        }
+        public abstract void Write(ILSwitch f);
+        public abstract void Write(ILFakeSwitch f);
+        public abstract void Write(ILVariable v);
+        public abstract void Write(ILCall bb);
+        public abstract void Write(ILValue bb);
+        public abstract void Write(ILLabel bb);
+        public abstract void Write(ILBasicBlock bb);
+        public abstract void Write(ILCondition bb);
+        public abstract void Write(ILExpression bb);
+        public abstract void Write(ILWithStatement bb);
+        public abstract void Write(ILWhileLoop bb);
+        public abstract void Write(ILElseIfChain bb);
+        //  void Write(ILBlock block);
         // What is used to start a line comment
-        string LineComment { get; }
-        string NodeEnding { get; }
-        string Extension { get; }
+        public abstract string LineComment { get; }
+        public abstract string BlockCommentStart { get; }
+        public abstract string BlockCommentEnd { get; }
+        public abstract string NodeEnding { get; }
+        public abstract string Extension { get; }
     }
     public interface INodeMutater
     {
         INodeMutater Clone();
         void SetStream(BlockToCode s);
         ILCall MutateCall(ILCall call);
-        ILAssign MutateAssign(ILAssign assign);
         ILVariable MutateVar(ILVariable v);
     }
     public class EmptyNodeMutater : INodeMutater // does nothing
     {
-        public ILAssign MutateAssign(ILAssign assign)
-        {
-            return assign;
-        }
+  
 
         public ILCall MutateCall(ILCall call)
         {
@@ -97,7 +114,7 @@ namespace GameMaker.Writers
             return test != null && test.Name == Name;
         }
     }
-    public class BlockToCode : IDisposable
+    public class BlockToCode : IDisposable, IMessages
     {
         static Regex regex_newline = new Regex("(\r\n|\r|\n)", RegexOptions.Compiled);
         static Dictionary<int, string> identCache = new Dictionary<int, string>();
@@ -111,30 +128,12 @@ namespace GameMaker.Writers
         static BlockToCode()
         {
         }
-        public static string DebugNodeToString(ILNode node) 
-        {
-            string ret;
-            using(var w = new BlockToCode(new DebugFormater()))
-            {
-                w.WriteNode(node);
-                ret = w.ToString();
-            }
-            return ret;
-        }
-        public static string NiceNodeToString(ILNode node)
-        {
-            string ret;
-            using (var w = new BlockToCode(new DebugFormater()))
-            {
-                w.WriteNode(node);
-                ret = w.ToString();
-            }
-            return ret;
-        }
+
         ICodeFormater formater = null;
         INodeMutater mutater = null;
         StringBuilder buffer = null;
         StringBuilder line = null;
+        IMessages error = null;
         public INodeMutater Mutater
         {
             get { return mutater; }
@@ -161,32 +160,40 @@ namespace GameMaker.Writers
         {
             if (line == null) line = new StringBuilder(80);
             else line.Clear();
-            if (buffer == null) buffer = new StringBuilder(max_seen_buffer);
-            else
-            {
-                if (this.buffer.Length > max_seen_buffer) max_seen_buffer = this.buffer.Length * 2;
-                buffer.Clear();
-            }
+            if (buffer == null) buffer = new StringBuilder(4096);
+            else buffer.Clear();
             Line = 1;
             Indent = 0;
         }
         public int Line { get; private set; }
-        public int Column { get { return currentIdent.Length + line.Length; } }
+        public int Column { get { return  line.Length; } }
+        public int ColumnWithIdent { get { return currentIdent.Length + line.Length; } }
         string currentIdent;
-        int ident = 0;
-        static int max_seen_buffer = 512;
-      
-        void Init(ICodeFormater formater)
+        int ident = 0;      
+        void Init(ICodeFormater formater, IMessages error)
         {
             if (formater == null) throw new ArgumentNullException("Formater");
+            if (error == null) throw new ArgumentNullException("error");
+            this.error = error;
             this.formater = formater;
             formater.SetStream(this);
             Clear();
         }
+        #region IMessages Interface
+        public void Error(string msg) { error.Error(msg); }
+        public void Error(string msg, ILNode node) { error.Error(msg, node); }
+        public void Warning(string msg) { error.Warning(msg); }
+        public void Warning(string msg, ILNode node) { error.Warning(msg, node); }
+        public void Info(string msg) { error.Info(msg); }
+        public void Info(string msg, ILNode node) { error.Info(msg, node); }
+        public string Name {  get { return error.Name; } }
+        public void FatalError(string msg) { error.FatalError(msg); }
+        public void FatalError(string msg, ILNode node) { error.FatalError(msg,node); }
+        #endregion
 
-        public BlockToCode(ICodeFormater formater)
+        public BlockToCode(ICodeFormater formater, IMessages error)
         {
-            Init(formater);
+            Init(formater,error);
         }
 
         public string CreateFileName(string filename)
@@ -225,8 +232,10 @@ namespace GameMaker.Writers
                 line.Append("; ");
             } else
             {
+                
                 buffer.Append(currentIdent);
                 buffer.AppendLine(line.ToString());
+               
                 Line++;
                 line.Clear();
             }
@@ -284,11 +293,15 @@ namespace GameMaker.Writers
       
         List<NodeInfo<ILVariable>> varinfos = new List<NodeInfo<ILVariable>>();
         public IReadOnlyList<NodeInfo<ILVariable>> VariablesUsed {  get { return varinfos; } }
-        List<NodeInfo<ILAssign>> assign_infos = new List<NodeInfo<ILAssign>>();
-        public IReadOnlyList<NodeInfo<ILAssign>> AssignsUsed { get { return assign_infos; } }
+
+
         List<NodeInfo<ILCall>> call_infos = new List<NodeInfo<ILCall>>();
         public IReadOnlyList<NodeInfo<ILCall>> CallsUsed { get { return call_infos; } }
-
+        public void StartBlock(ILBlock block)
+        {
+            block.ClearAndSetAllParents();
+            Write(block);
+        }
 
         public void Write(ILVariable v)
         {
@@ -297,13 +310,7 @@ namespace GameMaker.Writers
             varinfos.Add(new NodeInfo<ILVariable>(v,Line, Column,v.FullName));
             formater.Write(v);
         }
-        public void Write(ILAssign a)
-        {
-            if (mutater != null) a = mutater.MutateAssign(a);
-            if (formater == null) throw new NullReferenceException("Formatter is null");
-            assign_infos.Add(new NodeInfo<ILAssign>(a, Line, Column, a.Variable.FullName));
-            formater.Write(a);
-        }
+
         public void Write(ILCall c)
         {
             if (mutater != null) c = mutater.MutateCall(c);
@@ -334,12 +341,14 @@ namespace GameMaker.Writers
         // quick way to write a block
         public void WriteFile(ILBlock block, string filename)
         {
+            block.ClearAndSetAllParents();
             Write(block);
-            WriteAsyncToFile(filename);
+            using (StreamWriter sw = new StreamWriter(filename)) sw.Write(buffer.ToString());
             Clear();
         }
         public void Write(ILBlock block, bool skip_last_newline, bool ident)
         {
+            
             if(ident) Indent++;
             for (int i = 0; i < block.Body.Count; i++)
             {
@@ -354,12 +363,12 @@ namespace GameMaker.Writers
         {
             Write(block, skip_last_newline, true);
         }
-        public void WriteNode(ILNode n, bool newline = false)
+        public void WriteNode(ILNode n, bool newline = false, bool supressStatmentEnding=false)
         {
             _WriteNode(n);
             if (newline)
             {
-                if (formater.NodeEnding != null) Write(formater.NodeEnding);
+                if (!supressStatmentEnding && formater.NodeEnding != null) line.Append(formater.NodeEnding);
                 WriteLine();
             }
         }
@@ -378,13 +387,19 @@ namespace GameMaker.Writers
         {
             return buffer.ToString();
         }
+        public void WriteAsyncToFile(ILBlock block, string filePath)
+        {
+            Clear();
+            Write(block);
+            WriteAsyncToFile(filePath);
+        }
         public void WriteAsyncToFile(string filePath)
         {
+            string data = buffer.ToString();
             Task.Factory.StartNew(() =>
             {
                 if (string.IsNullOrWhiteSpace(Path.GetExtension(filePath))) 
                     filePath = Path.ChangeExtension(filePath, formater.Extension);
-                string data = buffer.ToString();
             using (StreamWriter sw = new StreamWriter(filePath))
                 sw.Write(data);
             /*
@@ -398,8 +413,11 @@ namespace GameMaker.Writers
                 }
                 */
             });
+            Clear();
         }
         public string LineComment { get { return formater.LineComment; } }
+        public string BlockCommentStart { get { return formater.BlockCommentStart; } }
+        public string BlockCommentEnd { get { return formater.BlockCommentEnd; } }
         ~BlockToCode()
         {
             Dispose(false);
@@ -433,6 +451,8 @@ namespace GameMaker.Writers
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
         }
+
+      
         #endregion
 
     }

@@ -1,0 +1,64 @@
+           goto Label_0
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_0
+           global.interact = 3
+           obj_mainchara.y = 128
+           obj_mainchara.visible = 0
+           obj_toroverworld3.sprite_index = 1114
+           obj_toroverworld3.lsprite = 1114
+           Pushing Enviroment : obj_mainchara
+           path_start(27,5,0,0)
+           Poping  Envorment :  obj_mainchara
+           Pushing Enviroment : obj_toroverworld3
+           path_start(27,5,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           self.conversation = 3
+Label_0:   
+           if !instance_exists("obj_toroverworld3") then goto Label_1
+           goto Label_1
+           if (obj_toroverworld3.path_position != 1) then goto Label_1
+           global.interact = 1
+           self.myinteract = 3
+           global.typer = 4
+           global.facechoice = 1
+           global.faceemotion = 2
+           obj_cosmeticpillar_a.flag[(global.flag[44] + 1)] = -5
+           global.flag[45] = 1
+           global.msc = 0
+           if (global.flag[44] != 1) then goto Label_2
+           global.msg[0] = "* I think you should&  play upstairs&  instead./%%"
+Label_2:   
+           if (global.flag[44] != 2) then goto Label_3
+           global.msg[0] = "* It is dangerous&  to play here./%%"
+Label_3:   
+           if (global.flag[44] != 3) then goto Label_4
+           global.msg[0] = "* It is drafty here.&* You will catch&  a cold./%%"
+Label_4:   
+           if (global.flag[44] != 4) then goto Label_5
+           global.msg[0] = "* It is dusty here.&* You will catch&  a cough./%%"
+Label_5:   
+           if (global.flag[44] != 5) then goto Label_6
+           global.msg[0] = "* There is nothing&  to see here./%%"
+Label_6:   
+           if (global.flag[44] != 6) then goto Label_7
+           global.msg[0] = "* Do you want to&  read a book?/%%"
+Label_7:   
+           if (global.flag[44] != 7) then goto Label_8
+           global.msg[0] = "\\E7* I do not like&  the game you&  are playing./%%"
+Label_8:   
+           if (global.flag[44] != 8) then goto Label_9
+           global.msg[0] = "\\E0* Why not go for&  a walk in the&  yard?/%%"
+Label_9:   
+           if (global.flag[44] != 9) then goto Label_10
+           global.msg[0] = "* Really now./%%"
+Label_10:  
+           if (global.flag[44] <= 9) then goto Label_11
+           global.msg[0] = "\\E4* .../%%"
+Label_11:  
+           if (global.plot >= 19) then goto Label_12
+           global.flag[44] = 0
+           global.msg[0] = "* Hey^1, do not go down&  here./"
+           global.msg[1] = "* I have something&  to show you&  upstairs./%%"
+Label_12:  
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")
+           self.conversation = 2
+Label_1:   

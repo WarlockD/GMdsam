@@ -1,0 +1,8 @@
+           Pushing Enviroment : 
+           self.sprite_index = 1102
+           Poping  Envorment :  
+           self.toriel.phone = 0
+           Pushing Enviroment : 
+           path_start(18,5,0,0)
+           Poping  Envorment :  
+           self.conversation = 4

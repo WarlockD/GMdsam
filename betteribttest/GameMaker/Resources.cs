@@ -12,7 +12,7 @@ using System.Collections.Specialized;
 
 namespace GameMaker
 {
-
+  
     class SimplerLuaFormatter : IFormatter
     {
         SerializationBinder binder;
@@ -145,6 +145,44 @@ namespace GameMaker
 
     public static class BinaryReaderExtensions
     {
+        static File.Chunk FindChunk(int pos)
+        {
+            foreach (var c in File.fileChunks)
+            {
+                if (c.Key == "FORM") continue;
+                if ((pos > c.Value.start && pos < c.Value.end) || pos == c.Value.start || pos == c.Value.end) return c.Value;
+            }
+            return null;
+        }
+        static string FindChunkString(int pos)
+        {
+            var chunk = FindChunk(pos);
+            if (chunk != null) return chunk.ToString();
+            return null;
+        }
+       
+        public static void WriteStuff(this BinaryReader r, int count, string name = null)
+        {
+            if (name != null) Debug.WriteLine("Stuff: " + name);
+            var curChunk = FindChunk((int)r.BaseStream.Position);
+            Debug.WriteLine("Starting In Chunk: " + curChunk.ToString());
+            var pos = r.BaseStream.Position;
+            for (int i = 0; i < count; i++)
+            {
+                int p = (int)r.BaseStream.Position;
+                File.Chunk nowChunk = null;
+                while ((nowChunk = FindChunk(p)) == null) p++;
+                if (nowChunk.start != curChunk.start)
+                {
+                    Debug.WriteLine("Went to Next Chunk: " + nowChunk.ToString());
+                    curChunk = nowChunk;
+                }
+                int v = r.ReadInt32();
+                string c = FindChunkString(v);
+                Debug.WriteLine("{0} : {1} | {2}", p.DebugHex(), v.DebugHex(), c);
+            }
+            r.BaseStream.Position = pos;
+        }
         public static T[] ReadArray<T>(this BinaryReader r, int offset, int count) where T : struct
         {
             var pos = r.BaseStream.Position;
@@ -313,18 +351,22 @@ namespace GameMaker
         }
 
     }
-    public partial class File
+    public  static partial class File
     {
       
-        class Chunk
+       internal class Chunk
         {
             public readonly int start;
             public readonly int end;
             public readonly int size;
             public readonly string name;
             public Chunk(string name, int start, int size) { this.name = name; this.start = start; this.end = start + size; this.size = size; }
+            public override string ToString()
+            {
+                return string.Format("( Name={0} Start={1} End={2} Size={3} )", name, start, end, size);
+            }
         }
-        static Dictionary<string, Chunk> fileChunks = null;
+        internal static Dictionary<string, Chunk> fileChunks = null;
         static byte[] rawData = null;
         static string filename = null;
 
@@ -385,7 +427,15 @@ namespace GameMaker
                 }
             }
         }
-
+        public enum VarType
+        {
+            BuiltIn = 0,
+            Local = 1,
+            Global = 2,
+            LocalOrGlobal = 3
+        }
+        static Dictionary<string, VarType> newvarTypeLookup = new Dictionary<string, VarType>();
+        public static IReadOnlyDictionary<string,VarType> NewVarTypeLookup {  get { return newvarTypeLookup; } }
         public static IEnumerable<INamedResrouce> Search(string name)
         {
             return namedResourceLookup.Where(x => x.Key.Contains(name)).Select(x => (INamedResrouce) x.Value);
@@ -445,21 +495,242 @@ namespace GameMaker
                 r = new BinaryReader(new MemoryStream(rawData, true));
                 for (int i = 0; i < File.Strings.Count; i++) stringToIndex[File.Strings[i]] = i;
             }
-            class CodeNameRefrence
+            static string formatint(int i)
+            {
+                return string.Format("({0,-8} , {0:X8})",i);
+            }
+           static  Chunk FindChunk(int pos)
+            {
+                foreach (var c in fileChunks)
+                {
+                    if (c.Key == "FORM") continue;
+                    if ((pos > c.Value.start && pos < c.Value.end) || pos == c.Value.start || pos == c.Value.end) return c.Value;
+                }
+                return null;
+            }
+            static string FindChunkString(int pos)
+            {
+                var chunk = FindChunk(pos);
+                if (chunk != null) return chunk.ToString();
+                return null;
+            }
+            static void WriteStuff(BinaryReader r, int count, string name = null)
+            {
+                if (name != null) Debug.WriteLine("Stuff: "+name);
+                var curChunk = FindChunk((int)r.BaseStream.Position);
+                Debug.WriteLine("Starting In Chunk: " + curChunk.ToString());
+                var pos = r.BaseStream.Position;
+                for (int i = 0; i < count; i++)
+                {
+                    int p = (int)r.BaseStream.Position;
+                    Chunk nowChunk = null;
+                    while ((nowChunk = FindChunk(p)) == null) p++;
+                    if (nowChunk.start != curChunk.start)
+                    {
+                        Debug.WriteLine("Went to Next Chunk: " + nowChunk.ToString());
+                        curChunk = nowChunk;
+                    }
+                    int v = r.ReadInt32();
+                    string c = FindChunkString(v);
+                    Debug.WriteLine("{0} : {1} | {2}", formatint(p), formatint(v), c);
+                }
+                r.BaseStream.Position = pos;
+            }
+            void WriteStuff(int count,string name = null)
+            {
+                WriteStuff(r, count, name);
+            }
+            // Slightly changed, now the start number is the count
+            class NewFunctionIndex
             {
                 public string Name;
-                public int Index;
+                public string Value;
+                public NewFunctionIndex(BinaryReader r)
+                {
+                    Debug.Assert(r.ReadIntBool());
+                    Name = r.ReadStringFromNextOffset();
+                    Debug.Assert(Name != null);
+                    Debug.Assert(!r.ReadIntBool());
+                    Value = r.ReadStringFromNextOffset();
+                    Debug.Assert(Value != null);
+                }
+                public override string ToString()
+                {
+                    return "( Name=" + Name + " Value=" + Value + " )";
+                }
+            }
+            List<NewFunctionIndex> newFunctionIndex;
+            // Ok, the new FUNC structure is the same as the old, except the opcode it changes is 
+            // diffrent AND it has a trailing list of evey function/code name in some wierd
+            // structure that dosn't seem to change?( 1, Name, 0, "arguments")  Not sure on its purpose
+            void NewFunctionChunk(Chunk func)
+            {
+                r.BaseStream.Position = func.start;
+                WriteStuff(10, "funcStart");
+                
+                int refCount = r.ReadInt32();
+                int calCount = func.size / 12; // the size dosn't match up though?  Why the extra data?
+                for (int i = 0; i < refCount; i++)
+                {
+                    NewFuncNameRefrence nref = new NewFuncNameRefrence(r);
+                    refs.Add(nref.Name, nref);
+                    foreach (var o in nref.Offsets) offsetLookup.Add(o, nref);
+                }
+                // humm some wierd mapping?
+                // I think its an index to string map of all the code?
+                int endCount = r.ReadInt32();
+                newFunctionIndex = new List<NewFunctionIndex>();
+                for (int i = 0; i < endCount; i++)
+                {
+                    newFunctionIndex.Add(new NewFunctionIndex(r));
+                }
+                // goes to the string chunk here so we are finaly at the end
+            }
+            abstract class  CodeNameRefrence
+            {
+                public string Name=null;
                 public int Count;
                 public int Start;
-                public int[] Offsets;
-                public CodeNameRefrence(BinaryReader r, int index)
+                public int[] Offsets=null;
+                protected CodeNameRefrence() { }
+                public override string ToString()
                 {
-                    Index = index;
+                    return "Name =" + Name + " Count=" + Count;
+                }
+            }
+            class NewVarNameRefrence : CodeNameRefrence
+            {
+                public int Type;
+                public int Index;
+                public override string ToString()
+                {
+                    return base.ToString() + " Type=" + Type + " Index=" + Index;
+                }
+                public NewVarNameRefrence(BinaryReader r)
+                {
+                    this.Name = r.ReadStringFromNextOffset();
+                    Type = r.ReadInt32();
+                    Index = r.ReadInt32();
+                    Count = r.ReadInt32();
+                    Start = r.ReadInt32();
+                    if (Count != 0) 
+                    {
+                      //  WriteStuff(r, 10, "NewVarNameRefrence");
+                        Offsets = new int[Count];
+                        var save = r.BaseStream.Position;
+                        r.BaseStream.Position = Start;
+                        if (Count > 0)
+                        {
+                            for (int i = 0; i < Count; i++)
+                            {
+                                uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
+                                int position = (int)r.BaseStream.Position;
+                                int code = (int)(first >> 24);
+                                Debug.Assert(code == 69 || code == 195 || code == 192 || code == 194); 
+                                // 69 is the new pop
+                                // 195 pushb?
+                                // 192 push general?  Old push code
+                                // OOOH 194 push global, I am seeing a partern!
+                                int offset = r.ReadInt32() & 0x00FFFFFF;
+                                Offsets[i] = position;
+                                r.BaseStream.Position += offset - 8;
+                            }
+                        }
+                        r.BaseStream.Position = save;
+                    }else
+                    {
+                        Debug.Assert(Start == -1); // seems to be the case
+                    }
+                }
+            }
+            void NewVarChunk(Chunk func)
+            {
+                r.BaseStream.Position = func.start;
+                int globalCount = r.ReadInt32();
+                int localCount = r.ReadInt32();
+                int nextCount = r.ReadInt32();
+                List<NewVarNameRefrence> locals = new List<NewVarNameRefrence>();
+                List<NewVarNameRefrence> builtin = new List<NewVarNameRefrence>();
+                List<NewVarNameRefrence> globals = new List<NewVarNameRefrence>();
+                List<NewVarNameRefrence> trash = new List<NewVarNameRefrence>();
+                while (r.BaseStream.Position < func.end)
+                {
+                    NewVarNameRefrence nref = new NewVarNameRefrence(r);
+                   
+                    if (nref.Type == -1)
+                    {
+                        if (nref.Index == -6)
+                        {
+                            Debug.Assert(!newvarTypeLookup.ContainsKey(nref.Name));
+                            newvarTypeLookup[nref.Name] = VarType.BuiltIn;
+                            builtin.Add(nref);
+                        }
+                        else {
+                            if (!newvarTypeLookup.ContainsKey(nref.Name)) newvarTypeLookup.Add(nref.Name, VarType.Local);
+                            else newvarTypeLookup[nref.Name] |= VarType.Local;
+                            locals.Add(nref);
+                        }
+                    }
+                    else if (nref.Type == -5)
+                    {
+                        if (!newvarTypeLookup.ContainsKey(nref.Name)) newvarTypeLookup.Add(nref.Name, VarType.Global);
+                        else newvarTypeLookup[nref.Name] |= VarType.Global;
+                        globals.Add(nref);
+                    }
+                    else trash.Add(nref);
+                    if(nref.Offsets!= null) foreach (var o in nref.Offsets) offsetLookup.Add(o, nref);
+                }
+                Debug.Assert(globalCount == globals.Count);
+                Debug.Assert(localCount == locals.Count);
+                // trash is all just arguments?
+
+
+                WriteStuff(10, "varend");
+            }
+            public void RefactorNewChunks(Chunk func, Chunk vars)
+            {
+                NewFunctionChunk(func);
+                NewVarChunk(vars);
+                //      WriteStuff(10, "func");
+                //    r.BaseStream.Position = vars.start;
+                //    stuff = r.ReadInt32(10);
+                //  WriteStuff(stuff,"var");
+            }
+            class NewFuncNameRefrence : CodeNameRefrence
+            {
+                public NewFuncNameRefrence(BinaryReader r)
+                {
+                    this.Name = r.ReadStringFromNextOffset();
+                    Count = r.ReadInt32();
+                    Start = r.ReadInt32();
+                    Offsets = new int[Count];
+                    var save = r.BaseStream.Position;
+                    r.BaseStream.Position = Start;
+                    if (Count > 0)
+                    {
+                        for (int i = 0; i < Count; i++)
+                        {
+                            uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
+                            int position = (int)r.BaseStream.Position;
+                            var code = GMCodeUtil.getFromRaw(first);
+                            Debug.Assert((int)code == 217); // new call opcode
+                            int offset = r.ReadInt32() & 0x00FFFFFF;
+                            Offsets[i] = position;
+                            r.BaseStream.Position += offset - 8;
+                        }
+                    }
+                    r.BaseStream.Position = save;
+                }
+            }
+            class OldCodeNameRefrence : CodeNameRefrence
+            {
+                public OldCodeNameRefrence(BinaryReader r)
+                {
                     Name = r.ReadStringFromNextOffset();
                     Count = r.ReadInt32();
                     Start = r.ReadInt32();
                     Offsets = new int[Count];
-                    int save = (int) r.BaseStream.Position;
+                    var save = r.BaseStream.Position;
                     r.BaseStream.Position = Start;
                     if (Count > 0)
                     {
@@ -468,7 +739,7 @@ namespace GameMaker
                             uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
                             int position = (int) r.BaseStream.Position;
                             var code = GMCodeUtil.getFromRaw(first);
-                            Debug.Assert(code == GMCode.Push || code == GMCode.Pop || code == GMCode.Call);
+                                Debug.Assert(code == GMCode.Push || code == GMCode.Pop || code == GMCode.Call);
                             int offset = r.ReadInt32() & 0x00FFFFFF;
                             Offsets[i] = position;
                             r.BaseStream.Position += offset - 8;
@@ -488,16 +759,18 @@ namespace GameMaker
                 // Each ref is 3 ints long, firt is name refrence, second is number of refs, and thrid is the chain
                 for (int i = 0; i < refCount; i++)
                 {
-                    CodeNameRefrence nref = new CodeNameRefrence(r, i);
+                    OldCodeNameRefrence nref = new OldCodeNameRefrence(r);
                     refs.Add(nref.Name, nref);
                     foreach (var o in nref.Offsets) offsetLookup.Add(o, nref);
                 }
             }
             public void WriteAllChangesToBytes()
             {
+                
                 foreach (var r in offsetLookup)
                 {
                     int offset = r.Key;
+                //    int item2 = item2 & 0xF0000000; ///  | (int)(struct32s[key1][i + 1] - struct32s[key1][i]) & 0xFFFFFFF;
                     int debug0 = BitConverter.ToInt32(rawData, offset);
                     int index = stringToIndex[r.Value.Name];
                     rawData[offset + 0] = (byte) ((index) & 0xFF);
@@ -514,11 +787,53 @@ namespace GameMaker
                 RefactorCodeManager rcm = new RefactorCodeManager(File.rawData);
                 Chunk funcChunk = fileChunks["FUNC"]; // function names
                 Chunk varChunk = fileChunks["VARI"]; // var names
+
                 rcm.AddRefs(funcChunk.start, funcChunk.size);
                 rcm.AddRefs(varChunk.start, varChunk.size); // add all the reffs
                 rcm.WriteAllChangesToBytes();
             }
         }
+        static void NewRefactorCode()
+        {
+            if (codes == null)
+            {
+          
+                /*
+            int codepositionStart = 0;
+            //  // fill out all the scripts first
+
+            {
+                BinaryReader r = new BinaryReader(new MemoryStream(rawData));
+                r.BaseStream.Position = fileChunks["CODE"].start;
+                var entries = r.ReadChunkEntries();
+                codepositionStart = (int)r.BaseStream.Position; 
+                // ment for debug, to show where all the raw code starts at
+            }
+            */
+
+                RefactorCodeManager rcm = new RefactorCodeManager(File.rawData);
+                Chunk funcChunk = fileChunks["FUNC"]; // function names
+                Chunk varChunk = fileChunks["VARI"]; // var names
+                if(Context.Version == UndertaleVersion.V10000)
+                {
+                    CheckList("CODE", ref codes);
+                    rcm.AddRefs(funcChunk.start, funcChunk.size);
+                    rcm.AddRefs(varChunk.start, varChunk.size); // old method
+                }else
+                {
+                    List<NewCode> new_codes = new List<NewCode>();
+                    // The tricky dicky with CODE is that the raw code block is here RIGHT after the entries
+                    // It goes (count, entries, BLOCKOFALLCODE, entry, entry, .. ) and the offset positions are 
+                    // based off the start of BLOCKOFCODE?
+                    CheckList("CODE", ref new_codes);
+
+                    codes = new_codes.Select(x => (File.Code)x).ToList();
+                    rcm.RefactorNewChunks(funcChunk, varChunk);
+                }
+                rcm.WriteAllChangesToBytes();
+            }
+        }
+
         public static void LoadEveything()
         {
             CheckStrings();
@@ -531,8 +846,13 @@ namespace GameMaker
             CheckList("SOND", ref sounds);
             CheckList("FONT", ref fonts);
             CheckList("OBJT", ref objects);
+
+
+
             CheckList("SCPT", ref scripts);
-            RefactorCode();
+            // CheckList("CODE", ref codes);
+            
+            NewRefactorCode();
 
             DebugPring();
         }

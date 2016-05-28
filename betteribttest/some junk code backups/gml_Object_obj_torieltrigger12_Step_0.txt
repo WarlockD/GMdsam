@@ -1,0 +1,88 @@
+           self.dingus = (self.dingus + 1)
+           goto Label_0
+           if (self.dingus != 2) then goto Label_0
+           instance_create(140,50,"obj_toroverworld3")
+           obj_toroverworld3.facing = 2
+           obj_toroverworld3.direction = 90
+Label_0:   
+           goto Label_1
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_1
+           self.alarm[1] = 20
+           global.flag[45] = 3
+           self.conversation = 3
+Label_1:   
+           goto Label_2
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_2
+           global.interact = 0
+Label_2:   
+           goto Label_3
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_3
+           obj_toroverworld3.y = (obj_toroverworld3.y + 10)
+           obj_toroverworld3.image_index = 0
+           obj_toroverworld3.dsprite = 1121
+           obj_toroverworld3.sprite_index = 1121
+           obj_mainchara.visible = 0
+           obj_toroverworld3.image_speed = 0.2
+           self.alarm[3] = 120
+           self.conversation = 7
+Label_3:   
+           if !instance_exists("obj_toroverworld3") then goto Label_4
+           goto Label_4
+           if (obj_toroverworld3.path_position != 1) then goto Label_4
+           self.alarm[5] = 30
+           self.conversation = 7.7
+Label_4:   
+           goto Label_5
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_5
+           Pushing Enviroment : obj_toroverworld3
+           path_start(28,3,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           self.conversation = 7.6
+Label_5:   
+           goto Label_6
+           if (instance_exists("obj_dialoguer") != 0) then goto Label_6
+           global.seriousbattle = 0
+           global.interact = 0
+           Pushing Enviroment : obj_toroverworld3
+           instance_destroy()
+           Poping  Envorment :  obj_toroverworld3
+           global.plot = 25
+           instance_destroy()
+Label_6:   
+           if !instance_exists("obj_toroverworld3") then goto Label_7
+           if (self.conversation != 1) then goto Label_7
+           global.interact = 1
+           self.myinteract = 3
+           global.typer = 4
+           global.facechoice = 1
+           global.faceemotion = 7
+           global.msc = 0
+           global.msg[0] = "* You want to leave&  so badly?/"
+           global.msg[1] = "\\E6* Hmph./"
+           global.msg[2] = "* You are just like&  the others./"
+           global.msg[3] = "\\E7* There is only one&  solution to this./"
+           global.msg[4] = "* Prove yourself.../"
+           global.msg[5] = "* Prove to me you&  are strong enough&  to survive./%%"
+           ini_open("undertale.ini")
+           self.TK = ini_read_real("Toriel","TK",0)
+           ini_close()
+           if (self.TK <= 0) then goto Label_8
+           global.msg[5] = "* Prove to me you&  are strong enough&  to survive!/"
+           global.msg[6] = "\\E6* ... wait./"
+           global.msg[7] = "* ... why are you looking&  at me like that?/"
+           global.msg[8] = "* Like you have seen&  a ghost./"
+           global.msg[9] = "\\E7* Do you know something&  that I do not?/"
+           global.msg[10] = "* No...&* That is impossible./%%"
+Label_8:   
+           goto Label_9
+           if (global.flag[203] <= 11) then goto Label_9
+           global.msg[5] = "* Prove to me that you&  are.../"
+           global.msg[6] = "\\E1* Hey^1, let me finish%%"
+Label_9:   
+           if (global.flag[45] != 3) then goto Label_10
+           global.msg[0] = "* Already?/"
+           global.msg[1] = "* What will it take&  for you to learn&  your lesson?/%%"
+Label_10:  
+           self.mydialoguer = instance_create(0,0,"obj_dialoguer")
+           self.conversation = 2
+Label_7:   

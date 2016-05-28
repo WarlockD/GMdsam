@@ -1,0 +1,12 @@
+           self.image_xscale = 50
+           self.image_yscale = 1
+           self.conversation = 0
+           if (global.plot <= 6) then goto Label_0
+           instance_destroy()
+Label_0:   
+           if (global.plot != 5.5) then goto Label_1
+           self.conversation = 3
+Label_1:   
+           if (global.plot != 6) then goto Label_2
+           self.conversation = 4
+Label_2:   

@@ -1,0 +1,15 @@
+           other.x = other.xprevious
+           other.y = other.yprevious
+           if (self.conversation != 0) then goto Label_0
+           instance_create(0,0,"obj_musfadeout")
+           global.plot = 9
+           global.interact = 1
+           self.tor = instance_create(obj_torinteractable6.x,obj_torinteractable6.y,"obj_toroverworld4")
+           Pushing Enviroment : obj_torinteractable6
+           instance_destroy()
+           Poping  Envorment :  obj_torinteractable6
+           Pushing Enviroment : obj_toroverworld4
+           path_start(15,3,0,0)
+           Poping  Envorment :  obj_toroverworld4
+           self.conversation = 3
+Label_0:   

@@ -1,0 +1,13 @@
+           if (self.conversation != 0) then goto Label_0
+           self.toriel = instance_create(140,240,"obj_toroverworld3")
+           global.msc = 0
+           global.typer = 4
+           global.interact = 1
+           global.facechoice = 1
+           global.faceemotion = 1
+           global.msg[0] = "* Oh dear^1, that took&  longer than I&  thought it would./%%"
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 1
+           self.fademusicout = 1
+           global.interact = 1
+Label_0:   

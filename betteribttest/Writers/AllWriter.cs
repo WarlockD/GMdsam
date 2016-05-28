@@ -7,7 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-
+using GameMaker.Ast;
 
 namespace GameMaker.Writers
 {
@@ -46,14 +46,18 @@ namespace GameMaker.Writers
                 case OutputType.LoveLua:
                     return (CodeWriter)new Lua.Writer(output);
                 case OutputType.JavaScript:
-                    return (CodeWriter) new JavaScript.Writer(output);
+                    return (CodeWriter) new GameMaker.Writer(output);
                 default:
                     throw new Exception("Bad output type");
 
             }
         }
-       
-        BlockToCode CreateOutput()
+        public static void CacheForAnalysis()
+        {
+            ConcurrentBag<string> globals_vars = new ConcurrentBag<string>();
+            ConcurrentBag<string> globals_arrays = new ConcurrentBag<string>();
+        }
+        public static BlockToCode CreateOutput(string name)
         {
             ICodeFormater formater = null;
             INodeMutater mutater = null;
@@ -64,18 +68,18 @@ namespace GameMaker.Writers
                     mutater = new Lua.Mutater();
                     break;
                 case OutputType.JavaScript:
-                    formater = new JavaScript.Formater();
+                    formater = new GameMaker.Formater();
                     break;
                 default:
                     throw new Exception("Bad output type type");
             }
-            BlockToCode output = new BlockToCode(formater);
+            BlockToCode output = new BlockToCode(formater,new Context.ErrorContext(name));
             output.Mutater = mutater;
             return output;
         }
         void Run(File.Script s, string filename=null)
         {
-            BlockToCode output = CreateOutput();
+            BlockToCode output = CreateOutput(s.Name);
             GetScriptWriter(output).Write(s);
             if (Context.doGlobals) AddGlobals(output);
             output.WriteAsyncToFile(filename);
@@ -83,21 +87,10 @@ namespace GameMaker.Writers
      
         void Run(File.GObject obj, string filename)
         {
-#if false
-            using (BlockToCode output = CreateOutput())
-            {
-                GetScriptWriter(output).Write(obj);
-                if (Context.doGlobals) AddGlobals(output);
-                WriteTextAsync(output.CreateFileName(filename), output.ToString()).Wait();
-            }
-            //  await sourceStream.WriteAsync(encodedText, 0, encodedText.Length);
-#else
-
-            BlockToCode output = CreateOutput();
+            BlockToCode output = CreateOutput(obj.Name);
             GetScriptWriter(output).Write(obj);
             if (Context.doGlobals) AddGlobals(output);
             output.WriteAsyncToFile(filename);
-#endif
         }
 
         void RunTask(File.GObject obj, string path)

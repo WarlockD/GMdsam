@@ -1,0 +1,30 @@
+            Label 'Label_4' not used
+           self.l = 0
+           self.t = 0
+           self.w = self.sprite_width
+           self.h = self.sprite_height
+           self.ll = ((global.idealborder[0] - self.x) + 1)
+           self.tt = ((global.idealborder[2] - self.y) + 1)
+           self.ww = (((self.x + self.w) - global.idealborder[1]) + 1)
+           self.hh = (((self.y + self.h) - global.idealborder[3]) + 1)
+           if (self.ll <= 0) then goto Label_0
+           self.l = (self.l + self.ll)
+Label_0:   
+           if (self.tt <= 0) then goto Label_1
+           self.t = (self.t + self.tt)
+Label_1:   
+           if (self.ww <= 0) then goto Label_2
+           self.w = (self.w - self.ww)
+Label_2:   
+           if (self.hh <= 0) then goto Label_3
+           self.h = (self.h - self.hh)
+Label_3:   
+           self.w = round(self.w)
+           self.h = round(self.h)
+           self.l = round(self.l)
+           self.t = round(self.t)
+           if (self.w <= 0) then goto Label_4
+           if (self.h <= 0) then goto Label_4
+           if (self.l >= self.w) then goto Label_4
+           if (self.t >= self.h) then goto Label_4
+           draw_sprite_part_ext(self.sprite_index,self.image_index,self.l,self.t,(self.w - self.l),(self.h - self.t),(self.x + self.l),(self.y + self.t),self.argument0,self.argument1,self.argument2,self.argument3)

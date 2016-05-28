@@ -6,109 +6,97 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using GameMaker.Ast;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace GameMaker.Writers
 {
     public abstract class CodeWriter
     {
-        protected class LuaVarCheckCashe
-        {
-            public class VarInfo : IEquatable<VarInfo>
-            {
-                public string Name;
-                public string Instance = null;
-                public bool isGlobal { get { return Instance == "global"; } }
-                public bool isArray = false;
-                public bool Equals(VarInfo o)
-                {
-                    return o.Name == Name && o.Instance == Instance;
-                }
-                public override bool Equals(object obj)
-                {
-                    if (object.ReferenceEquals(obj, null)) return false;
-                    if (object.ReferenceEquals(obj, this)) return true;
-                    VarInfo v = obj as VarInfo;
-                    return v != null && Equals(v);
-                }
-
-                public override int GetHashCode()
-                {
-                    return Name.GetHashCode();
-                }
-                public override string ToString()
-                {
-                    if (Instance != null) return Instance + '.' + Name;
-                    else return Name;
-                }
-            }
-            Dictionary<string, VarInfo> allvars = new Dictionary<string, VarInfo>();
-
-            HashSet<VarInfo> allvarsset = new HashSet<VarInfo>();
-            HashSet<VarInfo> allpinned = new HashSet<VarInfo>();
-
-            public void AddVar(ILVariable v)
-            {
-                string name = v.FullName;
-                if (allvars.ContainsKey(name)) return;
-                VarInfo vi = new VarInfo();
-                vi.Name = v.Name;
-                if (!v.isLocal && !v.isGenerated) vi.Instance = v.InstanceName ?? v.Instance.ToString();
-
-                vi.isArray = v.Index != null;
-                allvars.Add(name, vi);
-                allvarsset.Add(vi);
-            }
-            public void AddVars(ILBlock method)
-            { // what we do here is make sure
-                foreach (var v in method.GetSelfAndChildrenRecursive<ILVariable>()) AddVar(v);
-                foreach (var a in method.GetSelfAndChildrenRecursive<ILAssign>())
-                {
-                    string name = a.Variable.FullName;
-                    var v = allvars[name];
-                    allpinned.Add(v);
-                }
-            }
-            public IEnumerable<VarInfo> GetAll()
-            {
-                return allvarsset;
-            }
-            public IEnumerable<VarInfo> GetAll(Func<VarInfo, bool> pred)
-            {
-                return GetAll().Where(pred);
-            }
-            public IEnumerable<VarInfo> GetAllUnpinned()
-            {
-                return allvarsset.Except(allpinned);
-            }
-            public IEnumerable<VarInfo> GetAllUnpinned(Func<VarInfo, bool> pred)
-            {
-                return GetAllUnpinned().Where(pred);
-            }
-        }
-
         protected BlockToCode output { get; private set; }
-        protected LuaVarCheckCashe cache;
         public CodeWriter(BlockToCode output)
         {
             this.output = output;
-            this.cache = new LuaVarCheckCashe();
         }
-        protected class ActionInfo
+        public class ObjectInfo
+        {
+            public enum VarType
+            {
+                BuiltIn = 0,
+                Normal =1,
+                Array=2,
+                Array2D=4
+            }
+            public List<EventInfo> Events;
+            public File.GObject Object;
+            public Dictionary<string, VarType> Locals;
+        }
+        public static ObjectInfo.VarType GetVarType(ILVariable v)
+        {
+            ObjectInfo.VarType type;
+            if (v.isArray)
+                type = v.Index.Code == GMCode.Array2D ?  ObjectInfo.VarType.Array2D : ObjectInfo.VarType.Array;
+            else
+                type = Constants.IsDefined(v.Name) ? ObjectInfo.VarType.BuiltIn :  ObjectInfo.VarType.Normal;
+            return type;
+        }
+        public class ActionInfo
         {
             public ILBlock Method;
             public string Name;
             public int SubType;
             public int Type;
         }
-        protected class EventInfo
+        public class EventInfo
         {
             public int Type;
             public List<ActionInfo> Actions = new List<ActionInfo>();
         }
         protected abstract void WriteScript(File.Script script, ILBlock block, int arg_count);
-        public void Write(File.Script script)
+        protected virtual void WriteLocals(string name, List<string> strings)
         {
-            ILBlock block = Context.DecompileBlock(script.Code);
+            if (strings.Count > 0)
+            {
+                output.WriteLine("{0}: {1}", name, strings.Count);
+                output.Indent++;
+                foreach (var s in strings)
+                {
+                    if(output.Column > 0) output.Write(", ");
+                    output.Write(s);
+                    if (output.Column > 70) output.WriteLine();
+                }
+                if (output.Column > 0) output.WriteLine();
+                output.Indent--;
+            }
+        }
+        protected virtual void WriteLocals(ObjectInfo info)
+        {
+            output.WriteLine(output.BlockCommentStart);
+            if (info.Locals.Count > 0)
+            {
+
+                output.Indent++;
+                WriteLocals("Locals", info.Locals.Where(x => x.Value == ObjectInfo.VarType.Normal).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("Local Arrays", info.Locals.Where(x => x.Value == ObjectInfo.VarType.Array).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("Local 2D Arrays", info.Locals.Where(x => x.Value == ObjectInfo.VarType.Array2D).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("BuiltIn", info.Locals.Where(x => x.Value == ObjectInfo.VarType.BuiltIn).Select(x => x.Key).OrderBy(x => x).ToList());
+
+                WriteLocals("Both Array AND Normal", info.Locals.Where(x => x.Value.HasFlag(ObjectInfo.VarType.Normal) && x.Value.HasFlag(ObjectInfo.VarType.Array)).Select(x => x.Key).OrderBy(x => x).ToList());
+                output.Indent--;
+            }
+            output.WriteLine(output.BlockCommentEnd);
+        }
+        public void WriteCode(File.Code code, ILBlock block)
+        {
+            output.Write(output.LineComment);
+            output.Write(" Code Name: ");
+            output.WriteLine(code.Name);
+            output.Write(block);
+        }
+        public void Write(File.Script script, ILBlock block=null)
+        {
+            if(block == null) block = Context.DecompileBlock(script.Code);
             if (block == null)
             {
                 Context.Error("Missing block data for {0}", script.Code.Name);
@@ -123,52 +111,67 @@ namespace GameMaker.Writers
                     int arg = int.Parse(match.Groups[1].Value) + 1; // we want the count
                     if (arg > arguments) arguments = arg;
                     v.isLocal = true; // arguments are 100% local
-                    v.Instance = null;
-                    v.InstanceName = null; // clear all this out
                 }
             }
             WriteScript(script, block, arguments);
         }
-        protected abstract void WriteObject(File.GObject obj, List<EventInfo> infos);
-        public void Write(File.GObject obj)
+        protected abstract void WriteObject(ObjectInfo info);
+
+        public ObjectInfo BuildEventInfo(File.GObject obj)
         {
-
             List<EventInfo> infos = new List<EventInfo>();
-            List<Task<ActionInfo>> tasks = new List<Task<ActionInfo>>();
-            // seperating the compiling time for all the tasks didn't make it faster humm
+            ConcurrentDictionary<string, ObjectInfo.VarType> locals = new ConcurrentDictionary<string, ObjectInfo.VarType>();
 
+            // seperating the compiling time for all the tasks didn't make it faster humm
             for (int i = 0; i < obj.Events.Length; i++)
             {
                 if (obj.Events[i] == null) continue;
                 EventInfo einfo = new EventInfo();
-                var actions = einfo.Actions;
+                ConcurrentBag<ActionInfo> actions = new ConcurrentBag<ActionInfo>();
+              //  var actions = einfo.Actions;
                 infos.Add(einfo);
                 einfo.Type = i;
-                foreach (var e in obj.Events[i])
+                Parallel.ForEach(obj.Events[i], e => // This too much?:P
                 {
-                    foreach (var a in e.Actions)
+                    Parallel.ForEach(e.Actions, a =>
                     {
-                        Task<ActionInfo> task = new Task<ActionInfo>(() =>
+                        File.Code codeData = File.Codes[a.CodeOffset];
+                        ILBlock block = Context.DecompileBlock(codeData);
+                        HashSet<string> wierdVars = new HashSet<string>(); // used to suppress errors
+                        foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>(x => !x.isGlobal))
                         {
-                            File.Code codeData = File.Codes[a.CodeOffset];
-                            ILBlock block = Context.DecompileBlock(codeData);
-                            if (block == null) Context.Error("Missing block data for {0}", codeData.Name);
-                            ActionInfo info = new ActionInfo() { Method = block, Name = Context.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
-                            lock (actions) actions.Add(info);
-                            return info;
-                        }, TaskCreationOptions.AttachedToParent);
-                        tasks.Add(task);
-                        task.Start();
-                    }
-                }
-            }
-            foreach (var t in tasks)
-            {
-                ActionInfo info = t.Result;
-                cache.AddVars(info.Method);
-            }
+                            var type = GetVarType(v);
+                            locals.AddOrUpdate(v.Name, type,
+                                (key, existingVal) =>
+                                {
+                                    if (existingVal != type && !wierdVars.Contains(v.Name) )
+                                    {
+                                        output.Warning("Variable '{0}' changes from normal to array", v.Name);
+                                        wierdVars.Add(v.Name);
+                                    }
+                                    return existingVal | type;
 
-            WriteObject(obj, infos);
+                                });
+                        }
+                        if (block == null) Context.Error("Missing block data for {0}", codeData.Name);
+                        ActionInfo info = new ActionInfo() { Method = block, Name = Context.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
+                        actions.Add(info);
+                    });
+                });
+                einfo.Actions = actions.OrderBy(x => x.Type).ToList();
+            }
+            ObjectInfo oi = new ObjectInfo();
+            oi.Events = infos;
+            oi.Object = obj;
+            oi.Locals = locals.ToDictionary(x=> x.Key, z=> z.Value);
+
+            return oi;
+        }
+        public void Write(File.GObject obj, ObjectInfo info =null)
+        {
+            if (info == null) info = BuildEventInfo(obj);
+
+            WriteObject(info);
         }
     }
 }

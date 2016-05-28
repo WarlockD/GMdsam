@@ -1,0 +1,8 @@
+           if (self.conversation != 0) then goto Label_0
+           global.msc = 202
+           global.typer = 4
+           global.interact = 1
+           global.facechoice = 1
+           instance_create(0,0,"obj_dialoguer")
+           self.conversation = 1
+Label_0:   

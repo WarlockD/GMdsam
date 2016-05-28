@@ -1,0 +1,4 @@
+           if global.turntimer >= 1 then goto Label_0
+           global.turntimer = -1
+           global.mnfight = 3
+           instance_destroy()

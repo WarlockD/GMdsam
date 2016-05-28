@@ -1,0 +1,26 @@
+            Label 'Label_0' not used
+           scr_monstersetup(0,0,0,0,0)
+           self.tt = 0
+           self.hurtanim = 0
+           self.hurtsound = 51
+           self.talked = 0
+           self.whatiheard = -1
+           self.attacked = 0
+           self.killed = 0
+           self.iwilltalk = 0
+           global.heard = 0
+           self.takedamage = 0
+           self.outside = 0
+           self.image_xscale = 2
+           self.image_yscale = 2
+           self.mercymod = -20000
+           self.image_speed = 0
+           global.seriousbattle = 1
+           obj_battlebg.image_index = 1
+           self.hplastturn = global.monsterhp[self.myself]
+           self.conversation = 0
+           self.destroyed = 0
+           self.ht = self.sprite_height
+           self.wd = self.sprite_width
+           if (scr_murderlv() < 1) then goto Label_0
+           global.monsterdef[self.myself] = -9999

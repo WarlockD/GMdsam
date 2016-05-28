@@ -1,0 +1,176 @@
+           draw_sprite_ext(self.sprite_index,self.image_index,self.x,self.y,self.image_xscale,self.image_yscale,self.image_angle,self.image_blend,self.image_alpha)
+           if (self.con != 1) then goto Label_0
+           if (self.skip != 0) then goto Label_0
+           self.x = (self.x + floor(((self.idealx - self.x) / (Double)(3))))
+           self.y = (self.y + floor(((self.idealy - self.y) / (Double)(3))))
+           if (self.x >= self.idealx) then goto Label_1
+           self.x = (self.x + 1)
+Label_1:   
+           if (self.y >= self.idealy) then goto Label_2
+           self.y = (self.y + 1)
+Label_2:   
+           if (self.x <= self.idealx) then goto Label_3
+           self.x = (self.x - 1)
+Label_3:   
+           if (self.y <= self.idealy) then goto Label_4
+           self.y = (self.y - 1)
+Label_4:   
+           if (abs((self.x - self.idealx)) >= 3) then goto Label_5
+           self.x = self.idealx
+Label_5:   
+           if (abs((self.y - self.idealy)) >= 3) then goto Label_6
+           self.y = self.idealy
+Label_6:   
+           if (abs((self.x - self.idealx)) >= 0.1) then goto Label_0
+           if (abs((self.y - self.idealy)) >= 0.1) then goto Label_0
+           self.con = 2
+           self.alarm[4] = 2
+Label_0:   
+           if (self.con != 1) then goto Label_7
+           if (self.skip != 1) then goto Label_7
+           self.x = (self.x + floor(((self.idealx - self.x) / (Double)(3))))
+           self.y = (self.y + floor(((self.idealy - self.y) / (Double)(3))))
+           if (self.x >= self.idealx) then goto Label_8
+           self.x = (self.x + 1)
+Label_8:   
+           if (self.y >= self.idealy) then goto Label_9
+           self.y = (self.y + 1)
+Label_9:   
+           if (self.x <= self.idealx) then goto Label_10
+           self.x = (self.x - 1)
+Label_10:  
+           if (self.y <= self.idealy) then goto Label_11
+           self.y = (self.y - 1)
+Label_11:  
+           if (abs((self.x - self.idealx)) >= 3) then goto Label_12
+           self.x = self.idealx
+Label_12:  
+           if (abs((self.y - self.idealy)) >= 3) then goto Label_13
+           self.y = self.idealy
+Label_13:  
+           self.image_angle = (self.image_angle + floor(((self.idealrot - self.image_angle) / (Double)(3))))
+           if (self.image_angle >= self.idealrot) then goto Label_14
+           self.image_angle = (self.image_angle + 1)
+Label_14:  
+           if (self.image_angle <= self.idealrot) then goto Label_15
+           self.image_angle = (self.image_angle - 1)
+Label_15:  
+           if (abs((self.image_angle - self.idealrot)) >= 3) then goto Label_16
+           self.image_angle = self.idealrot
+Label_16:  
+           if (abs((self.x - self.idealx)) >= 0.1) then goto Label_7
+           if (abs((self.y - self.idealy)) >= 0.1) then goto Label_17
+           if (abs((self.idealrot - self.image_angle)) >= 0.01) then goto Label_7
+Label_17:  
+           self.con = 4
+           self.alarm[4] = self.pause
+Label_7:   
+           if (self.con != 3) then goto Label_18
+           self.image_angle = (self.image_angle + floor(((self.idealrot - self.image_angle) / (Double)(3))))
+           if (self.image_angle >= self.idealrot) then goto Label_19
+           self.image_angle = (self.image_angle + 1)
+Label_19:  
+           if (self.image_angle <= self.idealrot) then goto Label_20
+           self.image_angle = (self.image_angle - 1)
+Label_20:  
+           if (abs((self.image_angle - self.idealrot)) >= 3) then goto Label_21
+           self.image_angle = self.idealrot
+Label_21:  
+           if (abs((self.idealrot - self.image_angle)) >= 0.01) then goto Label_18
+           self.con = 4
+           self.alarm[4] = self.pause
+Label_18:  
+           if (self.con != 5) then goto Label_22
+           self.con = 6
+           self.alarm[4] = 4
+Label_22:  
+           if (self.con != 6) then goto Label_23
+           self.image_index = (self.image_index + 1)
+Label_23:  
+           if (self.con != 7) then goto Label_24
+           if (self.image_index != 4) then goto Label_25
+           self.image_index = 5
+           goto Label_26
+Label_25:  
+           if (self.image_index != 5) then goto Label_26
+           self.image_index = 4
+Label_26:  
+           self.direction = (self.idealrot + 90)
+           if (self.btimer != 0) then goto Label_27
+           519.self.p_beam = 1
+Label_27:  
+           if (self.btimer != 0) then goto Label_28
+           if (self.image_xscale < 2) then goto Label_28
+           self.sh = instance_create(0,0,obj_sans_shaker)
+           self.sh.intensity = 5
+Label_28:  
+           self.btimer = (self.btimer + 1)
+           if (self.btimer >= 5) then goto Label_29
+           self.speed = (self.speed + 1)
+           self.bt = (self.bt + floor(((35 * self.image_xscale) / (Double)(4))))
+           goto Label_30
+Label_29:  
+           self.speed = (self.speed + 4)
+Label_30:  
+           if (self.btimer <= (5 + self.terminal)) then goto Label_31
+           self.bt = (self.bt * 0.8)
+           self.fade = (self.fade - 0.1)
+           draw_set_alpha(self.fade)
+           if (self.bt > 2) then goto Label_31
+           instance_destroy()
+Label_31:  
+           if (self.x >= -(self.sprite_width)) then goto Label_32
+           self.speed = 0
+Label_32:  
+           if (self.x <= (self.room_width + self.sprite_width)) then goto Label_33
+           self.speed = 0
+Label_33:  
+           if (self.y <= (self.room_height + self.sprite_height)) then goto Label_34
+           self.speed = 0
+Label_34:  
+           if (self.x >= -(self.sprite_height)) then goto Label_35
+           self.speed = 0
+Label_35:  
+           self.bbsiner = (self.bbsiner + 1)
+           self.bb = ((sin((self.bbsiner / 1.5)) * self.bt) / (Double)(4))
+           self.xx = (lengthdir_x(70,(self.image_angle - 90)) * (self.image_xscale / (Double)(2)))
+           self.yy = (lengthdir_y(70,(self.image_angle - 90)) * (self.image_xscale / (Double)(2)))
+           self.rr = (random(2) - random(2))
+           self.rr2 = (random(2) - random(2))
+           self.xxx = lengthdir_x(1000,(self.image_angle - 90))
+           self.yyy = lengthdir_y(1000,(self.image_angle - 90))
+           draw_set_color(16777215)
+           draw_line_width(((self.x + self.xx) + self.rr),((self.y + self.yy) + self.rr2),((self.x + self.xxx) + self.rr),((self.y + self.yyy) + self.rr2),(self.bt + self.bb))
+           self.xxa = (lengthdir_x(50,(self.image_angle - 90)) * (self.image_xscale / (Double)(2)))
+           self.yya = (lengthdir_y(50,(self.image_angle - 90)) * (self.image_xscale / (Double)(2)))
+           self.xxb = (lengthdir_x(60,(self.image_angle - 90)) * (self.image_xscale / (Double)(2)))
+           self.yyb = (lengthdir_y(60,(self.image_angle - 90)) * (self.image_xscale / (Double)(2)))
+           draw_line_width(((self.x + self.xx) + self.rr),((self.y + self.yy) + self.rr2),((self.x + self.xxa) + self.rr),((self.y + self.yya) + self.rr2),((self.bt / (Double)(2)) + self.bb))
+           draw_line_width(((self.x + self.xx) + self.rr),((self.y + self.yy) + self.rr2),((self.x + self.xxb) + self.rr),((self.y + self.yyb) + self.rr2),((self.bt / 1.25) + self.bb))
+           self.nx_factor = lengthdir_x(1,self.image_angle)
+           self.ny_factor = lengthdir_y(1,self.image_angle)
+           if (self.col_o != 1) then goto Label_36
+           if (self.fade < 0.8) then goto Label_36
+           self.cl = 0
+Label_39:  
+           if (self.cl >= 4) then goto Label_37
+           if !collision_line(((self.x + self.xx) - (((self.nx_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),((self.y + self.yy) - (((self.ny_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),((self.x + self.xxx) - (((self.nx_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),((self.y + self.yyy) - (((self.ny_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),743,0,1) then goto Label_38
+           event_user(7)
+Label_38:  
+           self.cl = (self.cl + 1)
+           goto Label_39
+Label_37:  
+           self.cl = 0
+Label_41:  
+           if (self.cl >= 4) then goto Label_36
+           if !collision_line(((self.x + self.xx) + (((self.nx_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),((self.y + self.yy) + (((self.ny_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),((self.x + self.xxx) + (((self.nx_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),((self.y + self.yyy) + (((self.ny_factor * self.bt) / (Double)(2)) * (self.cl / (Double)(4)))),743,0,1) then goto Label_40
+           event_user(7)
+Label_40:  
+           self.cl = (self.cl + 1)
+           goto Label_41
+Label_36:  
+           if (self.col_o != 0) then goto Label_42
+           self.col_o = 1
+Label_42:  
+           draw_set_alpha(1)
+Label_24:  

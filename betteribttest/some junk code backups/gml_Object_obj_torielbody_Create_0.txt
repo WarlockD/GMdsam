@@ -1,0 +1,2 @@
+           self.shock = 0
+           self.pause = 0

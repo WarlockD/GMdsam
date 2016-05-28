@@ -1,0 +1,4 @@
+           self.mypart1.instance_destroy()
+           self.mypart2.instance_destroy()
+           self.image_index = 2
+           self.alarm[11] = 30

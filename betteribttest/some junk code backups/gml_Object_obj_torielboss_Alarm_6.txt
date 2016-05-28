@@ -1,0 +1,201 @@
+           if (self.hplastturn != global.monsterhp[self.myself]) then goto Label_0
+           if (global.talked != -1) then goto Label_0
+           self.conversation = (self.conversation + 1)
+           self.iwilltalk = 1
+           goto Label_1
+Label_0:   
+           self.iwilltalk = 0
+Label_1:   
+           self.hplastturn = global.monsterhp[self.myself]
+           if (global.monsterhp[self.myself] <= 0) then goto Label_2
+           if (self.iwilltalk != 1) then goto Label_3
+           global.turntimer = -300
+           obj_solidextall_2.alarm[(self.alarm[5] + 70)] = -1
+           if (self.conversation != 1) then goto Label_4
+           global.msg[0] = " ....."
+Label_4:   
+           if (self.conversation != 2) then goto Label_5
+           global.msg[0] = " .....& ....."
+Label_5:   
+           if (self.conversation != 3) then goto Label_6
+           global.msg[0] = " .....& .....& ....."
+Label_6:   
+           if (self.conversation != 4) then goto Label_7
+           global.msg[0] = " ...?"
+Label_7:   
+           if (self.conversation != 5) then goto Label_8
+           global.msg[0] = " What are& you& doing?"
+Label_8:   
+           if (self.conversation != 6) then goto Label_9
+           global.msg[0] = " Attack& or run& away!"
+Label_9:   
+           if (self.conversation != 7) then goto Label_10
+           global.msg[0] = " What are& you& proving& this way?"
+Label_10:  
+           if (self.conversation != 8) then goto Label_11
+           global.msg[0] = " Fight me& or& leave!"
+Label_11:  
+           if (self.conversation != 9) then goto Label_12
+           global.msg[0] = " Stop it."
+Label_12:  
+           if (self.conversation != 10) then goto Label_13
+           instance_create(self.x,self.y,"obj_torgen")
+Label_13:  
+           if (self.conversation != 10) then goto Label_14
+           global.msg[0] = " Stop& looking& at me& that way."
+Label_14:  
+           if (self.conversation != 11) then goto Label_15
+           global.msg[0] = " Go away!"
+Label_15:  
+           if (self.conversation != 12) then goto Label_16
+           global.msg[0] = " ..."
+Label_16:  
+           if (self.conversation != 12) then goto Label_17
+           self.sprite_index = 735
+Label_17:  
+           if (self.conversation != 13) then goto Label_18
+           global.msg[0] = " ...& ..."
+Label_18:  
+           if (self.conversation != 13) then goto Label_19
+           self.sprite_index = 730
+Label_19:  
+           if (self.conversation <= 13) then goto Label_20
+           obj_solidextall_2.alarm[(self.alarm[5] + 400)] = -1
+           if (self.conversation != 14) then goto Label_21
+           caster_free(global.batmusic)
+Label_21:  
+           global.mercy = 1
+           if (self.conversation != 14) then goto Label_22
+           self.sprite_index = 728
+Label_22:  
+           if (self.conversation != 14) then goto Label_23
+           global.msg[0] = "I know you want&to go home^1, but..."
+Label_23:  
+           if (self.conversation <= 15) then goto Label_24
+           self.sprite_index = 727
+Label_24:  
+           if (self.conversation != 15) then goto Label_25
+           global.msg[0] = "But please... go&upstairs now."
+Label_25:  
+           if (self.conversation != 16) then goto Label_26
+           global.msg[0] = "I promise I will&take good care&of you here."
+Label_26:  
+           if (self.conversation != 17) then goto Label_27
+           global.msg[0] = "I know we do not&have much^1, but..."
+Label_27:  
+           if (self.conversation != 18) then goto Label_28
+           global.msg[0] = "We can have a&good life here."
+Label_28:  
+           if (self.conversation != 19) then goto Label_29
+           self.sprite_index = 728
+Label_29:  
+           if (self.conversation != 19) then goto Label_30
+           global.msg[0] = "Why are you&making this so&difficult?"
+Label_30:  
+           if (self.conversation != 20) then goto Label_31
+           self.sprite_index = 730
+Label_31:  
+           if (self.conversation != 20) then goto Label_32
+           global.msg[0] = "Please^1, go upstairs."
+Label_32:  
+           if (self.conversation != 21) then goto Label_33
+           self.sprite_index = 732
+Label_33:  
+           if (self.conversation != 21) then goto Label_34
+           global.msg[0] = "....."
+Label_34:  
+           if (self.conversation != 22) then goto Label_35
+           self.sprite_index = 733
+Label_35:  
+           if (self.conversation != 22) then goto Label_36
+           global.msg[0] = "Ha ha..."
+Label_36:  
+           if (self.conversation != 23) then goto Label_37
+           global.msg[0] = "Pathetic^1, is it not^2?&I cannot save even&a single child."
+Label_37:  
+           if (self.conversation != 24) then goto Label_38
+           global.msg[0] = "..."
+Label_38:  
+           if (self.conversation != 24) then goto Label_39
+           self.sprite_index = 730
+Label_39:  
+           if (self.conversation != 25) then goto Label_40
+           global.flag[27] = 1
+           self.sprite_index = 731
+           self.alarm[5] = -6
+           self.conversation = 99
+           global.flag[45] = 5
+           ini_open("undertale.ini")
+           self.TS = ini_read_real("Toriel","TS",0)
+           ini_write_real("Toriel","TS",(self.TS + 1))
+           ini_close()
+           global.msg[0] = "No^1, I understand./"
+           global.msg[1] = "You would just be&unhappy trapped&down here./"
+           global.msg[2] = "The RUINS are very&small once you&get used to them./"
+           global.msg[3] = "It would not be&right for you to&grow up in a&place like this./"
+           global.msg[4] = "My expectations...&My loneliness...&My fear.../"
+           global.msg[5] = "For you^1, my child...&I will put them aside./%%"
+           global.mnfight = 99
+           global.myfight = 0
+Label_40:  
+           self.blcon = instance_create(((self.x + self.sprite_width) + 3),(self.y + 32),"obj_blconwdflowey")
+           global.typer = 8
+           self.blconwd = instance_create((obj_blconwdflowey.x + 36),(obj_blconwdflowey.y + 10),"OBJ_NOMSCWRITER")
+           goto Label_41
+Label_20:  
+           self.blcon = instance_create(((self.x + self.sprite_width) + 21),(self.ystart + 24),"obj_blconsm")
+Label_41:  
+           global.typer = 8
+           if !instance_exists("obj_blconsm") then goto Label_3
+           self.blconwd = instance_create((self.blcon.x + 15),(self.blcon.y + 10),"OBJ_NOMSCWRITER")
+Label_3:   goto Label_42
+Label_2:   
+           self.destroyed = 1
+           global.faceemotion = 0
+           caster_free(global.batmusic)
+           if !instance_exists(self.dmgwriter) then goto Label_43
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+Label_43:  
+           self.blcon = instance_create(((self.x + self.sprite_width) + 2),(self.y + 36),"obj_blconwdflowey")
+           global.msc = 0
+           global.msg[0] = "\\E0Urgh.../"
+           global.msg[1] = "\\E0You are stronger&than I thought.../"
+           global.msg[2] = "Listen to me^1,& small one.../"
+           global.msg[3] = "If you go beyond&this door,/"
+           global.msg[4] = "Keep walking as&far as you can./"
+           global.msg[5] = "Eventually you will&reach an exit./"
+           global.msg[6] = "\\E1..^1.&..../"
+           global.msg[7] = "\\RASGORE\\X..^1.&Do not let \\RASGORE\\X &take your soul./"
+           global.msg[8] = "His plan&cannot be allowed&to succeed./"
+           global.msg[9] = "\\E2....../"
+           global.msg[10] = "Be good^1,&won\'t you?/"
+           global.msg[11] = "\\E3My child.      %%"
+           if (global.flag[202] < 20) then goto Label_44
+           global.faceemotion = 4
+           global.msg[0] = "Y... you...&really hate me&that much?/"
+           global.msg[1] = "Now I see who I&was protecting by&keeping you here./"
+           global.msg[2] = "Not you.../"
+           global.msg[3] = "\\E5But them!/"
+           global.msg[4] = "\\E3Ha... ha... %%"
+Label_44:  
+           if (self.conversation <= 13) then goto Label_45
+           global.faceemotion = 4
+           global.msg[0] = "\\E4You.../"
+           global.msg[1] = "... at my most&vulnerable&moment.../"
+           global.msg[2] = "To think I was&worried you&wouldn\'t fit&in out there.../"
+           global.msg[3] = "\\E5Eheheheh!!!&You really are&no different than&them!/"
+           global.msg[4] = "\\E3Ha... ha... %%"
+Label_45:  
+           global.plot = 11
+           self.conversation = 1
+           self.image_speed = 0.2
+           global.typer = 12
+           self.blconwriter = instance_create((obj_blconwdflowey.x + 36),(obj_blconwdflowey.y + 10),"OBJ_WRITER")
+           self.alarm[9] = 2
+Label_42:  
+           self.mycommand = round(random(100))
+           global.border = 6
+           obj_heart.x = (round(((global.idealborder[0] + global.idealborder[1]) / (Double)(2))) - 8)
+           obj_heart.y = (round(((global.idealborder[2] + global.idealborder[3]) / (Double)(2))) - 8)

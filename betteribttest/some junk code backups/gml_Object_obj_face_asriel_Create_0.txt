@@ -1,0 +1,14 @@
+           event_inherited()
+           self.image_speed = 0.25
+           if  instance_exists(obj_face_papyrus)  then obj_face_papyrus.instance_destroy()
+           self.u[0] = spr_face_asriel0
+           self.u[1] = spr_face_asriel1
+           self.u[2] = spr_face_asriel2
+           self.u[3] = spr_face_asriel3
+           self.u[4] = spr_face_asriel4
+           self.u[5] = spr_face_asriel5
+           self.u[6] = spr_face_asriel6
+           self.u[7] = spr_face_asriel7
+           self.u[8] = spr_face_asriel8
+           self.u[9] = spr_face_asriel9
+           self.sprite_index = self.u[global.faceemotion]

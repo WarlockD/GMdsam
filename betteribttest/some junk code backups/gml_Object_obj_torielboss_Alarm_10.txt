@@ -1,0 +1,29 @@
+            Label 'Label_2' not used
+           if !instance_exists(self.blcon) then goto Label_0
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+Label_0:   
+           if (self.image_alpha <= 0.1) then goto Label_1
+           self.sprite_index = 739
+           self.y = (self.y + 56)
+           self.image_xscale = 1
+           self.image_yscale = 1
+           self.killed = 1
+           self.room_speed = 20
+           instance_create(obj_heart.x,((self.sprite_height / (Double)(2)) + self.y),"obj_torheart")
+           global.flag[45] = 4
+           ini_open("undertale.ini")
+           self.TK = ini_read_real("Toriel","TK",0)
+           ini_write_real("Toriel","TK",(self.TK + 1))
+           ini_close()
+           instance_destroy()
+           self.image_alpha = (self.image_alpha - 0.05)
+           self.alarm[10] = 1
+           goto Label_2
+Label_1:   
+           caster_stop(global.batmusic)
+           caster_free(global.batmusic)
+           global.typer = 1
+           script_execute("scr_writetext",0,"* YOU WON!&* You lost 1 experience point./%")
+           self.alarm[11] = 1

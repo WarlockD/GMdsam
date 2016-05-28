@@ -1,0 +1,177 @@
+           if (self.stringpos >= string_length(self.originalstring)) then goto Label_0
+           self.stringpos = (self.stringpos + 1)
+           if (global.typer != 111) then goto Label_1
+           self.stringpos = (self.stringpos + 1)
+Label_1:   
+           self.alarm[0] = self.textspeed
+           goto Label_2
+           if (string_char_at(self.originalstring,(self.stringpos + 1)) == "0") then goto Label_2
+           self.n = real(string_char_at(self.originalstring,(self.stringpos + 1)))
+           self.alarm[0] = (self.n * 10)
+           goto Label_3
+Label_2:   
+           if (self.txtsound == 56) then goto Label_4
+           if (self.txtsound == 65) then goto Label_4
+           goto Label_5
+Label_4:   
+Label_5:   if !1 then goto Label_6
+           if (self.txtsound != 56) then goto Label_7
+           if (string_char_at(self.originalstring,self.stringpos) == "") then goto Label_8
+           if (string_char_at(self.originalstring,self.stringpos) == "^") then goto Label_8
+           if (string_char_at(self.originalstring,self.stringpos) == "/") then goto Label_8
+           if (string_char_at(self.originalstring,self.stringpos) == "%") then goto Label_8
+           snd_stop(56)
+           snd_stop(57)
+           snd_stop(58)
+           snd_stop(59)
+           snd_stop(60)
+           snd_stop(61)
+           snd_stop(62)
+           snd_stop(63)
+           snd_stop(64)
+           self.rnsound = floor(random(9))
+           if (self.rnsound == 0) then goto Label_9
+           if (self.rnsound == 1) then goto Label_10
+           if (self.rnsound == 2) then goto Label_11
+           if (self.rnsound == 3) then goto Label_12
+           if (self.rnsound == 4) then goto Label_13
+           if (self.rnsound == 5) then goto Label_14
+           if (self.rnsound == 6) then goto Label_15
+           if (self.rnsound == 7) then goto Label_16
+           if (self.rnsound == 8) then goto Label_17
+           goto Label_18
+Label_9:   
+           snd_play("snd_mtt1")
+           goto Label_18
+Label_10:  
+           snd_play("snd_mtt2")
+           goto Label_18
+Label_11:  
+           snd_play("snd_mtt3")
+           goto Label_18
+Label_12:  
+           snd_play("snd_mtt4")
+           goto Label_18
+Label_13:  
+           snd_play("snd_mtt5")
+           goto Label_18
+Label_14:  
+           snd_play("snd_mtt6")
+           goto Label_18
+Label_15:  
+           snd_play("snd_mtt7")
+           goto Label_18
+Label_16:  
+           snd_play("snd_mtt8")
+           goto Label_18
+Label_17:  
+           snd_play("snd_mtt9")
+           goto Label_18
+Label_18:  self.rnsound
+Label_8:   
+           self.stringpos = (self.stringpos + 2)
+Label_7:   
+           if (self.txtsound != 71) then goto Label_19
+           if (string_char_at(self.originalstring,self.stringpos) == "") then goto Label_19
+           if (string_char_at(self.originalstring,self.stringpos) == "^") then goto Label_19
+           if (string_char_at(self.originalstring,self.stringpos) == "/") then goto Label_19
+           if (string_char_at(self.originalstring,self.stringpos) == "%") then goto Label_19
+           snd_stop(71)
+           snd_stop(72)
+           snd_stop(73)
+           snd_stop(74)
+           snd_stop(75)
+           snd_stop(76)
+           snd_stop(77)
+           self.rnsound = floor(random(7))
+           if (self.rnsound == 0) then goto Label_20
+           if (self.rnsound == 1) then goto Label_21
+           if (self.rnsound == 2) then goto Label_22
+           if (self.rnsound == 3) then goto Label_23
+           if (self.rnsound == 4) then goto Label_24
+           if (self.rnsound == 5) then goto Label_25
+           if (self.rnsound == 6) then goto Label_26
+           goto Label_27
+Label_20:  
+           snd_play("snd_wngdng1")
+           goto Label_27
+Label_21:  
+           snd_play("snd_wngdng2")
+           goto Label_27
+Label_22:  
+           snd_play("snd_wngdng3")
+           goto Label_27
+Label_23:  
+           snd_play("snd_wngdng4")
+           goto Label_27
+Label_24:  
+           snd_play("snd_wngdng5")
+           goto Label_27
+Label_25:  
+           snd_play("snd_wngdng6")
+           goto Label_27
+Label_26:  
+           snd_play("snd_wngdng7")
+           goto Label_27
+Label_27:  self.rnsound
+Label_19:  
+           if (self.txtsound != 65) then goto Label_28
+           if (string_char_at(self.originalstring,self.stringpos) == "") then goto Label_29
+           if (string_char_at(self.originalstring,self.stringpos) == "^") then goto Label_29
+           if (string_char_at(self.originalstring,self.stringpos) == "/") then goto Label_29
+           if (string_char_at(self.originalstring,self.stringpos) == "%") then goto Label_29
+           snd_stop(65)
+           snd_stop(66)
+           snd_stop(67)
+           snd_stop(68)
+           snd_stop(69)
+           snd_stop(70)
+           self.rnsound = floor(random(6))
+           if (self.rnsound == 0) then goto Label_30
+           if (self.rnsound == 1) then goto Label_31
+           if (self.rnsound == 2) then goto Label_32
+           if (self.rnsound == 3) then goto Label_33
+           if (self.rnsound == 4) then goto Label_34
+           if (self.rnsound == 5) then goto Label_35
+           goto Label_36
+Label_30:  
+           snd_play("snd_tem")
+           goto Label_36
+Label_31:  
+           snd_play("snd_tem2")
+           goto Label_36
+Label_32:  
+           snd_play("snd_tem3")
+           goto Label_36
+Label_33:  
+           snd_play("snd_tem4")
+           goto Label_36
+Label_34:  
+           snd_play("snd_tem5")
+           goto Label_36
+Label_35:  
+           snd_play("snd_tem6")
+           goto Label_36
+Label_36:  self.rnsound
+Label_29:  
+           self.stringpos = (self.stringpos + 1)
+Label_28:  goto Label_3
+Label_6:   
+           if (string_char_at(self.originalstring,self.stringpos) == "") then goto Label_3
+           if (string_char_at(self.originalstring,self.stringpos) == " ") then goto Label_3
+           if (string_char_at(self.originalstring,self.stringpos) == "&") then goto Label_3
+           if (string_char_at(self.originalstring,self.stringpos) == "^") then goto Label_3
+           if (string_char_at(self.originalstring,(self.stringpos - 1)) == "^") then goto Label_3
+           if (string_char_at(self.originalstring,self.stringpos) == "\\") then goto Label_3
+           if (string_char_at(self.originalstring,(self.stringpos - 1)) == "\\") then goto Label_3
+           if (string_char_at(self.originalstring,self.stringpos) == "/") then goto Label_3
+           if (string_char_at(self.originalstring,self.stringpos) == "%") then goto Label_3
+           snd_stop(self.txtsound)
+           snd_play(self.txtsound)
+Label_3:   
+           if (string_char_at(self.originalstring,self.stringpos) != "&") then goto Label_37
+           self.stringpos = (self.stringpos + 1)
+Label_37:  
+           if (string_char_at(self.originalstring,self.stringpos) != "\\") then goto Label_0
+           self.stringpos = (self.stringpos + 2)
+Label_0:   

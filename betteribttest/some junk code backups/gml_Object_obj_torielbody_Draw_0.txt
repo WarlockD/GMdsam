@@ -1,0 +1,55 @@
+           self.image_xscale = 2
+           self.image_yscale = 2
+           draw_sprite_ext(self.sprite_index,self.image_index,self.x,self.y,self.image_xscale,self.image_yscale,self.image_angle,self.image_blend,self.image_alpha)
+           if (self.shock != 0) then goto Label_0
+           self.facespr = 1985
+           if (global.faceemotion != 0) then goto Label_1
+           self.facespr = 1985
+Label_1:   
+           if (global.faceemotion != 1) then goto Label_2
+           self.facespr = 1989
+Label_2:   
+           if (global.faceemotion != 2) then goto Label_3
+           self.facespr = 1990
+Label_3:   
+           if (global.faceemotion != 3) then goto Label_4
+           self.facespr = 1995
+Label_4:   
+           if (global.faceemotion != 4) then goto Label_5
+           self.facespr = 2003
+Label_5:   
+           if (global.faceemotion != 5) then goto Label_6
+           self.facespr = 1992
+Label_6:   
+           if (global.faceemotion != 6) then goto Label_7
+           self.facespr = 2284
+Label_7:   
+           if (global.faceemotion != 7) then goto Label_8
+           self.facespr = 2282
+Label_8:   
+           if (global.faceemotion != 9) then goto Label_9
+           self.facespr = 2283
+Label_9:   
+           if (global.faceemotion != 10) then goto Label_10
+           self.facespr = 2287
+Label_10:  
+           if (global.faceemotion != 11) then goto Label_11
+           self.facespr = 2281
+Label_11:  
+           if (global.faceemotion != 12) then goto Label_12
+           self.facespr = 2286
+Label_12:  
+           if (global.faceemotion != 13) then goto Label_13
+           self.facespr = 2288
+Label_13:  
+           if (global.faceemotion != 14) then goto Label_14
+           self.facespr = 2285
+Label_14:  
+           if (global.faceemotion != 15) then goto Label_15
+           self.facespr = 2289
+Label_15:  
+           draw_sprite_ext(self.facespr,0,(self.x + 40),(self.y - 52),self.image_xscale,self.image_yscale,self.image_angle,self.image_blend,self.image_alpha)
+Label_0:   
+           if (self.shock != 1) then goto Label_16
+           draw_sprite_ext(2311,0,(self.x + 40),(self.y - 52),self.image_xscale,self.image_yscale,self.image_angle,self.image_blend,self.image_alpha)
+Label_16:  

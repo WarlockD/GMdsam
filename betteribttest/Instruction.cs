@@ -28,9 +28,8 @@ namespace GameMaker
         Instance,
         Short = 15, // This is usally short anyway
         NoType,
-        ConstantExpression // used when an expression is constant
     }
-    public enum GMCode : byte
+    public enum GMCode : int
     {
         BadOp = 0x00, // used for as a noop, mainly for branches hard jump location is after this
         Conv = 0x03,
@@ -78,13 +77,27 @@ namespace GameMaker
         DefaultCase,
         Concat, // -- filler for lua or string math
         Array2D,
+        Assign,
+        AssignAdd,
+        AssignSub,
+        AssignMul,
+        AssignDiv
+            // there are more but meh
     }
     public static class GMCodeUtil
     {
    
         public static int getBranchOffset(uint op)
         {
-            if ((op & 0x800000) != 0) op |= 0xFF000000; else op &= 0x00FFFFFF;
+            // Ok having a horred problem here.  I thought it was a 24 bit signed value
+            // but when I try to detect a 1 in the signed value, it dosn't work.
+            // so instead of checking for 0x80 0000 I am checking for 0x8 0000,
+            // I can get away with this cause the offsets never go this far, still,
+            // bug and unkonwn
+            //  if ((op & 0x800000) != 0) op |= 0xFFF00000; else op &= 0x7FFFFF;
+            if ((op & 0x400000) != 0) op |= 0xFFF00000; else op &= 0x7FFFFF;
+            int nop = (int)op;
+            Debug.Assert(nop < 80000); // arbatrary but havn't seen code this big
             return (int)(op);
         }
         public readonly static Dictionary<GMCode, int> opMathOperationCount = new Dictionary<GMCode, int>()  {

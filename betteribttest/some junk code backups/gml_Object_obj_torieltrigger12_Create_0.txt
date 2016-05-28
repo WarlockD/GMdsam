@@ -1,0 +1,9 @@
+           self.image_yscale = 1
+           self.image_xscale = 100
+           self.conversation = 0
+           self.flames = 0
+           if (global.plot <= 24) then goto Label_0
+           instance_destroy()
+Label_0:   
+           self.dingus = 0
+           self.turts = 0

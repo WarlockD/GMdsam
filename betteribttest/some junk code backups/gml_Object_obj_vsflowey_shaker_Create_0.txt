@@ -1,0 +1,4 @@
+           self.shakex = 4
+           self.shakey = 4
+           self.decay = 1
+           self.turn1 = 0

@@ -1,0 +1,17 @@
+           self.view_xview[0] = (random(self.shakex) - random(self.shakex))
+           self.view_yview[0] = (random(self.shakey) - random(self.shakey))
+           if (self.turn1 != 0) then goto Label_0
+           self.view_xview[0] = (self.shakex * choose(1,-1))
+           self.view_yview[0] = (self.shakey * choose(1,-1))
+           self.turn1 = 1
+Label_0:   
+           if (self.decay != 1) then goto Label_1
+           self.shakex = (self.shakex - 1)
+           self.shakey = (self.shakey - 1)
+Label_1:   
+           if (self.shakex > 0) then goto Label_2
+           if (self.shakey > 0) then goto Label_2
+           self.view_xview[0] = 0
+           self.view_yview[0] = 0
+           instance_destroy()
+Label_2:   

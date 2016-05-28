@@ -1,0 +1,8 @@
+           other.x = other.xprevious
+           other.y = other.yprevious
+           global.interact = 1
+           instance_create(60,95,"obj_toroverworld3")
+           Pushing Enviroment : obj_toroverworld3
+           path_start(26,5,0,0)
+           Poping  Envorment :  obj_toroverworld3
+           self.conversation = 1

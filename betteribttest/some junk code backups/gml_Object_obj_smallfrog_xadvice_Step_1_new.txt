@@ -1,0 +1,32 @@
+           scr_depth(0,0,0,0,0)
+           if global.kills <= 16 then goto Label_0
+           instance_destroy()
+Label_0:   
+           if self.room != 29 then goto Label_1
+           goto Label_2
+Label_1:   
+Label_2:   if !0 then goto Label_3
+           instance_destroy()
+Label_3:   
+           if self.room != 12 then goto Label_4
+           goto Label_5
+Label_4:   
+Label_5:   if !0 then goto Label_6
+           instance_destroy()
+Label_6:   
+           if !instance_exists(782) then goto Label_7
+           goto Label_8
+Label_7:   
+Label_8:   if !0 then goto Label_9
+           if !keyboard_multicheck_pressed(1) then goto Label_10
+           goto Label_11
+Label_10:  
+Label_11:  if !0 then goto Label_12
+           self.xed = 1
+Label_12:  
+           if self.xed <= 0 then goto Label_9
+           Instance(782).mystring[4] = "* (Oh^1, not you too!)/%%"
+           if global.flag[7] != 1 then goto Label_13
+           Instance(782).mystring[4] = "* (... I suppose some things&  never change.)/%%"
+Label_13:  
+           self.xed = 0

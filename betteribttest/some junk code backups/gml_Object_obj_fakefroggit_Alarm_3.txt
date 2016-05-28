@@ -1,0 +1,22 @@
+           if self.image_index == 1 then goto Label_0
+           self.mypart1.instance_destroy()
+           self.mypart2.instance_destroy()
+           self.dmgwriter = instance_create(self.x + self.sprite_width / (Double)(2) - 48,self.y - 24,"obj_dmgwriter")
+           global.damage = self.takedamage
+           self.dmgwriter.self.dmg = global.damage
+           self.image_index = 1
+           snd_play("snd_damage")
+           self.alarm[8] = 11
+Label_0:   
+           self.x = self.x + self.shudder
+           if self.shudder >= 0 then goto Label_1
+           self.shudder = -(self.shudder + 2)
+           goto Label_2
+Label_1:   
+           self.shudder = -(self.shudder)
+Label_2:   
+           if self.shudder != 0 then goto Label_3
+           global.hurtanim[self.myself] = 2
+           Exit
+Label_3:   
+           self.alarm[3] = 2

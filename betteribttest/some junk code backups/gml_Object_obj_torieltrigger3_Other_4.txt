@@ -1,0 +1,6 @@
+           goto Label_0
+           if (self.conversation != 0) then goto Label_0
+           self.tor = instance_create(60,100,"obj_toroverworld4")
+           self.conversation = 1
+           global.interact = 1
+Label_0:   

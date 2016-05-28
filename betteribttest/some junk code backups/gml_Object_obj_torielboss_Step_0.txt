@@ -1,0 +1,340 @@
+           if (global.mnfight != 3) then goto Label_0
+           self.attacked = 0
+Label_0:   
+           if (self.alarm[5] <= 0) then goto Label_1
+           if (global.monster[0] != 1) then goto Label_2
+           if (global.monsterinstance[0].alarm[5] <= self.alarm[5]) then goto Label_2
+           self.alarm[5] = global.monsterinstance[0].alarm[5]
+Label_2:   
+           if (global.monster[1] != 1) then goto Label_3
+           if (global.monsterinstance[1].alarm[5] <= self.alarm[5]) then goto Label_3
+           self.alarm[5] = global.monsterinstance[1].alarm[5]
+Label_3:   
+           if (global.monster[2] != 1) then goto Label_1
+           if (global.monsterinstance[2].alarm[5] <= self.alarm[5]) then goto Label_1
+           self.alarm[5] = global.monsterinstance[2].alarm[5]
+Label_1:   
+           if (global.mnfight != 1) then goto Label_4
+           if (self.talked != 0) then goto Label_4
+           if (global.monsterhp[self.myself] <= 0) then goto Label_5
+           self.alarm[5] = 15
+Label_5:   
+           if (self.mercymod != -49) then goto Label_6
+           self.alarm[5] = 400
+Label_6:   
+           self.alarm[6] = 2
+           self.talked = 1
+           global.heard = 0
+Label_4:   
+           if !keyboard_multicheck_pressed(13) then goto Label_7
+           if (self.conversation >= 13) then goto Label_8
+           goto Label_8
+           if (obj_lborder.x != global.idealborder[0]) then goto Label_9
+           if (self.alarm[6] >= 0) then goto Label_8
+Label_9:   
+           self.alarm[5] = 2
+Label_8:   
+           goto Label_7
+           if (self.conversation == 99) then goto Label_7
+           if !instance_exists("OBJ_NOMSCWRITER") then goto Label_7
+           if (OBJ_NOMSCWRITER.stringpos < string_length(OBJ_NOMSCWRITER.mystring[0])) then goto Label_7
+           self.alarm[5] = 2
+Label_7:   
+           if (global.hurtanim[self.myself] != 1) then goto Label_10
+           self.shudder = 16
+           self.alarm[3] = global.damagetimer
+           if (global.damage <= 100) then goto Label_11
+           self.shudder = 32
+Label_11:  
+           global.hurtanim[self.myself] = 3
+Label_10:  
+           if (global.hurtanim[self.myself] != 2) then goto Label_12
+           self.myself.monsterhp[(global.monsterhp[self.myself] - self.takedamage)] = -5
+           Pushing Enviroment : 
+           self.alarm[2] = 15
+           Poping  Envorment :  
+           if (global.damage <= 100) then goto Label_13
+           Pushing Enviroment : 
+           self.alarm[2] = 60
+           Poping  Envorment :  
+Label_13:  
+           if (global.monsterhp[self.myself] > 150) then goto Label_14
+           global.monsterdef[self.myself] = -140
+Label_14:  
+           if (global.monsterhp[self.myself] < 1) then goto Label_15
+           global.hurtanim[self.myself] = 0
+           if (self.conversation >= 13) then goto Label_16
+           if (global.hp <= 2) then goto Label_17
+           self.sprite_index = 725
+Label_17:  
+           if (global.hp > 2) then goto Label_16
+           self.sprite_index = 735
+Label_16:  
+           self.image_index = 0
+           global.myfight = 0
+           global.mnfight = 1
+           goto Label_12
+Label_15:  
+           global.myfight = 0
+           global.mnfight = 1
+Label_12:  
+           if (global.hurtanim[self.myself] != 5) then goto Label_18
+           global.damage = 0
+           instance_create(((self.x + (self.sprite_width / (Double)(2))) - 48),(self.y - 24),"obj_dmgwriter")
+           Pushing Enviroment : obj_dmgwriter
+           self.alarm[2] = 30
+           Poping  Envorment :  obj_dmgwriter
+           global.myfight = 0
+           global.mnfight = 1
+           global.hurtanim[self.myself] = 0
+Label_18:  
+           if (global.mnfight != 2) then goto Label_19
+           if (self.attacked != 0) then goto Label_19
+           global.turntimer = 160
+           goto Label_20
+           if (self.conversation >= 13) then goto Label_20
+           if (global.flag[6] != 0) then goto Label_21
+           goto Label_22
+           if (self.mycommand > 20) then goto Label_22
+           global.turntimer = 140
+           global.firingrate = 5
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           self.gen.bullettype = 7
+Label_22:  
+           goto Label_23
+           if (self.mycommand > 40) then goto Label_23
+           global.turntimer = 140
+           global.firingrate = 2
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           self.gen.bullettype = 8
+Label_23:  
+           goto Label_24
+           if (self.mycommand > 100) then goto Label_24
+           global.turntimer = 200
+           global.firingrate = 2
+           self.gen = instance_create((global.idealborder[0] - 45),(global.idealborder[2] + 5),"blt_handbullet1")
+           if (global.hp <= 6) then goto Label_24
+           self.gen.dmg = 5
+Label_24:  
+           goto Label_25
+           if (self.mycommand > 80) then goto Label_25
+           global.turntimer = 200
+           global.firingrate = 2
+           self.gen = instance_create((global.idealborder[0] - 45),(global.idealborder[2] + 5),"blt_handbullet1")
+           self.gen.x1 = 1
+           if (global.hp <= 6) then goto Label_26
+           self.gen.dmg = 5
+Label_26:  
+           self.gen2 = instance_create((global.idealborder[1] + 5),(global.idealborder[3] - 15),"blt_handbullet2")
+           if (global.hp <= 6) then goto Label_25
+           self.gen2.dmg = 5
+Label_25:  
+           goto Label_27
+           if (self.mycommand > 60) then goto Label_27
+           global.turntimer = 140
+           global.firingrate = 6
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           self.gen.bullettype = 10
+Label_27:  goto Label_28
+Label_21:  
+           goto Label_29
+           if (self.mycommand > 20) then goto Label_29
+           global.turntimer = 160
+           global.firingrate = 4
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           self.gen.bullettype = 7
+Label_29:  
+           goto Label_30
+           if (self.mycommand > 40) then goto Label_30
+           global.turntimer = 160
+           global.firingrate = 1
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           self.gen.bullettype = 8
+Label_30:  
+           goto Label_31
+           if (self.mycommand > 100) then goto Label_31
+           global.turntimer = 200
+           global.firingrate = 1
+           self.gen = instance_create((global.idealborder[0] - 45),(global.idealborder[2] + 5),"blt_handbullet1")
+           if (global.hp <= 6) then goto Label_31
+           self.gen.dmg = 6
+Label_31:  
+           goto Label_32
+           if (self.mycommand > 80) then goto Label_32
+           global.turntimer = 200
+           global.firingrate = 1
+           self.gen = instance_create((global.idealborder[0] - 45),(global.idealborder[2] + 5),"blt_handbullet1")
+           self.gen.x1 = 1
+           if (global.hp <= 6) then goto Label_33
+           self.gen.dmg = 6
+Label_33:  
+           self.gen2 = instance_create((global.idealborder[1] + 5),(global.idealborder[3] - 15),"blt_handbullet2")
+           if (global.hp <= 6) then goto Label_32
+           self.gen2.dmg = 6
+Label_32:  
+           goto Label_28
+           if (self.mycommand > 60) then goto Label_28
+           global.turntimer = 160
+           global.firingrate = 5
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           self.gen.bullettype = 10
+Label_28:  goto Label_34
+Label_20:  
+           if (global.monsterhp[self.myself] <= 150) then goto Label_35
+           global.monsterdef[self.myself] = -15
+Label_35:  
+           global.turntimer = 140
+           global.firingrate = 2
+           self.gen = instance_create(0,0,"obj_1sidegen")
+           if (self.conversation >= 13) then goto Label_36
+           instance_create(self.x,self.y,"obj_torgen")
+Label_36:  
+           self.gen.bullettype = 9
+Label_34:  
+           if (self.conversation <= 13) then goto Label_37
+           global.turntimer = 1
+           global.monsterdef[self.myself] = -2000
+Label_37:  
+           if (global.flag[202] < 20) then goto Label_38
+           global.monsterdef[self.myself] = -9999
+Label_38:  
+           self.gen.myself = self.myself
+           self.gen.dmg = global.monsteratk[self.myself]
+           if (self.mycommand < 0) then goto Label_39
+           global.msg[0] = "* Toriel prepares a magical&  attack."
+Label_39:  
+           if (self.mycommand < 30) then goto Label_40
+           global.msg[0] = "* Toriel looks through you."
+Label_40:  
+           if (self.mycommand < 70) then goto Label_41
+           global.msg[0] = "* Toriel is acting aloof."
+Label_41:  
+           if (self.mycommand < 90) then goto Label_42
+           global.msg[0] = "* Toriel takes a deep breath."
+Label_42:  
+           if (self.conversation <= 13) then goto Label_43
+           global.msg[0] = "* ..."
+Label_43:  
+           self.attacked = 1
+Label_19:  
+           goto Label_44
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_44
+           script_execute(null)
+           if (self.mercy >= 0) then goto Label_44
+           instance_destroy()
+Label_44:  
+           if (global.myfight != 2) then goto Label_45
+           if (self.whatiheard == -1) then goto Label_45
+           if (global.heard != 0) then goto Label_45
+           if (self.whatiheard != 0) then goto Label_46
+           global.msc = 0
+           global.msg[0] = "* TORIEL - ATK 80 DEF 80&* Knows best for you./^"
+           OBJ_WRITER.halt = 3
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           Pushing Enviroment : 
+           self.halt = 0
+           Poping  Envorment :  
+Label_46:  
+           if (self.whatiheard != 3) then goto Label_47
+           self.tt = (self.tt + 1)
+           global.msc = 0
+           global.msg[0] = "* You couldn\'t think of&  any conversation&  topics./^"
+           ini_open("undertale.ini")
+           self.TK = ini_read_real("Toriel","TK",0)
+           ini_close()
+           if (self.tt <= 1) then goto Label_48
+           global.msg[0] = "* You tried to think&  of something to say&  again^1, but.../^"
+Label_48:  
+           if (self.tt <= 2) then goto Label_49
+           global.msg[0] = "* Ironically^1, talking does not&  seem to be the solution&  to this situation./^" +
+    ""
+Label_49:  
+           if (self.TK <= 0) then goto Label_50
+           global.msg[0] = "* You thought about telling&  Toriel that you saw&  her die./"
+           global.msg[1] = "* But...&* That\'s creepy./"
+           global.msg[2] = "* Can you show mercy without&  fighting or running&  away...?/^"
+Label_50:  
+           goto Label_51
+           if (self.tt <= 1) then goto Label_51
+           global.msg[0] = "* Can you show mercy&  without running away...?/^"
+Label_51:  
+           if (global.flag[202] < 20) then goto Label_52
+           global.msg[0] = "* Not worth talking to./^"
+Label_52:  
+           OBJ_WRITER.halt = 3
+           self.iii = instance_create(global.idealborder[0],global.idealborder[2],"OBJ_WRITER")
+           Pushing Enviroment : 
+           self.halt = 0
+           Poping  Envorment :  
+Label_47:  
+           global.heard = 1
+Label_45:  
+           if (global.myfight != 4) then goto Label_53
+           if (global.mercyuse != 0) then goto Label_53
+           script_execute(null)
+           if (self.mercy >= 0) then goto Label_53
+           instance_destroy()
+Label_53:  
+           if (self.destroyed != 1) then goto Label_54
+           if (global.faceemotion != 0) then goto Label_55
+           self.sprite_index = 737
+           global.typer = 12
+Label_55:  
+           if (global.faceemotion != 1) then goto Label_56
+           self.sprite_index = 740
+           global.typer = 13
+Label_56:  
+           if (global.faceemotion != 2) then goto Label_57
+           self.sprite_index = 741
+           global.typer = 14
+Label_57:  
+           if (global.faceemotion != 3) then goto Label_58
+           self.sprite_index = 738
+           global.typer = 15
+Label_58:  
+           if (global.faceemotion != 4) then goto Label_59
+           self.sprite_index = 742
+           self.image_speed = 0
+           self.image_index = 0
+           global.typer = 13
+Label_59:  
+           if (global.faceemotion != 5) then goto Label_60
+           self.image_index = 1
+Label_60:  
+           if !instance_exists("OBJ_WRITER") then goto Label_61
+           Pushing Enviroment : OBJ_WRITER
+           script_execute(150,null)
+           Poping  Envorment :  OBJ_WRITER
+Label_61:  
+           global.facechange = 1
+Label_54:  
+           goto Label_62
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_62
+           if !instance_exists("OBJ_NOMSCWRITER") then goto Label_63
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+Label_63:  
+           if !instance_exists("obj_blconsm") then goto Label_64
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+Label_64:  
+           if !instance_exists("obj_blconwdflowey") then goto Label_65
+           Pushing Enviroment : obj_blconwdflowey
+           instance_destroy()
+           Poping  Envorment :  obj_blconwdflowey
+Label_65:  
+           if (global.flag[6] != 0) then goto Label_66
+           obj_battlecontroller.runaway = 1
+           self.conversation = 56
+           global.flag[45] = 5
+           self.alarm[2] = 20
+           instance_create(0,0,"obj_unfader")
+           goto Label_62
+Label_66:  
+           self.tr = instance_create(self.x,self.y,"obj_torboss_2ndtime")
+           self.tr.sprite_index = 735
+           self.visible = 0
+           self.conversation = -20
+Label_62:  

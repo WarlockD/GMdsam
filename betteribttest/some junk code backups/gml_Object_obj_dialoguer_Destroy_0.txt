@@ -1,0 +1,5 @@
+            Label 'Label_0' not used
+           if (instance_exists("obj_face") != 1) then goto Label_0
+           Pushing Enviroment : obj_face
+           instance_destroy()
+           Poping  Envorment :  obj_face

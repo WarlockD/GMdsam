@@ -1,0 +1,16 @@
+           if (global.interact != 0) then goto Label_0
+           snd_play("snd_phone")
+           global.typer = 5
+           global.facechoice = 0
+           global.faceemotion = 0
+           ini_open("undertale.ini")
+           self.bs = ini_read_real("Toriel","Bscotch",0)
+           ini_close()
+           if (self.bs != 0) then goto Label_1
+           script_execute(146,222,null)
+           goto Label_2
+Label_1:   
+           script_execute(146,831,null)
+Label_2:   
+           global.interact = 1
+Label_0:   

@@ -1,0 +1,306 @@
+           self.myx = self.writingx
+           self.myy = self.writingy
+           self.n = 1
+Label_90:  
+           if (self.n >= (self.stringpos + 1)) then goto Label_0
+           self.nskip = 0
+           if (string_char_at(self.originalstring,self.n) != "&") then goto Label_1
+           script_execute(null)
+           self.n = (self.n + 1)
+Label_1:   
+           if (string_char_at(self.originalstring,self.n) != "^") then goto Label_2
+           if (string_char_at(self.originalstring,(self.n + 1)) != "0") then goto Label_3
+           self.nskip = 1
+           goto Label_2
+Label_3:   
+           self.n = (self.n + 2)
+Label_2:   
+           if (string_char_at(self.originalstring,self.n) != "\\") then goto Label_4
+           if (string_char_at(self.originalstring,(self.n + 1)) != "R") then goto Label_5
+           self.mycolor = 255
+Label_5:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "G") then goto Label_6
+           self.mycolor = 65280
+Label_6:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "W") then goto Label_7
+           self.mycolor = 16777215
+Label_7:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "Y") then goto Label_8
+           self.mycolor = 65535
+Label_8:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "X") then goto Label_9
+           self.mycolor = 0
+Label_9:   
+           if (string_char_at(self.originalstring,(self.n + 1)) != "B") then goto Label_10
+           self.mycolor = 16711680
+Label_10:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "O") then goto Label_11
+           self.mycolor = 4235519
+Label_11:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "L") then goto Label_12
+           self.mycolor = 16629774
+Label_12:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "P") then goto Label_13
+           self.mycolor = 16711935
+Label_13:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "p") then goto Label_14
+           self.mycolor = 13941759
+Label_14:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "C") then goto Label_15
+           if (global.inbattle != 0) then goto Label_15
+           if (instance_exists("obj_choicer") != 0) then goto Label_16
+           self.choicer = instance_create(0,0,"obj_choicer")
+Label_16:  
+           self.choicer.creator = self.id
+           self.halt = 5
+Label_15:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "M") then goto Label_17
+           global.flag[20] = real(string_char_at(self.originalstring,(self.n + 2)))
+           self.n = (self.n + 1)
+Label_17:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "E") then goto Label_18
+           global.faceemotion = real(string_char_at(self.originalstring,(self.n + 2)))
+           self.n = (self.n + 1)
+Label_18:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "F") then goto Label_19
+           global.facechoice = real(string_char_at(self.originalstring,(self.n + 2)))
+           global.facechange = 1
+           self.n = (self.n + 1)
+Label_19:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "T") then goto Label_20
+           self.newtyper = string_char_at(self.originalstring,(self.n + 2))
+           if (self.newtyper != "T") then goto Label_21
+           global.typer = 4
+Label_21:  
+           if (self.newtyper != "t") then goto Label_22
+           global.typer = 48
+Label_22:  
+           if (self.newtyper != "0") then goto Label_23
+           global.typer = 5
+Label_23:  
+           if (self.newtyper != "S") then goto Label_24
+           global.typer = 10
+Label_24:  
+           if (self.newtyper != "F") then goto Label_25
+           global.typer = 16
+Label_25:  
+           if (self.newtyper != "s") then goto Label_26
+           global.typer = 17
+Label_26:  
+           if (self.newtyper != "P") then goto Label_27
+           global.typer = 18
+Label_27:  
+           if (self.newtyper != "M") then goto Label_28
+           global.typer = 27
+Label_28:  
+           if (self.newtyper != "U") then goto Label_29
+           global.typer = 37
+Label_29:  
+           if (self.newtyper != "A") then goto Label_30
+           global.typer = 47
+Label_30:  
+           if (self.newtyper != "a") then goto Label_31
+           global.typer = 60
+Label_31:  
+           if (self.newtyper != "R") then goto Label_32
+           global.typer = 76
+Label_32:  
+           script_execute(150,null)
+           global.facechange = 1
+           self.n = (self.n + 1)
+Label_20:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "z") then goto Label_33
+           self.sym = real(string_char_at(self.originalstring,(self.n + 2)))
+           self.sym_s = 837
+           if (self.sym != 4) then goto Label_34
+           self.sym_s = 837
+Label_34:  
+           if (self.sym != 4) then goto Label_35
+           draw_sprite_ext(self.sym_s,0,(self.myx + (random(self.shake) - (self.shake / (Double)(2)))),((self.myy + 10) + (random(self.shake) - (self.shake / (Double)(2)))),2,2,0,16777215,1)
+Label_35:  
+           self.n = (self.n + 1)
+Label_33:  
+           self.n = (self.n + 2)
+Label_4:   
+           if (string_char_at(self.originalstring,self.n) != "/") then goto Label_36
+           self.halt = 1
+           if (string_char_at(self.originalstring,(self.n + 1)) != "%") then goto Label_37
+           self.halt = 2
+Label_37:  
+           goto Label_38
+           if (string_char_at(self.originalstring,(self.n + 2)) == "0") then goto Label_38
+           self.halt = 4
+Label_38:  
+           if (string_char_at(self.originalstring,(self.n + 1)) != "*") then goto Label_39
+           self.halt = 6
+Label_39:  goto Label_0
+Label_36:  
+           if (string_char_at(self.originalstring,self.n) != "%") then goto Label_40
+           if (string_char_at(self.originalstring,(self.n + 1)) != "%") then goto Label_41
+           instance_destroy()
+           goto Label_0
+Label_41:  
+           self.stringpos = 1
+           self.stringno = (self.stringno + 1)
+           self.originalstring = self.mystring[self.stringno]
+           self.myx = self.writingx
+           self.myy = self.writingy
+           self.lineno = 0
+           self.alarm[0] = self.textspeed
+           self.myletter = " "
+           goto Label_0
+Label_40:  
+           if (self.myx <= self.writingxend) then goto Label_42
+           script_execute(null)
+Label_42:  
+           self.myletter = string_char_at(self.originalstring,self.n)
+           if (global.typer != 18) then goto Label_43
+           if (self.myletter == "l") then goto Label_44
+           goto Label_45
+Label_44:  
+Label_45:  if !1 then goto Label_46
+           self.myx = (self.myx + 2)
+Label_46:  
+           if (self.myletter != "I") then goto Label_47
+           self.myx = (self.myx + 2)
+Label_47:  
+           if (self.myletter != "!") then goto Label_48
+           self.myx = (self.myx + 2)
+Label_48:  
+           if (self.myletter != ".") then goto Label_49
+           self.myx = (self.myx + 2)
+Label_49:  
+           if (self.myletter != "S") then goto Label_50
+           self.myx = (self.myx + 1)
+Label_50:  
+           if (self.myletter != "?") then goto Label_51
+           self.myx = (self.myx + 2)
+Label_51:  
+           if (self.myletter != "D") then goto Label_52
+           self.myx = (self.myx + 1)
+Label_52:  
+           if (self.myletter != "A") then goto Label_53
+           self.myx = (self.myx + 1)
+Label_53:  
+           if (self.myletter != "\'") then goto Label_43
+           self.myx = (self.myx + 1)
+Label_43:  
+           draw_set_font(self.myfont)
+           draw_set_color(self.mycolor)
+           if (self.shake <= 38) then goto Label_54
+           if (self.shake != 39) then goto Label_55
+           self.direction = (self.direction + 10)
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+Label_55:  
+           if (self.shake != 40) then goto Label_56
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+Label_56:  
+           if (self.shake != 41) then goto Label_57
+           self.direction = (self.direction + (10 * self.n))
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+           self.direction = (self.direction - (10 * self.n))
+Label_57:  
+           if (self.shake != 42) then goto Label_58
+           self.direction = (self.direction + (20 * self.n))
+           draw_text((self.myx + self.hspeed),(self.myy + self.vspeed),self.myletter)
+           self.direction = (self.direction - (20 * self.n))
+Label_58:  
+           if (self.shake != 43) then goto Label_59
+           self.direction = (self.direction + (30 * self.n))
+           draw_text(((self.myx + (self.hspeed * 0.7)) + 10),(self.myy + (self.vspeed * 0.7)),self.myletter)
+           self.direction = (self.direction - (30 * self.n))
+Label_59:  goto Label_60
+Label_54:  
+           draw_text((self.myx + (random(self.shake) - (self.shake / (Double)(2)))),(self.myy + (random(self.shake) - (self.shake / (Double)(2)))),self.myletter)
+Label_60:  
+           self.myx = (self.myx + self.spacing)
+           if (self.myfont != 8) then goto Label_61
+           if (self.myletter != "w") then goto Label_62
+           self.myx = (self.myx + 2)
+Label_62:  
+           if (self.myletter != "m") then goto Label_63
+           self.myx = (self.myx + 2)
+Label_63:  
+           if (self.myletter != "i") then goto Label_64
+           self.myx = (self.myx - 2)
+Label_64:  
+           if (self.myletter != "l") then goto Label_65
+           self.myx = (self.myx - 2)
+Label_65:  
+           if (self.myletter != "s") then goto Label_66
+           self.myx = (self.myx - 1)
+Label_66:  
+           if (self.myletter != "j") then goto Label_61
+           self.myx = (self.myx - 1)
+Label_61:  
+           if (self.myfont != 9) then goto Label_67
+           if (self.myletter != "D") then goto Label_68
+           self.myx = (self.myx + 1)
+Label_68:  
+           if (self.myletter != "Q") then goto Label_69
+           self.myx = (self.myx + 3)
+Label_69:  
+           if (self.myletter != "M") then goto Label_70
+           self.myx = (self.myx + 1)
+Label_70:  
+           if (self.myletter != "L") then goto Label_71
+           self.myx = (self.myx - 1)
+Label_71:  
+           if (self.myletter != "K") then goto Label_72
+           self.myx = (self.myx - 1)
+Label_72:  
+           if (self.myletter != "C") then goto Label_73
+           self.myx = (self.myx + 1)
+Label_73:  
+           if (self.myletter != ".") then goto Label_74
+           self.myx = (self.myx - 3)
+Label_74:  
+           if (self.myletter != "!") then goto Label_75
+           self.myx = (self.myx - 3)
+Label_75:  
+           if (self.myletter == "O") then goto Label_76
+           goto Label_77
+Label_76:  
+Label_77:  if !1 then goto Label_78
+           self.myx = (self.myx + 2)
+Label_78:  
+           if (self.myletter != "I") then goto Label_79
+           self.myx = (self.myx - 6)
+Label_79:  
+           if (self.myletter != "T") then goto Label_80
+           self.myx = (self.myx - 1)
+Label_80:  
+           if (self.myletter != "P") then goto Label_81
+           self.myx = (self.myx - 2)
+Label_81:  
+           if (self.myletter != "R") then goto Label_82
+           self.myx = (self.myx - 2)
+Label_82:  
+           if (self.myletter != "A") then goto Label_83
+           self.myx = (self.myx + 1)
+Label_83:  
+           if (self.myletter != "H") then goto Label_84
+           self.myx = (self.myx + 1)
+Label_84:  
+           if (self.myletter != "B") then goto Label_85
+           self.myx = (self.myx + 1)
+Label_85:  
+           if (self.myletter != "G") then goto Label_86
+           self.myx = (self.myx + 1)
+Label_86:  
+           if (self.myletter != "F") then goto Label_87
+           self.myx = (self.myx - 1)
+Label_87:  
+           if (self.myletter != "?") then goto Label_88
+           self.myx = (self.myx - 3)
+Label_88:  
+           if (self.myletter != "\'") then goto Label_89
+           self.myx = (self.myx - 6)
+Label_89:  
+           if (self.myletter != "J") then goto Label_67
+           self.myx = (self.myx - 1)
+Label_67:  
+           self.n = (self.n + self.nskip)
+           self.n = (self.n + 1)
+           goto Label_90
+Label_0:   

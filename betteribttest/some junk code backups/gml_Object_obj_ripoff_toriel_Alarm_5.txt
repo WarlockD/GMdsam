@@ -1,0 +1,9 @@
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+           self.talked = 0
+           global.mnfight = 2
+           global.border = 30

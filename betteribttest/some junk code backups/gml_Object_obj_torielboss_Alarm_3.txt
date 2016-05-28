@@ -1,0 +1,47 @@
+           self.x = self.xstart
+           goto Label_0
+           if (self.sprite_index == 736) then goto Label_1
+           if (self.sprite_index == 742) then goto Label_0
+Label_1:   
+           if (self.shudder == 16) then goto Label_2
+           goto Label_3
+Label_2:   
+Label_3:   if !1 then goto Label_4
+           self.dmgwriter = instance_create(self.x,(self.y - 20),"obj_dmgwriter")
+           global.damage = self.takedamage
+           Pushing Enviroment : 
+           self.dmg = global.damage
+           Poping  Envorment :  
+           if (self.conversation >= 4) then goto Label_4
+           self.conversation = 0
+Label_4:   
+           self.sprite_index = 734
+           if (global.damage <= 100) then goto Label_5
+           self.sprite_index = 736
+           caster_set_volume(global.batmusic,0)
+Label_5:   
+           goto Label_6
+           if (self.conversation <= 13) then goto Label_6
+           self.sprite_index = 742
+Label_6:   
+           if (global.flag[202] < 20) then goto Label_7
+           self.sprite_index = 742
+Label_7:   
+           snd_play(self.hurtsound)
+Label_0:   
+           self.x = (self.x + self.shudder)
+           if (self.shudder >= 0) then goto Label_8
+           self.shudder = -((self.shudder + 2))
+           goto Label_9
+Label_8:   
+           self.shudder = -(self.shudder)
+Label_9:   
+           self.shudder = (self.shudder - 2)
+           if (self.shudder != 0) then goto Label_10
+           global.hurtanim[self.myself] = 2
+           Exit
+Label_10:  
+           self.alarm[3] = 2
+           if (global.damage <= 100) then goto Label_11
+           self.alarm[3] = 3
+Label_11:  

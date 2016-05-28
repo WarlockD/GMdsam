@@ -1,0 +1,28 @@
+            Label 'Label_8' not used
+           if (global.facechoice != 1) then goto Label_0
+           instance_create((self.writer.x - 33),(self.writer.y + 25),"obj_face_torieltalk")
+           instance_create(0,0,"obj_torbody")
+Label_0:   
+           if (global.facechoice != 2) then goto Label_1
+           instance_create((self.writer.x - 36),(self.writer.y + 25),"obj_face_floweytalk")
+Label_1:   
+           if (global.facechoice != 3) then goto Label_2
+           instance_create((self.writer.x - 35),(self.writer.y + 25),"obj_face_sans")
+Label_2:   
+           if (global.facechoice != 4) then goto Label_3
+           instance_create((self.writer.x - 35),(self.writer.y + 25),"obj_face_papyrus")
+Label_3:   
+           if (global.facechoice != 5) then goto Label_4
+           instance_create((self.writer.x - 40),(self.writer.y + 25),"obj_face_undyne")
+Label_4:   
+           if (global.facechoice != 6) then goto Label_5
+           instance_create((self.writer.x - 39),(self.writer.y + 25),"obj_face_alphys")
+Label_5:   
+           if (global.facechoice != 7) then goto Label_6
+           instance_create((self.writer.x - 40),(self.writer.y + 20),"obj_face_asgore")
+Label_6:   
+           if (global.facechoice != 8) then goto Label_7
+           instance_create((self.writer.x - 18),(self.writer.y + 45),"obj_face_mettaton")
+Label_7:   
+           if (global.facechoice != 9) then goto Label_8
+           instance_create((self.writer.x - 30),(self.writer.y + 30),"obj_face_asriel")

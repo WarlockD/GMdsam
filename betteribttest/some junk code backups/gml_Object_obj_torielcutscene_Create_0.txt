@@ -1,0 +1,8 @@
+           global.dontfade = 0
+           global.typer = 8
+           self.image_speed = 0
+           self.conversation = 0
+           global.faceemotion = 1
+           self.image_xscale = 2
+           self.image_yscale = 2
+           action_move("000100000",7)

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using GameMaker.Ast;
 
 namespace GameMaker.Writers.Lua
 {
@@ -57,8 +58,10 @@ namespace GameMaker.Writers.Lua
         {
             output.WriteLine("self.{0} = self.{0}  or {1}", varname, value ? "true" : "false");
         }
-        protected override void WriteObject(File.GObject obj, List<EventInfo> infos)
+        protected override void WriteObject(ObjectInfo info)
         {
+            File.GObject obj = info.Object;
+
             // start writing file
             // Headder
             output.WriteLine("local new_{0} = function(self)", obj.Name);
@@ -82,21 +85,10 @@ namespace GameMaker.Writers.Lua
             CheckOrCreateVar("sprite_index", obj.SpriteIndex);
 
             output.WriteLine();
-            output.WriteLine("-- check self for arrays");
-
-            var all_arrays = cache.GetAll(x => !x.isGlobal && x.isArray && !Constants.IsDefined(x.Name)).Select(x => x.Name).Distinct();
-            var all_values = cache.GetAll(x => !x.isGlobal && !x.isArray && !Constants.IsDefined(x.Name)).Select(x => x.Name).Distinct();
-            foreach (var v in all_arrays)
-            {
-                output.WriteLine("self.{0} = self.{0} or {{}}", v == "in" ? "_in" : v); // bunch of null correlesing
-            }
-
-            output.WriteLine("-- makesure we all have a value");
-            foreach (var v in all_values)
-                CheckOrCreateVar(v == "in" ? "_in" : v,  0);
+            WriteLocals(info);
 
             output.WriteLine();
-            foreach (var e in infos)
+            foreach (var e in info.Events)
             {
                 switch (e.Type)
                 {

@@ -1,0 +1,10 @@
+           if  (global.faceemotion == 0)  &&  (self.sprite_index != spr_face_torielhappytalk)      then self.sprite_index = spr_face_torielhappytalk
+           if  (global.faceemotion == 1)  &&  (self.sprite_index != spr_face_torieltalkside)       then self.sprite_index = spr_face_torieltalkside
+           if  (global.faceemotion == 2)  &&  (self.sprite_index != spr_face_torieltalk)           then self.sprite_index = spr_face_torieltalk
+           if  (global.faceemotion == 3)  &&  (self.sprite_index != spr_face_torielwhat)           then self.sprite_index = spr_face_torielwhat
+           if  (global.faceemotion == 4)  &&  (self.sprite_index != spr_face_torielwhatside)       then self.sprite_index = spr_face_torielwhatside
+           if  (global.faceemotion == 5)  &&  (self.sprite_index != spr_face_torielrevenge)        then self.sprite_index = spr_face_torielrevengetalk
+           if  (global.faceemotion == 6)  &&  (self.sprite_index != spr_face_torielcold)           then self.sprite_index = spr_face_torielcold
+           if  (global.faceemotion == 7)  &&  (self.sprite_index != spr_face_torielmad)            then self.sprite_index = spr_face_torielmad
+           if  (global.faceemotion == 8)  &&  (self.sprite_index != spr_face_torielembarrassed)    then self.sprite_index = spr_face_torielembarrassed
+           if  (global.faceemotion == 9)  &&  (self.sprite_index != spr_face_toriel_goawayasgore)  then self.sprite_index = spr_face_toriel_goawayasgore

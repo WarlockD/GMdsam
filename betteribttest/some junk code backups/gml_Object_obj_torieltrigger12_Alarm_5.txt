@@ -1,0 +1,19 @@
+           if (self.turts != 0) then goto Label_0
+           obj_toroverworld3.direction = 0
+Label_0:   
+           if (self.turts != 1) then goto Label_1
+           obj_toroverworld3.direction = 90
+Label_1:   
+           if (self.turts != 9) then goto Label_2
+           obj_toroverworld3.direction = 0
+Label_2:   
+           if (self.turts != 10) then goto Label_3
+           Pushing Enviroment : obj_toroverworld3
+           path_start(40,4,0,0)
+           Poping  Envorment :  obj_toroverworld3
+Label_3:   
+           if (self.turts != 13) then goto Label_4
+           self.conversation = 8
+Label_4:   
+           self.alarm[5] = 12
+           self.turts = (self.turts + 1)

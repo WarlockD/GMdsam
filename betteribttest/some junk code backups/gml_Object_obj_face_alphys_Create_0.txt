@@ -1,0 +1,42 @@
+           event_inherited()
+           if  instance_exists(obj_face_sans)         then obj_face_sans.instance_destroy()
+           if  instance_exists(obj_face_undyne)       then obj_face_undyne.instance_destroy()
+           if  instance_exists(obj_face_papyrus)      then obj_face_papyrus.instance_destroy()
+           if  instance_exists(obj_face_asgore)       then obj_face_asgore.instance_destroy()
+           if  instance_exists(obj_face_torieltalk)   then obj_face_torieltalk.instance_destroy()
+           if  instance_exists(obj_face_torielblink)  then obj_face_torielblink.instance_destroy()
+           if  instance_exists(obj_torbody)           then obj_torbody.instance_destroy()
+           self.image_speed = 0.25
+           self.u[0] = spr_alphysface_0
+           self.u[1] = spr_alphysface_1
+           self.u[2] = spr_alphysface_2
+           self.u[3] = spr_alphysface_3
+           self.u[4] = spr_alphysface_4
+           self.u[5] = spr_alphysface_5
+           self.u[6] = spr_alphysface_6
+           self.u[7] = spr_alphysface_7
+           self.u[8] = spr_alphysface_8
+           self.u[9] = spr_alphysface_9
+           self.u[10] = spr_alphysface_10
+           self.u[11] = spr_alphysface_11
+           self.u[12] = spr_alphysface_12
+           self.u[13] = spr_alphysface_13
+           self.u[14] = spr_alphysface_14
+           self.u[15] = spr_alphysface_15
+           self.u[16] = spr_alphysface_16
+           self.u[17] = spr_alphysface_17
+           self.u[18] = spr_alphysface_18
+           self.u[19] = spr_alphysface_19
+           self.u[20] = spr_alphysface_20
+           self.u[21] = spr_alphysface_21
+           self.u[22] = spr_alphysface_22
+           self.u[23] = spr_alphysface_23
+           self.u[24] = spr_alphysface_24
+           self.u[25] = spr_alphysface_25
+           self.sprite_index = self.u[global.faceemotion]
+           if  (global.flag[430] == 1)                then self.sprite_index = self.u[(global.faceemotion + 10)]
+           if  (global.flag[430] == 2)                then self.sprite_index = self.u[(global.faceemotion + 15)]
+           if (global.flag[430] != 4) then goto Label_9
+           self.image_index = global.faceemotion
+           self.sprite_index = spr_alphysface_new
+Label_9:   

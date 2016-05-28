@@ -1,0 +1,12 @@
+           self.myinteract = 0
+           self.image_xscale = 1
+           self.image_yscale = 1
+           self.image_speed = 0.1
+           if global.flag[25] <= 5 then goto Label_0
+           goto Label_1
+Label_0:   
+Label_1:   if !0 then goto Label_2
+           instance_destroy()
+Label_2:   
+           self.con = 0
+           self.xed = 0

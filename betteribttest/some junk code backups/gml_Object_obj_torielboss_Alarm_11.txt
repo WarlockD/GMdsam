@@ -1,0 +1,6 @@
+            Label 'Label_1' not used
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_0
+           self.alarm[7] = 2
+           goto Label_1
+Label_0:   
+           self.alarm[11] = 1

@@ -1,0 +1,71 @@
+            Label 'Label_7' not used
+           if (instance_exists(self.writer) != 0) then goto Label_0
+           instance_destroy()
+           goto Label_1
+Label_0:   
+           if !keyboard_multicheck_pressed(1) then goto Label_1
+           if (self.writer.halt != 0) then goto Label_2
+           if (global.typer == 10) then goto Label_2
+           obj_core_lightstrip_m.flag[(global.flag[25] + 1)] = -5
+           self.writer.stringpos = string_length(self.writer.originalstring)
+Label_2:   
+           keyboard_clear(16)
+Label_1:   
+           if (global.facechange != 2) then goto Label_3
+           global.facechange = 0
+Label_3:   
+           if (global.facechange != 1) then goto Label_4
+           if (global.facechoice != 0) then goto Label_4
+           if !instance_exists(self.writer) then goto Label_5
+           self.writer.x = (self.xx + 30)
+           self.writer.writingx = self.writer.x
+Label_5:   
+           if (instance_exists("obj_face") != 1) then goto Label_6
+           Pushing Enviroment : obj_face
+           instance_destroy()
+           Poping  Envorment :  obj_face
+Label_6:   
+           global.facechange = 2
+Label_4:   
+           if (global.facechange != 1) then goto Label_7
+           if !instance_exists(self.writer) then goto Label_7
+           self.writer.x = (self.xx + 68)
+           self.writer.writingx = (self.writer.x + 20)
+           if (global.facechoice != 1) then goto Label_8
+           if !!(instance_exists("obj_face_torieltalk")) then goto Label_8
+           if !!(instance_exists("obj_face_torielblink")) then goto Label_8
+           script_execute("scr_facechoice")
+Label_8:   
+           if (global.facechoice != 2) then goto Label_9
+           if !!(instance_exists("obj_face_floweytalk")) then goto Label_9
+           script_execute("scr_facechoice")
+Label_9:   
+           if (global.facechoice != 3) then goto Label_10
+           if !!(instance_exists("obj_face_sans")) then goto Label_10
+           script_execute("scr_facechoice")
+Label_10:  
+           if (global.facechoice != 4) then goto Label_11
+           if !!(instance_exists("obj_face_papyrus")) then goto Label_11
+           script_execute("scr_facechoice")
+Label_11:  
+           if (global.facechoice != 5) then goto Label_12
+           if !!(instance_exists("obj_face_undyne")) then goto Label_12
+           script_execute("scr_facechoice")
+Label_12:  
+           if (global.facechoice != 6) then goto Label_13
+           if !!(instance_exists("obj_face_alphys")) then goto Label_13
+           script_execute("scr_facechoice")
+Label_13:  
+           if (global.facechoice != 7) then goto Label_14
+           if !!(instance_exists("obj_face_asgore")) then goto Label_14
+           script_execute("scr_facechoice")
+Label_14:  
+           if (global.facechoice != 8) then goto Label_15
+           if !!(instance_exists("obj_face_mettaton")) then goto Label_15
+           script_execute("scr_facechoice")
+Label_15:  
+           if (global.facechoice != 9) then goto Label_16
+           if !!(instance_exists("obj_face_asriel")) then goto Label_16
+           script_execute("scr_facechoice")
+Label_16:  
+           global.facechange = 2

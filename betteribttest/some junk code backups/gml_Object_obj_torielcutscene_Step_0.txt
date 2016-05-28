@@ -1,0 +1,43 @@
+            Label 'Label_6' not used
+           if (self.x >= ((self.room_width / (Double)(2)) - (self.sprite_width / (Double)(2)))) then goto Label_0
+           if (self.conversation != 0) then goto Label_0
+           global.currentsong = caster_load("music/toriel.ogg")
+           caster_loop(global.currentsong,0.7,0.86)
+           self.conversation = 1
+           self.hspeed = 0
+           self.blcon = instance_create(((self.x + self.sprite_width) - 10),(self.y + 2),"obj_blconwdflowey")
+           global.msc = 674
+           self.conversation = 1
+           self.image_speed = 0.2
+           self.blconwriter = instance_create((obj_blconwdflowey.x + 40),(obj_blconwdflowey.y + 10),"OBJ_WRITER")
+Label_0:   
+           self.alarm[0] = 20
+           if !instance_exists("OBJ_WRITER") then goto Label_1
+           if (OBJ_WRITER.halt != 0) then goto Label_2
+           self.image_speed = 0.2
+           goto Label_1
+Label_2:   
+           self.image_speed = 0
+           self.image_index = 0
+Label_1:   
+           if !instance_exists("OBJ_WRITER") then goto Label_3
+           if (self.conversation != 1) then goto Label_3
+           scr_textskip()
+Label_3:   
+           if (instance_exists("OBJ_WRITER") != 0) then goto Label_4
+           if (self.conversation != 1) then goto Label_4
+           Pushing Enviroment : 
+           instance_destroy()
+           Poping  Envorment :  
+           instance_create(0,0,"obj_unfader")
+           self.alarm[2] = 20
+           self.conversation = 2
+           self.image_speed = 0
+           self.image_index = 0
+           self.volume = 1
+Label_4:   
+           if (global.faceemotion != 1) then goto Label_5
+           self.sprite_index = 722
+Label_5:   
+           if (global.faceemotion != 2) then goto Label_6
+           self.sprite_index = 724
