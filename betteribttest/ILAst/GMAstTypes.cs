@@ -10,6 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GameMaker.Dissasembler;
+using System.Collections.Concurrent;
 
 namespace GameMaker.Ast
 {
@@ -143,13 +144,58 @@ namespace GameMaker.Ast
         // I originaly wanted to make a list class that could handle parent and child nodes automaticly
         // but in the end it was adding to much managment where just a very few parts of the
         // decompiler needed
+        static bool check_speed = false;
         public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate = null) where T : ILNode
         {
+
             List<T> result = new List<T>(16);
             AccumulateSelfAndChildrenRecursive(result, predicate);
+            
+            if(check_speed && result.Count > 1000)
+            {
+                result = new List<T>(16);
+                var current = DateTime.Now;
+                AccumulateSelfAndChildrenRecursive(result, predicate);
+                var end = DateTime.Now;
+                var final1 = end - current;
+              
+                ConcurrentBag<T> bag = new ConcurrentBag<T>();
+                current = DateTime.Now;
+                var parrent = Task.Factory.StartNew(() =>
+                {
+                    AccumulateSelfAndChildrenRecursive(bag, predicate);
+                });
+                parrent.Wait();
+                end = DateTime.Now;
+                var final2 = end - current;
+                if(final1 > final2)
+                {
+                    Debug.WriteLine("------Items: {0}", result.Count);
+                    Debug.WriteLine("------------------First :" + final1);
+                    Debug.WriteLine("------------------Second :" + final2);
+                }
+            }
             return result;
         }
-
+        public IEnumerable<T> GetSelfAndChildrenRecursiveAsync<T>(Func<T, bool> predicate = null) where T : ILNode
+        {
+            ConcurrentBag<T> bag = new ConcurrentBag<T>();
+            AccumulateSelfAndChildrenRecursive(bag, predicate);
+            return bag.ToList();
+        }
+        static ParallelOptions op = new ParallelOptions();
+        void AccumulateSelfAndChildrenRecursive<T>( ConcurrentBag<T> bag, Func<T, bool> predicate) where T : ILNode
+        {
+            T thisAsT = this as T;
+            if (thisAsT != null && (predicate == null || predicate(thisAsT)))  bag.Add(thisAsT);
+            foreach(var node in this.GetChildren())
+            {
+                Task.Factory.StartNew(() =>
+                {
+                    if (node != null) node.AccumulateSelfAndChildrenRecursive(bag, predicate);
+                }, TaskCreationOptions.AttachedToParent);
+            }
+        }
         void AccumulateSelfAndChildrenRecursive<T>(List<T> list, Func<T, bool> predicate) where T : ILNode
         {
             // Note: RemoveEndFinally depends on self coming before children
