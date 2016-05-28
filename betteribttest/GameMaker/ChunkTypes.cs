@@ -1080,13 +1080,15 @@ namespace GameMaker
 
         public class Code : GameMakerStructure, IFileDataResource, INamedResrouce
         {
-            public string Name { get; set; }
-            public int Size { get; private set; }
+            public string Name { get; protected set; }
+            public int Size { get; protected set; }
+            protected int codePosition;
+
             public Stream Data
             {
                 get
                 {
-                    return new MemoryStream(File.rawData, this.Position + 8, Size, false, false);
+                    return new MemoryStream(File.rawData, codePosition, Size, false, false);
                 }
             }
           
@@ -1095,27 +1097,15 @@ namespace GameMaker
                 Name = string.Intern(r.ReadStringFromNextOffset());
                 Debug.Assert(!Name.Contains("gotobattle"));
                 Size = r.ReadInt32();
+                codePosition = this.Position + 8;
             }
         }
-        public class NewCode : GameMakerStructure, IFileDataResource
+        public class NewCode : Code
         {
-            public string Name { get; set; }
-            public int Size { get; private set; }
             public short LocalCount { get; private set; }
             public short ArgumentCount { get; private set; }
-            int codePosition;
             int wierd;
             int offset;
-
-            public Stream Data
-            {
-                get
-                {
-                   // int position = -(stream_0.Position - struct39_0.Code.OutputBase
-                    return new MemoryStream(File.rawData, codePosition, Size, false, false);
-                }
-            }
-
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());

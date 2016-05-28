@@ -17,13 +17,66 @@ namespace GameMaker
         LoveLua,
         JavaScript
     }
-    
-    public static class Context
+    public enum UndertaleVersion
+    {
+        V10000,
+        V10001
+    }
+    public interface IMessages 
+    {
+        void Error(string msg);
+        void Warning(string msg);
+        void Info(string msg);
+        void FatalError(string msg);
+        void Error(string msg, ILNode node);
+        void Warning(string msg, ILNode node);
+        void Info(string msg, ILNode node);
+        void FatalError(string msg, ILNode node);
+        string Name { get; }
+
+    }
+    public static class IMessagesExtensions
+    {
+        public static void Error(this IMessages msg, string str, params object[] o)
+        {
+            msg.Error(string.Format(str,o));
+        }
+        public static void Warning(this IMessages msg, string str, params object[] o)
+        {
+            msg.Warning(string.Format(str, o));
+        }
+        public static void Info(this IMessages msg, string str, params object[] o)
+        {
+            msg.Info(string.Format(str, o));
+        }
+        public static void FatalError(this IMessages msg, string str, params object[] o)
+        {
+            msg.FatalError(string.Format(str, o));
+        }
+        public static void Error(this IMessages msg, ILNode node, string str, params object[] o)
+        {
+            msg.Error(string.Format(str, o), node);
+        }
+        public static void Warning(this IMessages msg, ILNode node, string str, params object[] o)
+        {
+            msg.Warning(string.Format(str, o), node);
+        }
+        public static void Info(this IMessages msg, ILNode node, string str, params object[] o)
+        {
+            msg.Info(string.Format(str, o), node);
+        }
+        public static void FatalError(this IMessages msg, ILNode node, string str, params object[] o)
+        {
+            msg.FatalError(string.Format(str, o), node);
+        }
+    }
+    public static class Context 
     {
         public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
         public static ILBlock DecompileBlock(File.Code code)
         {
-            var error = Context.MakeErrorContext(code);
+            /*
+            
             var instructionsNew = GameMaker.Dissasembler.Instruction.Dissasemble(code, error);
             if (Context.doAsm || Context.Debug)
             {
@@ -41,7 +94,16 @@ namespace GameMaker
                     error.Error("Could not create .dot file: {0} Ex:{1}", file_Name, e.Message);
                 }
             }
-            return new ILAstBuilder().Build(code);
+            */
+            // Don't need any of that above since we don't do asms anymore
+            var error = Context.MakeErrorContext(code);
+            ILBlock block = new ILBlock();
+            if (Context.Version == UndertaleVersion.V10000)
+                block.Body =  new Dissasembler.OldByteCodeAst().Build(code, error);
+            else
+                block.Body = new Dissasembler.NewByteCodeToAst().Build(code, error);
+            block = new ILAstBuilder().Build(block, error);
+            return block;
         }
         const string ObjectNameHeader = "gml_Object_";
         enum MType{
@@ -50,19 +112,44 @@ namespace GameMaker
             Error,
             Fatal,
         }
-        class Message : IComparable<Message>
+        class Message : IComparable<Message>, IEquatable<Message>
         {
-            public DateTime TimeStamp;
-            public MType Type;
-            public string DebugName;
-            public string Msg;
-            public string Header;
-            public ILNode Node = null;
-
+            public readonly DateTime TimeStamp;
+            public readonly MType Type;
+            public readonly string Msg;
+            public readonly string CodeName;
+            public readonly string Header;
+            public readonly ILNode Node = null;
+            public Message(MType type, string msg, string codename, ILNode node = null)
+            {
+                this.Type = type;
+                this.Msg = msg;
+                this.CodeName = codename;
+                this.Node = node;
+                this.TimeStamp = DateTime.Now;
+                this.Header  = codename == null ?
+                string.Format("{0} {1}: ", type.ToString(), this.TimeStamp.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)) :
+                string.Format("{0} {1}({2}): ", type.ToString(), this.TimeStamp.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), codename);
+            }
             public int CompareTo(Message other)
             {
                 return TimeStamp.CompareTo(other);
             }
+            public override string ToString()
+            {
+                return Header + Msg;
+            }
+
+            public bool Equals(Message other)
+            {
+                return this.Type == other.Type && this.CodeName == other.CodeName && this.Msg == other.Msg;
+            }
+
+            public override int GetHashCode()
+            {
+                return this.Msg.GetHashCode();
+            }
+
         }
         public static ErrorContext MakeErrorContext(File.Code code)
         {
@@ -72,99 +159,59 @@ namespace GameMaker
         {
             return new ErrorContext(code.Name);
         }
-        public class ErrorContext
+        public class ErrorContext : IMessages
         {
             string code;
             List<Message> cache = new List<Message>();
-            public string MakeDebugFileName(string filename) {
-                return Context.MakeDebugFileName(code, filename);
-            }
+            public string Name {  get { return Name; } }
             internal ErrorContext(string code)
             {
                 this.code = code;
             }
-            public void DebugSave(ILBlock block, string filename)
+          
+            public void Info(string msg)
             {
-                string final_filename = Context.MakeDebugFileName(code, filename);
-                new Writers.BlockToCode(new Writers.DebugFormater()).WriteFile(block, final_filename);
+                DoMessage(MType.Info, msg, null,code);
+            }
+            public void Warning(string msg)
+            {
+                DoMessage(MType.Warning, msg, null, code);
+            }
+            public void Error(string msg)
+            {
+                DoMessage(MType.Error, msg, null, code);
+            }
+            public void FatalError(string msg)
+            {
+                DoMessage(MType.Fatal,  msg, null, code);
+            }
+            public void Info(string msg, ILNode node)
+            {
+                DoMessage(MType.Info,  msg, node, code);
+            }
+            public void Warning( string msg, ILNode node)
+            {
+                DoMessage(MType.Warning,  msg, node, code);
+            }
+            public void Error( string msg, ILNode node)
+            {
+                DoMessage(MType.Error,  msg, node, code);
+            }
+            public void FatalError(string msg, ILNode node)
+            {
+                DoMessage(MType.Fatal,  msg, node, code);
             }
             public void CheckDebugThenSave(ILBlock block, string filename)
             {
                 if (Context.Debug) DebugSave(block, filename);
             }
-            void DoMessage(MType type, string msg, ILNode node, params object[] o)
+            public void DebugSave(ILBlock block, string filename)
             {
-                if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
-                {
-                    string filename = FixDebugFileName(ErrorFileName);
-                    using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.OpenOrCreate)))
-                        sw.WriteLine("Error Start: {0}", DateTimeStamp);
-                    HasOpenedFile = true;
-                }
-
-                var time = DateTime.Now;
-                if (o != null && o.Length > 0) msg = string.Format(msg, o);
-                Message m = new Message() { DebugName = code, TimeStamp = time, Type = type, Header = string.Format("{0} {1}({2}): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture), code), Msg = msg, Node = node };
-                lock (messages) messages.Add(m);
-                ToConsole(m);
-                if (type == MType.Fatal)
-                {
-                    DumpMessages();
-                    Environment.Exit(-1);
-                }
+                block.DebugSaveFile(Context.MakeDebugFileName(code, filename));
             }
-            public void SaveGraph(ILBlock block, string filename)
+            public string MakeDebugFileName(string filename)
             {
-                if (block.Body.Count > 0)
-                {
-                    var debug = new LoopsAndConditions(this);
-                    string final_filename = Context.MakeDebugFileName(code, filename);
-                    FlowAnalysis.ControlFlowGraph graph;
-                    ILLabel l = block.EntryGoto.Operand as ILLabel;
-                    if (l == null && block.Body.First() is ILExpression)
-                    {
-                        ILExpression e = block.Body.First() as ILExpression;
-                        l = e.Operand as ILLabel;
-                    }
-                    if (l == null) throw new Exception("Bad label");
-
-                    graph = debug.BuildGraph(block.Body, l);
-                    graph.ComputeDominance();
-                    graph.ComputeDominanceFrontier();
-                    graph.ExportGraph().Save(System.IO.Path.ChangeExtension(final_filename, "dot"));
-                }
-            }
-            public void Info(string msg, params object[] o)
-            {
-                DoMessage(MType.Info, msg, null, o);
-            }
-            public void Warning(string msg, params object[] o)
-            {
-                DoMessage(MType.Warning, msg, null, o);
-            }
-            public void Error(string msg, params object[] o)
-            {
-                DoMessage(MType.Error, msg, null, o);
-            }
-            public void FatalError(string msg, params object[] o)
-            {
-                DoMessage(MType.Fatal,  msg, null, o);
-            }
-            public void Info(string msg, ILNode node, params object[] o)
-            {
-                DoMessage(MType.Info,  msg, node, o);
-            }
-            public void Warning( string msg, ILNode node, params object[] o)
-            {
-                DoMessage(MType.Warning,  msg, node, o);
-            }
-            public void Error( string msg, ILNode node, params object[] o)
-            {
-                DoMessage(MType.Error,  msg, node, o);
-            }
-            public void FatalError(string msg, ILNode node, params object[] o)
-            {
-                DoMessage(MType.Fatal,  msg, node, o);
+                return Context.MakeDebugFileName(code, filename);
             }
         }
         static bool HasOpenedFile = false;
@@ -272,16 +319,15 @@ namespace GameMaker
                     {
                         var ptext = new PlainTextOutput(strw);
                         ptext.Header = m.Header;
-                        ptext.Indent();
                         ptext.Write(m.Node.ToString());
-                        ptext.Unindent();
                         ptext.WriteLine();
                         ToConsole(strw.ToString());
                     }
                 }
             }
         }
-        static void DoMessage(MType type, string msg, ILNode node, params object[] o)
+        static void DoMessage(MType type, string msg, ILNode node, string code_name)
+       
         {
             if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
             {
@@ -290,11 +336,8 @@ namespace GameMaker
                     sw.WriteLine("Error Start: {0}", DateTimeStamp);
                 HasOpenedFile = true;
             }
-
-            var time = DateTime.Now;
-            if (o != null && o.Length > 0) msg = string.Format(msg, o);
-            Message m = new Message() {  TimeStamp = time, Type = type, Header = string.Format("{0} {1}(NoFile): ", type.ToString(), time.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)), Msg = msg, Node = node };
-            lock (messages) messages.Add(m);
+            Message m = new Message(type, msg, code_name, node);
+            lock (messages) messages.Add(m); // lock is good enough
             ToConsole(m);
             if (type == MType.Fatal)
             {
@@ -302,38 +345,42 @@ namespace GameMaker
                 Environment.Exit(-1);
             }
         }
+        static void DoMessage(MType type, string msg, ILNode node)
+        {
+            DoMessage(type, msg, node, null);
+        }
         public static void Info( string msg, params object[] o)
         {
-            DoMessage(MType.Info, msg, null, o);
+            DoMessage(MType.Info, string.Format(msg,o), null);
         }
         public static void Warning(string msg, params object[] o)
         {
-            DoMessage(MType.Warning, msg, null, o);
+            DoMessage(MType.Warning, string.Format(msg, o), null);
         }
         public static void Error( string msg, params object[] o)
         {
-            DoMessage(MType.Error, msg, null, o);
+            DoMessage(MType.Error, string.Format(msg, o), null);
         }
         public static void FatalError(string msg, params object[] o)
         {
-            DoMessage(MType.Fatal,  msg, null, o);
+            DoMessage(MType.Fatal, string.Format(msg, o), null);
             HasFatalError = true;
         }
         public static void Info( string msg, ILNode node, params object[] o)
         {
-            DoMessage(MType.Info,  msg, node, o);
+            DoMessage(MType.Info, string.Format(msg, o), node);
         }
         public static void Warning( string msg, ILNode node, params object[] o)
         {
-            DoMessage(MType.Warning,  msg, node, o);
+            DoMessage(MType.Warning, string.Format(msg, o), node);
         }
         public static void Error( string msg, ILNode node, params object[] o)
         {
-            DoMessage(MType.Error, msg, node, o);
+            DoMessage(MType.Error, string.Format(msg, o), node);
         }
         public static void FatalError( string msg, ILNode node, params object[] o)
         {
-            DoMessage(MType.Fatal,  msg, node, o);
+            DoMessage(MType.Fatal, string.Format(msg, o), node);
         }
         static List<Message> messages = new List<Message>();
         static public CancellationToken ct;
@@ -343,6 +390,7 @@ namespace GameMaker
         static public bool doAsm = false;
         static public bool doThreads = false;
         static public bool Debug = false;
+        static public UndertaleVersion Version = UndertaleVersion.V10001;
         static MType consoleLevel = MType.Warning;
         public static bool HasFatalError { get; private set; }
         static Context()
@@ -450,26 +498,20 @@ namespace GameMaker
             }
             throw new Exception("bad");
         }
-        static public string InstanceToString(ILNode instance, BlockToCode output = null)
+        static public string InstanceToString(ILNode instance, BlockToCode output)
         {
             ILExpression e = instance as ILExpression;
             if (e != null)
             {
                 if (e.Code == GMCode.Constant)
                     return InstanceToString(e.Operand as ILValue);
-                else if (e.Code == GMCode.Var)
-                    return InstanceToString(e.Operand as ILVariable);
-                if (output != null) return output.NodeToString(e);
-                    else return BlockToCode.DebugNodeToString(e);
+                else
+                    return output.NodeToString(e);
             }
             ILValue value = instance as ILValue;
             if (value != null) return InstanceToString(value);
             ILVariable v = instance as ILVariable;
-            if (v != null)
-            {
-                if (output != null) return output.NodeToString(v);
-                else return BlockToCode.DebugNodeToString(v);
-            }
+            if (v != null) return output.NodeToString(v);
             throw new Exception("Cannot display instance");
         }
  

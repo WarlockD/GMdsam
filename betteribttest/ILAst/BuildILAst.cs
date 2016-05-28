@@ -521,6 +521,7 @@ namespace GameMaker.Ast
             }
             return false;
         }
+       
         bool AfterLoopsAndConditions(ILBlock method)
         {
             HashSet<ILBlock> badblocks = new HashSet<ILBlock>();
@@ -606,7 +607,7 @@ namespace GameMaker.Ast
                     foreach (var kp in badCodes)
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
                     sw.WriteLine();
-                    var dwriter = new Writers.BlockToCode(new Writers.DebugFormater()); 
+                    var dwriter = new Writers.BlockToCode(new Writers.DebugFormater(), error); 
                     dwriter.Write(badmethod);
                     sw.WriteLine(dwriter.ToString());
                 }
@@ -638,24 +639,20 @@ namespace GameMaker.Ast
             } while (modified);
         }
         Context.ErrorContext error;
-        public ILBlock Build(File.IFileDataResource code)
+        public ILBlock Build(ILBlock method, Context.ErrorContext error)
         {
-            if (code == null) throw new ArgumentNullException("code");
-            var ast = new Dissasembler.NewByteCode.NewByteCodeToAst().Build(code);
-            if (ast == null || ast.Count == 0) return new ILBlock();
-            this.error = new Context.ErrorContext(code.Name);
-            ILBlock method = new ILBlock();
-            method.Body = ast;
-            FixAllPushes(ast); // makes sure all pushes have no operands and are all expressions for latter matches
+            if (method == null) throw new ArgumentNullException("method");
+            if (error == null) throw new ArgumentNullException("error");
+            this.error = error;
+            // Not sure I need this pass now 
+            FixAllPushes(method.Body); // makes sure all pushes have no operands and are all expressions for latter matches
                 
+
             Optimize.RemoveRedundantCode(method);
             error.CheckDebugThenSave(method, "raw.txt");
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
-            if (Context.Debug)
-            {
-                //error.SaveGraph(method, "basic_blocks.dot");
-                error.CheckDebugThenSave(method, "basic_blocks.txt");
-            }
+            error.CheckDebugThenSave(method, "basic_blocks.txt");
+
             bool modified = false;
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {

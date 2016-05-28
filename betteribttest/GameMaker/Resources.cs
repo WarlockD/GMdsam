@@ -797,66 +797,43 @@ namespace GameMaker
         {
             if (codes == null)
             {
-                List<NewCode> new_codes = new List<NewCode>();
-                // The tricky dicky with CODE is that the raw code block is here RIGHT after the entries
-                // It goes (count, entries, BLOCKOFALLCODE, entry, entry, .. ) and the offset positions are 
-                // based off the start of BLOCKOFCODE?
-                CheckList("CODE", ref new_codes);
-                int codepositionStart = 0;
-                //  // fill out all the scripts first
-                {
-                    BinaryReader r = new BinaryReader(new MemoryStream(rawData));
-                    r.BaseStream.Position = fileChunks["CODE"].start;
-                    var entries = r.ReadChunkEntries();
-                    codepositionStart = (int)r.BaseStream.Position;
-                }
+          
+                /*
+            int codepositionStart = 0;
+            //  // fill out all the scripts first
 
+            {
+                BinaryReader r = new BinaryReader(new MemoryStream(rawData));
+                r.BaseStream.Position = fileChunks["CODE"].start;
+                var entries = r.ReadChunkEntries();
+                codepositionStart = (int)r.BaseStream.Position; 
+                // ment for debug, to show where all the raw code starts at
+            }
+            */
 
                 RefactorCodeManager rcm = new RefactorCodeManager(File.rawData);
                 Chunk funcChunk = fileChunks["FUNC"]; // function names
                 Chunk varChunk = fileChunks["VARI"]; // var names
+                if(Context.Version == UndertaleVersion.V10000)
+                {
+                    CheckList("CODE", ref codes);
+                    rcm.AddRefs(funcChunk.start, funcChunk.size);
+                    rcm.AddRefs(varChunk.start, varChunk.size); // old method
+                }else
+                {
+                    List<NewCode> new_codes = new List<NewCode>();
+                    // The tricky dicky with CODE is that the raw code block is here RIGHT after the entries
+                    // It goes (count, entries, BLOCKOFALLCODE, entry, entry, .. ) and the offset positions are 
+                    // based off the start of BLOCKOFCODE?
+                    CheckList("CODE", ref new_codes);
 
-                rcm.RefactorNewChunks(funcChunk, varChunk);
-                //  rcm.AddRefs(funcChunk.start, funcChunk.size);
-                //rcm.AddRefs(varChunk.start, varChunk.size); // add all the reffs
+                    codes = new_codes.Select(x => (File.Code)x).ToList();
+                    rcm.RefactorNewChunks(funcChunk, varChunk);
+                }
                 rcm.WriteAllChangesToBytes();
-                Context.Debug = true;
-                var newCodedir = Directory.CreateDirectory("new_code");
-                foreach (var f in newCodedir.EnumerateFiles()) f.Delete();
-                ForEach(new_codes.Where(x=> x.Name.Contains("bulletgenparent_Create_0")));
-                Context.Debug = false;
-                ForEach(new_codes, false);
-
             }
         }
-       static void DebugCode(string path, File.NewCode c)
-        {
-            System.Diagnostics.Debug.WriteLine("File: " + c.Name);
-            // dissasemble
-          //  string filename = Path.Combine(path, Path.ChangeExtension(c.Name, "asm"));
-          //  new Dissasembler.NewByteCode.StupidNewDisasembler(c).DissembleToFile(filename);
 
-            // Debug expression
-          //  filename = Path.Combine(path, Path.ChangeExtension(c.Name, "txt"));
-        //    Ast.ILBlock block = new Ast.ILBlock();
-         //   block.Body = new Dissasembler.NewByteCode.NewByteCodeToAst().Build(c);
-          //  block.DebugSaveFile(filename);
-
-            // Debug final
-            var newblock = new Ast.ILAstBuilder().Build(c);
-            filename = Path.Combine(path, Path.ChangeExtension(c.Name, "lua"));
-            var output = Writers.AllWriter.CreateOutput();
-            output.WriteFile(newblock, filename);
-
-        }
-        static void ForEach(IEnumerable<File.NewCode> nodes, bool async=false)
-        {
-            var newCodedir = Directory.CreateDirectory("new_code");
-            foreach (var f in newCodedir.EnumerateFiles()) f.Delete();
-            string path = newCodedir.FullName;
-            if (async) Parallel.ForEach(nodes, c => DebugCode(path, c));
-            else foreach (var c in nodes) DebugCode(path, c);
-        }
         public static void LoadEveything()
         {
             CheckStrings();

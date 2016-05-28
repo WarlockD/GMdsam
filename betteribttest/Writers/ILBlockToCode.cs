@@ -48,6 +48,8 @@ namespace GameMaker.Writers
         //  void Write(ILBlock block);
         // What is used to start a line comment
         public abstract string LineComment { get; }
+        public abstract string BlockCommentStart { get; }
+        public abstract string BlockCommentEnd { get; }
         public abstract string NodeEnding { get; }
         public abstract string Extension { get; }
     }
@@ -112,7 +114,7 @@ namespace GameMaker.Writers
             return test != null && test.Name == Name;
         }
     }
-    public class BlockToCode : IDisposable
+    public class BlockToCode : IDisposable, IMessages
     {
         static Regex regex_newline = new Regex("(\r\n|\r|\n)", RegexOptions.Compiled);
         static Dictionary<int, string> identCache = new Dictionary<int, string>();
@@ -126,30 +128,12 @@ namespace GameMaker.Writers
         static BlockToCode()
         {
         }
-        public static string DebugNodeToString<T>(T node) where T : ILNode
-        {
-            string ret;
-            using(var w = new BlockToCode(new DebugFormater()))
-            {
-                w.Write((dynamic)node);
-                ret = w.ToString();
-            }
-            return ret;
-        }
-        public static string NiceNodeToString(ILNode node)
-        {
-            string ret;
-            using (var w = new BlockToCode(new DebugFormater()))
-            {
-                w.WriteNode(node);
-                ret = w.ToString();
-            }
-            return ret;
-        }
+
         ICodeFormater formater = null;
         INodeMutater mutater = null;
         StringBuilder buffer = null;
         StringBuilder line = null;
+        IMessages error = null;
         public INodeMutater Mutater
         {
             get { return mutater; }
@@ -182,22 +166,34 @@ namespace GameMaker.Writers
             Indent = 0;
         }
         public int Line { get; private set; }
-        public int Column { get { return currentIdent.Length + line.Length; } }
+        public int Column { get { return  line.Length; } }
+        public int ColumnWithIdent { get { return currentIdent.Length + line.Length; } }
         string currentIdent;
-        int ident = 0;
-        static int max_seen_buffer = 512;
-      
-        void Init(ICodeFormater formater)
+        int ident = 0;      
+        void Init(ICodeFormater formater, IMessages error)
         {
             if (formater == null) throw new ArgumentNullException("Formater");
+            if (error == null) throw new ArgumentNullException("error");
+            this.error = error;
             this.formater = formater;
             formater.SetStream(this);
             Clear();
         }
+        #region IMessages Interface
+        public void Error(string msg) { error.Error(msg); }
+        public void Error(string msg, ILNode node) { error.Error(msg, node); }
+        public void Warning(string msg) { error.Warning(msg); }
+        public void Warning(string msg, ILNode node) { error.Warning(msg, node); }
+        public void Info(string msg) { error.Info(msg); }
+        public void Info(string msg, ILNode node) { error.Info(msg, node); }
+        public string Name {  get { return error.Name; } }
+        public void FatalError(string msg) { error.FatalError(msg); }
+        public void FatalError(string msg, ILNode node) { error.FatalError(msg,node); }
+        #endregion
 
-        public BlockToCode(ICodeFormater formater)
+        public BlockToCode(ICodeFormater formater, IMessages error)
         {
-            Init(formater);
+            Init(formater,error);
         }
 
         public string CreateFileName(string filename)
@@ -420,6 +416,8 @@ namespace GameMaker.Writers
             Clear();
         }
         public string LineComment { get { return formater.LineComment; } }
+        public string BlockCommentStart { get { return formater.BlockCommentStart; } }
+        public string BlockCommentEnd { get { return formater.BlockCommentEnd; } }
         ~BlockToCode()
         {
             Dispose(false);
@@ -453,6 +451,8 @@ namespace GameMaker.Writers
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
         }
+
+      
         #endregion
 
     }

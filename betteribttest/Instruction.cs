@@ -77,7 +77,12 @@ namespace GameMaker
         DefaultCase,
         Concat, // -- filler for lua or string math
         Array2D,
-        Assign
+        Assign,
+        AssignAdd,
+        AssignSub,
+        AssignMul,
+        AssignDiv
+            // there are more but meh
     }
     public static class GMCodeUtil
     {

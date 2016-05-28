@@ -182,6 +182,7 @@ namespace GameMaker.Writers
 
 
         public override string Extension { get { return "_d.txt"; } }
-
+        public override string BlockCommentStart { get { return "/*"; } }
+        public override string BlockCommentEnd { get { return "*/"; } }
     }
 }

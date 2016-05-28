@@ -7,7 +7,7 @@ using GameMaker.Ast;
 using System.IO;
 using System.Diagnostics;
 
-namespace GameMaker.Dissasembler.NewByteCode
+namespace GameMaker.Dissasembler
 {
     public enum NewOpcodeCondtions
     {

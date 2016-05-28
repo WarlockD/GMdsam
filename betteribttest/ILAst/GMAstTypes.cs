@@ -81,7 +81,7 @@ namespace GameMaker.Ast
         }
         public static void DebugSave(this ILBlock block, string FileName)
         {
-            new Writers.BlockToCode(new Writers.DebugFormater()).WriteFile(block, FileName);
+            new Writers.BlockToCode(new Writers.DebugFormater(), new Context.ErrorContext(Path.GetFileNameWithoutExtension(FileName))).WriteFile(block, FileName);
         }
         public static bool TryParse(this ILValue node, out int value)
         {
@@ -94,8 +94,9 @@ namespace GameMaker.Ast
             value = 0;
             return false;
         }
+  
     }
-
+    
     public abstract class ILNode
     {
         public string Comment = null;
@@ -167,12 +168,24 @@ namespace GameMaker.Ast
         }
         // returns true when ending with a new line
         public abstract bool ToStringBuilder(StringBuilder sb,int ident);
-
+       
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder();
             ToStringBuilder(sb,0);
             return sb.ToString();
+        }
+        // I KNEW SOMEDAY I would have to implment this, I just should of done it earlyer
+        // Only bother with this on expresions for now
+        protected virtual bool InternalTreeEqual(ILNode node)
+        {
+            return false;
+        }
+        public bool TreeEqual(ILNode node)
+        {
+            if (object.ReferenceEquals(node, null)) return false;
+            if (object.ReferenceEquals(node, this)) return true; // simple cases, no node should be the same though
+            return InternalTreeEqual(node);
         }
     }
     public class ILBasicBlock : ILNode
@@ -244,6 +257,15 @@ namespace GameMaker.Ast
         {
             return Arguments;
         }
+        protected override bool InternalTreeEqual(ILNode node)
+        {
+            ILCall call = node as ILCall;
+            if (call == null) return false;
+            if (call.Arguments.Count != Arguments.Count) return false;
+            for (int i = 0; i < call.Arguments.Count; i++)
+                if (!Arguments[i].TreeEqual(call.Arguments[i])) return false;
+            return true;
+        }
     }
 
     public class ILValue : ILNode, IEquatable<ILValue>, IComparable<ILValue>
@@ -313,7 +335,13 @@ namespace GameMaker.Ast
             if (Type == GM_Type.NoType) return true; // consider this null or nothing
             else return Value.Equals(other.Value);
         }
-
+        protected override bool InternalTreeEqual(ILNode node)
+        {
+            ILValue v = node as ILValue;
+            if (v == null) return false;
+            if (v.Type != this.Type) return false;
+            return v.Value.Equals(Value);
+        }
         public int CompareTo(ILValue other)
         {
             // all the operands are comparatlable to one another
@@ -483,9 +511,11 @@ namespace GameMaker.Ast
                 return !isLocal && _instance == -7;
             }
         }
-        public bool isFixedVar {  get
+        public bool isSelf
+        {
+            get
             {
-                return Index.Code == GMCode.Constant || (Index.Code == GMCode.Array2D && Index.Arguments[0].Code == GMCode.Constant && Index.Arguments[1].Code == GMCode.Constant);
+                return !isLocal || _instance == -1;
             }
         }
         public bool Equals(ILVariable obj)
@@ -501,6 +531,18 @@ namespace GameMaker.Ast
             if (object.ReferenceEquals(obj, this)) return true;
             ILVariable test = obj as ILVariable;
             return Equals(test);
+        }
+        // The semi tricky one
+        protected override bool InternalTreeEqual(ILNode node)
+        {
+            ILVariable v = node as ILVariable;
+            if (v == null) return false;
+            if (!v.isResolved || !isResolved) throw new Exception("Must be resolved to get here");
+            if (isArray != v.isArray) return false;
+            if (v.Index == null)
+                return v.Name == Name && Instance.TreeEqual(v.Instance);
+            else
+                return v.Name == Name && Instance.TreeEqual(v.Instance) && Index.TreeEqual(v.Index);
         }
         public override int GetHashCode()
         {
@@ -789,6 +831,25 @@ void ReportUnassignedILRanges(ILBlock method)
                 sb.Append('?');
             }
         }
+        protected override bool InternalTreeEqual(ILNode node)
+        {
+            if (node is ILValue && Code == GMCode.Constant)
+                return (Operand as ILValue).TreeEqual(node as ILValue);
+            else if (node is ILVariable && Code == GMCode.Var)
+                return (Operand as ILVariable).TreeEqual(node as ILVariable);
+            else
+            {
+                ILExpression e = node as ILExpression;
+                if (e == null) return false;
+                if (Code != e.Code) return false;
+                if (e.Operand != null || Operand != null) return false;
+                // operands have to be cleared, we only compare arguments
+                if (e.Arguments.Count != Arguments.Count) return false;
+                for (int i = 0; i < e.Arguments.Count; i++)
+                    if (!Arguments[i].TreeEqual(e.Arguments[i])) return false;
+                return true;
+            }
+        }
         public override bool ToStringBuilder(StringBuilder sb, int ident)
         {
             switch (Code)
@@ -962,9 +1023,9 @@ void ReportUnassignedILRanges(ILBlock method)
             {
                 StringBuilder sb = new StringBuilder();
                 sb.Append("Value=");
-                sb.Append(Writers.BlockToCode.DebugNodeToString(Value));
+                sb.Append(Value);
                 sb.Append(" Goto=");
-                sb.Append(Writers.BlockToCode.DebugNodeToString(Goto));
+                sb.Append(Goto);
                 return sb.ToString();
             }
 
@@ -988,7 +1049,7 @@ void ReportUnassignedILRanges(ILBlock method)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("Condition=");
-            sb.Append(Writers.BlockToCode.DebugNodeToString(Condition));
+            sb.Append(Condition);
             sb.Append(" Case Count=");
             sb.Append(Cases.Count);
             return sb.ToString();
@@ -1018,11 +1079,11 @@ void ReportUnassignedILRanges(ILBlock method)
                 sb.Append("{ ILSwitch.ILCase Values=");
                 if(Values.Count > 0)
                 {
-                    sb.Append(Writers.BlockToCode.DebugNodeToString(Values[0]));
+                    sb.Append(Values[0]);
                     for(int i=1; i < Values.Count; i++)
                     {
                         sb.Append(", ");
-                        sb.Append(Writers.BlockToCode.DebugNodeToString(Values[1]));
+                        sb.Append(Values[1]);
                     }
                 }
                 sb.Append("}");

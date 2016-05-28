@@ -286,7 +286,7 @@ namespace GameMaker.Writers.Lua
             // the with function in code returns a ipairs table of either all the instances OR just the single instance
             // with must be able to tell the diffrence when a string, int or table is sent
             string localVar = "with_" + localGen++;  
-            string env = Context.InstanceToString(with.Enviroment);
+            string env = Context.InstanceToString(with.Enviroment,writer);
             writer.Write("for _, {0} in with({1}) do", localVar, env);
             writer.WriteLine(" -- Enviroment: {0}", env);
 
@@ -300,6 +300,8 @@ namespace GameMaker.Writers.Lua
 
 
         public override string LineComment { get { return "--"; } }
+        public override string BlockCommentStart { get { return "--[["; } }
+        public override string BlockCommentEnd { get { return "--]]"; } }
 
         public override string NodeEnding
         {

@@ -33,7 +33,7 @@ namespace GameMaker.Dissasembler
             e.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
             return e;
         }
-        public List<ILNode> Build(IFileDataResource code)
+        public List<ILNode> Build(File.Code code, Context.ErrorContext error=null)
         {
             if (code == null) throw new ArgumentNullException("code");
             Stream stream = code.Data;
@@ -41,7 +41,7 @@ namespace GameMaker.Dissasembler
             if (!stream.CanRead) throw new ArgumentException("Must be readable", "code_stream");
             if (!stream.CanSeek) throw new ArgumentException("Must be seekable", "code_stream");
             if (stream.Length == 0) return new List<ILNode>(); // empty stream
-            Error = new Context.ErrorContext(code.Name);
+            Error = error ?? new Context.ErrorContext(code.Name);
             labels = new Dictionary<int, ILLabel>(); // cause they are all the same
             stream.Position = 0;
             r = new BinaryReader(stream);
