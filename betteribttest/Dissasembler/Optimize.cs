@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using betteribttest.FlowAnalysis;
+using GameMaker.FlowAnalysis;
 using System.Diagnostics;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public static class ILAstOptimizerExtensionMethods
     {
@@ -88,7 +88,10 @@ namespace betteribttest.Dissasembler
             if (!collection.Remove(item))
                 throw new Exception("The item was not found in the collection");
         }
-
+        public static void RemoveOrThrow<T>(this ICollection<T> collection, IEnumerable<T> items)
+        {
+            foreach (var i in items) collection.RemoveOrThrow(i);
+        }
         public static void RemoveOrThrow<K, V>(this IDictionary<K, V> collection, K key)
         {
             if (!collection.Remove(key))
@@ -106,6 +109,49 @@ namespace betteribttest.Dissasembler
             }
             return false;
         }
+        // Clones the node to another expression or makes an expresson based off it
+        public static ILExpression ToExpresion(this ILNode n)
+        {
+            if (n == null) return null;
+            else if (n is ILValue) return new ILExpression(GMCode.Constant, n as ILValue);
+            else if (n is ILVariable) return new ILExpression(GMCode.Var, n as ILVariable);
+            else if (n is ILExpression) return new ILExpression(n as ILExpression);
+            else if (n is ILCall) return new ILExpression(GMCode.Call, n);
+            else throw new Exception("Should not happen here");
+        }
+
+
+        /// <summary>
+        /// Fixes an expression so that any extra Operand data is converted to an expresion
+        /// </summary>
+        /// <param name="n"></param>
+        /// <returns>True if its a push</returns>
+        public static bool FixPushExpression(this ILNode n)
+        {
+            ILExpression e = n as ILExpression;
+            if (e == null || e.Code != GMCode.Push) return false; // not an expresson or null
+            if (e.Operand != null) // already processed
+            {
+                ILExpression arg = null;
+                object o = e.Operand;
+                if (o is ILValue) arg = new ILExpression(GMCode.Constant, o as ILValue);
+                else if (o is ILVariable) arg = new ILExpression(GMCode.Var, o as ILVariable);
+                else if (o is ILCall) arg = new ILExpression(GMCode.Call, o);
+                Debug.Assert(arg != null);
+                e.Arguments.Clear(); // make sure
+                e.Arguments.Add(arg);
+                e.Operand = null;
+            }
+            return true;
+        }
+        // Returns argument off a an expression or throws.  This is WAY to common so I made it an extension
+        public static ILExpression MatchSingleArgument(this ILNode n)
+        {
+            ILExpression e = n as ILExpression;
+            if (e == null) throw new Exception("Not an expression");
+            if (e.Code == GMCode.Push) return e.Arguments.Single();
+            else return e;
+        }
 
     }
     class Optimize
@@ -116,7 +162,7 @@ namespace betteribttest.Dissasembler
         /// The method adds necessary branches to make control flow between blocks
         /// explicit and thus order independent.
         /// </summary>
-        public static void SplitToBasicBlocks(ILBlock block)
+        public static void SplitToBasicBlocks(ILBlock block,bool reducebranches=false)
         {
             int nextLabelIndex = 0;
             List<ILNode> basicBlocks = new List<ILNode>();
@@ -166,7 +212,35 @@ namespace betteribttest.Dissasembler
             }
 
             block.Body = basicBlocks;
+
+            if (reducebranches)
+            {
+                if (basicBlocks.Count > 0)
+                {
+                    for (int i = 0; i < block.Body.Count; i++)
+                    {
+                        ILBasicBlock bb = block.Body[i] as ILBasicBlock;
+                        if (bb == null) continue;
+                        ILLabel trueLabel;
+                        ILLabel falseLabel;
+                        if (bb.MatchLastAndBr(GMCode.Bf, out falseLabel, out trueLabel))
+                        {
+                            ILExpression bf = bb.Body[bb.Body.Count - 2] as ILExpression;
+                            ILExpression b = bb.Body[bb.Body.Count - 1] as ILExpression;
+                            bf.Code = GMCode.Bt;
+                            b.Operand = falseLabel;
+                            bf.Operand = trueLabel;
+                        }
+                    }
+                }
+            }
             return;
+        }
+        // Bad programing here.  It seems GM dosn't remove code that is never used, like if somone
+        // puts code after an exit or return
+        public static void RemoveCodeAfterExit(ILBlock method)
+        {
+
         }
         public static void RemoveRedundantCode(ILBlock method)
         {
@@ -193,7 +267,7 @@ namespace betteribttest.Dissasembler
                     {
                         // Ignore nop
                         
-                    }
+                    } 
                     else {
                         ILLabel label = body[i] as ILLabel;
                         if (label != null)
@@ -259,9 +333,103 @@ namespace betteribttest.Dissasembler
                 }
             }
         }
+        public static bool FixLuaStringAddExpression(ILNode expr)
+        {
+            bool haveString = false; // check if we have a single string in the expression
+            var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
+            if (allNonAdds.Count ==0)
+            {
+                var allAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Add).ToList();
+                for (int i = 0; i < allAdds.Count; i++)
+                {
+                    var e = allAdds[i];
+                    if (haveString)
+                        e.Code = GMCode.Concat;
+                    else if (e.Arguments[0].MatchConstant(GM_Type.String) || e.Arguments[1].MatchConstant(GM_Type.String))
+                    {// if we match a string, they all have to be converted
+                        haveString = true;
+                        i = -1; // reset list
+                    }
+                }
+            }
+            return haveString;
+        } // 
+        public static bool FixLuaStringAddExpression(IList<ILNode> body, ILExpression expr, int pos)
+        {
+            bool haveString = false; // check if we have a single string in the expression
+            var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
+            if (allNonAdds.Count > 0)
+            {
+                var allAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Add).ToList();
+                for (int i = 0; i < allAdds.Count; i++)
+                {
+                    var e = allAdds[i];
+                    if (haveString)
+                        e.Code = GMCode.Concat;
+                    else if (e.MatchConstant(GM_Type.String))
+                    {// if we match a string, they all have to be converted
+                        haveString = true;
+                        i = 0; // reset list
+                    }
+                }
+            }
+            return haveString;
+        }
+        public static bool FixLuaStringAdd(IList<ILNode> body, ILBasicBlock head, int pos)
+        {
+            bool modified = false; // may need to optimzie this, can we just go though all the nodes?
+            // it makes sure where a concat can exisit it should, but we need to do a lot of refactoring
+            // on this latter
+            foreach(var a in head.GetSelfAndChildrenRecursive<ILAssign>())
+            {
+                modified |= FixLuaStringAddExpression(a);
+            }
+            foreach (var a in head.GetSelfAndChildrenRecursive<ILCall>())
+            {
+                foreach(var e in a.Arguments) modified |= FixLuaStringAddExpression(e);
+            }
+            foreach (var a in head.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Call))
+            {
+                foreach (var e in a.Arguments) modified |= FixLuaStringAddExpression(e);
+            }
+            return modified;
+        }
 
-    
+     
+        // GM uses 1 and 0 as bool but uses conv to convert them so lets fix calls
+        // like check() == 1 and change them to just check()
 
+        public static bool SimplifyBoolTypes(ILExpression expr)
+        {
+            ILExpression call;
+            int constant;
+            if ((expr.Code == GMCode.Seq || expr.Code == GMCode.Sne) &&
+                (expr.Arguments[0].MatchCall(GM_Type.Bool, out call) ||
+                expr.Arguments[1].MatchCall(GM_Type.Bool, out call)) &&
+                (expr.Arguments[0].MatchIntConstant(out constant) ||
+                expr.Arguments[1].MatchIntConstant(out constant))
+                )
+            {
+                if ((expr.Code == GMCode.Seq && constant == 0) || constant == 1) // have ot invert it
+                    call = new ILExpression(GMCode.Not, null, call);
+                expr.Replace(call);
+                return true;
+            }
+            return false;
+        }
+
+        public static bool SimplifyBoolTypes(List<ILNode> body, ILExpression expr, int pos)
+        {
+            bool modified = false;
+            if (expr.Code == GMCode.Push || expr.Code.isBranch())
+            {
+                foreach(var e in expr.GetSelfAndChildrenRecursive<ILExpression>(x=>x.Code == GMCode.Seq || x.Code == GMCode.Sne))
+                {
+                    modified |= SimplifyBoolTypes(e);
+                }
+            }
+            return modified;
+        }
 
         /// <summary>
         /// Removes redundatant Br, Nop, Dup, Pop
@@ -277,77 +445,9 @@ namespace betteribttest.Dissasembler
             Debug.Assert(expr == null);
             return modified;
         }
-        static bool SimplifyLogicNot(ref ILExpression expr)
-        {
-            bool modified = false;
-            var newExpr = SimplifyLogicNot(expr, ref modified);
-            if (newExpr != null) expr = newExpr;
-            return modified;
-        }
-        static void FixAllIfStatements(ILBlock expr)
-        {
-            bool modified=false;
-            do
-            {
-                modified = false;
-                var list = expr.GetSelfAndChildrenRecursive<ILCondition>().ToList();
-                foreach (var ifs in list) modified |= SimplifyLogicNot(ref ifs.Condition);
-            } while (modified);
-            do
-            {
-                modified = false;
-                var list = expr.GetSelfAndChildrenRecursive<ILWhileLoop>().ToList();
-                foreach (var loop in list) modified |= SimplifyLogicNot(ref loop.Condition);
-            } while (modified);
-          //  return;
-            do
-            {
-                modified = false;
-              
-                // combine ifstatements to logic ands
-                List<ILCondition> test = expr.GetSelfAndChildrenRecursive<ILCondition>(x => x.FalseBlock == null && x.TrueBlock.Body.Count == 1 && x.TrueBlock.Body[0] is ILCondition).ToList();
-                if (test == null || test.Count > 0) modified = true;
-                foreach (var ifs in test)
-                {
-                    var leftIf = (ifs.TrueBlock.Body[0] as ILCondition);
-                    ifs.TrueBlock = leftIf.TrueBlock;
-                    ifs.Condition = new ILExpression(GMCode.LogicAnd, null, ifs.Condition, leftIf.Condition);
-                }
-            }
-            while (modified);
-        }
+     
         // This will negate a condition and optimize it
-        static ILExpression NegateCondition(ILExpression expr)
-        {
-            Debug.Assert(expr.Code != GMCode.Push); // We don't handle pushes
-            switch (expr.Code)
-            {
-                case GMCode.Not:
-                    return expr.Arguments.Single(); // VERY simple, remove the negate
-                case GMCode.Constant:
-                case GMCode.Var:
-                case GMCode.Call:
-                    return new ILExpression(GMCode.Not, null, expr); // VERY simple, add a not
-
-                case GMCode.Seq: expr.Code = GMCode.Sne; return expr;
-                case GMCode.Sne: expr.Code = GMCode.Seq; return expr;
-                case GMCode.Sgt: expr.Code = GMCode.Sle; return expr;
-                case GMCode.Sge: expr.Code = GMCode.Slt; return expr;
-                case GMCode.Slt: expr.Code = GMCode.Sge; return expr;
-                case GMCode.Sle: expr.Code = GMCode.Sgt; return expr;
-                // this is complcated as we have to negate the left and right side too
-                case GMCode.LogicAnd:
-                case GMCode.LogicOr:
-                    expr.Code = expr.Code == GMCode.LogicOr ? GMCode.LogicAnd : GMCode.LogicOr;
-                    expr.Arguments[0] = NegateCondition(expr.Arguments[0]);
-                    expr.Arguments[1] = NegateCondition(expr.Arguments[1]);
-                    return expr;
-                case GMCode.Neg:
-                    throw new Exception("Error, cannot logic negate a neg");
-                default:
-                    throw new Exception("Error, cannot logic negate a this code");
-            }
-        }
+      
             // Tis will simplify negates that get out of control
             static ILExpression SimplifyLogicNot(ILExpression expr, ref bool modified)
         {
@@ -363,9 +463,13 @@ namespace betteribttest.Dissasembler
                 modified = true;
             }
 #endif
+            if(expr.Code == GMCode.Push && expr.Arguments.Count > 0)
+                return SimplifyLogicNot(expr.Arguments[0], ref modified);
+
             ILExpression res = null;
-            while (expr.Code == GMCode.Not)
+            while (expr.Code == GMCode.Not && expr.Arguments.Count >0)
             {
+                Debug.Assert(expr.Arguments.Count == 1);
                 a = expr.Arguments[0];
                 // remove double negation
                 if (a.Code == GMCode.Not)

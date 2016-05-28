@@ -5,45 +5,49 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
-    public static class PatternMatching
-    {
-        public static bool WriteNodes<T>(this IList<T> nodes,  ITextOutput output, int start, int count, bool endingSemiColon, bool withBrackets) where T : ILNode
+    public static class PatternMatching {
+
+
+        public static ILExpression NegateCondition(this ILExpression expr)
         {
-            // Generic method to print a list of nodes
-            if (nodes.Count == 0 || count == 0) return false;
-            else if ((nodes.Count - start) == 1 || count == 1)
+            Debug.Assert(expr != null);
+            Debug.Assert(expr.Code != GMCode.Push); // We don't handle pushes
+            switch (expr.Code)
             {
-                nodes[start].WriteTo(output);
-                if (endingSemiColon) output.Write(';');
-                return false;
+                case GMCode.Not:
+                    return expr.Arguments.Single(); // VERY simple, remove the negate
+                case GMCode.Constant:
+                case GMCode.Var:
+                case GMCode.Call:
+                    return new ILExpression(GMCode.Not, null, expr); // VERY simple, add a not
+
+                case GMCode.Seq: expr.Code = GMCode.Sne; return expr;
+                case GMCode.Sne: expr.Code = GMCode.Seq; return expr;
+                case GMCode.Sgt: expr.Code = GMCode.Sle; return expr;
+                case GMCode.Sge: expr.Code = GMCode.Slt; return expr;
+                case GMCode.Slt: expr.Code = GMCode.Sge; return expr;
+                case GMCode.Sle: expr.Code = GMCode.Sgt; return expr;
+                // this is complcated as we have to negate the left and right side too
+                case GMCode.LogicAnd:
+                case GMCode.LogicOr:
+                    expr.Code = expr.Code == GMCode.LogicOr ? GMCode.LogicAnd : GMCode.LogicOr;
+                    expr.Arguments[0] = NegateCondition(expr.Arguments[0]);
+                    expr.Arguments[1] = NegateCondition(expr.Arguments[1]);
+                    return expr;
+                case GMCode.Neg:
+                    throw new Exception("Error, cannot logic negate a neg");
+                default:
+                    // might be math that assigns zero
+                    if (expr.Code.isExpression()) // if it is then lets make it equal zero
+                    {
+                        return new ILExpression(GMCode.Seq, null, expr, new ILExpression(GMCode.Constant, new ILValue((short) 0)));
+                    }
+                    throw new Exception("Error, cannot logic negate a this code");
             }
-            else
-            {
-                if (withBrackets) output.Write('{');
-                output.WriteLine();
-                output.Indent();
-                for (; start < count; start++)
-                {
-                    ILNode n = nodes[start];
-                    n.WriteTo(output);
-                    if (endingSemiColon && n is ILExpression) output.Write(';');
-                    output.WriteLine();
-                }
-                output.Unindent();
-                if (withBrackets) output.Write('}');
-                return true; // we did a writeline, atleast one
-            }
         }
-        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, int start, bool endingSemiColon, bool withBrackets) where T : ILNode
-        {
-            return nodes.WriteNodes(output, start, nodes.Count - start, endingSemiColon, withBrackets);
-        }
-        public static bool WriteNodes<T>(this IList<T> nodes, ITextOutput output, bool endingSemiColon, bool withBrackets) where T : ILNode
-        {
-            return nodes.WriteNodes(output, 0, nodes.Count, endingSemiColon, withBrackets);
-        }
+     
         public static void CollectLabels(this ILExpression node, HashSet<ILLabel> labels)
         {
             ILLabel label = node.Operand as ILLabel;
@@ -65,6 +69,182 @@ namespace betteribttest.Dissasembler
             expr.ILRanges.AddRange(ilranges);
             return expr;
         }
+        public static bool MatchConstant(this ILNode node, GM_Type type, out ILValue value)
+        {
+            ILValue ret;
+            if(node.MatchConstant(out ret) && ret.Type == type)
+            {
+                value = ret;
+                return true;
+            }
+            value = default(ILValue);
+            return false;
+        }
+        public static bool MatchConstant(this ILNode node,  out ILValue value)
+        {
+            ILValue ret = node as ILValue;
+            if (ret == null && !node.Match(GMCode.Constant, out ret))
+            {
+                value = default(ILValue);
+                return false;
+            }
+            value = ret;
+            return true;
+        }
+        public static ILLabel GotoLabel(this ILBasicBlock bb)
+        {
+            ILLabel label = (bb.Body[bb.Body.Count - 1] as ILExpression).Operand as ILLabel;
+            Debug.Assert(label != null);
+            return label;
+        }
+        public static string GotoLabelName(this ILBasicBlock bb)
+        {
+            ILExpression end = bb.Body.Last() as ILExpression;
+            switch (end.Code)
+            {
+                case GMCode.B:
+                    return (end.Operand as ILLabel).Name;
+                case GMCode.Ret:
+                    return "Return";
+                case GMCode.Exit:
+                    return "Exit";
+                    
+            }
+            Debug.Assert(false);
+            return null;
+        }
+        public static ILLabel EntryLabel(this ILBasicBlock bb)
+        {
+            ILLabel label = bb.Body[0]  as ILLabel;
+            Debug.Assert(label != null);
+            return label;
+        }
+        // checks to see if the node can be used in an expression, or if it needs latter processing
+        public static bool isExpressionResolved(this ILExpression e)
+        {
+            if (e == null) return false;
+            if (e.Code == GMCode.Push) e = e.MatchSingleArgument(); // go into
+            switch (e.Code)
+            {
+                case GMCode.Constant: return true; // always
+                case GMCode.Var:
+                    if ((e.Operand as ILVariable).isResolved) return true;
+                    break;
+                case GMCode.Array2D:
+                    return true; // array index
+                case GMCode.Call:
+                    if ((e.Operand is ILCall)) return true;
+                    break;
+                default:
+                    if (e.Code.isExpression() && e.Arguments.Count != 0) return true;
+                    break;
+
+            }
+            return false;
+        }
+        public static bool isExpressionResolved(this ILNode node)
+        {
+            if (node == null) return false;
+            ILExpression e = node as ILExpression;
+            if (e != null) return isExpressionResolved(e);
+           else  return false;
+        }
+        public static bool isNodeResolved(this ILNode node)
+        {
+            if (node == null) return false;
+            ILExpression e = node as ILExpression;
+            if (e != null) return isExpressionResolved(e); 
+            else return true; // true on any node that isn't an expressoin
+        }
+        public static bool isNodeResolved(this ILExpression e)
+        {
+            if (e == null) return false;
+            return isExpressionResolved(e);
+        }
+        public static bool MatchCall(this ILNode node, GM_Type type, out ILExpression call)
+        {
+            ILCall c = node as ILCall;
+            if(c != null && c.Type == type)
+            {
+                call = new ILExpression(GMCode.Call, c);
+                return true;
+            }
+            ILExpression e = node as ILExpression;
+            if(e != null && e.Code == GMCode.Call)
+            {
+                c = e.Operand as ILCall;
+                if (c != null && c.Type == type)
+                {
+                    call = new ILExpression(GMCode.Call, c);
+                    return true;
+                } else if(e.Operand is string && e.InferredType == type)
+                {
+                    call = e;
+                    return true;
+                }
+            }
+            call = default(ILExpression);
+            return false;
+        }
+        public static bool MatchCall(this ILNode node, GM_Type type)
+        {
+            ILExpression call;
+            return node.MatchCall(type, out call);
+        }
+        public static bool MatchConstant(this ILNode node, GM_Type type)
+        {
+            ILValue ret;
+            if(node.MatchConstant(type,out ret) || node.MatchCall(type)) // try to match it on a call
+            {
+                return true;
+            }
+            return false;
+        }
+        public static bool MatchConstant<T>(this ILNode node, GM_Type type, out T value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(type, out ret) && ret.Value is T)
+            {
+                value = (T) ret.Value;
+                return true;
+            }
+            value = default(T);
+            return false;
+        }
+
+        public static bool MatchIntConstant(this ILNode node, out ILValue value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(out ret) && (ret.Type == GM_Type.Short || ret.Type == GM_Type.Int))
+            {
+                value = ret;
+                return true;
+            }
+            value = default(ILValue);
+            return false;
+        }
+        public static bool MatchIntConstant(this ILNode node, out int value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(out ret) && (ret.Type == GM_Type.Short || ret.Type == GM_Type.Int))
+            {
+                value = (int)ret.Value;
+                return true;
+            }
+            value = default(int);
+            return false;
+        }
+        public static bool MatchConstant<T>(this ILNode node, out T value)
+        {
+            ILValue ret;
+            if (node.MatchConstant(out ret) && ret.Value is T)
+            {
+                value = (T)ret.Value;
+                return true;
+            }
+            value = default(T);
+            return false;
+        }
         public static bool Match(this ILNode node, GMCode code)
         {
             ILExpression expr = node as ILExpression;
@@ -76,21 +256,28 @@ namespace betteribttest.Dissasembler
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code && expr.Arguments.Count == 0)
             {
-                if(expr.Operand is T)
+                if (expr.Operand is T)
                 {
-                    operand = (T)expr.Operand;
+                    operand = (T) expr.Operand;
+                    return true;
+                }
+                // special case.  Tired of doing Match(code,ivalue) ivlaue is etc
+                ILValue v = expr.Operand as ILValue;
+                if (v.Value is T) 
+                {
+                    operand = (T) v.Value;
                     return true;
                 }
             }
             operand = default(T);
             return false;
         }
-        public static bool Match(this ILNode node, GMCode code, out IList<ILExpression> args)
+        public static bool Match(this ILNode node, GMCode code, out List<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code)
             {
-                //Debug.Assert(expr.Operand == null);
+                Debug.Assert(expr.Operand == null);
                 args = expr.Arguments;
                 return true;
             }
@@ -100,7 +287,7 @@ namespace betteribttest.Dissasembler
 
         public static bool Match(this ILNode node, GMCode code, out ILExpression arg)
         {
-            IList<ILExpression> args;
+            List<ILExpression> args;
             if (node.Match(code, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -110,7 +297,7 @@ namespace betteribttest.Dissasembler
             return false;
         }
 
-        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out IList<ILExpression> args)
+        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out List<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code)
@@ -126,7 +313,7 @@ namespace betteribttest.Dissasembler
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg)
         {
-            IList<ILExpression> args;
+            List<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -138,7 +325,7 @@ namespace betteribttest.Dissasembler
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg1, out ILExpression arg2)
         {
-            IList<ILExpression> args;
+            List<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 2)
             {
                 arg1 = args[0];
@@ -202,7 +389,20 @@ namespace betteribttest.Dissasembler
             object filler;
             return bb.MatchSingleAndBr<object>(code, out filler, out arg, out brLabel);
         }
-
+        public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out List<ILExpression> args, out ILLabel brLabel)
+        {
+            {
+                if (bb.Body.Count == 3 &&
+           bb.Body[0] is ILLabel &&
+           bb.Body[1].Match(code, out operand, out args) &&
+           bb.Body[2].Match(GMCode.B, out brLabel))
+                    return true;
+            }
+            args = default(List<ILExpression>);
+            brLabel = default(ILLabel);
+            operand = default(T);
+            return false;
+        }
         public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
         {
             {
@@ -228,6 +428,30 @@ namespace betteribttest.Dissasembler
             operand = default(T);
             arg = null;
             brLabel = null;
+            return false;
+        }
+        public static bool MatchLastAt<T>(this ILBasicBlock bb, int back, GMCode code, out T operand, out ILExpression arg)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code,  out operand, out arg)) return true;
+            arg = default(ILExpression);
+            operand = default(T);
+            return false;
+        }
+        public static bool MatchLastAt<T>(this ILBasicBlock bb, int back, GMCode code, out T operand)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code, out operand)) return true;
+            operand = default(T);
+            return false;
+        }
+        public static bool MatchLastAt(this ILBasicBlock bb, int back, GMCode code, out ILExpression arg)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code, out arg)) return true;
+            arg = default(ILExpression);
+            return false;
+        }
+        public static bool MatchLastAt(this ILBasicBlock bb, int back, GMCode code)
+        {
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code)) return true;
             return false;
         }
         public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
@@ -262,7 +486,7 @@ namespace betteribttest.Dissasembler
             brLabel = null;
             return false;
         }
-        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out IList<ILExpression> args, out ILLabel brLabel)
+        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out List<ILExpression> args, out ILLabel brLabel)
         {
             if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand, out args) &&
                 bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))
@@ -274,35 +498,7 @@ namespace betteribttest.Dissasembler
             brLabel = null;
             return false;
         }
-        public static int FindLastIndexOf(this IList<ILNode> ast, GMCode code, int from)
-        {
-            if (ast.Count == 0 || from < 0 || from > (ast.Count - 1)) return -1;
-            for (int i = from; i >= 0; i--) if (ast[i].Match(code)) return i;
-            return -1;
-        }
-        public static int FindLastIndexOf(this IList<ILNode> ast, GMCode code)
-        {
-            return ast.FindLastIndexOf(code, ast.Count - 1);
-        }
-        public static bool MatchLastCount<T>(this IList<T> ast, GMCode code, int count, out List<ILExpression> match) where T : ILNode
-        {
-            do
-            {
-                if (ast.Count == 0 && ast.Count < count) break;
-                int i = ast.Count - 1, j = 0;
-                List<ILExpression> ret = new List<ILExpression>();
-                for (; i >= 0 && j < count; i--, j++)
-                {
-                    ILExpression test;
-                    if (ast.ElementAtOrDefault(i).Match(code, out test)) ret.Add(test); else break;
-                }
-                if (j != count) break; // bad match or not enough match
-                match = ret;
-                return true;
-            } while (false);
-            match = default(List<ILExpression>);
-            return false;
-        }
+
 
         public static bool isConstant(this ILExpression n)
         {

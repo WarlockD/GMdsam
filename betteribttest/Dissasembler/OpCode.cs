@@ -6,9 +6,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace betteribttest.Dissasembler
+namespace GameMaker.Dissasembler
 {
     public static class InstructionHelper {
+        // Just because we don't have to buffer it
+        public static IEnumerable<T> MyReverse<T>(this List<T> list)
+        {
+            for (int j = list.Count - 1; j >= 0; j--) yield return list[j];
+        }
         public static void ReLinkList(this IEnumerable<Instruction> list)
         {
             Instruction prev = null;
@@ -247,6 +252,9 @@ namespace betteribttest.Dissasembler
                     i.Types = new GM_Type[] { (GM_Type)((raw >> 16) & 15), (GM_Type)((raw >> 20) & 15) };
                     break;
                 case GMCode.Break:
+                   // saw this here obj_snowfloor
+                   // From older documentation on the net, this is to check if arrays have made
+                   // Debug.Assert(false); // the fuck?
                     //  i._extra = (int)(0x00FFFFFFF & raw); // never seen the need for more than this
                     break;
                 case GMCode.B:
@@ -317,23 +325,23 @@ namespace betteribttest.Dissasembler
             }
             return ret;
         }
-        public static SortedList<int, Instruction> Dissasemble(Stream stream, List<string> StringList, List<string> InstanceList = null)
-        {
-            if (stream == null) throw new ArgumentNullException("stream");
-            if (!stream.CanRead) throw new IOException("Cannot read stream");
-            if(!stream.CanSeek) throw new IOException("Cannot seak stream");
-            stream.Position = 0;
-            BinaryReader r = new BinaryReader(stream);
-            return Dissasemble(r, stream.Length, StringList, InstanceList);
-        }
         // I had multipul passes on this so trying to combine it all to do one pass
-        public static  SortedList<int,Instruction> Dissasemble(BinaryReader r, long length, List<string> StringList, List < string> InstanceList=null)
+        public static  List<Instruction> Dissasemble(File.Code code, Context.ErrorContext error)
         {
-            if (r == null) throw new ArgumentNullException("stream");
+            if (code == null) throw new ArgumentNullException("code");
+            Stream rawStream = code.Data;
+            if (rawStream == null) throw new ArgumentNullException("stream");
+            if (!rawStream.CanRead) throw new IOException("Cannot read stream");
+            if (!rawStream.CanSeek) throw new IOException("Cannot seak stream");
+            
+            BinaryReader r = new BinaryReader(code.Data);
+            long length = r.BaseStream.Length;
+           
             if (r.BaseStream.CanRead != true) throw new IOException("Cannot read stream");
             int pc = 0;
-            long lastpc = r.BaseStream.Length / 4;
-            SortedList<int, Instruction> list = new SortedList<int, Instruction>();
+            long lastpc = length / 4;
+            List<Instruction> list = new List<Instruction>();
+            
             Dictionary<int,Label> labels = new Dictionary<int, Label>();
             Dictionary<int, Label> pushEnviroment = new Dictionary<int, Label>();
             List<Instruction> branches = new List<Instruction>();
@@ -351,6 +359,7 @@ namespace betteribttest.Dissasembler
             while(r.BaseStream.Position < length)
             {
                 Instruction i = DissasembleFromReader(pc, r);
+             //   Debug.WriteLine(i.ToString());
                 pc += i.Size;
                 switch (i.Code)
                 {
@@ -370,9 +379,9 @@ namespace betteribttest.Dissasembler
                                 i.Operand = GiveInstructionALabel(i, i.Extra - 1);  // not a break, set the label BACK to the push as we are simulating a loop
                             }
                             else {
-                                foreach(Instruction ii in list.Values.Reverse())
+                                foreach(Instruction ii in list.MyReverse())
                                 {
-                                    if(ii.Code == GMCode.Pushenv)
+                                    if (ii.Code == GMCode.Pushenv)
                                     {
                                         i.Operand = GiveInstructionALabel(i, ii.Address); // we want to make these continues
                                         break;
@@ -393,27 +402,27 @@ namespace betteribttest.Dissasembler
                         {
                             // i.Operand = StringList[(int)i.Operand]; Don't want to touch as it might 
                             sb.Clear();
-                            sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
+                            sb.Append(Context.InstanceToString(i.Extra));
                             sb.Append('.');
-                            sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
+                            sb.Append(Context.LookupString((int)i.Operand & 0xFFFFF));
                             i.OperandText = sb.ToString();
                         }
                         else if (i.Types[0] == GM_Type.String)
                         {
-                            i.Operand = StringList[(int)i.Operand];
+                            i.Operand = Context.LookupString((int)i.Operand & 0xFFFFF);
                             i.OperandText = GMCodeUtil.EscapeString(i.Operand as string);
                         }
                         break;
                     case GMCode.Pop: // technicaly pop is always a var, but eh
                                      //i.Operand = StringList[(int)i.Operand]; Don't do it this wa as we might need to find out of its an array
                         sb.Clear();
-                        sb.Append(GMCodeUtil.lookupInstance(i.Extra, InstanceList));
+                        sb.Append(Context.InstanceToString(i.Extra));
                         sb.Append('.');
-                        sb.Append(StringList[(int)i.Operand & 0xFFFFF]);
+                        sb.Append(Context.LookupString((int)i.Operand & 0xFFFFF));
                         i.OperandText = sb.ToString();
                         break;
                     case GMCode.Call:
-                        i.OperandText = StringList[(int)i.Operand];
+                        i.OperandText = Context.LookupString((int)i.Operand & 0xFFFFF);
                         i.Operand = i.OperandText;
                         break;
 
@@ -421,26 +430,31 @@ namespace betteribttest.Dissasembler
                 i.Previous = prev;
                 if (prev == null) prev = i;
                 else prev.Next = i;
-                list.Add(i.Address, i);
+                list.Add( i);
             }
             if (list.Count == 0) return list; // return list, its empty
-
-            Instruction last = list.Last().Value;
+            for(int i=0; i < list.Count; i++)
+            {
+                list[i].Next = list.ElementAtOrDefault(i + 1);
+            }
+            Instruction last = list.Last();
+            last.Next = null; 
             if(last.Code != GMCode.Exit || last.Code != GMCode.Ret)
             {
                 int address = last.Address + last.Size;
-                list.Add(address, new Instruction(address, GMCode.Exit));
+                list.Add(new Instruction(address, GMCode.Exit));
             } // must be done for graph and in case we have a branch that goes right outside.  Its implied in any event
+            Dictionary<int, Instruction> offsetToInstruction = list.ToDictionary(i => i.Address);
             foreach (var i in branches)
             {
                 Label l = i.Operand as Label;
                 if(l.Origin == null) // Link the label 
                 {
-                    l.Origin = list[l.Address];
-                    list[l.Address].Label = l;
+                    l.Origin = offsetToInstruction[l.Address];
+                    offsetToInstruction[l.Address].Label = l;
                 }
             }
-            return list;
+             return list;
         }
         public void WriteTo(ITextOutput output)
         {
