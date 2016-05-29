@@ -45,7 +45,7 @@ namespace GameMaker.Writers
             {
                 case OutputType.LoveLua:
                     return (CodeWriter)new Lua.Writer(output);
-                case OutputType.JavaScript:
+                case OutputType.GameMaker:
                     return (CodeWriter) new GameMaker.Writer(output);
                 default:
                     throw new Exception("Bad output type");
@@ -67,7 +67,7 @@ namespace GameMaker.Writers
                     formater = new Lua.Formater();
                     mutater = new Lua.Mutater();
                     break;
-                case OutputType.JavaScript:
+                case OutputType.GameMaker:
                     formater = new GameMaker.Formater();
                     break;
                 default:
@@ -188,6 +188,18 @@ namespace GameMaker.Writers
                 TimeSpan time = stop.Subtract(start);
                 Debug.WriteLine("Time : {0}", time);
                 tasks.Clear();
+            }
+            if (ILNode.times.Count > 0)
+            {
+                using (StreamWriter sw = new StreamWriter(Context.MoveFileToOldErrors("timeCollection.txt")))
+                {
+                    List<double> timeAverage = new List<double>();
+                    foreach (var c in ILNode.times) timeAverage.Add(c.Time.Ticks);
+
+                    sw.WriteLine("Total Tick Average: {0}", timeAverage.Average());
+                    sw.WriteLine();
+                    foreach (var c in ILNode.times.OrderBy(x=>x.Time)) sw.WriteLine("Count={0}  Time={1}", c.Count, c.Time);
+                }
             }
             if(scrptnames!= null && scrptnames.Count > 0)
             {

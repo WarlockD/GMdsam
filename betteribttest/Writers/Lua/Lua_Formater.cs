@@ -22,10 +22,7 @@ namespace GameMaker.Writers.Lua
         {
             throw new Exception("Should not run into basic block here");
         }
-        public override void Write(ILFakeSwitch f)
-        {
-            throw new Exception("Should not run into basic block here");
-        }
+
         public override void Write(ILElseIfChain chain)
         {
             for (int i = 0; i < chain.Conditions.Count; i++)

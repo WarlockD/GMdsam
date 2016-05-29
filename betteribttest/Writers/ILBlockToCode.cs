@@ -34,7 +34,6 @@ namespace GameMaker.Writers
             if (needParm) writer.Write(')');
         }
         public abstract void Write(ILSwitch f);
-        public abstract void Write(ILFakeSwitch f);
         public abstract void Write(ILVariable v);
         public abstract void Write(ILCall bb);
         public abstract void Write(ILValue bb);
@@ -127,6 +126,7 @@ namespace GameMaker.Writers
         }
         static BlockToCode()
         {
+            identCache[0] = "";
         }
 
         ICodeFormater formater = null;
@@ -341,7 +341,7 @@ namespace GameMaker.Writers
         // quick way to write a block
         public void WriteFile(ILBlock block, string filename)
         {
-            block.ClearAndSetAllParents();
+         //   block.ClearAndSetAllParents();
             Write(block);
             using (StreamWriter sw = new StreamWriter(filename)) sw.Write(buffer.ToString());
             Clear();

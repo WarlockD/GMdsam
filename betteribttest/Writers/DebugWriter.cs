@@ -55,20 +55,7 @@ namespace GameMaker.Writers
             writer.Indent--;
             // The if and loop replace the last goto, so watch for that on basic blocks
         }
-        public override void Write(ILFakeSwitch f)
-        {
-            writer.WriteLine("ILFakeSwitch Condition={0}", f.Condition);
-            writer.Indent++;
-            foreach(var c in f.Cases)
-            {
-                writer.Write("ILFakeSwitch.ILCase Value=");
-                writer.Write(c.Value);
-                writer.Write(" Goto=");
-                writer.Write(c.Goto);
-                writer.WriteLine();
-            }
-            writer.Indent--;
-        }
+
         public override void Write(ILSwitch f)
         {
             writer.WriteLine("ILSwitch Condition={0}", f.Condition);

@@ -198,7 +198,7 @@ namespace GameMaker.Ast
             int nextLabelIndex = 0;
             List<ILNode> basicBlocks = new List<ILNode>();
 
-            ILLabel entryLabel = block.Body.FirstOrDefault() as ILLabel ?? new ILLabel() { Name = "Block_" + (nextLabelIndex++) };
+            ILLabel entryLabel = block.Body.FirstOrDefault() as ILLabel ?? ILLabel.Generate("Block_" ,nextLabelIndex++);
             ILBasicBlock basicBlock = new ILBasicBlock();
             basicBlocks.Add(basicBlock);
             basicBlock.Body.Add(entryLabel);
@@ -218,7 +218,7 @@ namespace GameMaker.Ast
                         lastNode.IsUnconditionalControlFlow())
                     {
                         // Try to reuse the label
-                        ILLabel label = currNode as ILLabel ?? new ILLabel() { Name = "Block_" + (nextLabelIndex++).ToString() };
+                        ILLabel label = currNode as ILLabel ?? ILLabel.Generate("Block_", nextLabelIndex++);
 
                         // Terminate the last block
                         if (!lastNode.IsUnconditionalControlFlow())

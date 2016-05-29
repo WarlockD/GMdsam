@@ -127,21 +127,6 @@ namespace GameMaker.Ast
                         destination.Incoming.Add(edge);
                     }
                 }
-                foreach (ILFakeSwitch fswitch in node.GetSelfAndChildrenRecursive<ILFakeSwitch>())
-                {
-                    // Labels which are out of out scope will not be in the collection
-                    // Insert self edge only if we are sure we are a loop
-                    foreach (var target in fswitch.GetLabels())
-                    {
-                        ControlFlowNode destination;
-                        if (labelToCfNode.TryGetValue(target, out destination) && (destination != source || target == node.Body.FirstOrDefault()))
-                        {
-                            ControlFlowEdge edge = new ControlFlowEdge(source, destination, JumpType.Normal);
-                            source.Outgoing.Add(edge);
-                            destination.Incoming.Add(edge);
-                        }
-                    }
-                }
             }
 
             return new ControlFlowGraph(cfNodes.ToArray());
@@ -263,7 +248,7 @@ namespace GameMaker.Ast
                         result.Add(new ILBasicBlock()
                         {
                             Body = new List<ILNode>() {
-                                new ILLabel() { Name = "Loop_" + (nextLabelIndex++) },
+                                ILLabel.Generate("Loop"),
                                 new ILWhileLoop() {
                                     BodyBlock = new ILBlock() {
                                         EntryGoto = new ILExpression(GMCode.B, (ILLabel)basicBlock.Body.First()),
@@ -314,20 +299,19 @@ namespace GameMaker.Ast
                     ILBasicBlock block = (ILBasicBlock)node.UserData;
                    
                     {
+                        ILLabel[] caseLabels;
+                        List<ILExpression> conditions;
+                        ILLabel fallLabel;
                         // Switch
-                        ILFakeSwitch fswitch = block.Body.ElementAtOrDefault(block.Body.Count - 2) as ILFakeSwitch;
-                        //   IList<ILExpression> cases; out IList<ILExpression> arg, out ILLabel fallLabel)
-                        // matches a switch statment, not sure how the hell I am going to do this
-                        if (fswitch != null)
+
+                        if (block.MatchLastAndBr(GMCode.Switch, out caseLabels, out conditions, out fallLabel))
                         {
-                            ILSwitch ilSwitch = new ILSwitch() { Condition = fswitch.Condition };
+                            ILSwitch ilSwitch = new ILSwitch() { Condition = conditions[0].Arguments[0].Arguments[1] };
                             block.Body[block.Body.Count - 2] = ilSwitch; // replace it, nothing else needs to be done!
                             result.Add(block); // except add it to the result, DOLT
-                            // Remove the item so that it is not picked up as content
-                            scope.RemoveOrThrow(node);
+                           
+                            scope.RemoveOrThrow(node);// Remove the item so that it is not picked up as content
 
-                            ILLabel fallLabel = fswitch.Default;
-                            ILLabel[] caseLabels = fswitch.Cases.Select(x => x.Goto).ToArray();
                             // Pull in code of cases
                             ControlFlowNode fallTarget = null;
                             labelToCfNode.TryGetValue(fallLabel, out fallTarget);
@@ -343,10 +327,9 @@ namespace GameMaker.Ast
                                 if (condTarget != null)
                                     frontiers.UnionWith(condTarget.DominanceFrontier.Except(new[] { condTarget }));
                             }
-
-                            for (int i = 0; i < fswitch.Cases.Count; i++)
+                            for (int i = 0; i < caseLabels.Length; i++)
                             {
-                                ILLabel condLabel = fswitch.Cases[i].Goto;
+                                ILLabel condLabel = caseLabels[i];
 
                                 // Find or create new case block
                                 ILSwitch.ILCase caseBlock = ilSwitch.Cases.FirstOrDefault(b => b.EntryGoto.Operand == condLabel);
@@ -371,13 +354,13 @@ namespace GameMaker.Ast
                                         caseBlock.Body.Add(new ILBasicBlock()
                                         {
                                             Body = {
-                                                new ILLabel() { Name = "SwitchBreak_" + (nextLabelIndex++) },
+                                                ILLabel.Generate("SwitchBreak" ,(int)nextLabelIndex++),
                                                 new ILExpression(GMCode.LoopOrSwitchBreak, null)
                                             }
                                         });
                                     }
                                 }
-                                caseBlock.Values.Add(fswitch.Cases[i].Value);
+                                caseBlock.Values.Add(conditions[i].Arguments[0].Arguments[0]);
                             }
 
                             // Heuristis to determine if we want to use fallthough as default case
@@ -392,22 +375,16 @@ namespace GameMaker.Ast
 
                                     scope.ExceptWith(content);
                                     foreach (var con in FindConditions(content, fallTarget)) caseBlock.Body.Add(con);
-
+                                    
                                     // Add explicit break which should not be used by default, but the goto removal might decide to use it
                                     caseBlock.Body.Add(new ILBasicBlock()
-                                    {
+                                    { 
                                         Body = {
-                                            new ILLabel() { Name = "SwitchBreak_" + (nextLabelIndex++) },
+                                            ILLabel.Generate("SwitchBreak" ,(int)nextLabelIndex++),
                                             new ILExpression(GMCode.LoopOrSwitchBreak, null)
                                         }
                                     });
                                 }
-                            }
-                            // this is just to be fancy, but lets sort it as long as all the values are const
-                            if(!ilSwitch.Cases.Select(x=> x.Values.Where(x1=>x1.Code != GMCode.Constant)).Any())
-                            {
-                                // if all the values are ordered then lets sort by ivalue
-                                ilSwitch.Cases = ilSwitch.Cases.OrderBy(o => o.Values[0].Operand as ILValue).ToList();
                             }
                         }
                      //   Debug.Assert((block.Body.First() as ILLabel).Name != "L1938");

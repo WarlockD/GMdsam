@@ -53,7 +53,8 @@ namespace GameMaker.Writers.GameMaker
                 if (string.IsNullOrWhiteSpace(obj.ParentName)) obj.ParentName = File.Objects[obj.Parent].Name;
                 output.WriteLine("builtin.parent_name = \"{0}\"", obj.ParentName);
             }
-            output.WriteLine("builtin.sprite_index = {0}", obj.SpriteIndex);
+            output.Write("builtin.sprite_index = {0}", obj.SpriteIndex);
+            if (obj.SpriteIndex > -1) output.WriteLine(" // \"{0}\"", File.Sprites[obj.SpriteIndex].Name); else output.WriteLine();
             output.WriteLine("builtin.visible = {0}", obj.Visible ? "true" : "false");
             output.WriteLine("builtin.solid = {0}", obj.Solid ? "true" : "false");
             output.WriteLine("builtin.persistent = {0}", obj.Persistent ? "true" : "false");

@@ -42,10 +42,7 @@ namespace GameMaker.Writers.GameMaker
         {
             throw new Exception("Should not run into basic block here");
         }
-        public override void Write(ILFakeSwitch f)
-        {
-            throw new Exception("Should not have fake switch here, don't make it an ilnode?");
-        }
+
         // this is a switch statement so we will just write it as such
         public override void Write(ILElseIfChain chain)
         {
@@ -270,13 +267,14 @@ namespace GameMaker.Writers.GameMaker
         static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
         public override void Write(ILVariable v)
         {
-            if (Constants.IsDefined(v.Name)){
-                Debug.Assert(v.isSelf);
-                writer.Write("builtin.");
-            } else if(!v.isSelf)
+            string instanceName = Context.InstanceToString(v.Instance, writer);
+            if (instanceName != "self")
             {
-                writer.Write(Context.InstanceToString(v.Instance, writer));
+                writer.Write(instanceName);
                 writer.Write('.');
+            } else if(Constants.IsDefined(v.Name))
+            {
+                writer.Write("builtin.");
             }
             writer.Write(v.Name);
             if (v.isArray)

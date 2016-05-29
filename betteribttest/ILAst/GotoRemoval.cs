@@ -25,8 +25,8 @@ namespace GameMaker.Ast
                 foreach (ILNode child in node.GetChildren())
                 {
                     ILExpression e = child as ILExpression;
-                    if (e != null && (e.Code == GMCode.Constant || e.Code == GMCode.Var || e.Code == GMCode.Call)) continue;
-                    if (child is ILValue || child is ILVariable) continue; // we want to skip these.
+                    if (e != null && (e.Operand is ILValue || e.Operand is ILVariable)) continue; // This should fix alot of issues
+                     if (child is ILValue || child is ILVariable) continue; // we want to skip these.
                     // Added them as nodes so I don't have to dick with them latter with another AST
                     if (parent.ContainsKey(child))
                     { // this throws on one single file and I don't know why the hell it does
@@ -66,7 +66,7 @@ namespace GameMaker.Ast
             HashSet<ILLabel> liveLabels = new HashSet<ILLabel>(method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()));
            foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                block.Body = block.Body.Where(n => !n.Match(GMCode.BadOp) && !n.Match(GMCode.Popz) && !(n is ILLabel && !liveLabels.Contains((ILLabel)n))).ToList();
+                block.Body = block.Body.Where(n => !n.Match(GMCode.BadOp)  && !(n is ILLabel && !liveLabels.Contains((ILLabel)n))).ToList();
             }
 
             // Remove redundant continue
@@ -106,10 +106,11 @@ namespace GameMaker.Ast
                     }
                 }
                 // fix case block
+                
 
-                var defaultCase = ilSwitch.Cases.SingleOrDefault(cb => cb.Values == null);
+                var defaultCase = ilSwitch.Default ?? ilSwitch.Cases.SingleOrDefault(cb => cb.Values == null);
                 // If there is no default block, remove empty case blocks
-                if (ilSwitch.Default == null || (ilSwitch.Default.Body.Count == 1 && ilSwitch.Default.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
+                if (defaultCase == null || (defaultCase.Body.Count == 1 && defaultCase.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
                 {
                     ilSwitch.Cases.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
                 }
@@ -233,41 +234,7 @@ namespace GameMaker.Ast
                 if (expr.Code == GMCode.B)
                 {
                     ILLabel target = (ILLabel)expr.Operand;
-                    // Early exit - same try-block
-                    if (GetParents(expr).OfType<ILTryCatchBlock>().FirstOrDefault() == GetParents(target).OfType<ILTryCatchBlock>().FirstOrDefault())
-                        return Enter(target, visitedNodes);
-                    // Make sure we are not entering any try-block
-                    var srcTryBlocks = GetParents(expr).OfType<ILTryCatchBlock>().Reverse().ToList();
-                    var dstTryBlocks = GetParents(target).OfType<ILTryCatchBlock>().Reverse().ToList();
-                    // Skip blocks that we are already in
-                    int i = 0;
-                    while (i < srcTryBlocks.Count && i < dstTryBlocks.Count && srcTryBlocks[i] == dstTryBlocks[i]) i++;
-                    if (i == dstTryBlocks.Count)
-                    {
-                        return Enter(target, visitedNodes);
-                    }
-                    else {
-                        ILTryCatchBlock dstTryBlock = dstTryBlocks[i];
-                        // Check that the goto points to the start
-                        ILTryCatchBlock current = dstTryBlock;
-                        while (current != null)
-                        {
-                            foreach (ILNode n in current.TryBlock.Body)
-                            {
-                                if (n is ILLabel)
-                                {
-                                    if (n == target)
-                                        return dstTryBlock;
-                                }
-                                else if (!n.Match(GMCode.BadOp))
-                                {
-                                    current = n as ILTryCatchBlock;
-                                    break;
-                                }
-                            }
-                        }
-                        return null;
-                    }
+                    return Enter(target, visitedNodes);
                 }
                 else if (expr.Code == GMCode.BadOp  || expr.Code == GMCode.Constant || expr.Code == GMCode.Var)
                 {

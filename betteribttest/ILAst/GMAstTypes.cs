@@ -26,7 +26,7 @@ namespace GameMaker.Ast
         }
         public static bool Append<T>(this StringBuilder sb, T node, int ident) where T : ILNode
         {
-            if (node != null) return node.ToStringBuilder(sb,ident);
+            if (node != null) return node.ToStringBuilder(sb, ident);
             sb.Append("?null?");
             return false;
         }
@@ -46,7 +46,21 @@ namespace GameMaker.Ast
             }
             ident--;
         }
-        public static void AppendBlock(this StringBuilder sb, ILBlock block,int ident) 
+        public static List<ILRange> JoinILRangesFromTail(this ILBasicBlock block, int count)
+        {
+            List<ILRange> ranges = new List<ILRange>();
+            int i = block.Body.Count - 1;
+            while (count > 0)
+            {
+                ILExpression e = block.Body[i] as ILExpression;
+                if (e != null) ranges.AddRange(e.ILRanges);
+                i--;
+                count--;
+            }
+            ILRange.OrderAndJoin(ranges);
+            return ranges;
+        }
+        public static void AppendBlock(this StringBuilder sb, ILBlock block, int ident)
         {
             if (block == null || block.Body.Count == 0) sb.AppendLine("{}");
             else
@@ -56,9 +70,9 @@ namespace GameMaker.Ast
                 sb.Ident(ident);
                 sb.AppendLine("}");
             }
-            
+
         }
-        public static bool AppendArguments(this StringBuilder sb, IEnumerable<string> strings) 
+        public static bool AppendArguments(this StringBuilder sb, IEnumerable<string> strings)
         {
             bool need_comma = false;
             foreach (var s in strings)
@@ -72,11 +86,11 @@ namespace GameMaker.Ast
         public static bool AppendArguments<T>(this StringBuilder sb, IEnumerable<T> nodes) where T : ILNode
         {
             bool need_comma = false;
-            foreach(var n in nodes)
+            foreach (var n in nodes)
             {
                 if (need_comma) sb.Append(',');
                 else need_comma = true;
-                n.ToStringBuilder(sb,0);
+                n.ToStringBuilder(sb, 0);
             }
             return false;
         }
@@ -84,26 +98,16 @@ namespace GameMaker.Ast
         {
             new Writers.BlockToCode(new Writers.DebugFormater(), new Context.ErrorContext(Path.GetFileNameWithoutExtension(FileName))).WriteFile(block, FileName);
         }
-        public static bool TryParse(this ILValue node, out int value)
-        {
-            ILValue valueNode = node as ILValue;
-            if (valueNode != null && (valueNode.Type == GM_Type.Short || valueNode.Type == GM_Type.Int))
-            {
-                value = (int) valueNode;
-                return true;
-            }
-            value = 0;
-            return false;
-        }
-  
+
     }
-    
+
     public abstract class ILNode
     {
+        public abstract bool hasChildren { get; }
         public string Comment = null;
         ILNode _parent = null;
         ILNode _next = null;
-        public ILNode Parent {  get { return _parent; } }
+        public ILNode Parent { get { return _parent; } }
         public ILNode Next { get { return _next; } }
         public IEnumerable<ILNode> GetParents()
         {
@@ -116,86 +120,68 @@ namespace GameMaker.Ast
                 yield return current;
             }
         }
-        public void ClearAndSetAllParents(bool skipVarAndConstants=true)
+        public void ClearAndSetAllParents(bool skipVarAndConstants = true)
         {
             List<ILNode> nodes = this.GetSelfAndChildrenRecursive<ILNode>().ToList(); // cause we do this twice
-            foreach(var n in nodes) n._parent = n._next = null;
+            foreach (var n in nodes) n._parent = n._next = null;
             foreach (ILNode node in nodes)
             {
                 ILNode previousChild = null;
                 foreach (ILNode child in node.GetChildren())
                 {
                     if (skipVarAndConstants && (child is ILValue || child is ILVariable)) continue; // we want to skip these.
-                    if(child._parent != null)
+                    if (child._parent != null)
                     {
                         throw new Exception("The following expression is linked from several locations: " + child.ToString());
                     }
                     child._parent = node;
                     if (previousChild != null) previousChild._next = child;
                     previousChild = child;
-                   
+
                 }
                 if (previousChild != null) previousChild._next = null;
             }
         }
         // hack
         public static string EnviromentOverride = null;
-        // removed ILList<T>
-        // I originaly wanted to make a list class that could handle parent and child nodes automaticly
-        // but in the end it was adding to much managment where just a very few parts of the
-        // decompiler needed
-        static bool check_speed = false;
-        public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate = null) where T : ILNode
+        // After HOURS of tryign diffrent algorythms using tasks/threads
+        // there is no way to optimize this.  To be frank, we don't have enough nodes
+        // to really optimize it that much except for doing a first
+        //trasversal Parrell task
+        public static ConcurrentBag<TimeChecker> times = new ConcurrentBag<TimeChecker>();
+        public class TimeChecker
         {
-
-            List<T> result = new List<T>(16);
-            AccumulateSelfAndChildrenRecursive(result, predicate);
-            
-            if(check_speed && result.Count > 1000)
-            {
-                result = new List<T>(16);
-                var current = DateTime.Now;
-                AccumulateSelfAndChildrenRecursive(result, predicate);
-                var end = DateTime.Now;
-                var final1 = end - current;
-              
-                ConcurrentBag<T> bag = new ConcurrentBag<T>();
-                current = DateTime.Now;
-                var parrent = Task.Factory.StartNew(() =>
-                {
-                    AccumulateSelfAndChildrenRecursive(bag, predicate);
-                });
-                parrent.Wait();
-                end = DateTime.Now;
-                var final2 = end - current;
-                if(final1 > final2)
-                {
-                    Debug.WriteLine("------Items: {0}", result.Count);
-                    Debug.WriteLine("------------------First :" + final1);
-                    Debug.WriteLine("------------------Second :" + final2);
-                }
-            }
+            public TimeSpan Time;
+            public int Count;
+        }
+        public IEnumerable<T> GetSelfAndChildrenRecursive<T>() where T : ILNode
+        {
+            List<T> result = new List<T>(16);  /// standard
+            var start = DateTime.Now;
+            AccumulateSelfAndChildrenRecursive(result);
+            var end = DateTime.Now;
+            if (result.Count > 5000) times.Add(new TimeChecker() { Time = end -start , Count = result.Count });
             return result;
         }
-        public IEnumerable<T> GetSelfAndChildrenRecursiveAsync<T>(Func<T, bool> predicate = null) where T : ILNode
+
+        public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate) where T : ILNode
         {
-            ConcurrentBag<T> bag = new ConcurrentBag<T>();
-            AccumulateSelfAndChildrenRecursive(bag, predicate);
-            return bag.ToList();
+            if (predicate == null) throw new ArgumentNullException("predicate");
+            List<T> result = new List<T>(16);
+            AccumulateSelfAndChildrenRecursive(result, predicate);
+            return result;
         }
-        static ParallelOptions op = new ParallelOptions();
-        void AccumulateSelfAndChildrenRecursive<T>( ConcurrentBag<T> bag, Func<T, bool> predicate) where T : ILNode
+
+        void AccumulateSelfAndChildrenRecursive<T>(List<T> list) where T : ILNode
         {
             T thisAsT = this as T;
-            if (thisAsT != null && (predicate == null || predicate(thisAsT)))  bag.Add(thisAsT);
-            foreach(var node in this.GetChildren())
+            if (thisAsT != null) list.Add(thisAsT);
+            foreach (ILNode node in this.GetChildren())
             {
-                Task.Factory.StartNew(() =>
-                {
-                    if (node != null) node.AccumulateSelfAndChildrenRecursive(bag, predicate);
-                }, TaskCreationOptions.AttachedToParent);
+                if (node != null) node.AccumulateSelfAndChildrenRecursive(list);
             }
         }
+ 
         void AccumulateSelfAndChildrenRecursive<T>(List<T> list, Func<T, bool> predicate) where T : ILNode
         {
             // Note: RemoveEndFinally depends on self coming before children
@@ -238,13 +224,14 @@ namespace GameMaker.Ast
     {
         /// <remarks> Body has to start with a label and end with unconditional control flow </remarks>
         public List<ILNode> Body = new List<ILNode>();
+        public override bool hasChildren { get { return Body.Count > 0; } }
         public override IEnumerable<ILNode> GetChildren()
         {
             return this.Body;
         }
         public override bool ToStringBuilder(StringBuilder sb,int ident)
         {
-            sb.Append("ILBasicBlock: ");
+            sb.AppendLine("ILBasicBlock: ");
             sb.AppendLines(Body, ident);
             return true;
         }
@@ -257,6 +244,7 @@ namespace GameMaker.Ast
         {
             this.Body = body.ToList();
         }
+        public override bool hasChildren { get { return Body.Count > 0; } }
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.EntryGoto != null)
@@ -288,6 +276,7 @@ namespace GameMaker.Ast
         public string FunctionNameOverride = null;
         public string FullTextOverride = null;
         public List<ILExpression> Arguments = new List<ILExpression>();
+        public override bool hasChildren { get { return Arguments.Count > 0; } }
         public GM_Type Type = GM_Type.NoType; // return type
         public override bool ToStringBuilder(StringBuilder sb, int ident)
         {
@@ -316,6 +305,7 @@ namespace GameMaker.Ast
 
     public class ILValue : ILNode, IEquatable<ILValue>, IComparable<ILValue>
     {
+        public override bool hasChildren { get { return false; } }
         public object Value { get; private set; }
         public GM_Type Type { get; private set; }
         public string ValueText = null;
@@ -421,21 +411,35 @@ namespace GameMaker.Ast
 
     public class ILLabel : ILNode, IEquatable<ILLabel>
     {
+        public override bool hasChildren { get { return false; } }
         static int generate_count = 0;
         // generates a label, gurntess unique
         public static ILLabel Generate(string name = "G")
         {
-            name = string.Format("{0}_L{1}", name, generate_count++);
-            return new ILLabel() { Name = name };
+            return Generate(name, generate_count++);
         }
-        public string Name;
-        public Label OldLabel = null;
-        public int Offset;
-        public object UserData = null; // usally old dsam label
-        public bool isExit = false;
+        public static ILLabel Generate(string name, int labelIndex)
+        {
+            name = string.Format("{0}_{1}", name, labelIndex);
+            return new ILLabel(name);
+        }
+        public readonly string Name;
+        public readonly int Offset;
+        public ILLabel(int offset)
+        {
+            this.Name = "L" + offset;
+            this.Offset = offset;
+        }
+        ILLabel(string name)
+        {
+            this.Offset = -1;
+            this.Name = name;
+        }
         public bool Equals(ILLabel other)
         {
-            return other.Name == Name;
+            if (this.Offset != -1 && this.Offset == other.Offset) return true;
+            if(this.Offset != other.Offset) return false;
+            return Offset == -1 && other.Name == this.Name;
         }
         public override bool Equals(object obj)
         {
@@ -446,21 +450,34 @@ namespace GameMaker.Ast
         }
         public override int GetHashCode()
         {
-            return Name.GetHashCode();
+            return this.Offset == -1 ? this.Name.GetHashCode() : this.Offset;
         }
 
         public override bool ToStringBuilder(StringBuilder sb, int ident)
         {
-            sb.Append("(Name=");
+            sb.Append(":");
             sb.Append(Name);
-            sb.Append(" Offset=");
-            sb.Append(Offset);
-            sb.Append(")");
+            sb.Append(":");
             return false;
         }
     }
     public class ILVariable : ILNode, IEquatable<ILVariable>
     {
+        public override bool hasChildren { get { return Index != null || _instance == 0; } }
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            if(!(Instance is ILValue)) yield return Instance;
+            if (Index != null)
+            {
+                if (Index.Code == GMCode.Array2D)
+                {
+                    yield return Index.Arguments[0];
+                    yield return Index.Arguments[1]; // special case, meh.  I need to shove this in Expressions the more I think about it
+                }
+                else
+                    yield return Index;
+            }   
+        }
         static int static_gen = 0;
         // generates a variable, gurntees it unique
         public static ILVariable GenerateTemp(string name = "gen")
@@ -561,7 +578,7 @@ namespace GameMaker.Ast
         {
             get
             {
-                return !isLocal || _instance == -1;
+                return isLocal ||  _instance == -1;
             }
         }
         public bool Equals(ILVariable obj)
@@ -728,7 +745,7 @@ void ReportUnassignedILRanges(ILBlock method)
 
     public class ILExpression : ILNode
     {
-
+        public override bool hasChildren { get { return Operand is ILNode || Arguments.Count > 0; } }
         public GMCode Code { get; set; }
         public int Extra { get; set; }
         public object Operand { get; set; }
@@ -791,8 +808,7 @@ void ReportUnassignedILRanges(ILBlock method)
             InferredType = GM_Type.NoType;
             ExpectedType = GM_Type.NoType;
         }
-
-        public ILExpression(GMCode code, object operand, params ILExpression[] args)
+        public ILExpression(GMCode code, object operand, List<ILRange> ranges, params ILExpression[] args)
         {
             if (operand is ILExpression)
                 throw new ArgumentException("operand");
@@ -800,16 +816,21 @@ void ReportUnassignedILRanges(ILBlock method)
             this.Code = code;
             this.Operand = operand;
             this.Arguments = new List<ILExpression>(args);
-            this.ILRanges = new List<ILRange>(1);
+
+            if (ranges != null)
+                this.ILRanges = ranges;
+            else
+                this.ILRanges = new List<ILRange>(1);
             InferredType = GM_Type.NoType;
             ExpectedType = GM_Type.NoType;
         }
+        public ILExpression(GMCode code, object operand, params ILExpression[] args) : this(code, operand, null, args) { }
 
 
         public override IEnumerable<ILNode> GetChildren()
         {
-            if (Operand is ILValue || Operand is ILVariable || Operand is ILCall) yield return Operand as ILNode;
-            foreach (var e in Arguments) yield return e;
+            if (Operand is ILVariable) yield return Operand as ILNode;
+            if (Arguments.Count > 0) foreach (var e in Arguments) yield return e;
         }
 
         public bool IsBranch()
@@ -972,7 +993,7 @@ void ReportUnassignedILRanges(ILBlock method)
     {
         public ILExpression Condition;
         public ILBlock BodyBlock;
-
+        public override bool hasChildren {get { return Condition != null || BodyBlock != null;}}
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.Condition != null)
@@ -995,6 +1016,7 @@ void ReportUnassignedILRanges(ILBlock method)
     {
         public List<ILCondition> Conditions = new List<ILCondition>();
         public ILBlock Else = null;
+        public override bool hasChildren { get { return Conditions.Count > 0 || Else != null; } }
         public override IEnumerable<ILNode> GetChildren()
         {
             foreach (var c in Conditions) yield return c;
@@ -1027,7 +1049,7 @@ void ReportUnassignedILRanges(ILBlock method)
         public ILExpression Condition;
         public ILBlock TrueBlock;   // Branch was taken
         public ILBlock FalseBlock;  // Fall-though
-
+        public override bool hasChildren { get { return true; } }
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.Condition != null)
@@ -1052,69 +1074,10 @@ void ReportUnassignedILRanges(ILBlock method)
             return true;
         }
     }
-    // Used as a place holder for the loop switch detection
-    public class ILFakeSwitch : ILNode
-    {
-        public class ILCase : ILNode
-        {
-            public ILExpression Value = null;
-            public ILLabel Goto = null;
-
-            public override IEnumerable<ILNode> GetChildren()
-            {
-                if (Value != null) yield return this.Value;
-                if (Goto != null) yield return this.Goto;
-            }
-            public override string ToString()
-            {
-                StringBuilder sb = new StringBuilder();
-                sb.Append("Value=");
-                sb.Append(Value);
-                sb.Append(" Goto=");
-                sb.Append(Goto);
-                return sb.ToString();
-            }
-
-            public override bool ToStringBuilder(StringBuilder sb, int ident)
-            {
-                sb.AppendLine("ILSwitch.ILCase");
-                return true;
-            }
-        }
-        public ILExpression Condition;      
-        public List<ILCase> Cases = new List<ILCase>();
-        public ILLabel Default = null;
-
-        public override IEnumerable<ILNode> GetChildren()
-        {
-            if (Condition != null) yield return Condition;
-            foreach(var c in Cases) yield return c;
-            if (Default != null) yield return Default;
-        }
-        public override string ToString()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.Append("Condition=");
-            sb.Append(Condition);
-            sb.Append(" Case Count=");
-            sb.Append(Cases.Count);
-            return sb.ToString();
-        }
-        public IEnumerable<ILLabel> GetLabels()
-        {
-            List<ILLabel> list = Cases.Select(x => x.Goto).ToList();
-            if (Default != null) list.Add(Default);
-            return list;
-        }
-
-        public override bool ToStringBuilder(StringBuilder sb, int ident)
-        {
-            sb.AppendLine("ILFakeSwitch");
-            return true;
-        }
-    }
+   
     public class ILSwitch : ILNode
     {
+        public override bool hasChildren { get { return true; } }
 
         public class ILCase : ILBlock
         {
@@ -1154,6 +1117,7 @@ void ReportUnassignedILRanges(ILBlock method)
 
     public class ILWithStatement : ILNode
     {
+        public override bool hasChildren { get { return true; } }
         public static int withVars = 0;
         public ILBlock Body = new ILBlock();
         public ILExpression Enviroment;
@@ -1175,6 +1139,7 @@ void ReportUnassignedILRanges(ILBlock method)
 
     public class ILTryCatchBlock : ILNode
     {
+        public override bool hasChildren { get { return true; } }
         public class CatchBlock : ILBlock
         {
             public ILVariable ExceptionVariable;

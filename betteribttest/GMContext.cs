@@ -15,7 +15,7 @@ namespace GameMaker
     public enum OutputType
     {
         LoveLua,
-        JavaScript
+        GameMaker
     }
     public enum UndertaleVersion
     {
@@ -73,6 +73,19 @@ namespace GameMaker
     public static class Context 
     {
         public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
+        static List<Message> messages = new List<Message>();
+        static public CancellationToken ct;
+        static public bool doGlobals = true;
+        static public bool makeObject = false;
+        static public OutputType outputType = OutputType.GameMaker;
+        static public bool doAsm = false;
+        static public bool doThreads = true;
+        static public bool Debug = false;
+        static public UndertaleVersion Version = UndertaleVersion.V10001;
+        static MType consoleLevel = MType.Warning;
+        static bool HasOpenedFile = false;
+        public static string ErrorFileName = "errors.txt";
+        public static bool HasFatalError { get; private set; }
         public static ILBlock DecompileBlock(File.Code code)
         {
             /*
@@ -214,8 +227,7 @@ namespace GameMaker
                 return Context.MakeDebugFileName(code, filename);
             }
         }
-        static bool HasOpenedFile = false;
-        public static string ErrorFileName = "errors.txt";
+
         public static string ChangeEndOfFileName(string filename, string toAdd)
         {
             return Path.ChangeExtension((Path.GetFileNameWithoutExtension(filename) + toAdd), Path.GetExtension(filename));
@@ -238,7 +250,7 @@ namespace GameMaker
         }
         private static System.Object lockThis = new System.Object();
 
-        static string FixDebugFileName(string dfilename)
+        public static string MoveFileToOldErrors(string dfilename)
         {
             if (System.IO.File.Exists(dfilename))
             {
@@ -307,21 +319,28 @@ namespace GameMaker
         }
         static void  ToConsole(Message m)
         {
-            if(consoleLevel >= m.Type)
+            if(consoleLevel <= m.Type)
             {
                 StringBuilder sb = new StringBuilder();
                 sb.Append(m.Header);
                 sb.Append(m.Msg);
                 ToConsole(sb.ToString());
-                if(m.Node != null)
+                if (m.Node != null)
                 {
-                    using (StringWriter strw = new StringWriter())
+                    sb.Clear();
+                    m.Node.ToStringBuilder(sb, 0);
+                    using (StringReader sr = new StringReader(sb.ToString()))
                     {
-                        var ptext = new PlainTextOutput(strw);
-                        ptext.Header = m.Header;
-                        ptext.Write(m.Node.ToString());
-                        ptext.WriteLine();
-                        ToConsole(strw.ToString());
+                        while(sr.Peek() != -1)
+                        {
+                            string s = sr.ReadLine();
+                            if (string.IsNullOrWhiteSpace(s)) continue;
+                            sb.Clear();
+                            sb.Append(m.Header);
+                            sb.Append(' ');
+                            sb.Append(s);
+                            ToConsole(sb.ToString());
+                        }
                     }
                 }
             }
@@ -331,7 +350,7 @@ namespace GameMaker
         {
             if (!HasOpenedFile && System.IO.File.Exists(ErrorFileName))
             {
-                string filename = FixDebugFileName(ErrorFileName);
+                string filename = MoveFileToOldErrors(ErrorFileName);
                 using (StreamWriter sw = new StreamWriter(System.IO.File.Open("errors.txt", FileMode.OpenOrCreate)))
                     sw.WriteLine("Error Start: {0}", DateTimeStamp);
                 HasOpenedFile = true;
@@ -382,17 +401,7 @@ namespace GameMaker
         {
             DoMessage(MType.Fatal, string.Format(msg, o), node);
         }
-        static List<Message> messages = new List<Message>();
-        static public CancellationToken ct;
-        static public bool doGlobals = true;
-        static public bool makeObject = false;
-        static public OutputType outputType = OutputType.LoveLua;
-        static public bool doAsm = false;
-        static public bool doThreads = false;
-        static public bool Debug = false;
-        static public UndertaleVersion Version = UndertaleVersion.V10001;
-        static MType consoleLevel = MType.Warning;
-        public static bool HasFatalError { get; private set; }
+
         static Context()
         {
             HasFatalError = false;
@@ -406,8 +415,9 @@ namespace GameMaker
             string filename = Path.GetFileNameWithoutExtension(file);
             filename = code_name + "_" + filename + Path.GetExtension(file);
             filename = file.Replace(Path.GetFileName(file), filename); // so we keep any path information
-            return FixDebugFileName(filename);
+            return MoveFileToOldErrors(filename);
         }
+
         public static string EscapeChar(char v)
         {
             switch (v)

@@ -21,7 +21,7 @@ namespace GameMaker.Dissasembler
         protected ILLabel GetLabel(int position)
         {
             ILLabel l;
-            if (!labels.TryGetValue(position, out l)) labels[position] = l = new ILLabel() { Name = "L" + position.ToString(), Offset = position };
+            if (!labels.TryGetValue(position, out l)) labels[position] = l = new ILLabel(position);
             return l;
         }
         protected ILExpression CreateLabeledExpression(GMCode code)

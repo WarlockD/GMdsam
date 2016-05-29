@@ -80,13 +80,17 @@ namespace GameMaker
                         }
 
                         break;
+                    case "-old":
+                        pos++;
+                        Context.Version = UndertaleVersion.V10000;
+                        break;
                     case "-debug":
                         pos++;
                         Context.Debug = true;
                         break;
-                    case "-thread":
+                    case "-nothreading":
                         pos++;
-                        Context.doThreads = true;
+                        Context.doThreads = false;
                         break;
                     case "-all":
                         {
@@ -117,14 +121,6 @@ namespace GameMaker
                         break;
                     case "-lua":
                         Context.outputType = OutputType.LoveLua;
-                        pos++;
-                        break;
-                    case "-js":
-                        Context.outputType = OutputType.JavaScript;
-                        pos++;
-                        break;
-                    case "-asm":
-                        Context.doAsm = true;
                         pos++;
                         break;
                     default:

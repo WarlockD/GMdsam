@@ -35,12 +35,6 @@ namespace GameMaker.Ast
                         labelToBranch.GetOrDefault(target).Add(entry);
                         continue;
                     }
-                    ILFakeSwitch fswitch = n as ILFakeSwitch;
-                    if (fswitch != null)
-                    {
-                        foreach (var fl in fswitch.GetLabels())
-                            labelGlobalRefCount[fl] = labelGlobalRefCount.GetOrDefault(fl) + 1;
-                    }
                 }
             }
         }
@@ -65,11 +59,6 @@ namespace GameMaker.Ast
                 {
                     labelToBasicBlock[label] = bb;
                 }
-                foreach (ILFakeSwitch fswitch in bb.GetChildren().OfType<ILFakeSwitch>())
-                {
-                    foreach (var target in fswitch.GetLabels())
-                        labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-                }
             }
            
         }
@@ -90,14 +79,7 @@ namespace GameMaker.Ast
            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
             {
                 labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-            }
-            foreach (ILFakeSwitch fswitch in method.GetSelfAndChildrenRecursive<ILFakeSwitch>())
-            {
-                foreach(var target in fswitch.GetLabels())
-                    labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-            }
-
-           
+            }   
             foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
             {
                 foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
@@ -121,6 +103,20 @@ namespace GameMaker.Ast
             trueLabel = default(ILLabel);
             falseLabel = default(ILLabel);
             condition = default(ILExpression);
+            return false;
+        }
+        bool MatchSwitchCaseAndBuildExpression(ILBasicBlock head, out ILLabel trueLabel, out ILLabel falseLabel, out ILExpression expr)
+        {
+            ILExpression condition;
+            if (MatchSwitchCase(head, out trueLabel, out falseLabel, out condition))
+            {
+                var ranges = head.JoinILRangesFromTail(5);
+                expr = new ILExpression(GMCode.Bt, trueLabel, ranges, new ILExpression(GMCode.Seq, null, condition));
+                return true;
+            }
+            trueLabel = default(ILLabel);
+            falseLabel = default(ILLabel);
+            expr = default(ILExpression);
             return false;
         }
         ILExpression PreSetUpCaseBlock(ILBasicBlock block, ILExpression condition)
@@ -162,71 +158,89 @@ namespace GameMaker.Ast
             ILLabel callTo;
             return FindEndOfSwitch(start, out callTo);
         }
+        // changed the detection to use expresions...again.. and to make it more generic for
+        // changing between a bunch of if statements or a big case statmet
         public bool DetectSwitch_GenerateSwitch(List<ILNode> body, ILBasicBlock head, int pos)
         {
 
             bool modified = false;
-            ILExpression condition;
+            ILExpression expr;
             ILLabel trueLabel;
             ILLabel falseLabel;
             ILLabel fallThough;
             //    Debug.Assert(head.EntryLabel().Name != "Block_473");
-            if (MatchSwitchCase(head, out trueLabel, out fallThough, out condition))
+            if (MatchSwitchCaseAndBuildExpression(head, out trueLabel, out fallThough, out expr))
             {
-                ILFakeSwitch fake = new ILFakeSwitch() { Default = head.GotoLabel() };
-                fake.Cases.Add(new ILFakeSwitch.ILCase() { Goto = trueLabel, Value = condition });
+                ILExpression fswitch = new ILExpression(GMCode.Switch, null);
+                List<ILExpression> args = fswitch.Arguments;
+                List<ILLabel> labels = new List<ILLabel>();
                 List<ILNode> caseBlocks = new List<ILNode>();
                 ILLabel prev = head.EntryLabel();
-                ILBasicBlock startOfCases = head;
-                caseBlocks.Add(startOfCases);
+                ILBasicBlock endOfAllCases = head;
+                ILBasicBlock startOfAllCases = head;
+
+                args.Add(expr); // add self as case
+                labels.Add(trueLabel); // add exit labels
+                caseBlocks.Add(head); // add head of cases
 
                 for (int i = pos - 1; i >= 0; i--)
                 {
                     ILBasicBlock bb = body[i] as ILBasicBlock;
-                    if (MatchSwitchCase(bb, out trueLabel, out falseLabel, out condition))
+                    if (MatchSwitchCaseAndBuildExpression(bb, out trueLabel, out falseLabel, out expr))
                     {
                         caseBlocks.Add(bb);
-                        fake.Cases.Add(new ILFakeSwitch.ILCase() { Goto = trueLabel, Value = condition });
-                        Debug.Assert(falseLabel == prev);
+                        args.Add(expr); // add case
+                        labels.Add(trueLabel); // add label
+                        Debug.Assert(falseLabel == prev); // Make sure its correct in the chain
                         prev = bb.EntryLabel();
-                        startOfCases = bb;
+                        startOfAllCases = bb; // change the start to here
                     }
                     else break;
                 } // we have all the cases
+                // Since we went backward revere the list and labels
+                labels.Reverse();
+                args.Reverse(); // They should be sorted anyway
+                fswitch.Operand = labels.ToArray();
+                ILExpression pushSwitchExpression = startOfAllCases.Body.ElementAtOrDefault(startOfAllCases.Body.Count - 6) as ILExpression;
+                ILExpression switchCondition;
+                if (!pushSwitchExpression.Match(GMCode.Push, out switchCondition) || !switchCondition.isExpressionResolved()) { 
 
-
-                if (!startOfCases.Body[startOfCases.Body.Count - 4].Match(GMCode.Push, out fake.Condition)) { 
-
-                    error.Info("switch failure " + startOfCases.ToString());
+                    error.Error("switch failure " + startOfAllCases.ToString());
                     
                     // Something not worky?
                     throw new Exception("switch failure");
 
                 }
+                foreach (var e in args) e.Arguments[0].Arguments.Add(new ILExpression(switchCondition));
+
+
                 // It seems GM makes a default case that just jumps to the end of the switch but I think I can 
                 // rely on it always being there
                 ILBasicBlock default_case = body[pos + 1] as ILBasicBlock;
-                Debug.Assert(default_case.EntryLabel() == head.GotoLabel());
+                Debug.Assert(default_case.EntryLabel() == endOfAllCases.GotoLabel());
                 ILBasicBlock end_of_switch = FindEndOfSwitch(default_case, out fallThough);
                 if(end_of_switch != null)
                 {
-                    if(fallThough == null) // we have no default case
+                    if (fallThough == null) // we have no default case
                     {
                         fallThough = default_case.EntryLabel();
                         end_of_switch.Body.RemoveAt(1); // yeaa!
-                    } else
+                    }
+                    else
                     {
-                        ILBasicBlock test1 = FindEndOfSwitch(startOfCases);
-                        ILBasicBlock test2 = FindEndOfSwitch(head);
-                        // Make sure we all reach the same place, I should test ALL the cases to make sure this happens
-                        // but just a few should be good enough
-                        if (end_of_switch == test1 && end_of_switch == test2) {
-                            end_of_switch.Body.RemoveAt(1); // yeaa!
-                        } else
+                        // this is VERY time intensive, since I am lazy and don't want to otimzie, I will 
+                        // only check 5 of the labels   
+                        for(int i=0; i < labels.Count && i < 5; i++)
                         {
-                            error.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
-                            throw new Exception("end_of_switch");
+                            ILLabel l = labels[i];
+                            ILBasicBlock test = FindEndOfSwitch(labelToBasicBlock[l]);
+                            if (end_of_switch != test)
+                            {
+                                error.Error("Cannot find end of switch", end_of_switch);  // bad, cant find end
+                                throw new Exception("end_of_switch");
+                            }
                         }
+                        end_of_switch.Body.RemoveAt(1); // yeaa!
                     }
                 } else
                 {
@@ -234,11 +248,11 @@ namespace GameMaker.Ast
                     throw new Exception("end_of_switch");
                 }
                 // Now we have to  clean up
-                foreach (var b in caseBlocks.Where(x => x != startOfCases)) body.RemoveOrThrow(b);
+                foreach (var b in caseBlocks.Where(x => x != startOfAllCases)) body.RemoveOrThrow(b);
                 // then modify head with the new switch structure
-                startOfCases.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Seq, GMCode.Bt, GMCode.B);
-                startOfCases.Body.Add(fake);
-                startOfCases.Body.Add(new ILExpression(GMCode.B, fake.Default)); //  end_of_switch.EntryLabel()));
+                startOfAllCases.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Seq, GMCode.Bt, GMCode.B);
+                startOfAllCases.Body.Add(fswitch);
+                startOfAllCases.Body.Add(new ILExpression(GMCode.B, endOfAllCases.GotoLabel())); //  end_of_switch.EntryLabel()));
                 modified = true;
             }
             return modified;
