@@ -9,10 +9,13 @@ using System.Diagnostics;
 using System.Runtime.Serialization;
 using System.Reflection;
 using System.Collections.Specialized;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Drawing;
 
 namespace GameMaker
 {
-  
+
     class SimplerLuaFormatter : IFormatter
     {
         SerializationBinder binder;
@@ -26,105 +29,135 @@ namespace GameMaker
 
         public object Deserialize(System.IO.Stream serializationStream)
         {
-            StreamReader sr = new StreamReader(serializationStream);
-
-            // Get Type from serialized data.
-            string line = sr.ReadLine();
-            char[] delim = new char[] { '=' };
-            string[] sarr = line.Split(delim);
-            string className = sarr[1];
-            Type t = Type.GetType(className);
-
-            // Create object of just found type name.
-            Object obj = FormatterServices.GetUninitializedObject(t);
-
-            // Get type members.
-            MemberInfo[] members = FormatterServices.GetSerializableMembers(obj.GetType(), Context);
-
-            // Create data array for each member.
-            object[] data = new object[members.Length];
-
-            // Store serialized variable name -> value pairs.
-            StringDictionary sdict = new StringDictionary();
-            while (sr.Peek() >= 0)
-            {
-                line = sr.ReadLine();
-                sarr = line.Split(delim);
-
-                // key = variable name, value = variable value.
-                sdict[sarr[0].Trim()] = sarr[1].Trim();
-            }
-            sr.Close();
-
-            // Store for each member its value, converted from string to its type.
-            for (int i = 0; i < members.Length; ++i)
-            {
-                FieldInfo fi = ((FieldInfo) members[i]);
-                if (!sdict.ContainsKey(fi.Name))
-                    throw new SerializationException("Missing field value : " + fi.Name);
-                data[i] = System.Convert.ChangeType(sdict[fi.Name], fi.FieldType);
-            }
-
-            // Populate object members with theri values and return object.
-            return FormatterServices.PopulateObjectMembers(obj, members, data);
+           return null;
         }
-        void SerializeArray(StreamWriter sw, System.Collections.IEnumerable e)
+        bool isSimpleObject(object o)
         {
-            sw.WriteLine("{ ");
-            bool comma = false;
-            foreach (var o in e)
-            {
-                if (comma) { comma = true; sw.Write(", "); }
-                SerializePump(sw, e);
-            }
-            sw.WriteLine(" }");
+            Type t = o.GetType();
+            if (o is string || t.IsPrimitive) return true;
+            if (o is System.Collections.IEnumerable) return false;
+            if (t == typeof(KeyValuePair<string, object>) && isSimpleObject(((KeyValuePair<string, object>)o).Value)) return true;
+            return false;
         }
-        void SerializePump(StreamWriter sw, object graph,string table=null)
+        void SaveSimpleObject(int ident, StringBuilder sb, object o)
         {
-            MemberInfo[] members = FormatterServices.GetSerializableMembers(graph.GetType(), Context);
-            object[] objs = FormatterServices.GetObjectData(graph, members);
-            if (table != null) sw.Write("{0} = ", table);
-            sw.Write("{ ");
-            for (int i = 0; i < objs.Length; ++i)
+            Type t = o.GetType();
+            if (t == typeof(string))
             {
-                sw.Write(members[i].Name);
-                sw.Write(" = ");
-                SerializeValue(sw,objs[i]);
+                sb.Append('"');
+                foreach (var c in (o as string)) sb.Append(JISONEscapeString(c));
+                sb.Append('"');
             }
-            sw.WriteLine(" }");
-        }
-        void SerializeValue(StreamWriter sw, object o)
-        {
-            switch (Type.GetTypeCode(o.GetType()))
+            else if (t == typeof(bool)) sb.Append((bool)o ? "true" : "false");
+            else if (t.IsPrimitive) sb.Append(o.ToString());
+            else if(t == typeof(KeyValuePair<string, object>))
             {
-                case TypeCode.String:
-                    sw.Write("\"");
-                    sw.Write(o.ToString());
-                    sw.Write("\"");
-                    break;
-                case TypeCode.Boolean:
-                    sw.Write((bool) o ? "true" : "false");
-                    break;
-                default: // otherwise check if its an array
-                    if (o.GetType().IsPrimitive) sw.Write(o.ToString()); // default
-                    else if (o is System.Collections.IEnumerable) SerializeArray(sw, o as System.Collections.IEnumerable);
-                    else SerializePump(sw, o);
-                    break;
+                KeyValuePair<string, object> kv = (KeyValuePair<string, object>)o;
+                sb.Append(kv.Key);
+                sb.Append(" = ");
+                if(!isSimpleObject(kv.Value)) throw new Exception("Not a simple object");
+                SaveSimpleObject(ident, sb, kv.Value);
+            }
+            else throw new Exception("Not a simple object");
+        }
+        void SaveValue(int ident, StringBuilder sb, object o)
+        {
+            Type t = o.GetType();
+            if (o == null) sb.Append(NullString);
+            else if (t.IsPrimitive || o is string) SaveSimpleObject(ident, sb, o);
+            else if (t == typeof(KeyValuePair<string, object>))
+            {
+                KeyValuePair<string, object> kv = (KeyValuePair<string, object>)o;
+                sb.Append(kv.Key);
+                sb.Append(" = ");
+                SaveValue(ident, sb, kv.Value);
+            }
+            else
+            {
+                sb.Append('{');
+                bool need_comma = false;
+                ident++;
+                System.Collections.IEnumerable ie = o as System.Collections.IEnumerable;
+                if (ie != null)
+                {
+                    foreach (var io in ie)
+                    {
+                        if (need_comma) sb.Append(','); else need_comma = true;
+                        sb.Append(' ');
+                        object ioo;
+                        if (io is KeyValuePair<string, object>)
+                        {
+                            KeyValuePair<string, object> kv = (KeyValuePair<string, object>)io;
+                            sb.Append(kv.Key);
+                            sb.Append(" = ");
+                            ioo = kv.Value;
+                        }
+                        else ioo = io;
+                        SaveValue(ident, sb, ioo);
+                        if (!isSimpleObject(ioo)) sb.AppendLineAndIdent(ident);
+                    }
+                }
+                else
+                {
+                    MemberInfo[] members = FormatterServices.GetSerializableMembers(o.GetType(), Context);
+                    object[] objs = FormatterServices.GetObjectData(o, members);
+                    Dictionary<string, object> dic = new Dictionary<string, object>();
+                    for (int i = 0; i < objs.Length; ++i)
+                    {
+                        string name = members[i].Name;
+                        var match = k__BackingFieldRemoveRegex.Match(name);
+                        if (match != null && match.Success) name = match.Groups[1].Value; // hack, but it works, eh
+                        dic.Add(name, objs[i]);
+                    }
+                    SaveValue(ident, sb, (IEnumerable<KeyValuePair<string, object>>)dic);
+                }
+                ident--;
+                sb.Append('}');
+            }
+        }
+        public string NullString = "nil";
+        static Regex k__BackingFieldRemoveRegex = new Regex(@"<([\w\d]+)>k__BackingField", RegexOptions.Compiled);
+   
+  
+        
+   
+        public static string JISONEscapeString(string s)
+        {
+            StringBuilder sb = new StringBuilder(50);
+            sb.Append('"');
+            foreach (var c in s) sb.Append(JISONEscapeString(c));
+            sb.Append('"');
+            return sb.ToString();
+        }
+        public static string JISONEscapeString(char v)
+        {
+            switch (v)
+            {
+                case '\a': return "\\a";
+                case '\n': return "\\n";
+                case '\r': return "\\r";
+                case '\t': return "\\t";
+                case '\v': return "\\v";
+                case '\\': return "\\\\";
+                case '\"': return "\\\"";
+                case '\'': return "\\\'";
+                //  case '[': return "\\[";
+                //   case ']': return "\\]";
+                default:
+                    if (char.IsControl(v)) return string.Format("\\{0}", (byte)v);
+                    else return v.ToString();
             }
         }
         public void Serialize(System.IO.Stream serializationStream, object graph)
         {
-            StreamWriter sw = new StreamWriter(serializationStream);
-           
-            sw.WriteLine(" local ClassName=\"{0}\"", graph.GetType().FullName);
-            sw.WriteLine("local self = {}");
-            SerializePump(sw, graph);
+            StringBuilder ssw = new StringBuilder(10000);
+            SaveValue(0, ssw, graph);
+            byte[] bytes = Encoding.ASCII.GetBytes(ssw.ToString());
+            serializationStream.Flush();
+            serializationStream.Write(bytes, 0, bytes.Length);
             serializationStream.Flush();
         }
 
-        //  
-
-   
 
         public ISurrogateSelector SurrogateSelector
         {
@@ -295,9 +328,11 @@ namespace GameMaker
         public static Entry[] ReadChunkEntries(this BinaryReader r)
         {
             int count = r.ReadInt32();
-            if (count == 0) return new Entry[0];
+            if (count == -1) return null;
+            else if (count == 0) return new Entry[0];
             else
             {
+              
                 Entry[] entries = new Entry[count];
                 int[] ientries = r.ReadInt32(count);
                 for (int i = 0; i < count; i++)
@@ -833,7 +868,28 @@ namespace GameMaker
                 rcm.WriteAllChangesToBytes();
             }
         }
+        public static HashSet<System.Drawing.Color>[] CollectTextureColors()
+        {
+            var textureCache = Sprite.TextureCache;
+            HashSet<System.Drawing.Color> allcoclors = new HashSet<System.Drawing.Color>();
+            HashSet<System.Drawing.Color>[] textureColor = new HashSet<System.Drawing.Color>[textureCache.Count];
+            for (int i = 0; i < textureColor.Length; i++)
+            {
+                Bitmap bmp = new Bitmap(textureCache[i]);
+                var currentHash = textureColor[i] = new HashSet<System.Drawing.Color>();
 
+                for (int y = 0; y < bmp.Height; y++)
+                    for (int x = 0; x < bmp.Width; x++)
+                    {
+                        System.Drawing.Color c = bmp.GetPixel(x, y);
+                        currentHash.Add(c);
+                        allcoclors.Add(c);
+                    }
+                Context.Info("Texture {0} has {1} colors",i, currentHash.Count);
+            }
+            Context.Info("All textures have  {0} colors", allcoclors.Count);
+            return textureColor;
+        }
         public static void LoadEveything()
         {
             CheckStrings();
@@ -851,9 +907,9 @@ namespace GameMaker
 
             CheckList("SCPT", ref scripts);
             // CheckList("CODE", ref codes);
-            
+        //    CollectTextureColors();
             NewRefactorCode();
-
+          
             DebugPring();
         }
         public static IReadOnlyList<Script> Scripts { get { CheckList("SCPT", ref scripts); return scripts; } }
@@ -896,39 +952,7 @@ namespace GameMaker
             }
         }
 
-        public static void DebugPrint<T>(List<T> list, TextWriter w, string globalTableName, bool nameLookup = true) where T : ILuaObject
-        {
-            w.WriteLine("-- Start {0} Init", globalTableName);
-            w.WriteLine("{0} = {{}}", globalTableName);
-            string localTableName = "loc_" + globalTableName.Replace('.', '_');
-            w.WriteLine("local {0} = {1}", localTableName, globalTableName);
-            // we set up an index array lookup
-            for (int i = 0; i < list.Count; i++)
-            {
-                var o = list[i];
-                var ls = o.ToLuaStructure();
-                w.Write("{0}[{1,-4}]= ", localTableName, i);
-                ls.ToStringBuilder(w);
-                w.WriteLine();
-
-            }
-            if (nameLookup)
-            {
-                string localMapName = "loc_" + globalTableName + "NameMap";
-                w.WriteLine();
-                w.WriteLine("-- Set up name look up here");
-                w.WriteLine("{0}NameMap = {{}}", globalTableName);
-                w.WriteLine("local {0} = {1}NameMap", localMapName, globalTableName);
-                w.WriteLine("for k, v in ipairs({0}) do", localMapName);
-                w.WriteLine("\tmap[v.name] = v");
-                w.WriteLine("\tif v.index == nil or v.index ~= k then");
-                w.WriteLine("\t\tv.index = k");
-                w.WriteLine("\tend");
-                w.WriteLine("end");
-            }
-            w.WriteLine("-- End {0} Init", globalTableName);
-
-        }
+      
         public static void DebugPring()
         {
             using (StreamWriter sr = new StreamWriter("object_info.txt"))
@@ -941,14 +965,14 @@ namespace GameMaker
                     sr.WriteLine();
                 }
             }
-            using (StreamWriter sr = new StreamWriter("sprite_info.lua"))
-            {
-                DebugPrint(sprites, sr, "_sprites", true);
-            }
-            using (StreamWriter sr = new StreamWriter("font_info.lua"))
-            {
-                DebugPrint(fonts, sr, "_fonts", true);
-            }
+          //  using (StreamWriter sr = new StreamWriter("sprite_info.lua"))
+         //   {
+             //   DebugPrint(sprites, sr, "_sprites", true);
+          //  }
+          //  using (StreamWriter sr = new StreamWriter("font_info.lua"))
+         //   {
+            //    DebugPrint(fonts, sr, "_fonts", true);
+          //  }
             using (StreamWriter sr = new StreamWriter("room_info.txt"))
             {
                 for (int i = 0; i < rooms.Count; i++)
@@ -978,13 +1002,16 @@ namespace GameMaker
             {
                 const string filename = "room_all.lua";
                 if (System.IO.File.Exists(filename)) System.IO.File.Delete(filename);
-                using (System.IO.FileStream file = new System.IO.FileStream(filename, FileMode.Create))
+                using (StreamWriter file = new StreamWriter(filename))
                 {
-                    file.Position = 0;
-                    SimplerLuaFormatter writer = new SimplerLuaFormatter();
-                    writer.Serialize(file, Sounds[45]);
-                    file.Flush();
-                    file.Close();
+                    file.WriteLine("local rooms = {");
+                    foreach(var room in Rooms)
+                    {
+                        var helper = room.CreateHelper();
+                        helper.DebugSave(file);
+                    }
+                    file.WriteLine("}");
+                    file.WriteLine("_rooms = rooms");
                 }
             }
             //  

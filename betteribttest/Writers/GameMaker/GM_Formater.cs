@@ -11,9 +11,10 @@ using GameMaker.Ast;
 
 namespace GameMaker.Writers.GameMaker
 {
-    public class Formater : ICodeFormater
+    public class Formater : CodeFormater
     {
         // since this is a debug writer we have to handle basicblock, otherwise we would never have this or use dynamic here
+       
         public override void Write(ILSwitch f)
         {
             writer.Write("switch(");

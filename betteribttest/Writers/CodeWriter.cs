@@ -106,10 +106,14 @@ namespace GameMaker.Writers
         }
         public void WriteCode(File.Code code, ILBlock block)
         {
-            output.Write(output.LineComment);
-            output.Write(" Code Name: ");
-            output.WriteLine(code.Name);
+            if (code == null) throw new ArgumentNullException("code");
+            if (block == null) throw new ArgumentNullException("block");
             output.Write(block);
+        }
+        public void WriteCode(File.Code code)
+        {
+            if (code == null) throw new ArgumentNullException("code");
+            WriteCode(code, DecompileCode(code));
         }
         ConcurrentDictionary<string, ObjectInfo.VarType> locals = new ConcurrentDictionary<string, ObjectInfo.VarType>();
         ConcurrentDictionary<string, bool> wierdVars = new ConcurrentDictionary<string, bool>();// used to suppress errors on vars

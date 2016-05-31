@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GameMaker.Ast;
+using System.Text.RegularExpressions;
 
 namespace GameMaker.Writers
 {
@@ -24,7 +25,10 @@ namespace GameMaker.Writers
         DirectoryInfo scriptDirectory = null;
         DirectoryInfo objectDirectory = null;
         List<Task> tasks = new List<Task>();
-
+        public static string QuickCodeToLine(File.Code code,string context=null)
+        {
+            return new AllWriter().CodeToSingleLine(code, context);
+        }
         public AllWriter()
         {
      
@@ -59,7 +63,7 @@ namespace GameMaker.Writers
         }
         public static BlockToCode CreateOutput(string name)
         {
-            ICodeFormater formater = null;
+            CodeFormater formater = null;
             INodeMutater mutater = null;
             switch (Context.outputType)
             {
@@ -76,6 +80,17 @@ namespace GameMaker.Writers
             BlockToCode output = new BlockToCode(formater,new Context.ErrorContext(name));
             output.Mutater = mutater;
             return output;
+        }
+        static Regex regex_newline = new Regex(@"\s*(\r\n|\r|\n)\s*", RegexOptions.Compiled);
+        static Regex regex_commas = new Regex(@";+", RegexOptions.Compiled);
+        //
+        string CodeToSingleLine(File.Code c, string context = null)
+        {
+            BlockToCode output = CreateOutput(context ?? c.Name);
+            GetScriptWriter(output).WriteCode(c);
+            var code = regex_newline.Replace(output.ToString(), ";");
+            code = regex_commas.Replace(code, "; "); // replace all double/tripple commas
+            return code.Trim();
         }
         void Run(File.Script s, string filename=null)
         {
@@ -103,6 +118,17 @@ namespace GameMaker.Writers
                 task.Start();
             }
             else Run(obj,path);
+        }
+        void RunTask(Action func)
+        {
+            if (Context.doThreads)
+            {
+                Task task = new Task(func);
+                task.ContinueWith(ExceptionHandler, TaskContinuationOptions.OnlyOnFaulted);
+                tasks.Add(task);
+                task.Start();
+            }
+            else func();
         }
         void RunTask(File.Script s, string path)
         {
@@ -157,6 +183,20 @@ namespace GameMaker.Writers
                 RunTask(s, filename);
             }
         }
+        public void StartWriteAllRooms()
+        {
+            var roomDirectory  = Directory.CreateDirectory("room");
+            string full_name = scriptDirectory.FullName;
+            foreach (var room in File.Rooms) {
+                RunTask(() =>
+                {
+                    string filename = Path.Combine(full_name, room.Name);
+                    using (ResourceFormater fmt = new ResourceFormater(filename))
+                        fmt.Write(room);
+                });
+            }
+        }
+        
         DateTime start;
         public void StartWriteAllObjects()
         {

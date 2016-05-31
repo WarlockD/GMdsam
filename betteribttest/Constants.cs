@@ -8,6 +8,54 @@ namespace GameMaker
 {
     public static class Constants
     {
+        public static string JISONEscapeString(string s)
+        {
+            StringBuilder sb = new StringBuilder(50);
+            sb.Append('"');
+            foreach (var c in s) sb.Append(JISONEscapeString(c));
+            sb.Append('"');
+            return sb.ToString();
+        }
+        public static string JISONEscapeString(char v)
+        {
+            switch (v)
+            {
+                case '\a': return "\\a";
+                case '\n': return "\\n";
+                case '\r': return "\\r";
+                case '\t': return "\\t";
+                case '\v': return "\\v";
+                case '\\': return "\\\\";
+                case '\"': return "\\\"";
+                case '\'': return "\\\'";
+                //  case '[': return "\\[";
+                //   case ']': return "\\]";
+                default:
+                    if (char.IsControl(v)) return string.Format("\\{0}", (byte)v);
+                    else return v.ToString();
+            }
+        }
+        static Dictionary<int, string> identCache = new Dictionary<int, string>();
+        // better than making a new string each ident level
+        public static void Ident(this StringBuilder sb, int ident)
+        {
+            if (ident < 0) throw new ArgumentException("ident cannot be less than 0", "ident");
+            if (ident > 20) throw new ArgumentException("ident cannot be more than 20", "ident");
+            string sident;
+            if (!identCache.TryGetValue(ident, out sident))
+                identCache.Add(ident, sident = new string('\t', ident));
+            sb.Append(sident);
+        }
+        public static void AppendLineAndIdent(this StringBuilder sb, int ident)
+        {
+            if (ident < 0) throw new ArgumentException("ident cannot be less than 0", "ident");
+            if (ident > 20) throw new ArgumentException("ident cannot be more than 20", "ident");
+            string sident;
+            if (!identCache.TryGetValue(ident, out sident))
+                identCache.Add(ident, sident = new string('\t', ident));
+            sb.AppendLine();
+            sb.Append(sident);
+        }
         public static string DebugHex(this int i)
         {
             return string.Format("({0,-8} , {0:X8})", i);
@@ -30,7 +78,7 @@ namespace GameMaker
                     return ".0";
             }
         }
-        public static bool Contains(this List<GameMaker.Ast.ILRange> range, int value)
+        public static bool Contains(this List<Ast.ILRange> range, int value)
         {
             return range.Any(x => x.Contains(value));
         }

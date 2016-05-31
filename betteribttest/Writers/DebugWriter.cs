@@ -9,7 +9,7 @@ using GameMaker.Ast;
 
 namespace GameMaker.Writers
 {
-    public class DebugFormater : ICodeFormater 
+    public class DebugFormater : CodeFormater 
     {
 
         public override string LineComment

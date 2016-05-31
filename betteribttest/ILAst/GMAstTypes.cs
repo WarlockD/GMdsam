@@ -16,14 +16,7 @@ namespace GameMaker.Ast
 {
     public static class NodeOperations
     {
-        static Dictionary<int, string> identCache = new Dictionary<int, string>();
-        // better than making a new string each ident level
-        public static void Ident(this StringBuilder sb, int ident) {
-            string sident;
-            if (!identCache.TryGetValue(ident, out sident))
-                identCache.Add(ident, sident = new string('\t', ident));
-            sb.Append(sident);
-        }
+      
         public static bool Append<T>(this StringBuilder sb, T node, int ident) where T : ILNode
         {
             if (node != null) return node.ToStringBuilder(sb, ident);

@@ -64,6 +64,7 @@ namespace GameMaker
 #endif
             string toSearch = null;
             int pos = 1;
+            var w = new Writers.AllWriter();
             while (pos < args.Length)
             {
                 switch (args[pos])
@@ -72,13 +73,10 @@ namespace GameMaker
                         {
                             pos++;
                             toSearch = args.ElementAtOrDefault(pos);
-                            var w = new Writers.AllWriter();
                             string option = args.ElementAtOrDefault(pos);
                             w.Search(toSearch, true);
-                            w.FinishProcessing();
-                            GoodExit();
+                            pos = args.Length;
                         }
-
                         break;
                     case "-old":
                         pos++;
@@ -95,7 +93,7 @@ namespace GameMaker
                     case "-all":
                         {
                             pos++;
-                            var w = new Writers.AllWriter();
+                         
                             string option = args.ElementAtOrDefault(pos);
                             if (string.IsNullOrWhiteSpace(option)) option = "eveything";
                             switch (option)
@@ -106,6 +104,9 @@ namespace GameMaker
                                 case "objects":
                                     w.StartWriteAllObjects();
                                     break;
+                                case "rooms":
+                                    w.StartWriteAllRooms();
+                                    break;
                                 case "eveything":
                                     w.StartWriteAllScripts();
                                     w.StartWriteAllObjects();
@@ -115,8 +116,8 @@ namespace GameMaker
                                     break;
 
                             }
-                            w.FinishProcessing();
-                            GoodExit();
+                            pos = args.Length;
+
                         }
                         break;
                     case "-lua":
@@ -128,6 +129,8 @@ namespace GameMaker
                         break;
                 }
             }
+            w.FinishProcessing();
+            GoodExit();
         }
     }
 }

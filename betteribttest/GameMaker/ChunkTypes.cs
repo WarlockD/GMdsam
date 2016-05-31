@@ -1,17 +1,24 @@
-﻿using System;
+﻿using GameMaker.Ast;
+using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace GameMaker
 {
     public  static partial class File
     {
+
         public interface INamedResrouce
         {
             string Name { get; }
@@ -20,9 +27,9 @@ namespace GameMaker
         {
             void ReadRaw(BinaryReader r);
         }
-        public interface IFileDataResource: INamedResrouce
+        public interface IDataResource
         {
-            Stream Data { get; }
+            Stream getStream();
         }
         public interface IIndexable
         {
@@ -69,14 +76,17 @@ namespace GameMaker
             public static T[] ArrayFromOffset<T>(BinaryReader r) where T : GameMakerStructure, new()
             {
                 var entries = r.ReadChunkEntries();
+                if (entries == null) return null;
                 if (entries.Length == 0) return new T[0];
                 T[] data = new T[entries.Length];
+                var pos = r.BaseStream.Position;
                 foreach (var e in r.ForEachEntry(entries))
                 {
                     T obj = new T();
                     obj.Read(r, e.Index);
                     data[e.Index] = obj;
                 }
+                r.BaseStream.Position = pos;
                 return data;
             }
             public void Read(BinaryReader r, int index)
@@ -93,6 +103,7 @@ namespace GameMaker
             {
                 return other.Position == Position;
             }
+            
             public override string ToString()
             {
                 INamedResrouce ns = this as INamedResrouce;
@@ -106,29 +117,18 @@ namespace GameMaker
             */
         }
         [Serializable]
-        public class AudioFile : GameMakerStructure, INamedResrouce, IFileDataResource
+        public class AudioFile : GameMakerStructure, INamedResrouce, IDataResource
         {
-            string name;
-            int audio_type;
-            string extension;
-            string filename;
-            int effects;
-            float volume;
-            float pan;
-            int other;
-            int sound_index;
-  
             public string Name { get { return name; } }
-            public int AudioType { get { return audio_type; } }
-            public string Extension { get { return extension; } }
-            public string FileName { get { return filename; } }
-            public int Effects { get { return effects; } }
-            public float Volume { get { return volume; } }
-            public float Pan { get { return pan; } }
-            public int Other { get { return other; } }
-            public int SoundIndex { get { return sound_index; } }
-            public Stream Data { get { return sound_index >= 0 ? File.rawAudio[SoundIndex].Data : null; } }
-
+            public string name;
+            public int audio_type;
+            public string extension;
+            public string filename;
+            public int effects;
+            public float volume;
+            public float pan;
+            public int other;
+            public int sound_index;
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset()); // be sure to intern the name
@@ -145,51 +145,54 @@ namespace GameMaker
                 other = r.ReadInt32();
                 sound_index = r.ReadInt32();
             }
-            /*
-            public GameMakerStructure(SerializationInfo info, StreamingContext context) { }
-            public override void GetObjectData(SerializationInfo info, StreamingContext context)
+            public Stream Data
             {
-                info.AddValue("")
-            }
-            */
-        }
-       
-       
-        public class Texture : GameMakerStructure, IFileDataResource
-        {
-            string _cachedName;
-            // Don't really need this but have to implment Name in IFileDataResource
-            public string Name { get
-                { // soo hacky too
-                    if (_cachedName == null)
-                    {
-                        for (int i = 0; i < File.textures.Count; i++)
-                            if (File.Textures[i] == this) _cachedName = "texture_" + i.ToString() + ".png";
-                    }
-                    return _cachedName;
+                get
+                {
+                    return getStream();
                 }
             }
+            public Stream getStream()
+            {
+                return sound_index >= 0 ? File.rawAudio[sound_index].Data : null;
+            }
+        }
+
+        // This class is just a simple filler for the serilizatin I use
+       public struct Color : SerializerHelper.ISerilizerHelperSimple
+        {
+            int raw;
+            public Color(int v) { this.raw = v; }
+
+            public object CreateHelper()
+            {
+                return BitConverter.GetBytes(raw);
+            }
+            public static implicit operator Color(int val) { return new Color(val); }
+            public static implicit operator int(Color val) { return val.raw; }
+        }
+       
+        public class Texture : GameMakerStructure, IDataResource
+        {
+            [NonSerialized]
             int _pngLength;
+            [NonSerialized]
             int _pngOffset;
             // I could read a bitmap here like I did in my other library however
             // monogame dosn't use Bitmaps, neither does unity, so best just to make a sub stream
             static readonly byte[] pngSigBytes = new byte[] { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
             static readonly string pngSig = System.Text.Encoding.UTF8.GetString(pngSigBytes);
-            public Stream Data
+
+            public Stream getStream()
             {
-                get
-                {
-                    return new MemoryStream(File.rawData, _pngOffset, _pngLength, false, false);
-                }
-                
+                return new MemoryStream(File.rawData, _pngOffset, _pngLength, false, false);
             }
-           protected override void InternalRead(BinaryReader r)
+            protected override void InternalRead(BinaryReader r)
             {
                 int dummy = r.ReadInt32(); // Always 1
                 _pngOffset = r.ReadInt32(); // offset to texture
                 r.BaseStream.Position = _pngOffset;
                 string sig = r.ReadFixedString(8);
-                _cachedName = null;
                 if (sig != pngSig) throw new Exception("Texture not a png");
                 // to get the texture lengh, we have to read all the chunks and add them together
                 // once this is done, we can create a proper stream
@@ -210,352 +213,175 @@ namespace GameMaker
             }
         }
       
-        public abstract class LuaObjectBuilder
+       
+      
+    
+        public class SpriteFrame : GameMakerStructure
         {
-            public string TableName = null;
-            public bool ProcessKeyLikeString = false;
-            public LuaObjectBuilder Parent = null;
-            public static string ValueToString(char v)
-            {
-                switch (v)
-                {
-                    case '\a': return "\\a";
-                    case '\n': return "\\n";
-                    case '\r': return "\\r";
-                    case '\t': return "\\t";
-                    case '\v': return "\\v";
-                    case '\\': return "\\\\";
-                    case '\"': return "\\\"";
-                    case '\'': return "\\\'";
-                    //  case '[': return "\\[";
-                    //   case ']': return "\\]";
-                    default:
-                        if (char.IsControl(v)) return string.Format("\\{0}", (byte)v);
-                        else return v.ToString();
-                }
-            }
-            public static string ValueToString(string v)
-            {
-                StringBuilder sb = new StringBuilder();
-                AppendValue(sb, v);
-                return sb.ToString();
-            }
-            public static string ValueToString(LuaObjectBuilder v)
-            {
-                StringBuilder sb = new StringBuilder();
-                AppendValue(sb, v);
-                return sb.ToString();
-            }
-            public static void AppendValue(StringBuilder sb, char v)
-            {
-                sb.Append(ValueToString(v));
-            }
-            public static void AppendValue(TextWriter wr, char v)
-            {
-                wr.Write(ValueToString(v));
-            }
-            public static void AppendValue(StringBuilder sb, string v)
-            {
-                sb.Append('"');
-                foreach (var c in v) AppendValue(sb, c);
-                sb.Append('"');
-            }
-            public static void AppendValue(TextWriter wr, string v)
-            {
-                wr.Write('"');
-                foreach (var c in v) AppendValue(wr, c);
-                wr.Write('"');
-            }
-            public static void AppendValue(StringBuilder sb, LuaObjectBuilder v)
-            {
-                v.ToStringBuilder(sb);
-            }
-            public static void AppendValue(TextWriter wr, LuaObjectBuilder v)
-            {
-                v.ToStringBuilder(wr);
-            }
-            public static void AppendValue(StringBuilder sb, bool v)
-            {
-                sb.Append(v ? "true" : "false");
-            }
-            public static void AppendValue(TextWriter wr, bool v)
-            {
-                wr.Write(v ? "true" : "false");
-            }
-            public static void AppendValue(StringBuilder sb, object v)
-            {
-                if (v is LuaObjectBuilder) AppendValue(sb, v as LuaObjectBuilder);
-                else if (v is string) AppendValue(sb, v as string);
-                else if (v is char)
-                {
-                    sb.Append('"');
-                    AppendValue(sb, (char)v);
-                    sb.Append('"');
-                }
-                else if (v is bool) AppendValue(sb, (bool)v);
-                else sb.Append(v.ToString());
-            }
-            public static void AppendValue(TextWriter wr, object v)
-            {
-                if (v is LuaObjectBuilder) AppendValue(wr, v as LuaObjectBuilder);
-                else if (v is string) AppendValue(wr, v as string);
-                else if (v is char)
-                {
-                    wr.Write('"');
-                    AppendValue(wr, (char)v);
-                    wr.Write('"');
-                }
-                else if (v is bool) AppendValue(wr, (bool)v);
-                else wr.Write(v.ToString());
-            }
+            public short X;
+            public short Y;
+            public short Width;
+            public short Height;
+            public short Offset_X;
+            public short Offset_Y;
+            public short Crop_Width;
+            public short Crop_Height;
+            public short Original_Width;
+            public short Original_Height;
+            public short Texture_Index;
 
-
-            public void AppendSingleEntry(TextWriter wr, KeyValuePair<string, object> v)
-            {
-                if (ProcessKeyLikeString)
-                {
-                    wr.Write('[');
-                    AppendValue(wr, v.Key);
-                    wr.Write(']');
-                }
-                else wr.Write(v.Key);
-                wr.Write(" = ");
-                AppendValue(wr, v.Value);
-            }
-            public void AppendSingleEntry(StringBuilder sb, KeyValuePair<string, object> v)
-            {
-                if (ProcessKeyLikeString)
-                {
-                    sb.Append('[');
-                    AppendValue(sb, v.Key);
-                    sb.Append(']');
-                }
-                else sb.Append(v.Key);
-                sb.Append(" = ");
-                AppendValue(sb, v.Value);
-            }
-            public abstract void ToStringBuilder(StringBuilder sb);
-            public abstract void ToStringBuilder(TextWriter wr);
-
-            public override string ToString()
-            {
-                StringBuilder sb = new StringBuilder();
-                ToStringBuilder(sb);
-                return sb.ToString();
-            }
-        }
-        public interface ILuaObject
-        {
-            LuaObjectBuilder ToLuaStructure();
-        }
-        public class LuaArrayBuilder : LuaObjectBuilder
-        {
-            List<object> list = new List<object>();
-            public bool StartAtOne = false;
-            public void Add<T>(T value)
-            {
-                ILuaObject o = value as ILuaObject;
-                if (o != null)
-                    list.Add(o.ToLuaStructure());
-                else
-                    list.Add(value);
-            }
-            public override void ToStringBuilder(TextWriter wr)
-            {
-                IndentedTextWriter iwr = wr as IndentedTextWriter;
-                if (iwr == null) iwr = new IndentedTextWriter(wr);
-                iwr.Write('{');
-                // we know we have atleast one
-                if (list.Count > 0)
-                {
-                    iwr.Indent++;
-                    if (list[0] is LuaObjectBuilder) iwr.WriteLine();
-
-                    AppendValue(iwr, list[0]);
-                    for (int i = 1; i < list.Count; i++)
-                    {
-                        iwr.Write(", ");
-                        if (list[i] is LuaObjectBuilder) iwr.WriteLine();
-                        AppendValue(iwr, list[i]);
-                    }
-                    iwr.Write(' ');
-                    iwr.Indent--;
-                }
-                iwr.Write("}");
-            }
-            public override void ToStringBuilder(StringBuilder sb)
-            {
-                sb.Append("{");
-                // we know we have atleast one
-                if (list.Count > 0)
-                {
-                    sb.Append(' ');
-                    AppendValue(sb, list[0]);
-                    for (int i = 1; i < list.Count; i++)
-                    {
-                        sb.Append(", ");
-                        AppendValue(sb, list[i]);
-                    }
-                    sb.Append(' ');
-                }
-                sb.Append("}");
-            }
-        }
-        public class LuaTableBuilder : LuaObjectBuilder
-        {
-            List<KeyValuePair<string, object>> Values = new List<KeyValuePair<string, object>>();
-
-            public void Add<T>(string name, T value)
-            {
-                ILuaObject o = value as ILuaObject;
-                if (o != null)
-                    Values.Add(new KeyValuePair<string, object>(name, o.ToLuaStructure()));
-                else
-                    Values.Add(new KeyValuePair<string, object>(name, value));
-            }
-            public override void ToStringBuilder(TextWriter wr)
-            {
-                IndentedTextWriter iwr = wr as IndentedTextWriter;
-                if (iwr == null) iwr = new IndentedTextWriter(wr);
-                iwr.Write('{');
-                // we know we have atleast one
-                if (Values.Count > 0)
-                {
-                    iwr.Indent++;
-                    if (Values[0].Value is LuaObjectBuilder) iwr.WriteLine();
-                    AppendSingleEntry(iwr, Values[0]);
-                    for (int i = 1; i < Values.Count; i++)
-                    {
-                        iwr.Write(", ");
-                        if (Values[i].Value is LuaObjectBuilder) iwr.WriteLine();
-                        AppendSingleEntry(iwr, Values[i]);
-                    }
-                    iwr.Indent--;
-                    iwr.Write(' ');
-                }
-                iwr.Write("}");
-            }
-
-            public override void ToStringBuilder(StringBuilder sb)
-            {
-                sb.Append("{");
-                if (Values.Count > 0)
-                {
-                    // we know we have atleast one
-                    AppendSingleEntry(sb, Values[0]);
-                    for (int i = 1; i < Values.Count; i++)
-                    {
-                        sb.Append(',');
-                        AppendSingleEntry(sb, Values[i]);
-                    }
-                    sb.Append(' ');
-                }
-                sb.Append("}");
-            }
-        }
-        [Serializable()]
-        public class SpriteFrame : GameMakerStructure, ILuaObject
-        {
-            public short X { get; private set; }
-            public short Y { get; private set; }
-            public short Width { get; private set; }
-            public short Height { get; private set; }
-            public short OffsetX { get; private set; }
-            public short OffsetY { get; private set; }
-            public short CropWidth { get; private set; }
-            public short CropHeight { get; private set; }
-            public short OriginalWidth { get; private set; }
-            public short OriginalHeight { get; private set; }
-            public short TextureIndex { get; private set; }
-
-            public LuaObjectBuilder ToLuaStructure()
-            {
-                LuaTableBuilder b = new LuaTableBuilder();
-                b.Add("x", X);
-                b.Add("y", Y);
-                b.Add("width", Width);
-                b.Add("height", Height);
-                b.Add("offsetx", OffsetX);
-                b.Add("offsety", OffsetY);
-                b.Add("crop_width", CropWidth);
-                b.Add("crop_height", CropHeight);
-                b.Add("original_width", OriginalWidth);
-                b.Add("original_height", OriginalHeight);
-                b.Add("texture", TextureIndex);
-                return b;
-            }
-            public override string ToString()
-            {
-                return ToLuaStructure().ToString();
-            }
             protected override void InternalRead(BinaryReader r) {
                 X = r.ReadInt16();
                 Y = r.ReadInt16();
                 Width = r.ReadInt16();
                 Height = r.ReadInt16();
-                OffsetX = r.ReadInt16();
-                OffsetY = r.ReadInt16();
-                CropWidth = r.ReadInt16();
-                CropHeight = r.ReadInt16();
-                OriginalWidth = r.ReadInt16();
-                OriginalHeight = r.ReadInt16();
-                TextureIndex = r.ReadInt16();
+                Offset_X = r.ReadInt16();
+                Offset_Y = r.ReadInt16();
+                Crop_Width = r.ReadInt16();
+                Crop_Height = r.ReadInt16();
+                Original_Width = r.ReadInt16();
+                Original_Height = r.ReadInt16();
+                Texture_Index = r.ReadInt16();
             }
         }
-        [Serializable()]
-        public class Sprite : GameMakerStructure, INamedResrouce, ILuaObject
+        public class Sprite : GameMakerStructure, INamedResrouce
         {
-            public string Name { get; private set; }
-            public int Width { get; private set; }
-            public int Height { get; private set; }
-            public int Flags { get; private set; }
-            public int Width0 { get; private set; }
-            public int Height0 { get; private set; }
-            public int Another { get; private set; }
-            public int[] Extra { get; private set; }
-            public SpriteFrame[] Frames { get; private set; }
-            public LuaObjectBuilder ToLuaStructure()
+            public string Name { get { return name; } }
+            string name;
+            public int Width;
+            public int Height;
+            public int Left;
+            public int Right;
+            public int Bottom;
+            public int Top;
+            public bool Transparent;
+            public bool Smooth;
+            public bool Preload;
+            public int Mode;
+            public bool ColCheck;
+            public int Original_X;
+            public int Original_Y;
+            public int Type;
+            public SpriteFrame[] Frames;
+            public int[] MaskOffsets; 
+            // lots of data, so we just keep the offsets since we have the raw file
+
+            static List<Image> textureCache;
+
+            public static IReadOnlyList<Image> TextureCache
             {
-                LuaTableBuilder b = new LuaTableBuilder();
-                b.Add("index", Index);
-                b.Add("name", Name);
-                b.Add("width", Width);
-                b.Add("height", Height);
-                LuaArrayBuilder frameArray = new LuaArrayBuilder();
-                foreach (var frame in Frames) frameArray.Add(frame);
-                b.Add("frames", frameArray);
-                return b;
-            }
-            public override string ToString()
-            {
-                return ToLuaStructure().ToString();
-            }
-      
-            protected override void InternalRead(BinaryReader r)
-            {
-                Name = string.Intern(r.ReadStringFromNextOffset()); // be sure to intern the name
-                Width = r.ReadInt32();
-                Height = r.ReadInt32();
-                Flags = r.ReadInt32();
-                Width0 = r.ReadInt32();
-                Height0 = r.ReadInt32();
-                Another = r.ReadInt32();
-                Extra = r.ReadInt32(7);
-                Frames = ArrayFromOffset<SpriteFrame>(r);
-                // bitmask is here
-                int haveMask = r.ReadInt32();
-                if (haveMask != 0)
-                { // have mask?
-                    int stride = (Width % 8) != 0 ? Width + 1 : Width;
-                    //	std::vector<uint8_t>* mask = new std::vector<uint8_t>();
-                    //	mask->resize(stride * header.height);
-                    //	r.read(mask->data(), mask->size());
-                    //	_spriteMaskLookup.emplace(std::make_pair(name, mask));
+                get
+                {
+                    if (textureCache == null) textureCache = File.Textures.Select(t => Bitmap.FromStream(t.getStream())).ToList();
+                    return textureCache;
                 }
             }
+            static Sprite()
+            {
+                DirectoryInfo info = new DirectoryInfo(".");
+                foreach(var f in info.GetFiles("*.png")) f.Delete();
+            }
+            public Bitmap FrameToBitmap(int index)
+            {
 
+                SpriteFrame frame = Frames[index];
+                Bitmap sprite = new Bitmap(this.Width, this.Height); //, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+                using (Graphics g = Graphics.FromImage(sprite))
+                {
+                    g.DrawImage(TextureCache[frame.Texture_Index], frame.Offset_X, frame.Offset_Y, new Rectangle(frame.X, frame.Y, frame.Width, frame.Height), GraphicsUnit.Pixel);
+
+                }
+            //    sprite.Save(this.Name + "_frame_" + index + ".png");
+                return sprite;
+            }
+            IEnumerable<bool> GetPixelData(int index)
+            {
+                int offset = MaskOffsets[index];
+                byte[] data = File.rawData;
+                int width = (this.Width + 7) / 8;
+                for (int y = 0; y < this.Height; y++)
+                {
+                    for (int x = 0; x < this.Width; x++)
+                    {
+                        byte pixel = data[y * width + x / 8 + offset];
+                        int bit = (7 - (x & 7) & 31);
+                        bool on = ((pixel >> bit) & 1) != 0;
+                        yield return on;
+                    }
+                }
+            }
+            public Bitmap MaskToBitmap(int index)
+            {
+                int offset = MaskOffsets[index];
+                byte[] data = File.rawData;
+                Bitmap test = new Bitmap(this.Width, this.Height); //, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+
+                int width = (this.Width + 7) / 8;
+                // numArray = new byte[width * this.Height];
+                //  int max_x  = Math.Max(0, Math.Min(0, this.Width));
+
+                for (int y = 0; y < this.Height; y++)
+                {
+                    for (int x = 0; x < this.Width; x++)
+                    {
+                        byte pixel = data[y * width + x / 8 + offset];
+                        int bit = (7 - (x & 7) & 31);
+                        bool on = ((pixel >> bit) & 1) != 0;
+
+                        test.SetPixel(x, y, on ? System.Drawing.Color.White : System.Drawing.Color.Black);
+                        //     g.
+                        //     numArray[i * width + j / 8] = (byte)(num6 | (byte)((stream_0.ReadBool() ? 1 : 0) << (7 - (j & 7) & 31)));
+                    }
+                }
+              //  test.Save(this.Name + "_mask_" + index + ".png");
+                return test;
+                // I thought of making this indexed, but png saves it quite small, smaller than indexed!
+                // Not sure about internaly though
+            }
+            protected override void InternalRead(BinaryReader r)
+            {
+                name = string.Intern(r.ReadStringFromNextOffset()); // be sure to intern the name
+                Width = r.ReadInt32();
+                Height = r.ReadInt32();
+                Left = r.ReadInt32();
+                Right = r.ReadInt32();
+                Bottom = r.ReadInt32();
+                Top = r.ReadInt32();
+                Transparent = r.ReadIntBool();
+                Smooth = r.ReadIntBool();
+                Preload = r.ReadIntBool();
+                Mode = r.ReadInt32();
+                ColCheck = r.ReadIntBool();
+                Original_X = r.ReadInt32();
+                Original_Y = r.ReadInt32();
+                this.Type = 0;
+                MaskOffsets = null;
+                Frames = ArrayFromOffset<SpriteFrame>(r); // if -1
+                if (Frames == null)
+                {
+                    Debug.Assert(r.ReadInt32() == 1); // never happened humm
+                    this.Type = r.ReadInt32();
+                }
+                else
+                { // FINALY FIGURED OUT MASKS
+                    int num_masks = r.ReadInt32();
+                    MaskOffsets = new int[num_masks];
+                    if (num_masks != 0)
+                    {
+                   
+                        int width = (this.Width + 7) / 8;
+                        for (int i = 0; i < num_masks; i++)
+                        {
+                            MaskOffsets[i] = (int)r.BaseStream.Position;
+                            r.BaseStream.Position += width * this.Height;
+                        }
+                    }
+                }
+            //    if(MaskOffsets != null) for (int i = 0; i < MaskOffsets.Length; i++) MaskToBitmap(i, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+                if (Frames != null)  for (int i = 0; i < Frames.Length; i++) FrameToBitmap(i);
+                int[] offset0 = r.ReadInt32(7);
+            }
         }
-        [Serializable()]
         public class GObject : GameMakerStructure, INamedResrouce
         {
             public class Event
@@ -634,50 +460,7 @@ namespace GameMaker
             public PhysicsVert[] PhysicisVertexs;
             public int[] eventOffsets = new int[12]; // hummmm!
             public Event[][] Events;
-            public void DebugLuaObject(ITextOutput sw, bool outputRawEvents)
-            {
-                sw.WriteLine("self.index = {0}", ObjectIndex);
-                sw.WriteLine("self.name = \"{0}\"", this.Name);
-                if (this.Parent >= 0)
-                {
-                    sw.WriteLine("self.parent_index = {0}", this.Parent);
-                    sw.WriteLine("self.parent_name = \"{0}\"", this.ParentName);
-                }
-                sw.WriteLine("self.sprite_index = {0}", this.SpriteIndex);
-                sw.WriteLine("self.visible = {0}", this.Visible ? "true" : "false");
-                sw.WriteLine("self.solid = {0}", this.Solid ? "true" : "false");
-                sw.WriteLine("self.persistent = {0}", this.Persistent ? "true" : "false");
-                sw.WriteLine("self.depth = {0}", this.Depth);
-                if (outputRawEvents)
-                {
-                    for (int i = 0; i < Events.Length; i++)
-                    {
-                        Event[] eo = Events[i];
-                        if (eo == null) continue;
-                        foreach (var e in eo)
-                        {
-                            sw.WriteLine("self.Raw_{0} = {{}}", e.SubTypeName);
-                            sw.Write("table.insert(self.{0},{");
-                            foreach (var a in e.Actions)
-                            {
-                                sw.Write("LibID = {0},", a.LibID);
-                                sw.Write("ID = {0},", a.ID);
-                                sw.Write("Kind = {0},", a.Kind);
-                                sw.Write("UseRelative = {0},", a.UseRelative ? "true" : "false");
-                                sw.Write("IsQuestion = {0},", a.IsQuestion ? "true" : "false");
-                                sw.Write("UseApplyTo = {0},", a.UseApplyTo ? "true" : "false");
-                                sw.Write("ExeType = {0},", a.ExeType);
-                                sw.Write("Name = \"{0}\",", a.Name);
-                                sw.Write("CodeOffset = {0},", a.CodeOffset);
-                                sw.Write("Who = {0},", a.Who);
-                                sw.Write("Relative = {0},", a.Relative ? "true" : "false");
-                                sw.Write("IsNot = {0},", a.IsNot ? "true" : "false");
-                            }
-                            sw.WriteLine("})");
-                        }
-                    }
-                }
-            }
+         
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());
@@ -737,7 +520,6 @@ namespace GameMaker
                 }
             }
         };
-        [Serializable()]
         public class Background : GameMakerStructure, INamedResrouce
         {
             public string Name { get; private set; }
@@ -757,10 +539,8 @@ namespace GameMaker
                 Frame.Read(r, -1);
             }
         };
-        [Serializable()]
-        public class Room : GameMakerStructure, INamedResrouce
+        public class Room : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
-            [Serializable()]
             public class View : GameMakerStructure
             {
                 public bool Visible;
@@ -777,6 +557,7 @@ namespace GameMaker
                 public int Speed_X;
                 public int Speed_Y;
                 public int ViewIndex;
+
                 protected override void InternalRead(BinaryReader r)
                 {
                     Visible = r.ReadIntBool();
@@ -793,92 +574,101 @@ namespace GameMaker
                     Speed_X = r.ReadInt32();
                     Speed_Y = r.ReadInt32();
                     index = r.ReadInt32();
-                }
+                }      
             }
-            [Serializable()]
             public class Background : GameMakerStructure
             {
                 public bool Visible;
                 public bool Foreground;
-                public int BackgroundIndex;
+                public int Background_Index;
                 public int X;
                 public int Y;
-                public int TiledX;
-                public int TiledY;
-                public int SpeedX;
-                public int SpeedY;
+                public int Tiled_X;
+                public int Tiled_Y;
+                public int Speed_X;
+                public int Speed_Y;
                 public bool Stretch;
                 protected override void InternalRead(BinaryReader r)
                 {
                     Visible = r.ReadIntBool();
                     Foreground = r.ReadIntBool();
-                    BackgroundIndex = r.ReadInt32();
+                    Background_Index = r.ReadInt32();
                     X = r.ReadInt32();
                     Y = r.ReadInt32();
-                    TiledX = r.ReadInt32();
-                    TiledY = r.ReadInt32();
-                    SpeedX = r.ReadInt32();
-                    SpeedY = r.ReadInt32();
+                    Tiled_X = r.ReadInt32();
+                    Tiled_Y = r.ReadInt32();
+                    Speed_X = r.ReadInt32();
+                    Speed_Y = r.ReadInt32();
                     Stretch = r.ReadIntBool();
                 }
+             
             };
-            [Serializable()]
-            public class Instance : GameMakerStructure
+            public class Instance : GameMakerStructure, SerializerHelper.ISerilizerHelper
             {
                 public int X;
                 public int Y;
-                public int ObjectIndex;
+                public int Object_Index;
                 public int Id;
-                public int CodeOffset;
+                public int Code_Offset;
                 public float Scale_X;
                 public float Scale_Y;
-                public int Colour;
+                public Color Colour;
                 public float Rotation;
                 protected override void InternalRead(BinaryReader r)
                 {
                     X = r.ReadInt32();
                     Y = r.ReadInt32();
-                    ObjectIndex = r.ReadInt32();
+                    Object_Index = r.ReadInt32();
                     Id = r.ReadInt32();
-                    CodeOffset = r.ReadInt32();
+                    Code_Offset = r.ReadInt32();
                     Scale_X = r.ReadSingle();
                     Scale_Y = r.ReadSingle();
                     Colour = r.ReadInt32();
                     Rotation = r.ReadSingle();
                 }
+                public SerializerHelper CreateHelper()
+                {
+                    SerializerHelper helper = new SerializerHelper(this);
+               //     helper.ReplaceFieldsWithObject(o);
+                    helper.RemoveField("Code_Offset");
+                    if(Code_Offset >= 0) // lets make some code
+                    {
+                        string code = Writers.AllWriter.QuickCodeToLine(File.Codes[Code_Offset]);
+                        helper.AddField("Code_String", code);
+                    }
+                    return helper;
+                }
             };
-            [Serializable()]
             public class Tile : GameMakerStructure
             {
                 public int X;
                 public int Y;
-                public int BackgroundIndex;
-                public int OffsetX;
-                public int OffsetY;
+                public int Background_Index;
+                public int Offset_X;
+                public int Offset_Y;
                 public int Width;
                 public int Height;
                 public int Depth;
                 public int Id;
-                public float ScaleX;
-                public float ScaleY;
-                public int Blend;
-                public int Ocupancy;
+                public float Scale_X;
+                public float Scale_Y;
+                public Color Blend;
                 protected override void InternalRead(BinaryReader r)
                 {
+                    // I think tiles will change in newer versions, so watch this
                     X = r.ReadInt32();
                     Y = r.ReadInt32();
-                    BackgroundIndex = r.ReadInt32();
-                    OffsetX = r.ReadInt32();
-                    OffsetY = r.ReadInt32();
+                    Background_Index = r.ReadInt32();
+                    Offset_X = r.ReadInt32();
+                    Offset_Y = r.ReadInt32();
                     Width = r.ReadInt32();
                     Height = r.ReadInt32();
                     Depth = r.ReadInt32();
                     Id = r.ReadInt32();
-                    ScaleX = r.ReadSingle();
-                    ScaleY = r.ReadSingle();
-                    int mixed = r.ReadInt32();
-                    Blend = mixed & 0x00FFFFFF;
-                    Ocupancy = mixed >> 24;
+                    Scale_X = r.ReadSingle();
+                    Scale_Y = r.ReadSingle();
+                    Blend = r.ReadInt32();
+
                 }
             };
             public string Name { get;  set; }
@@ -887,15 +677,29 @@ namespace GameMaker
             public int Width;
             public int Height;
             public int Speed;
-            public int Persistent;
-            public int Colour;
-            public int Show_colour;
-            public int CodeOffset;
-            public int Flags;
+            public bool Persistent;
+            public Color Colour;
+            public bool Show_colour;
+            public int Code_Offset;
+            public bool EnableViews;
+            public bool ViewClearScreen;
+            public bool ClearDisplayBuffer;
             public Background[] Backgrounds;
             public View[] Views;
             public Instance[] Objects;
             public Tile[] Tiles;
+            public SerializerHelper CreateHelper()
+            {
+                SerializerHelper helper = new SerializerHelper(this);
+                //     helper.ReplaceFieldsWithObject(o);
+                helper.RemoveField("Code_Offset");
+                if (Code_Offset >= 0) // lets make some code // lets make some code
+                {
+                    string code = Writers.AllWriter.QuickCodeToLine(File.Codes[Code_Offset]);
+                    helper.AddField("Code_String", code);
+                }
+                return helper;
+            }
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());
@@ -903,12 +707,16 @@ namespace GameMaker
                 Width = r.ReadInt32();
                 Height = r.ReadInt32();
                 Speed = r.ReadInt32();
-                Persistent = r.ReadInt32();
+                Persistent = r.ReadIntBool();
                 Colour = r.ReadInt32();
-                Show_colour = r.ReadInt32();
-                CodeOffset = r.ReadInt32();
-                Flags = r.ReadInt32();
-                int backgroundsOffset = r.ReadInt32();
+                Show_colour = r.ReadIntBool();
+                Code_Offset = r.ReadInt32();
+                int flags = r.ReadInt32();
+                EnableViews = (flags & 1) != 0;
+                ViewClearScreen = (flags & 2) != 0;
+                ClearDisplayBuffer = (flags & 14) != 0;
+
+            int backgroundsOffset = r.ReadInt32();
                 int viewsOffset = r.ReadInt32();
                 int instancesOffset = r.ReadInt32();
                 int tilesOffset = r.ReadInt32();
@@ -918,11 +726,9 @@ namespace GameMaker
                 Tiles = ArrayFromOffset<Tile>(r, tilesOffset);
             }
         }
-        [Serializable()]
-        public class Font : GameMakerStructure, INamedResrouce, ILuaObject
+        public class Font : GameMakerStructure, INamedResrouce
         {
-            [Serializable()]
-            public class Glyph : GameMakerStructure, ILuaObject
+            public class Glyph : GameMakerStructure
             {
                 public short ch;
                 public short x;
@@ -941,18 +747,6 @@ namespace GameMaker
                     shift = r.ReadInt16();
                     offset = r.ReadInt16();
                 }
-                public LuaObjectBuilder ToLuaStructure()
-                {
-                    LuaTableBuilder b = new LuaTableBuilder();
-                    b.Add("ch", (char)ch);
-                    b.Add("x", x);
-                    b.Add("y", y);
-                    b.Add("width", width);
-                    b.Add("height", height);
-                    b.Add("shift", shift);
-                    b.Add("offset", offset);
-                    return b;
-                }
             }
             public string Name { get; private set; }
             public string Description { get; private set; }
@@ -968,26 +762,6 @@ namespace GameMaker
             public float ScaleW { get; private set; }
             public float ScaleH { get; private set; }
             public Glyph[] Glyphs { get; private set; }
-            public LuaObjectBuilder ToLuaStructure()
-            {
-                LuaTableBuilder b = new LuaTableBuilder();
-                b.Add("name", Name);
-                b.Add("description", Description);
-                b.Add("size", Size);
-                b.Add("bold", Bold);
-                b.Add("italic", Italic);
-                b.Add("first", FirstChar);
-                b.Add("last", LastChar);
-                b.Add("anti_alias", AntiAlias);
-                b.Add("charset", CharSet);
-                b.Add("scalew", ScaleW);
-                b.Add("scaleh", ScaleH);
-                b.Add("frame", Frame);
-                LuaTableBuilder glyphs = new LuaTableBuilder() { ProcessKeyLikeString = true, TableName = "glyphs" };
-                foreach (var g in Glyphs) glyphs.Add(((char)g.ch).ToString(), g);
-                b.Add("glyphs", glyphs);
-                return b;
-            }
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());
@@ -1009,42 +783,41 @@ namespace GameMaker
                 ScaleH = r.ReadSingle();
                 Glyphs = ArrayFromOffset<Glyph>(r);
             }
-
-
         }
 
-        public class RawAudio : GameMakerStructure, IFileDataResource
+        public class RawAudio : GameMakerStructure, IDataResource
         {
-            string _cachedName;
             // Don't really need this but have to implment Name in IFileDataResource
-            public string Name
-            {
-                get
-                { // soo hacky too
-                    if (_cachedName == null)
-                    {
-                        for (int i = 0; i < File.rawAudio.Count; i++)
-                            if (File.rawAudio[i] == this) _cachedName = "rawAudio_" + i.ToString() + ".wav";
-                    }
-                    return _cachedName;
-                }
-            }
-            public int Size { get; private set; }
+            public int Size;
             public Stream Data
             {
-                get{
-                    return new MemoryStream(File.rawData, this.Position, Size, false, false);
+                get
+                {
+                    return getStream();
                 }
             }
-           // public byte[] RawSound { get; private set; }
+            // public byte[] RawSound { get; private set; }
             protected override void InternalRead(BinaryReader r)
             {
                 Size = r.ReadInt32();
              //   RawSound = r.ReadBytes(Size);
             }
+
+            public Stream getStream()
+            {
+                return new MemoryStream(File.rawData, this.Position, Size, false, false);
+            }
         }
-        public class Script : GameMakerStructure, IFileDataResource, INamedResrouce {
-            public string Name { get; set; }
+        public class Script : GameMakerStructure, IDataResource, INamedResrouce {
+            string name;
+            public string Name { get { return name; } }
+            public Stream Data
+            {
+                get
+                {
+                    return getStream();
+                }
+            }
             public Code Code {
                 get
                 {
@@ -1052,46 +825,51 @@ namespace GameMaker
                 }
             }
             int _scriptIndex;
-            public Stream Data
-            {
-                get
-                {
-                    if (_scriptIndex == -1) { // its not in the list but it might still be in the code list
-                        foreach(var o in File.Search(Name))
-                        {
-                            if (o == this) continue; // skip if its this
-                            Code c = o as Code;
-                            if (c == null) continue; // just looking for code
-                            return c.Data;
-                        }
-                        return null;
-                    }
-                    else
-                        return File.Codes[_scriptIndex].Data;
-                }
-            }
             // public byte[] RawSound { get; private set; }
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
+                name = string.Intern(r.ReadStringFromNextOffset());
                 _scriptIndex = r.ReadInt32();
+            }
+
+            public Stream getStream()
+            {
+                if (_scriptIndex == -1)
+                { // its not in the list but it might still be in the code list
+                    foreach (var o in File.Search(Name))
+                    {
+                        if (o == this) continue; // skip if its this
+                        Code c = o as Code;
+                        if (c == null) continue; // just looking for code
+                        return c.Data;
+                    }
+                    return null;
+                }
+                else
+                    return File.Codes[_scriptIndex].Data;
             }
         }
 
-        public class Code : GameMakerStructure, IFileDataResource, INamedResrouce
+        public class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
             public string Name { get; protected set; }
             public int Size { get; protected set; }
+            [NonSerialized]
+            public ILBlock block = null; // cached
+            [NonSerialized]
             protected int codePosition;
 
+            public Stream getStream()
+            {
+                return new MemoryStream(File.rawData, codePosition, Size, false, false);
+            }
             public Stream Data
             {
                 get
                 {
-                    return new MemoryStream(File.rawData, codePosition, Size, false, false);
+                    return getStream();
                 }
             }
-          
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());
@@ -1104,8 +882,17 @@ namespace GameMaker
         {
             public short LocalCount { get; private set; }
             public short ArgumentCount { get; private set; }
+            [NonSerialized]
             int wierd;
+            [NonSerialized]
             int offset;
+            public Stream Data
+            {
+                get
+                {
+                    return getStream();
+                }
+            }
             protected override void InternalRead(BinaryReader r)
             {
                 Name = string.Intern(r.ReadStringFromNextOffset());

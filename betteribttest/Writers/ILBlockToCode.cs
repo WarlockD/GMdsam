@@ -10,7 +10,7 @@ using GameMaker.Ast;
 
 namespace GameMaker.Writers
 {
-    public abstract class ICodeFormater
+    public abstract class CodeFormater
     {
         protected BlockToCode writer;
         public void SetStream(BlockToCode s) { writer = s; }
@@ -51,6 +51,9 @@ namespace GameMaker.Writers
         public abstract string BlockCommentEnd { get; }
         public abstract string NodeEnding { get; }
         public abstract string Extension { get; }
+
+
+
     }
     public interface INodeMutater
     {
@@ -129,7 +132,7 @@ namespace GameMaker.Writers
             identCache[0] = "";
         }
 
-        ICodeFormater formater = null;
+        CodeFormater formater = null;
         INodeMutater mutater = null;
         StringBuilder buffer = null;
         StringBuilder line = null;
@@ -145,7 +148,7 @@ namespace GameMaker.Writers
  
             }
         }
-        public ICodeFormater Formater
+        public CodeFormater Formater
         {
             get { return formater; }
             set
@@ -170,7 +173,7 @@ namespace GameMaker.Writers
         public int ColumnWithIdent { get { return currentIdent.Length + line.Length; } }
         string currentIdent;
         int ident = 0;      
-        void Init(ICodeFormater formater, IMessages error)
+        void Init(CodeFormater formater, IMessages error)
         {
             if (formater == null) throw new ArgumentNullException("Formater");
             if (error == null) throw new ArgumentNullException("error");
@@ -191,7 +194,7 @@ namespace GameMaker.Writers
         public void FatalError(string msg, ILNode node) { error.FatalError(msg,node); }
         #endregion
 
-        public BlockToCode(ICodeFormater formater, IMessages error)
+        public BlockToCode(CodeFormater formater, IMessages error)
         {
             Init(formater,error);
         }
@@ -229,7 +232,7 @@ namespace GameMaker.Writers
         {
             if (supressWriteLine)
             {
-                line.Append("; ");
+                line.Append(";");
             } else
             {
                 

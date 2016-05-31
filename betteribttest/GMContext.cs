@@ -286,15 +286,14 @@ namespace GameMaker
                             sw.WriteLine(m.Msg);
                             if (m.Node != null)
                             {
-                                using (StringWriter strw = new StringWriter())
+                                using (PlainTextWriter ptext = new PlainTextWriter())
                                 {
-                                    var ptext = new PlainTextOutput(strw);
-                                    ptext.Header = m.Header;
-                                    ptext.Indent();
+                                    ptext.LineHeader = m.Header;
+                                    ptext.Indent++;
                                     ptext.Write(m.Node.ToString());
-                                    ptext.Unindent();
-                                    ptext.WriteLine();
-                                    sw.Write(strw.ToString());
+                                    ptext.Indent--;
+                                    if(ptext.LineLength > 0) ptext.WriteLine();
+                                    sw.Write(ptext.ToString());
                                 }
                             }
                         }
@@ -312,35 +311,32 @@ namespace GameMaker
                 ct.ThrowIfCancellationRequested();
             }
         }
-        static void  ToConsole(string s)
+        static void  ToConsole(MType type, string s)
         {
-            Console.WriteLine(s);
+            if (consoleLevel <= type) Console.WriteLine(s);
             System.Diagnostics.Debug.WriteLine(s); // just because I don't look at console all the time
         }
-        static void  ToConsole(Message m)
+        static void ToConsole(Message m)
         {
-            if(consoleLevel <= m.Type)
+            StringBuilder sb = new StringBuilder();
+            sb.Append(m.Header);
+            sb.Append(m.Msg);
+            ToConsole(m.Type, sb.ToString());
+            if (m.Node != null)
             {
-                StringBuilder sb = new StringBuilder();
-                sb.Append(m.Header);
-                sb.Append(m.Msg);
-                ToConsole(sb.ToString());
-                if (m.Node != null)
+                sb.Clear();
+                m.Node.ToStringBuilder(sb, 0);
+                using (StringReader sr = new StringReader(sb.ToString()))
                 {
-                    sb.Clear();
-                    m.Node.ToStringBuilder(sb, 0);
-                    using (StringReader sr = new StringReader(sb.ToString()))
+                    while (sr.Peek() != -1)
                     {
-                        while(sr.Peek() != -1)
-                        {
-                            string s = sr.ReadLine();
-                            if (string.IsNullOrWhiteSpace(s)) continue;
-                            sb.Clear();
-                            sb.Append(m.Header);
-                            sb.Append(' ');
-                            sb.Append(s);
-                            ToConsole(sb.ToString());
-                        }
+                        string s = sr.ReadLine();
+                        if (string.IsNullOrWhiteSpace(s)) continue;
+                        sb.Clear();
+                        sb.Append(m.Header);
+                        sb.Append(' ');
+                        sb.Append(s);
+                        ToConsole(m.Type, sb.ToString());
                     }
                 }
             }

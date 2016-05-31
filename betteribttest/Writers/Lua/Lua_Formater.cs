@@ -11,7 +11,7 @@ using GameMaker.Ast;
 
 namespace GameMaker.Writers.Lua
 {
-    public class Formater : ICodeFormater
+    public class Formater : CodeFormater
     {
         string EnviromentOverride = null;
         public override void Write(ILSwitch f)

@@ -456,10 +456,6 @@ namespace GameMaker.Dissasembler
             }
              return list;
         }
-        public void WriteTo(ITextOutput output)
-        {
-            output.Write(ToString());
-        }
         void FormatPrefix(StringBuilder line)
         {
             line.AppendFormat("{0,-5}{1,-5} ", Address, this.Label == null ? "" : "L" + this.Label.Address);
