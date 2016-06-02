@@ -1,33 +1,102 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+
 
 namespace GameMaker
 {
-    public class SerializerHelper
+    public class SerializerHelper : IEnumerable<SerializerHelper.SerizlierObject>
     {
+        public enum SerializerType
+        {
+            String,
+            StringArray,
+            Helper,
+            HelperArray
+        }
+        public struct SerizlierObject : IEquatable<SerizlierObject>
+        {
+            public readonly string Name;
+            public readonly object Value;
+            public readonly bool isSimple;
+            public readonly bool isArray;
+            public IEnumerable<string> GetSimpleArray() { return Value as string[]; }
+            public IEnumerable<SerializerHelper> GetComplexArray() { return Value as SerializerHelper[]; }
+            internal SerizlierObject(string name, object value)
+            {
+                this.Name = name;
+                this.Value = value;
+                this.isSimple = value is string || value is string[];
+                this.isArray = value.GetType().IsArray;
+            }
+            public override int GetHashCode()
+            {
+                return this.Name.GetHashCode();
+            }
+            public void ToStringBuilder(StringBuilder sb)
+            {
+                sb.Append(Name);
+                sb.Append(" = ");
+                if (isSimple)
+                {
+                    if (isArray)
+                    {
+                        sb.Append('{');
+                        sb.AppendCommaDelimited(GetSimpleArray(), akv => { sb.Append(akv); return false; });
+                        sb.Append('}');
+                    }
+                    else sb.Append(Value);
+                }
+                else
+                {
+                    if (isArray)
+                        sb.AppendCommaDelimited(GetComplexArray(), akv => { sb.Append(akv.ToString()); return false; });
+                    else
+                        sb.Append((Value as SerializerHelper));
+                }
+            }
+            public override string ToString()
+            {
+                StringBuilder sb = new StringBuilder(20);
+                ToStringBuilder(sb);
+                return sb.ToString();
+            }
+            public bool Equals(SerizlierObject other)
+            {
+                return Name == other.Name;
+            }
+        }
+        HashSet<string> fields;
+        List<SerizlierObject> list;
+        public bool isPrimitive { get; protected set; }
+        public IEnumerator<SerializerHelper.SerizlierObject> GetEnumerator()
+        {
+            return list.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return this.GetEnumerator();
+        }
         static Regex k__BackingFieldRemoveRegex = new Regex(@"<([\w\d]+)>k__BackingField", RegexOptions.Compiled);
         public interface ISerilizerHelper
         {
-            SerializerHelper CreateHelper();
+            void CreateHelper(SerializerHelper help);
         }
         public interface ISerilizerHelperSimple
         {
             object CreateHelper();
         }
-        HashSet<string> fields;
-        List<KeyValuePair<string, object>> list;
-        public bool isPrimitive { get; protected set; }
+       
         public SerializerHelper()
         {
             this.isPrimitive = true;
             this.fields = new HashSet<string>();
-            this.list = new List<KeyValuePair<string, object>>();
+            this.list = new List<SerizlierObject>();
         }
 
         string FixName(string name)
@@ -37,36 +106,30 @@ namespace GameMaker
             name = name.ToLower();
             return name;
         }
-        //  public SerializerHelper(SerializerHelper.ISerilizerHelper o)
-        //  {
-        //      throw new Exception("This is a recursive call, don't do this!");
-        //    }
+
         public SerializerHelper(object o)
         {
             this.isPrimitive = true;
             this.fields = new HashSet<string>();
-            this.list = new List<KeyValuePair<string, object>>();
+            this.list = new List<SerizlierObject>();
             Type t = o.GetType();
             FieldInfo[] ofields = t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             if (ofields.Length == 0) throw new Exception("Cannot convert value or bad not a simple object");
+
+
             foreach (var f in ofields)
             {
                 if (!f.IsNotSerialized) AddField(FixName(f.Name), f.GetValue(o));
             }
-        }
-        void AddObject(string name, object o)
-        {
-            name = FixName(name);
-            if (fields.Contains(name)) throw new ArgumentException("Already contains field name", "name");
-            list.Add(new KeyValuePair<string, object>(name, o));
-            fields.Add(name);
+            SerializerHelper.ISerilizerHelper ihelper = o as SerializerHelper.ISerilizerHelper;
+            if (ihelper != null) ihelper.CreateHelper(this);
         }
         public void RemoveField(string name)
         {
             name = FixName(name);
             if (!fields.Contains(name)) throw new ArgumentException("does not contains field name", "name");
             fields.Remove(name);
-            list.Remove(list.Where(x => x.Key == name).Single());
+            list.Remove(list.Where(x => x.Name == name).Single());
         }
         public virtual string NullString { get { return "null"; } }
         public static bool MyInterfaceFilter(Type typeObj, Object criteriaObj)
@@ -97,8 +160,7 @@ namespace GameMaker
             ISerilizerHelperSimple ishelper = o as ISerilizerHelperSimple;
             if (ishelper != null) return ObjectConvert(ishelper.CreateHelper());
             // check if we have a custom interface
-            SerializerHelper.ISerilizerHelper ihelper = o as SerializerHelper.ISerilizerHelper;
-            if (ihelper != null) return ihelper.CreateHelper();
+            
             // check if its an array
             System.Collections.IEnumerable ie = o as System.Collections.IEnumerable;
             if (ie != null)
@@ -120,101 +182,29 @@ namespace GameMaker
         }
         public void AddField(string name, object o)
         {
-            AddObject(name, ObjectConvert(o));
+            name = FixName(name);
+            if (fields.Contains(name)) throw new ArgumentException("Already contains field name", "name");
+            list.Add(new SerizlierObject(name, ObjectConvert(o)));
+            fields.Add(name);
         }
         // needed something like this for a while now, I really need ot make a text formater class that
-        // does all sorts of text processing
-        static void Write<T>(int ident, StringBuilder sb, IEnumerable<T> la, Func<T, bool> func)
-        {
-            sb.Append('{');
-            if (la.Any())
-            {
-                bool comma = false;
-                bool need_append = false;
-                foreach (var v in la)
-                {
-                    if (need_append) sb.Ident(ident);
-                    else need_append = false;
-                    if (comma) sb.Append(',');
-                    else comma = true;
-                    sb.Append(' ');
-                    if (func(v)) { sb.AppendLine(); need_append = true; }
-                }
-                sb.Append(' ');
-            }
-            sb.Append('}');
-        }
-        public void Write(StringBuilder sb, int ident)
-        {
-            if (isPrimitive)
-            {
-                Write(ident, sb, list, kv =>
-                {
-                    sb.Ident(ident);
-                    sb.Append(kv.Key);
-                    sb.Append(" = ");
-                    if (kv.Value is string) sb.Append(kv.Value as string);
-                    else if (kv.Value is string[])
-                    {
-                        Write(ident, sb, kv.Value as string[], o =>
-                        {
-                            sb.Append(o);
-                            return false;
-                        });
-                    }
-                    return false;
-                });
-            }
-            else
-            {
-                ident++;
-                Write(ident, sb, list, kv =>
-                {
-                    sb.Ident(ident);
-                    sb.Append(kv.Key);
-                    sb.Append(" = ");
-                    if (kv.Value is string) sb.Append(kv.Value as string);
-                    else if (kv.Value is string[])
-                    {
-                        Write(ident, sb, kv.Value as string[], o =>
-                        {
-                            sb.Append(o);
-                            return false;
-                        });
-                    }
-                    else if (kv.Value is SerializerHelper) (kv.Value as SerializerHelper).Write(sb, ident);
-                    else if (kv.Value is SerializerHelper[])
-                    {
-                        Write(ident, sb, kv.Value as SerializerHelper[], o =>
-                        {
-                            o.Write(sb, ident);
-                            return true;
-                        });
-                        return false;
-                    }
-                    return true;
-                });
-                ident--;
-            }
 
-        }
-        public void DebugSave(string filename)
-        {
-            StringBuilder sb = new StringBuilder(500);
-            Write(sb, 0);
-            using (StreamWriter sw = new StreamWriter(filename)) sw.Write(sb.ToString());
-        }
-        public void DebugSave(TextWriter tx)
-        {
-            StringBuilder sb = new StringBuilder(500);
-            Write(sb, 0);
-            tx.Write(sb.ToString());
-        }
         public override string ToString()
         {
             StringBuilder sb = new StringBuilder(500);
-            Write(sb, 0);
+            sb.Append('{');
+            if (list.Count > 0)
+            {
+                sb.AppendCommaDelimited(list, kv =>
+                {
+                    kv.ToStringBuilder(sb);
+                    return false;
+                });
+            }
+            sb.Append('}');
             return sb.ToString();
         }
+
+    
     }
 }

@@ -29,20 +29,21 @@ namespace GameMaker.Writers
         {
             return new AllWriter().CodeToSingleLine(code, context);
         }
+
+        string CodeToSingleLine(File.Code c, string context = null)
+        {
+            BlockToCode output = CreateOutput(context ?? c.Name);
+            GetScriptWriter(output).WriteCode(c);
+            var code = regex_newline.Replace(output.ToString(), ";");
+            code = regex_commas.Replace(code, "; "); // replace all double/tripple commas
+            return code.Trim();
+        }
+
         public AllWriter()
         {
      
         }
-        void AddGlobals(BlockToCode output)
-        {
-            foreach(var n in output.VariablesUsed.Select(x => x.Node).Where(x => x.isGlobal))
-            {
-                if (n.isArray)
-                    globals_arrays.Add(n.Name);
-                else
-                    globals_vars.Add(n.Name);
-            }
-        }
+
         CodeWriter GetScriptWriter(BlockToCode output)
         {
             switch (Context.outputType)
@@ -63,49 +64,27 @@ namespace GameMaker.Writers
         }
         public static BlockToCode CreateOutput(string name)
         {
-            CodeFormater formater = null;
-            INodeMutater mutater = null;
-            switch (Context.outputType)
-            {
-                case OutputType.LoveLua:
-                    formater = new Lua.Formater();
-                    mutater = new Lua.Mutater();
-                    break;
-                case OutputType.GameMaker:
-                    formater = new GameMaker.Formater();
-                    break;
-                default:
-                    throw new Exception("Bad output type type");
-            }
-            BlockToCode output = new BlockToCode(formater,new Context.ErrorContext(name));
-            output.Mutater = mutater;
+            BlockToCode output = new BlockToCode(new Context.ErrorContext(name));
             return output;
         }
         static Regex regex_newline = new Regex(@"\s*(\r\n|\r|\n)\s*", RegexOptions.Compiled);
         static Regex regex_commas = new Regex(@";+", RegexOptions.Compiled);
         //
-        string CodeToSingleLine(File.Code c, string context = null)
-        {
-            BlockToCode output = CreateOutput(context ?? c.Name);
-            GetScriptWriter(output).WriteCode(c);
-            var code = regex_newline.Replace(output.ToString(), ";");
-            code = regex_commas.Replace(code, "; "); // replace all double/tripple commas
-            return code.Trim();
-        }
-        void Run(File.Script s, string filename=null)
+
+        async void Run(File.Script s, string filename=null)
         {
             BlockToCode output = CreateOutput(s.Name);
             GetScriptWriter(output).Write(s);
-            if (Context.doGlobals) AddGlobals(output);
-            output.WriteAsyncToFile(filename);
+          //  if (Context.doGlobals) AddGlobals(output);
+            await output.AsyncWriteToFile(filename);
         }
-     
-        void Run(File.GObject obj, string filename)
+
+        async void Run(File.GObject obj, string filename)
         {
             BlockToCode output = CreateOutput(obj.Name);
             GetScriptWriter(output).Write(obj);
-            if (Context.doGlobals) AddGlobals(output);
-            output.WriteAsyncToFile(filename);
+         //   if (Context.doGlobals) AddGlobals(output);
+            await output.AsyncWriteToFile(filename);
         }
 
         void RunTask(File.GObject obj, string path)
@@ -183,20 +162,83 @@ namespace GameMaker.Writers
                 RunTask(s, filename);
             }
         }
+        static string DeleteAllAndCreateDirectory(string dir)
+        {
+            var directory = Directory.CreateDirectory(dir);
+            foreach (var f in directory.GetFiles()) f.Delete();
+            return directory.FullName;
+        }
         public void StartWriteAllRooms()
         {
-            var roomDirectory  = Directory.CreateDirectory("room");
-            string full_name = scriptDirectory.FullName;
-            foreach (var room in File.Rooms) {
+            var path = DeleteAllAndCreateDirectory("rooms");
+            foreach (var o in File.Rooms) {
                 RunTask(() =>
                 {
-                    string filename = Path.Combine(full_name, room.Name);
-                    using (ResourceFormater fmt = new ResourceFormater(filename))
-                        fmt.Write(room);
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name),"js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
                 });
             }
         }
-        
+        public void StartWriteAllBackgrounds()
+        {
+            var path = DeleteAllAndCreateDirectory("backgrounds");
+            foreach (var o in File.Backgrounds)
+            {
+                RunTask(() =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
+                });
+            }
+        }
+        public void StartWriteAllSprites()
+        {
+            var path = DeleteAllAndCreateDirectory("sprites");
+            foreach (var o in File.Sprites)
+            {
+                RunTask(() =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
+                });
+            }
+        }
+        public void StartWriteAllFonts()
+        {
+            var path = DeleteAllAndCreateDirectory("fonts");
+            foreach (var o in File.Fonts)
+            {
+                RunTask(() =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
+                });
+            }
+        }
+        public void StartWriteAllCode()
+        {
+            var path = DeleteAllAndCreateDirectory("code");
+            foreach (var o in File.Codes)
+            {
+                RunTask(() =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
+                });
+            }
+        }
+        public void StartWriteAllSounds()
+        {
+            var path = DeleteAllAndCreateDirectory("sounds");
+            foreach (var o in File.Sounds)
+            {
+                RunTask(() =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
+                });
+            }
+        }
         DateTime start;
         public void StartWriteAllObjects()
         {

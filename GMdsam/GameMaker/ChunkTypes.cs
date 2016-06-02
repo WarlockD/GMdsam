@@ -118,7 +118,13 @@ namespace GameMaker
         }
         [Serializable]
         public class AudioFile : GameMakerStructure, INamedResrouce, IDataResource
+            , SerializerHelper.ISerilizerHelper
         {
+            public void CreateHelper(SerializerHelper help)
+            {
+                help.AddField("index", Index);
+            }
+
             public string Name { get { return name; } }
             public string name;
             public int audio_type;
@@ -244,7 +250,7 @@ namespace GameMaker
                 Texture_Index = r.ReadInt16();
             }
         }
-        public class Sprite : GameMakerStructure, INamedResrouce
+        public class Sprite : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
             public string Name { get { return name; } }
             string name;
@@ -381,9 +387,17 @@ namespace GameMaker
                 if (Frames != null)  for (int i = 0; i < Frames.Length; i++) FrameToBitmap(i);
                 int[] offset0 = r.ReadInt32(7);
             }
+            public void CreateHelper(SerializerHelper help)
+            {
+                help.AddField("index", Index);
+            }
         }
-        public class GObject : GameMakerStructure, INamedResrouce
+        public class GObject : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
+            public void CreateHelper(SerializerHelper help)
+            {
+                help.AddField("index", Index);
+            }
             public class Event
             {
                 public int SubType;
@@ -520,8 +534,12 @@ namespace GameMaker
                 }
             }
         };
-        public class Background : GameMakerStructure, INamedResrouce
+        public class Background : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
+            public void CreateHelper(SerializerHelper help)
+            {
+                help.AddField("index", Index);
+            }
             public string Name { get; private set; }
             public bool Trasparent { get; private set; }
             public bool Smooth { get; private set; }
@@ -626,17 +644,16 @@ namespace GameMaker
                     Colour = r.ReadInt32();
                     Rotation = r.ReadSingle();
                 }
-                public SerializerHelper CreateHelper()
+                public void CreateHelper(SerializerHelper help)
                 {
-                    SerializerHelper helper = new SerializerHelper(this);
-               //     helper.ReplaceFieldsWithObject(o);
-                    helper.RemoveField("Code_Offset");
+                    help.AddField("object_name", File.Objects[Object_Index].Name);
+                    //     helper.ReplaceFieldsWithObject(o);
+                    help.RemoveField("Code_Offset");
                     if(Code_Offset >= 0) // lets make some code
                     {
                         string code = Writers.AllWriter.QuickCodeToLine(File.Codes[Code_Offset]);
-                        helper.AddField("Code_String", code);
+                        help.AddField("Code_String", code);
                     }
-                    return helper;
                 }
             };
             public class Tile : GameMakerStructure
@@ -688,17 +705,16 @@ namespace GameMaker
             public View[] Views;
             public Instance[] Objects;
             public Tile[] Tiles;
-            public SerializerHelper CreateHelper()
+            public void CreateHelper(SerializerHelper help)
             {
-                SerializerHelper helper = new SerializerHelper(this);
                 //     helper.ReplaceFieldsWithObject(o);
-                helper.RemoveField("Code_Offset");
+                help.RemoveField("Code_Offset");
+                help.AddField("index", Index);
                 if (Code_Offset >= 0) // lets make some code // lets make some code
                 {
                     string code = Writers.AllWriter.QuickCodeToLine(File.Codes[Code_Offset]);
-                    helper.AddField("Code_String", code);
+                    help.AddField("Code_String", code);
                 }
-                return helper;
             }
             protected override void InternalRead(BinaryReader r)
             {
@@ -726,8 +742,13 @@ namespace GameMaker
                 Tiles = ArrayFromOffset<Tile>(r, tilesOffset);
             }
         }
-        public class Font : GameMakerStructure, INamedResrouce
+        public class Font : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
+            public void CreateHelper(SerializerHelper help)
+            {
+                help.AddField("index", Index);
+            }
+
             public class Glyph : GameMakerStructure
             {
                 public short ch;
@@ -753,8 +774,8 @@ namespace GameMaker
             public int Size { get; private set; }
             public bool Bold { get; private set; }
             public bool Italic { get; private set; }
-            public char FirstChar { get; private set; }
-            public char LastChar { get; private set; }
+            public int FirstChar { get; private set; }
+            public int LastChar { get; private set; }
             public int AntiAlias { get; private set; }
             public int CharSet { get; private set; }
 
@@ -808,7 +829,12 @@ namespace GameMaker
                 return new MemoryStream(File.rawData, this.Position, Size, false, false);
             }
         }
-        public class Script : GameMakerStructure, IDataResource, INamedResrouce {
+        public class Script : GameMakerStructure, IDataResource, INamedResrouce, SerializerHelper.ISerilizerHelper
+        {
+            public void CreateHelper(SerializerHelper help)
+            {
+                help.AddField("index", Index);
+            }
             string name;
             public string Name { get { return name; } }
             public Stream Data

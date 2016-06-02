@@ -607,7 +607,7 @@ namespace GameMaker.Ast
                     foreach (var kp in badCodes)
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
                     sw.WriteLine();
-                    var dwriter = new Writers.BlockToCode(new Writers.DebugFormater(), error); 
+                    var dwriter = new Writers.BlockToCode(error); 
                     dwriter.Write(badmethod);
                     sw.WriteLine(dwriter.ToString());
                 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,6 +9,81 @@ namespace GameMaker
 {
     public static class Constants
     {
+        // these two are helper functions for writing commma ordered junk
+        // They will write nothing if there is nothing, and will always make sure there is a starter space, and ending space and a space right
+        // after the comma of each element.  It also reutnrs true if it was empty but not sure I iwll keep that
+        public static bool WriteCommaDelimited<T>(this TextWriter writer, IEnumerable<T> list, Func<T,bool> action) 
+        {
+            var arr = list.ToArray();
+            if (arr.Length == 0) return true;
+            writer.Write(' ');
+            int i = 0;
+            for (; i < (arr.Length - 1); i++)
+            {
+                if (action(arr[i]))
+                    writer.WriteLine(", ");
+                else
+                    writer.Write(", ");
+            }
+            if (action(arr[i]))
+                writer.WriteLine();
+            else
+                writer.Write(' ');
+            writer.Write(' ');
+            return false;
+        }
+        public static bool isEndingEqual(this StringBuilder sb, char t)
+        {
+            for(int i = sb.Length - 1; i >= 0; i--)
+            {
+                char c = sb[i];
+                if (c == t) return true;
+                else if (char.IsWhiteSpace(c)) continue;
+                else break;
+            }
+            return false;
+        }
+        public static bool isEndingEqual(this string sb, char t)
+        {
+            for (int i = sb.Length - 1; i >= 0; i--)
+            {
+                char c = sb[i];
+                if (c == t) return true;
+                else if (char.IsWhiteSpace(c)) continue;
+                else break;
+            }
+            return false;
+        }
+        public static bool isEndingEqual(this string sb, char t1, char t2)
+        {
+            for (int i = sb.Length - 1; i >= 0; i--)
+            {
+                char c = sb[i];
+                if (c == t1 || c == t2) return true;
+                else if (char.IsWhiteSpace(c)) continue;
+                else break;
+            }
+            return false;
+        }
+        public static bool AppendCommaDelimited<T>(this StringBuilder sb, IEnumerable<T> list, Func<T,bool> action)
+        {
+            var arr = list.ToArray();
+            if (arr.Length == 0) return true;
+            sb.Append(' ');
+            int i = 0;
+            for (; i < arr.Length - 1; i++)
+            {
+                if (action(arr[i]))
+                    sb.AppendLine(",");
+                else
+                    sb.Append(", ");
+            }
+            if (action(arr[i]))
+                sb.AppendLine();
+            else
+                sb.Append(' ');
+            return false;
+        }
         public static string JISONEscapeString(string s)
         {
             StringBuilder sb = new StringBuilder(50);

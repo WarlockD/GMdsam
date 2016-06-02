@@ -62,6 +62,7 @@ namespace GameMaker
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
 #endif
+            Context.doThreads = false;
             string toSearch = null;
             int pos = 1;
             var w = new Writers.AllWriter();
@@ -96,29 +97,48 @@ namespace GameMaker
                          
                             string option = args.ElementAtOrDefault(pos);
                             if (string.IsNullOrWhiteSpace(option)) option = "eveything";
-                            switch (option)
+                            do
                             {
-                                case "scripts":
-                                    w.StartWriteAllScripts();
-                                    break;
-                                case "objects":
-                                    w.StartWriteAllObjects();
-                                    break;
-                                case "rooms":
-                                    w.StartWriteAllRooms();
-                                    break;
-                                case "eveything":
-                                    w.StartWriteAllScripts();
-                                    w.StartWriteAllObjects();
-                                    break;
-                                default:
-                                    InstructionError("Invalide option '{0}' for -all", option);
-                                    break;
+                                switch (option)
+                                {
+                                    case "backgrounds":
+                                        w.StartWriteAllBackgrounds();
+                                        break;
+                                    case "sprites":
+                                        w.StartWriteAllSprites();
+                                        break;
+                                    case "sounds":
+                                        w.StartWriteAllSounds();
+                                        break;
 
-                            }
-                            pos = args.Length;
+                                    case "codes":
+                                        w.StartWriteAllCode();
+                                        break;
+                                    case "fonts":
+                                        w.StartWriteAllFonts();
+                                        break;
+                                    case "scripts":
+                                        w.StartWriteAllScripts();
+                                        break;
+                                    case "objects":
+                                        w.StartWriteAllObjects();
+                                        break;
+                                    case "rooms":
+                                        w.StartWriteAllRooms();
+                                        break;
+                                    case "eveything":
+                                        w.StartWriteAllScripts();
+                                        w.StartWriteAllObjects();
+                                        break;
+                                    default:
+                                        InstructionError("Invalide option '{0}' for -all", option);
+                                        break;
 
+                                }
+                                option = args.ElementAtOrDefault(++pos);
+                            } while (!string.IsNullOrWhiteSpace(option));
                         }
+                        pos = args.Length;
                         break;
                     case "-lua":
                         Context.outputType = OutputType.LoveLua;

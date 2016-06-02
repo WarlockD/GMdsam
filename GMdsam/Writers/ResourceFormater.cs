@@ -10,71 +10,93 @@ using GameMaker.Ast;
 
 namespace GameMaker.Writers
 {
-    public class ResourceFormater : IDisposable // I like using using
+    public class ResourceFormater : PlainTextWriter
     {
-        protected PlainTextWriter writer { get; private set; }
-        bool disposed = false;
-        public void Dispose()
+        public ResourceFormater(TextWriter writer) : base(writer) { }
+        public ResourceFormater() : base() { }
+        public ResourceFormater(string filename) : base(filename) { }
+        public virtual void WriteAll<T>(IEnumerable<T> all) where T: File.GameMakerStructure
         {
-            if (!disposed)
-            {
-                writer.Dispose();
-                disposed = true;
-            }
-            throw new NotImplementedException();
-        }
-        ~ResourceFormater() { Dispose(); }
-        public ResourceFormater(TextWriter writer)
-        {
-            this.writer = writer as PlainTextWriter;
-            if (this.writer == null) this.writer = new PlainTextWriter(writer);
-        }
-        public ResourceFormater()
-        {
-            this.writer = new PlainTextWriter();
-        }
-        public ResourceFormater(string filename)
-        {
-            this.writer = new PlainTextWriter(filename);
-        }
-        public virtual void Write<T>(IEnumerable<T> all) where T: File.GameMakerStructure
-        {
-            writer.WriteLine("{");
+            WriteLine("{");
             foreach(var a in all)
             {
                 Write((dynamic)a);
             }
-            writer.WriteLine("}");
+            WriteLine("}");
         }
         public virtual void Write(File.Room room)
         {
             SerializerHelper help = new SerializerHelper(room);
-            help.DebugSave(writer);
+            SimpleWrite(help);
         }
-        public virtual void Write(File.GObject room)
+        bool HelpLine(SerializerHelper.SerizlierObject o) {
+            if (o.isSimple)
+            {
+                string line = o.ToString();
+                Write(line);
+            } else
+            {
+                if (o.isArray) // array of objects
+                {
+                    Write(o.Name);
+                    Write(" = ");
+                    WriteLine("{");
+                    Indent++;
+                    this.WriteCommaDelimited(o.GetComplexArray(), ao =>
+                    {
+                        Write(ao.ToString());
+                        return true;
+                    });
+                    Indent--;
+                    Write("}");
+                } else // just an object
+                {
+                    string line = o.ToString();
+                    Write(line);
+                }
+            }
+            return true;
+        }
+        protected void SimpleWrite(SerializerHelper help)
         {
-            SerializerHelper help = new SerializerHelper(room);
-            help.DebugSave(writer);
+            WriteLine("{");
+            Indent++;
+            this.WriteCommaDelimited(help, HelpLine);
+            Indent--;
+            WriteLine("}");
+        }
+        public virtual void Write(File.GObject o)
+        {
+            SerializerHelper help = new SerializerHelper(o);
+            SimpleWrite(help);
         }
         public virtual void Write(File.Font font)
         {
-
+            SerializerHelper help = new SerializerHelper(font);
+            SimpleWrite(help);
         }
-        public virtual void Write(File.Sprite font)
+        public virtual void Write(File.Sprite sprite)
         {
-
+            SerializerHelper help = new SerializerHelper(sprite);
+            SimpleWrite(help);
         }
-        public virtual void Write(File.AudioFile font)
+        public virtual void Write(File.AudioFile o)
         {
-
+            SerializerHelper help = new SerializerHelper(o);
+            SimpleWrite(help);
         }
-        public virtual void Write(File.Background font)
+        public virtual void Write(File.Background b)
         {
-
+            SerializerHelper help = new SerializerHelper(b);
+            SimpleWrite(help);
         }
         public virtual void Write(File.Code code)
         {
-
+            using (var output = new BlockToCode(new Context.ErrorContext(code.Name), this))
+            {
+                new GameMaker.Writer(output).WriteCode(code);
+                Write(output.ToString());
+            }
         }
     }
 }

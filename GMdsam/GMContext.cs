@@ -292,7 +292,7 @@ namespace GameMaker
                                     ptext.Indent++;
                                     ptext.Write(m.Node.ToString());
                                     ptext.Indent--;
-                                    if(ptext.LineLength > 0) ptext.WriteLine();
+                                    if(ptext.Column > 0) ptext.WriteLine();
                                     sw.Write(ptext.ToString());
                                 }
                             }
@@ -512,12 +512,12 @@ namespace GameMaker
                 if (e.Code == GMCode.Constant)
                     return InstanceToString(e.Operand as ILValue);
                 else
-                    return output.NodeToString(e);
+                    return output.WriteToString(e);
             }
             ILValue value = instance as ILValue;
             if (value != null) return InstanceToString(value);
             ILVariable v = instance as ILVariable;
-            if (v != null) return output.NodeToString(v);
+            if (v != null) return output.WriteToString(v);
             throw new Exception("Cannot display instance");
         }
  

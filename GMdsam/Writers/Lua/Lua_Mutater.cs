@@ -10,12 +10,8 @@ using GameMaker.Ast;
 
 namespace GameMaker.Writers.Lua
 {
-    public class Mutater : INodeMutater
+    public class Mutater 
     {
-        public INodeMutater Clone()
-        {
-            return new Mutater();
-        }
         BlockToCode output;
         public void SetStream(BlockToCode output)
         {

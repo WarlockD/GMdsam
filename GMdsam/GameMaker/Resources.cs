@@ -952,70 +952,9 @@ namespace GameMaker
             }
         }
 
-      
+
         public static void DebugPring()
         {
-            using (StreamWriter sr = new StreamWriter("object_info.txt"))
-            {
-                for (int i = 0; i < objects.Count; i++)
-                {
-                    var o = objects[i];
-                    sr.Write("{0,-4}: Name: {1:-20}", i, o.Name);
-                    if (o.Parent > 0) sr.Write("  Parent({0}): {1}", o.Parent, File.Objects[o.Parent].Name);
-                    sr.WriteLine();
-                }
-            }
-          //  using (StreamWriter sr = new StreamWriter("sprite_info.lua"))
-         //   {
-             //   DebugPrint(sprites, sr, "_sprites", true);
-          //  }
-          //  using (StreamWriter sr = new StreamWriter("font_info.lua"))
-         //   {
-            //    DebugPrint(fonts, sr, "_fonts", true);
-          //  }
-            using (StreamWriter sr = new StreamWriter("room_info.txt"))
-            {
-                for (int i = 0; i < rooms.Count; i++)
-                {
-                    var o = rooms[i];
-                    sr.Write("{0,-4}: Name: {1:-20} Size({2},{3})", i, o.Name, o.Width, o.Height);
-                    sr.WriteLine();
-                    if (o.Objects.Length > 0)
-                        for (int j = 0; j < o.Objects.Length; j++)
-                        {
-                            var oo = o.Objects[j];
-                            var obj = objects[oo.Index];
-                            sr.WriteLine("       Object: {0}  Pos({1},{2}", obj.Name, oo.X, oo.Y);
-                        }
-                }
-            }
-            { // xmltest
-                const string filename = "room_all.xml";
-                if (System.IO.File.Exists(filename)) System.IO.File.Delete(filename);
-                using (System.IO.FileStream file = new System.IO.FileStream(filename, FileMode.Create))
-                {
-                    System.Xml.Serialization.XmlSerializer writer = new System.Xml.Serialization.XmlSerializer(typeof(File.AudioFile));
-                    writer.Serialize(file, Sounds[45]);
-                    file.Flush();
-                } 
-            }
-            {
-                const string filename = "room_all.lua";
-                if (System.IO.File.Exists(filename)) System.IO.File.Delete(filename);
-                using (StreamWriter file = new StreamWriter(filename))
-                {
-                    file.WriteLine("local rooms = {");
-                    foreach(var room in Rooms)
-                    {
-                        var helper = room.CreateHelper();
-                        helper.DebugSave(file);
-                    }
-                    file.WriteLine("}");
-                    file.WriteLine("_rooms = rooms");
-                }
-            }
-            //  
-            // var path = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + "//SerializationOverview.xml";
         }
         
         public static void LoadDataWin(string filename)

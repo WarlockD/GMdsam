@@ -89,7 +89,8 @@ namespace GameMaker.Ast
         }
         public static void DebugSave(this ILBlock block, string FileName)
         {
-            new Writers.BlockToCode(new Writers.DebugFormater(), new Context.ErrorContext(Path.GetFileNameWithoutExtension(FileName))).WriteFile(block, FileName);
+            using (var output = new Writers.BlockToCode(FileName))
+                output.Write(block);
         }
 
     }
