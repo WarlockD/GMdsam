@@ -41,6 +41,7 @@ namespace GameMaker
         TextWriter writer;
         bool ownWriter;
         char prev;
+        bool startwritten;
         public int Indent { get; set; }
 
         public string CurrentLine { get { return line.ToString(); } set { line.Clear(); line.Append(value ?? ""); } }
@@ -80,6 +81,7 @@ namespace GameMaker
             prev = default(char);
             Indent = 0;
             _lineheader = null;
+            startwritten = false;
         }
         public void ClearLine()
         {
@@ -95,6 +97,7 @@ namespace GameMaker
             clone.LineNumber = this.LineNumber;
             clone.prev = this.prev; // just in case
             clone._settings = this._settings;
+            clone.startwritten = this.startwritten;
             return clone;
         }
         public StringBuilder GetStringBuilder()
@@ -112,6 +115,7 @@ namespace GameMaker
             this.Indent = 0;
             this.LineNumber = 1;
             this.prev = default(char);
+            this.startwritten = false;
         }
         public PlainTextWriter(TextWriter writer)
         {
@@ -151,34 +155,18 @@ namespace GameMaker
         }
         public override void WriteLine()
         {
-            string sline = line.ToString();
-            int space_to_skip = Indent * _settings.SpacesPerIdent;
-            if (_lineheader != null) {
-                if (_settings.HeaderOvewritesIdent)
-                    if (_lineheader.Length < space_to_skip)
-                        space_to_skip -= _lineheader.Length;
-                    else
-                        space_to_skip = 0;
-                writer.Write(_lineheader);
-            }
-            System.Diagnostics.Debug.Assert(space_to_skip >= 0);
-            if (space_to_skip > 0)
-            {
-                writer.Write(FindIdent(space_to_skip));
-                // if we are identing we trim the line
-                sline = sline.Trim();
-            }
-            writer.Write(sline);
+            writer.Write(line.ToString());
             writer.WriteLine();
             LineNumber++;
             line.Clear();
+            startwritten = false;
         }
         // Since eveything pipes though here and even if I override
         // alot I STILL have to check for new lines, better to just use this
         public override void Write(char c)
         {
             // fix newlines with a simple state machine
-            if(prev == '\n' || prev == '\r')
+            if (prev == '\n' || prev == '\r')
             {
                 if (prev != c && (c == '\n' || c == '\r'))
                 {
@@ -187,6 +175,22 @@ namespace GameMaker
                 }
             }
             prev = c;
+            if (!startwritten)
+            {
+                if (Indent > 0 && c == ' ') return; // if we are using ident, we skip the starting spaces
+                int space_to_skip = Indent * _settings.SpacesPerIdent;
+                if (_lineheader != null)
+                {
+                    if (_settings.HeaderOvewritesIdent)
+                        if (_lineheader.Length < space_to_skip)
+                            space_to_skip -= _lineheader.Length;
+                        else
+                            space_to_skip = 0;
+                    writer.Write(_lineheader);
+                }
+                if (space_to_skip > 0) writer.Write(FindIdent(space_to_skip));
+                startwritten = true;
+            }
             switch (c)
             {
                 case '\t':
@@ -207,11 +211,20 @@ namespace GameMaker
         }
         public override void Flush()
         {
+            // carful with flush, we clear the line WITHOUT doing a new line
+            writer.Write(line.ToString());
+            line.Clear();
             writer.Flush();
         }
         public override string ToString()
         {
-            if (writer is StringWriter) return GetStringBuilder().ToString();
+            if (writer is StringWriter)
+            {
+                StringBuilder sb = new StringBuilder(100);
+                sb.Append(GetStringBuilder());
+                sb.Append(line.ToString());
+                return sb.ToString();
+            }
             else return "LineNumber=" + LineNumber + " CurrentLine=" + line.ToString();
         }
         ~PlainTextWriter()
@@ -227,9 +240,10 @@ namespace GameMaker
             if (!disposedValue)
             {
                 if (line.Length > 0) WriteLine();
-                writer.Flush();
+                
                 if (ownWriter)
                 {
+                    writer.Flush();
                     writer.Dispose();
                     writer = null;
                 }

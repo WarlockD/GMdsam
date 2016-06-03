@@ -11,13 +11,6 @@ namespace GameMaker
 {
     public class SerializerHelper : IEnumerable<SerializerHelper.SerizlierObject>
     {
-        public enum SerializerType
-        {
-            String,
-            StringArray,
-            Helper,
-            HelperArray
-        }
         public struct SerizlierObject : IEquatable<SerizlierObject>
         {
             public readonly string Name;
@@ -71,7 +64,7 @@ namespace GameMaker
             }
         }
         HashSet<string> fields;
-        List<SerizlierObject> list;
+        LinkedList<SerizlierObject> list;
         public bool isPrimitive { get; protected set; }
         public IEnumerator<SerializerHelper.SerizlierObject> GetEnumerator()
         {
@@ -96,7 +89,7 @@ namespace GameMaker
         {
             this.isPrimitive = true;
             this.fields = new HashSet<string>();
-            this.list = new List<SerizlierObject>();
+            this.list = new LinkedList<SerizlierObject>();
         }
 
         string FixName(string name)
@@ -111,7 +104,7 @@ namespace GameMaker
         {
             this.isPrimitive = true;
             this.fields = new HashSet<string>();
-            this.list = new List<SerizlierObject>();
+            this.list = new LinkedList<SerizlierObject>();
             Type t = o.GetType();
             FieldInfo[] ofields = t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             if (ofields.Length == 0) throw new Exception("Cannot convert value or bad not a simple object");
@@ -119,7 +112,7 @@ namespace GameMaker
 
             foreach (var f in ofields)
             {
-                if (!f.IsNotSerialized) AddField(FixName(f.Name), f.GetValue(o));
+                if (!f.IsNotSerialized) AddLast(FixName(f.Name), f.GetValue(o));
             }
             SerializerHelper.ISerilizerHelper ihelper = o as SerializerHelper.ISerilizerHelper;
             if (ihelper != null) ihelper.CreateHelper(this);
@@ -180,11 +173,18 @@ namespace GameMaker
             }
             else return new SerializerHelper(o);
         }
-        public void AddField(string name, object o)
+        public void AddLast(string name, object o)
         {
             name = FixName(name);
             if (fields.Contains(name)) throw new ArgumentException("Already contains field name", "name");
-            list.Add(new SerizlierObject(name, ObjectConvert(o)));
+            list.AddLast(new SerizlierObject(name, ObjectConvert(o)));
+            fields.Add(name);
+        }
+        public void AddFirst(string name, object o)
+        {
+            name = FixName(name);
+            if (fields.Contains(name)) throw new ArgumentException("Already contains field name", "name");
+            list.AddFirst(new SerizlierObject(name, ObjectConvert(o)));
             fields.Add(name);
         }
         // needed something like this for a while now, I really need ot make a text formater class that

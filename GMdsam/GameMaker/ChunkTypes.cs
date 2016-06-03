@@ -7,15 +7,12 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+using System.Runtime.Serialization.Json;
 
 namespace GameMaker
 {
+  
     public  static partial class File
     {
 
@@ -31,20 +28,17 @@ namespace GameMaker
         {
             Stream getStream();
         }
-        public interface IIndexable
+        [DataContract]
+        public abstract class GameMakerStructure : IEquatable<GameMakerStructure> //: ISerializable
         {
-            int Index { get; }
-        }
-        [Serializable]
-        public abstract class GameMakerStructure : IEquatable<GameMakerStructure>, IIndexable//: ISerializable
-        {
-            [NonSerialized]
             int position;
-            [NonSerialized]
+            [DataMember(EmitDefaultValue = false)]
             protected int? index;
-            public int Position { get { return position; } }
-            public int Index {  get { return index == null ? -100 : (int)index; } }
-            public bool hasIndex {  get { return index != null;  } }
+            [DataMember(EmitDefaultValue = false)]
+            protected string name;
+            public int Position {  get { return position; } }
+            public int Index { get { return index ?? -1; } }
+            public string Name {  get { return name; } }
             protected abstract void InternalRead(BinaryReader r);
             public void ReadFromDataWin(BinaryReader r, int index)
             {
@@ -52,17 +46,11 @@ namespace GameMaker
                 position = (int) r.BaseStream.Position; // used for equality
                 InternalRead(r);
             }
-            public void ReadFromDataWin(BinaryReader r)
-            {
-                this.index = null;
-                position = (int) r.BaseStream.Position; // used for equality
-                InternalRead(r);
-            }
-            public static T ReadStructure<T>(BinaryReader r, int? index = null) where T : GameMakerStructure, new()
+            public static T ReadStructure<T>(BinaryReader r) where T : GameMakerStructure, new()
             {
                 T o = new T();
                 o.InternalRead(r);
-                o.index = index;
+                o.index = default(int);
                 return o;
             }
             public static T[] ArrayFromOffset<T>(BinaryReader r, int offset) where T : GameMakerStructure, new()
@@ -122,11 +110,9 @@ namespace GameMaker
         {
             public void CreateHelper(SerializerHelper help)
             {
-                help.AddField("index", Index);
+                help.AddLast("index", Index);
             }
 
-            public string Name { get { return name; } }
-            public string name;
             public int audio_type;
             public string extension;
             public string filename;
@@ -250,10 +236,9 @@ namespace GameMaker
                 Texture_Index = r.ReadInt16();
             }
         }
+        [DataContract]
         public class Sprite : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
-            public string Name { get { return name; } }
-            string name;
             public int Width;
             public int Height;
             public int Left;
@@ -389,14 +374,14 @@ namespace GameMaker
             }
             public void CreateHelper(SerializerHelper help)
             {
-                help.AddField("index", Index);
+                help.AddLast("index", Index);
             }
         }
         public class GObject : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
             public void CreateHelper(SerializerHelper help)
             {
-                help.AddField("index", Index);
+                help.AddLast("index", Index);
             }
             public class Event
             {
@@ -448,7 +433,6 @@ namespace GameMaker
                 public float X;
                 public float Y;
             }
-            public string Name { get; set; }
             public int ObjectIndex = -1;
             public int SpriteIndex = 0;
             public bool Solid = false;
@@ -477,7 +461,7 @@ namespace GameMaker
          
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
+                name = string.Intern(r.ReadStringFromNextOffset());
                 this.SpriteIndex = r.ReadInt32();
                 this.Visible = r.ReadIntBool();
                 this.Solid = r.ReadIntBool();
@@ -538,16 +522,15 @@ namespace GameMaker
         {
             public void CreateHelper(SerializerHelper help)
             {
-                help.AddField("index", Index);
+                help.AddLast("index", Index);
             }
-            public string Name { get; private set; }
             public bool Trasparent { get; private set; }
             public bool Smooth { get; private set; }
             public bool Preload { get; private set; }
             public SpriteFrame Frame { get; private set; }
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
+                name = string.Intern(r.ReadStringFromNextOffset());
                 Trasparent = r.ReadIntBool();
                 Smooth = r.ReadIntBool();
                 Preload = r.ReadIntBool();
@@ -557,23 +540,39 @@ namespace GameMaker
                 Frame.Read(r, -1);
             }
         };
-        public class Room : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
+        [DataContract]
+        public class Room : GameMakerStructure, INamedResrouce
         {
+            [DataContract]
             public class View : GameMakerStructure
             {
+                [DataMember(Order = 1)]
                 public bool Visible;
+                [DataMember(Order = 2)]
                 public int X;
+                [DataMember(Order = 3)]
                 public int Y;
+                [DataMember(Order = 4)]
                 public int Width;
+                [DataMember(Order = 5)]
                 public int Height;
+                [DataMember(Order = 6)]
                 public int Port_X;
+                [DataMember(Order = 7)]
                 public int Port_Y;
+                [DataMember(Order = 8)]
                 public int Port_Width;
+                [DataMember(Order = 9)]
                 public int Port_Height;
+                [DataMember(Order = 10)]
                 public int Border_X;
+                [DataMember(Order = 11)]
                 public int Border_Y;
+                [DataMember(Order = 12)]
                 public int Speed_X;
+                [DataMember(Order = 13)]
                 public int Speed_Y;
+                [DataMember(Order = 14)]
                 public int ViewIndex;
 
                 protected override void InternalRead(BinaryReader r)
@@ -594,17 +593,28 @@ namespace GameMaker
                     index = r.ReadInt32();
                 }      
             }
+            [DataContract]
             public class Background : GameMakerStructure
             {
+                [DataMember(Order = 1)]
                 public bool Visible;
+                [DataMember(Order = 2)]
                 public bool Foreground;
+                [DataMember(Order = 3)]
                 public int Background_Index;
+                [DataMember(Order = 4)]
                 public int X;
+                [DataMember(Order = 5)]
                 public int Y;
+                [DataMember(Order = 6)]
                 public int Tiled_X;
+                [DataMember(Order = 7)]
                 public int Tiled_Y;
+                [DataMember(Order = 8)]
                 public int Speed_X;
+                [DataMember(Order = 9)]
                 public int Speed_Y;
+                [DataMember(Order = 10)]
                 public bool Stretch;
                 protected override void InternalRead(BinaryReader r)
                 {
@@ -621,17 +631,29 @@ namespace GameMaker
                 }
              
             };
+            [DataContract]
             public class Instance : GameMakerStructure, SerializerHelper.ISerilizerHelper
             {
+                [DataMember(Order = 1)]
                 public int X;
+                [DataMember(Order = 2)]
                 public int Y;
+                [DataMember(Order = 3)]
                 public int Object_Index;
+                [DataMember(Order = 4)]
                 public int Id;
-                public int Code_Offset;
+          
+                [DataMember(Order = 5)]
                 public float Scale_X;
+                [DataMember(Order = 6)]
                 public float Scale_Y;
-                public Color Colour;
+                [DataMember(Order = 7)]
+                public byte[] color;
+                [DataMember(Order = 8)]
                 public float Rotation;
+                [DataMember(EmitDefaultValue = false, Order = 9)]
+                public string Room_Code = null;
+                public int Code_Offset;
                 protected override void InternalRead(BinaryReader r)
                 {
                     X = r.ReadInt32();
@@ -641,35 +663,48 @@ namespace GameMaker
                     Code_Offset = r.ReadInt32();
                     Scale_X = r.ReadSingle();
                     Scale_Y = r.ReadSingle();
-                    Colour = r.ReadInt32();
+                    color = r.ReadBytes(4);
                     Rotation = r.ReadSingle();
                 }
                 public void CreateHelper(SerializerHelper help)
                 {
-                    help.AddField("object_name", File.Objects[Object_Index].Name);
+                    help.AddLast("object_name", File.Objects[Object_Index].Name);
                     //     helper.ReplaceFieldsWithObject(o);
                     help.RemoveField("Code_Offset");
                     if(Code_Offset >= 0) // lets make some code
                     {
                         string code = Writers.AllWriter.QuickCodeToLine(File.Codes[Code_Offset]);
-                        help.AddField("Code_String", code);
+                        help.AddLast("Code_String", code);
                     }
                 }
             };
+            [DataContract]
             public class Tile : GameMakerStructure
             {
+                [DataMember(Order = 1)]
                 public int X;
+                [DataMember(Order = 2)]
                 public int Y;
+                [DataMember(Order = 3)]
                 public int Background_Index;
+                [DataMember(Order = 4)]
                 public int Offset_X;
+                [DataMember(Order = 5)]
                 public int Offset_Y;
+                [DataMember(Order = 6)]
                 public int Width;
+                [DataMember(Order = 7)]
                 public int Height;
+                [DataMember(Order = 8)]
                 public int Depth;
+                [DataMember(Order = 9)]
                 public int Id;
+                [DataMember(Order = 10)]
                 public float Scale_X;
+                [DataMember(Order = 11)]
                 public float Scale_Y;
-                public Color Blend;
+                [DataMember(Order = 12)]
+                public byte[] Blend;
                 protected override void InternalRead(BinaryReader r)
                 {
                     // I think tiles will change in newer versions, so watch this
@@ -684,69 +719,90 @@ namespace GameMaker
                     Id = r.ReadInt32();
                     Scale_X = r.ReadSingle();
                     Scale_Y = r.ReadSingle();
-                    Blend = r.ReadInt32();
+                    Blend = r.ReadBytes(4);
 
                 }
             };
-            public string Name { get;  set; }
-            public string Caption { get;  set; }
+            [DataMember(EmitDefaultValue = false, Order = 10)]
+            public string caption;
+            [DataMember( Order = 11)]
+            public int width;
+            [DataMember(Order = 12)]
+            public int height;
+            [DataMember(Order = 13)]
+            public int speed;
+            [DataMember(Order = 14)]
+            public bool persistent;
+            [DataMember(Order = 15)]
+            public byte[] color;
+            [DataMember(Order = 16)]
+            public bool show_color;
+       
+            public int code_offset;
 
-            public int Width;
-            public int Height;
-            public int Speed;
-            public bool Persistent;
-            public Color Colour;
-            public bool Show_colour;
-            public int Code_Offset;
-            public bool EnableViews;
-            public bool ViewClearScreen;
-            public bool ClearDisplayBuffer;
+
+            [DataMember(Order = 17)]
+            public bool enable_views;
+            [DataMember(Order = 18)]
+            public bool view_clear_screen;
+            [DataMember(Order = 19)]
+            public bool clear_display_buffer;
+            [DataMember(EmitDefaultValue = false, Order = 20)]
             public Background[] Backgrounds;
+            [DataMember(EmitDefaultValue = false, Order = 21)]
             public View[] Views;
+            [DataMember(EmitDefaultValue = false, Order = 22)]
             public Instance[] Objects;
+            [DataMember(EmitDefaultValue = false, Order = 23)]
             public Tile[] Tiles;
-            public void CreateHelper(SerializerHelper help)
-            {
-                //     helper.ReplaceFieldsWithObject(o);
-                help.RemoveField("Code_Offset");
-                help.AddField("index", Index);
-                if (Code_Offset >= 0) // lets make some code // lets make some code
-                {
-                    string code = Writers.AllWriter.QuickCodeToLine(File.Codes[Code_Offset]);
-                    help.AddField("Code_String", code);
-                }
-            }
+            [DataMember(EmitDefaultValue = false, Order = 24)]
+            public string Room_Code = null;
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
-                Caption = r.ReadStringFromNextOffset();
-                Width = r.ReadInt32();
-                Height = r.ReadInt32();
-                Speed = r.ReadInt32();
-                Persistent = r.ReadIntBool();
-                Colour = r.ReadInt32();
-                Show_colour = r.ReadIntBool();
-                Code_Offset = r.ReadInt32();
+                name = string.Intern(r.ReadStringFromNextOffset());
+                caption = r.ReadStringFromNextOffset();
+                width = r.ReadInt32();
+                height = r.ReadInt32();
+                speed = r.ReadInt32();
+                persistent = r.ReadIntBool();
+                color = r.ReadBytes(4);
+                show_color = r.ReadIntBool();
+                code_offset = r.ReadInt32();
                 int flags = r.ReadInt32();
-                EnableViews = (flags & 1) != 0;
-                ViewClearScreen = (flags & 2) != 0;
-                ClearDisplayBuffer = (flags & 14) != 0;
+                enable_views = (flags & 1) != 0;
+                view_clear_screen = (flags & 2) != 0;
+                clear_display_buffer = (flags & 14) != 0;
 
             int backgroundsOffset = r.ReadInt32();
                 int viewsOffset = r.ReadInt32();
                 int instancesOffset = r.ReadInt32();
                 int tilesOffset = r.ReadInt32();
                 Backgrounds = ArrayFromOffset<Background>(r, backgroundsOffset);
+                if (Backgrounds.Length == 0) Backgrounds = null;
+                else // check our backgrounds
+                {
+                    Backgrounds = Backgrounds.Where(x => x.Background_Index != -1).ToArray();
+                    if (Backgrounds.Length == 0) Backgrounds = null;
+                }
                 Views = ArrayFromOffset<View>(r, viewsOffset);
+                if (Views.Length == 0) Views = null;
+                else // check if any of the views has an inde of more than -1
+                {
+                    Views = Views.Where(x => x.Index != -1).ToArray();
+                    if (Views.Length == 0) Views = null;
+                }
                 Objects = ArrayFromOffset<Instance>(r, instancesOffset);
+                if (Objects.Length == 0) Objects = null;
                 Tiles = ArrayFromOffset<Tile>(r, tilesOffset);
+                if (Tiles.Length == 0) Tiles = null;
             }
         }
+        [DataContract]
         public class Font : GameMakerStructure, INamedResrouce, SerializerHelper.ISerilizerHelper
         {
             public void CreateHelper(SerializerHelper help)
             {
-                help.AddField("index", Index);
+                help.AddLast("index", Index);
             }
 
             public class Glyph : GameMakerStructure
@@ -769,7 +825,6 @@ namespace GameMaker
                     offset = r.ReadInt16();
                 }
             }
-            public string Name { get; private set; }
             public string Description { get; private set; }
             public int Size { get; private set; }
             public bool Bold { get; private set; }
@@ -785,7 +840,7 @@ namespace GameMaker
             public Glyph[] Glyphs { get; private set; }
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
+                name = string.Intern(r.ReadStringFromNextOffset());
                 Description = r.ReadStringFromNextOffset();
                 Size = r.ReadInt32();
                 Bold = r.ReadIntBool();
@@ -833,10 +888,8 @@ namespace GameMaker
         {
             public void CreateHelper(SerializerHelper help)
             {
-                help.AddField("index", Index);
+                help.AddLast("index", Index);
             }
-            string name;
-            public string Name { get { return name; } }
             public Stream Data
             {
                 get
@@ -878,7 +931,6 @@ namespace GameMaker
 
         public class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
-            public string Name { get; protected set; }
             public int Size { get; protected set; }
             [NonSerialized]
             public ILBlock block = null; // cached
@@ -898,7 +950,7 @@ namespace GameMaker
             }
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
+                name = string.Intern(r.ReadStringFromNextOffset());
                 Debug.Assert(!Name.Contains("gotobattle"));
                 Size = r.ReadInt32();
                 codePosition = this.Position + 8;
@@ -921,7 +973,7 @@ namespace GameMaker
             }
             protected override void InternalRead(BinaryReader r)
             {
-                Name = string.Intern(r.ReadStringFromNextOffset());
+                name = string.Intern(r.ReadStringFromNextOffset());
                 Size = r.ReadInt32();
                 LocalCount = r.ReadInt16();
                 ArgumentCount = r.ReadInt16();
