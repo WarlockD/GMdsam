@@ -202,8 +202,9 @@ namespace GameMaker
             {
                 case '\t':
                     {
+                        int div = (line.Length / Settings.TabMarks) * Settings.TabMarks + Settings.TabMarks;
                         int mod = line.Length % Settings.TabMarks;
-                        int spaces_needed = Settings.TabMarks - mod;
+                        int spaces_needed = div - line.Length;
                         line.Append(' ', spaces_needed);
                     }
                     c = default(char);

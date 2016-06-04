@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using GameMaker.Ast;
 using static GameMaker.File;
 using System.Runtime.Serialization.Json;
+using System.Diagnostics;
 
 namespace GameMaker.Writers
 {
@@ -150,7 +151,7 @@ namespace GameMaker.Writers
         }
 
         // I just gave up here and set up the first level
-        void WriteStart(TokenStream stream) // test if we are starting on an object or on an array
+        void WriteStart(TokenStream stream, int level = 0) // test if we are starting on an object or on an array
         {
             char ch = stream.Next();
             if (ch == '{')
@@ -158,24 +159,25 @@ namespace GameMaker.Writers
                 WriteLine('{');
                 Indent++;
 
-                ParseValue(stream,0);
+                ParseValue(stream, level);
                 WriteLine();
                 Indent--;
                 Write('}');
             }
             else if (ch == '[')
             {
+                WriteLine('[');
                 while (ch != ']')
                 {
                     Indent++;
-                    WriteLine('[');
-                    WriteStart(stream);
+
+                    ParseValue(stream, 0);
                     WriteLine();
                     Indent--;
                     ch = stream.Next();
                     if (ch == ',')
                     {
-                        WriteLine(',');
+                        Write(',');
                         ch = stream.Next();
                     }
                 }
@@ -185,9 +187,9 @@ namespace GameMaker.Writers
         }
         #endregion
         bool make_pretty;
-        public ResourceFormater(TextWriter writer,bool make_pretty = true) : base(writer) { this.make_pretty = make_pretty; }
+        public ResourceFormater(TextWriter writer, bool make_pretty = true) : base(writer) { this.make_pretty = make_pretty; }
         public ResourceFormater(bool make_pretty = true) : base() { this.make_pretty = make_pretty; }
-        public ResourceFormater(string filename, bool make_pretty = true) : base(Path.ChangeExtension(filename,"json")) { this.make_pretty = make_pretty; }
+        public ResourceFormater(string filename, bool make_pretty = true) : base(Path.ChangeExtension(filename, "json")) { this.make_pretty = make_pretty; }
 
         string DefaultJSONSerilizeToString<T>(T o) where T : GameMakerStructure
         {
@@ -202,14 +204,56 @@ namespace GameMaker.Writers
                 return sr.ReadToEnd();
             }
         }
+        static Regex match_value = new Regex(@"\""[^\,]\,", RegexOptions.Compiled);
+
+        public static string FormatLine(string line, int field_size)
+        {
+            StringBuilder sb = new StringBuilder();
+            int start = -1;
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i];
+                sb.Append(c);
+                if (start >= 0) start++;
+                if (c == '"' && start == -1) start = 0;
+                else if (c == ',' && start >0)
+                {
+                    int extra = field_size-start;
+                    if (extra > 0) sb.Append(' ', extra);
+                    start = -1;
+                }
+            }
+            return sb.ToString();
+        }
         public virtual void WriteAll<T>(IEnumerable<T> all) where T : File.GameMakerStructure
         {
-            WriteLine("[");
+            WriteLine('[');
             this.Indent++;
-            foreach (var a in all) Write((dynamic)a);
+            bool need_comma = false;
+            foreach (var a in all)
+            {
+                if (need_comma) WriteLine(',');
+                else need_comma = true;
+                using (MemoryStream ssw = new MemoryStream())
+                {
+                    DataContractJsonSerializerSettings set = new DataContractJsonSerializerSettings();
+                    DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(T));
+                    ser.WriteObject(ssw, a);
+                    ssw.Position = 0;
+
+                    StreamReader sw = new StreamReader(ssw);
+                    string line = sw.ReadToEnd();
+                    line = FormatLine(line, 20);
+                   // line = line.Replace("{", "{ ").Replace(",", ",\t").Replace(",\t\"audio_type\"", ",\t\t\"audio_type\"").Replace(":", ": ");
+                    Write(line);
+                }
+            }
+            WriteLine();
             this.Indent--;
-            WriteLine("}");
+            WriteLine(']');
+            Flush(); // flush it
         }
+   
         public void WriteAny<T>(T o) where T : File.GameMakerStructure
         {
             using (MemoryStream ssw = new MemoryStream())
