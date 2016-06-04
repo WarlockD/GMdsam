@@ -13,294 +13,12 @@ using System.Runtime.Serialization.Json;
 
 namespace GameMaker.Writers
 {
-    // this class Writes EVEYTHING.
-    // Idea being that we can take all the varriables, figure out when and how they are being used
-    // and make sure the initalizers are set up for it
-    public class JsonPrittyPrint // used to make Json look a little better
-    {
-        static Regex string_match = new Regex(@"""[^ ""\\] * (?:\\.[^ ""\\] *)*""", RegexOptions.Compiled);
-        static Regex number_match = new Regex(@"\d+", RegexOptions.Compiled);
-        static Regex float_match = new Regex(@"(?:^|(?<=\s))[0-9]*\.?[0-9](?=\s|$)");
-        HashSet<string> toInline = new HashSet<string>();
-        public void AddInline(string name)
-        {
-            toInline.Add("\"" + name.ToLower() + "\"");
-        }
-        // cause I am lazy
-        string incomming;
-        int pos;
-        char prev = default(char);
-        char current = default(char);
-        bool ignoreWhitespace;
-
-        PlainTextWriter writer = null;
-        void Reset(string incomming)
-        {
-            this.incomming = incomming;
-            this.pos = 0;
-            this.current = default(char);
-            this.prev = default(char);
-        }
-        public JsonPrittyPrint(string incomming)
-        {
-            Reset(incomming);
-            ignoreWhitespace = true;
-            this.writer = null;
-        }
-        char Next()
-        {
-            prev = current;
-            do
-            {
-                if (pos < incomming.Length)
-                {
-                    current = char.ToLower(incomming[pos++]);
-                    if (char.IsWhiteSpace(current)) continue; // we ignore whitespace
-                }
-                else current = default(char);
-            } while (false);
-            return current;
-        }
-        void ParseArrayInObject()
-        {
-
-        }
-        char ParseValue(int level,char from = default(char))
-        {
-            StringBuilder sb = new StringBuilder();
-            string name = null;
-            char ch = Next();
-            char last = default(char);
-            while(ch != 0) {
-           
-                switch (ch)
-                {
-                    case '"':
-                        writer.Write(ch);
-                        if (name == null) sb.Clear();
-                        while (ch != 0)
-                        {
-                            ch = Next();
-                            if (prev != '\\' && ch == '"') break;
-                            if (name == null) sb.Append(ch);
-                            writer.Write(ch);
-                        }
-                        writer.Write(ch);
-                        if (name == null) name = sb.ToString();
-                        break;
-                    case '{':
-                        writer.Indent++;
-                        if (from == '[')// object array
-                        {
-                            if(last != ',') // first start
-                            {
-                           
-                                writer.WriteLine();
-                                writer.Write(ch);
-                                writer.Write(' ');
-                                ch = ParseValue(level++, '('); // object inline
-                            } else
-                            {
-                                writer.Write(ch);
-                                writer.Write(' ');
-                                ch = ParseValue(level++, '('); // object inline
-                            }
-                        }
-                        else if(last == ',')
-                        {
-                            writer.Write(ch);
-                            writer.WriteLine();// usally first level
-                            ch = ParseValue(level++, '{');
-                        }
-                        else writer.WriteLine();// usally first level
-                        writer.Indent--;
-                        writer.Write(' '); // final space
-                        writer.Write(ch); // write the ending bracket
-                        break;
-                    case '[':
-
-                        writer.Write(ch);
-
-                        ch=ParseValue(level++, '[');
-                        writer.Write(ch);
-                        break;
-                    case '}': return '}';
-                    case ']':
-                        //writer.Write(ch);
-                        if (!char.IsNumber(last)) writer.WriteLine();
-                        return ']';
-                    case ',':
-                        writer.Write(ch);
-                        if(from == '[')
-                        {
-                            if (!char.IsNumber(last)) writer.WriteLine();
-                            else if (last == '}') writer.WriteLine();
-                            else writer.Write(' ');
-                        } else if(from != '(') writer.WriteLine(); // its an object but we want it inline
-                        else writer.Write(' ');
-                        break;
-                    case ':':
-                        writer.Write(ch);
-                        writer.Write(' ');
-                        break;
-                    default:
-                        writer.Write(ch);
-                        break;
-                }
-                last = ch;
-                ch = Next();
-            }
-            return default(char);
-        }
-        void Debug()
-        {
-            using (StreamWriter sw = new StreamWriter("debug.json")) sw.Write(writer.ToString());
-        }
-        void WriteObjectStart()
-        {
-
-        }
-        void WriteStart() // test if we are starting on an object or on an array
-        {
-            char ch = Next();
-            if (ch == '{')
-            {
-                writer.WriteLine('{');
-                writer.Indent++;
-            
-                ParseValue(0);
-                writer.WriteLine();
-                writer.Indent--;
-                writer.Write('}');
-            } else if(ch == '[')
-            {
-                while(ch != ']')
-                {
-                    writer.Indent++;
-                    writer.WriteLine('[');
-                    WriteStart();
-                    writer.WriteLine();
-                    writer.Indent--;
-                    ch = Next();
-                    if (ch == ',')
-                    {
-                        writer.WriteLine(',');
-                        ch = Next();
-                    }
-                }
-                writer.Indent--;
-                writer.WriteLine(']');
-            }
-        }
-        public void Write(TextWriter writer)
-        {
-            this.pos = 0;
-            this.writer = new PlainTextWriter(writer);
-            WriteStart();
-            this.writer.WriteLine();
-           // this.writer.Flush();
-            this.writer = null;
-        }
-
-    }
+    
     public class AllWriter
     {
-        enum JsonState
-        {
-            InObject,
-            InArray,
-            InObjectArray
-        }
         // http://stackoverflow.com/questions/4580397/json-formatter-in-c
-        // copied from there and modified to use my plain textwriter identer class
-        // Also to handle first level objects to look a bit cleaner
-        // I tried building a full tokenizer but that just wated 4 hours of my life and was still MUCH slower than this:P
-        public static string FormatJson(string str, params string[] inlines)
-        {
-            HashSet<string> toinline = new HashSet<string>(inlines.Select(x => x.ToLower()));
-            using (PlainTextWriter writer = new PlainTextWriter())
-            {
-                StringBuilder sb = new StringBuilder();
-                char ch = default(char);
-                char pch =  default(char);
-                string name = null;
-                Stack<JsonState> state = new Stack<JsonState>();
-                for (var i = 0; i < str.Length; i++)
-                {
-                    pch = ch;
-                    ch = char.ToLower(str[i]); // eveything is lower case
-                    switch (ch)
-                    {
-                        case '{':
-                            writer.Write(ch);
-                            var top = JsonState.InObject;
-                            if (state.Count > 0) {
-                                var peek = state.Peek();
-                                if (peek == JsonState.InArray)
-                                {
-                                    top = JsonState.InObjectArray;
-                                    writer.WriteLine();
-                                    writer.Indent++;                                
-                                }
-                                
-                            } else
-                            {
-                                writer.WriteLine();
-                                writer.Indent++; // first level ident always
-                            }
-                            state.Push(JsonState.InObject);
-                            break;
-                        case '[':
-                            writer.Write(ch);
-                            state.Push(JsonState.InArray);
-                            break;
-                        case '}':
-                            state.Pop();
-                            if (state.Count == 0 || state.Peek() != JsonState.InArray)
-                            {
-                                writer.WriteLine();
-                                writer.Indent--;
-                            }
-                            writer.Indent--;
-                            writer.Write(ch);
-                         
-                            break;
-                        case ']':
-                            writer.Write(ch);
-                            state.Pop();
-                            break;
-                        case '"':
-                            writer.Write(ch);
-                            sb.Clear();
-                            i++;
-                            for(; i < str.Length; i++)
-                            {
-                                pch = ch;
-                                ch = char.ToLower(str[i]);
-                                if (pch != '\\' && ch == '"') break;
-                                sb.Append(ch);
-                                writer.Write(ch);
-                            }
-                            writer.Write(ch);
-                            if (name == null) name = sb.ToString();
-                           
-                            break;
-                        case ',':
-                            writer.Write(ch);
-                            writer.WriteLine();
-                            break;
-                        case ':':
-                            writer.Write(ch);
-                            writer.Write(' ');
-                            break;
-                        default:
-                            writer.Write(ch);
-                            break;
-                    }
-                }
-                return writer.ToString();
-            }
-        }
+      
+
         ConcurrentBag<string> globals_vars = new ConcurrentBag<string>();
         ConcurrentBag<string> globals_arrays = new ConcurrentBag<string>();
         ConcurrentBag<string> scrptnames;
@@ -308,24 +26,53 @@ namespace GameMaker.Writers
         DirectoryInfo scriptDirectory = null;
         DirectoryInfo objectDirectory = null;
         List<Task> tasks = new List<Task>();
-        public static string QuickCodeToLine(File.Code code,string context=null)
+        public static string QuickCodeToLine(File.Code code,string context)
         {
             return new AllWriter().CodeToSingleLine(code, context);
         }
-
-        string CodeToSingleLine(File.Code c, string context = null)
+        public static string QuickCodeToLine(File.Code code, bool keep_newline = false)
         {
-            BlockToCode output = CreateOutput(context ?? c.Name);
-            GetScriptWriter(output).WriteCode(c);
-            var code = regex_newline.Replace(output.ToString(), ";");
-            code = regex_commas.Replace(code, "; "); // replace all double/tripple commas
-            return code.Trim();
+            return new AllWriter().CodeToSingleLine(code, code.Name, keep_newline);
         }
-
+        public static string QuickCodeToLine(File.Code code, string context, bool keep_newline = false)
+        {
+            return new AllWriter().CodeToSingleLine(code, context, keep_newline);
+        }
+        string CodeToSingleLine(File.Code c, string context, bool keep_newline=false)
+        {
+            string code = null;
+            if(c.Size ==0) Debug.WriteLine("Code '" + c.Name + "' has no data but is regestered?");
+            if (c.Size > 0)
+            {
+                BlockToCode output = CreateOutput(context);
+                GetScriptWriter(output).WriteCode(c);
+                code = output.ToString();
+                Debug.Assert(!string.IsNullOrWhiteSpace(code));
+                if (!keep_newline)
+                {
+                    code = regex_newline.Replace(code, ";");
+                    // replace all double/tripple commas and puts a space next to any statements so its slightly easyer to read in a line
+                    code = regex_commas.Replace(code, "; "); 
+                    code = code.Trim();
+                }
+                return code;
+            } return null;
+        }
+        Dictionary<string, Action> actionLookup;
         public AllWriter()
         {
-     
+            actionLookup = new Dictionary<string, Action>();
+            actionLookup["backgrounds"] = StartWriteAllBackgrounds;
+            actionLookup["objects"] = StartWriteAllObjects;
+            actionLookup["scripts"] = StartWriteAllScripts;
+            actionLookup["sprites"] = StartWriteAllSprites;
+            actionLookup["rooms"] = StartWriteAllRooms;
+            actionLookup["code"] = StartWriteAllCode;
+            actionLookup["fonts"] = StartWriteAllFonts;
+            actionLookup["sounds"] = StartWriteAllSounds;
+            actionLookup["textures"] = StartAllTextures;
         }
+        public IReadOnlyDictionary<string,Action> ActionLookup {  get { return actionLookup; } }
 
         CodeWriter GetScriptWriter(BlockToCode output)
         {
@@ -351,7 +98,8 @@ namespace GameMaker.Writers
             return output;
         }
         static Regex regex_newline = new Regex(@"\s*(\r\n|\r|\n)\s*", RegexOptions.Compiled);
-        static Regex regex_commas = new Regex(@";+", RegexOptions.Compiled);
+        // Used to replace all repeating ;; and to put a space
+        static Regex regex_commas = new Regex(@";(;*|[^ ])", RegexOptions.Compiled);
         //
 
         async void Run(File.Script s, string filename=null)
@@ -451,43 +199,27 @@ namespace GameMaker.Writers
             foreach (var f in directory.GetFiles()) f.Delete();
             return directory.FullName;
         }
+
+        public void StartAllTextures()
+        {
+            var path = DeleteAllAndCreateDirectory("textures");
+            foreach (File.Texture o in File.Textures)
+            {
+                RunTask(() =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, "texture_" + o.Index), "png");
+                    using (FileStream fs = new FileStream(filename, FileMode.Create)) o.getStream().CopyTo(fs);
+                });
+            }
+        }
         public void StartWriteAllRooms()
         {
             var path = DeleteAllAndCreateDirectory("rooms");
             foreach (var o in File.Rooms) {
                 RunTask(() =>
                 {
-                    // check if we need to do room code
-                    if(o.code_offset > 0 && o.Room_Code == null)
-                    {
-                            o.Room_Code = QuickCodeToLine(File.Codes[o.code_offset]);    
-                    }
-                    foreach(var oi in o.Objects)
-                    {
-                        if (oi.Code_Offset > 0 && oi.Room_Code == null)
-                        {
-                            oi.Room_Code = QuickCodeToLine(File.Codes[oi.Code_Offset]);
-                        }
-                    }
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name),"json");
-                    //   using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
-                    using (MemoryStream ssw = new MemoryStream())
-                    {
-                        DataContractJsonSerializerSettings set = new DataContractJsonSerializerSettings();
-                        DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(File.Room));
-                       
-                        ser.WriteObject(ssw, o);
-                        ssw.Position = 0;
-                        StreamReader sr = new StreamReader(ssw);
-                        string mstr = sr.ReadToEnd();
-                        JsonPrittyPrint test = new JsonPrittyPrint(mstr);
-
-                        StreamWriter sw = new StreamWriter(filename);
-                      // sw.Write(mstr);
-                        test.Write(sw);
-                        sw.Flush();
-                        sw.Close();
-                    }
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
                 });
             }
         }
@@ -498,7 +230,7 @@ namespace GameMaker.Writers
             {
                 RunTask(() =>
                 {
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
                     using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
                 });
             }
@@ -510,7 +242,7 @@ namespace GameMaker.Writers
             {
                 RunTask(() =>
                 {
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
                     using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
                 });
             }
@@ -522,7 +254,7 @@ namespace GameMaker.Writers
             {
                 RunTask(() =>
                 {
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
                     using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
                 });
             }
@@ -534,7 +266,7 @@ namespace GameMaker.Writers
             {
                 RunTask(() =>
                 {
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
                     using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
                 });
             }
@@ -542,14 +274,25 @@ namespace GameMaker.Writers
         public void StartWriteAllSounds()
         {
             var path = DeleteAllAndCreateDirectory("sounds");
+            RunTask(() =>
+            {
+                string sounds_info = Path.ChangeExtension(Path.Combine(path, "sound_settings"), "json");
+                ResourceFormater fmt = new ResourceFormater(sounds_info);
+                fmt.WriteAll(File.Sounds);
+            });
             foreach (var o in File.Sounds)
             {
-                RunTask(() =>
+                Stream data = o.Data;
+                if(data != null)
                 {
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "js");
-                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
-                });
+                    RunTask(() =>
+                    {
+                        string filename = Path.ChangeExtension(Path.Combine(path, o.Name), o.extension);
+                        using (FileStream fs = new FileStream(filename, FileMode.Create)) data.CopyTo(fs);
+                    });
+                }  
             }
+           
         }
         DateTime start;
         public void StartWriteAllObjects()

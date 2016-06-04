@@ -94,49 +94,28 @@ namespace GameMaker
                     case "-all":
                         {
                             pos++;
-                         
                             string option = args.ElementAtOrDefault(pos);
-                            if (string.IsNullOrWhiteSpace(option)) option = "eveything";
-                            do
+                            List<Action> actions;
+                            if (string.IsNullOrWhiteSpace(option) || option.ToLower() == "everything")
+                                actions = w.ActionLookup.Select(x => x.Value).ToList();
+                            else
                             {
-                                switch (option)
+                                actions = new List<Action>();
+                                do
                                 {
-                                    case "backgrounds":
-                                        w.StartWriteAllBackgrounds();
-                                        break;
-                                    case "sprites":
-                                        w.StartWriteAllSprites();
-                                        break;
-                                    case "sounds":
-                                        w.StartWriteAllSounds();
-                                        break;
-
-                                    case "codes":
-                                        w.StartWriteAllCode();
-                                        break;
-                                    case "fonts":
-                                        w.StartWriteAllFonts();
-                                        break;
-                                    case "scripts":
-                                        w.StartWriteAllScripts();
-                                        break;
-                                    case "objects":
-                                        w.StartWriteAllObjects();
-                                        break;
-                                    case "rooms":
-                                        w.StartWriteAllRooms();
-                                        break;
-                                    case "eveything":
-                                        w.StartWriteAllScripts();
-                                        w.StartWriteAllObjects();
-                                        break;
-                                    default:
+                                    Action action;
+                                    if (!w.ActionLookup.TryGetValue(option.ToLower(), out action))
+                                    {
                                         InstructionError("Invalide option '{0}' for -all", option);
-                                        break;
+                                    }
+                                    actions.Add(action);
+                                    option = args.ElementAtOrDefault(++pos);
+                                } while (!string.IsNullOrWhiteSpace(option));
 
-                                }
-                                option = args.ElementAtOrDefault(++pos);
-                            } while (!string.IsNullOrWhiteSpace(option));
+
+                            }
+                            foreach (var a in actions) a();
+                            w.FinishProcessing();
                         }
                         pos = args.Length;
                         break;

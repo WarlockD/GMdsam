@@ -430,15 +430,12 @@ namespace GameMaker.Writers
             if (ident_block) Indent++;
             if (body.Count > 0)
             {
-                if (body.Count > 1)
+                for (int i = 0; i < body.Count; i++)
                 {
-                    for (int i = 0; i < body.Count; i++)
-                    {
-                        Write(body[i]);
-                        // prevents the semi-colen appering after the '}'  Soo annyed me
-                        if(NodeEnding != null && !this.CurrentLine.isEndingEqual('}',';')) Write(NodeEnding);
-                        WriteLine();
-                    }
+                    Write(body[i]);
+                    // prevents the semi-colen appering after the '}'  Soo annyed me
+                    if (NodeEnding != null && !this.CurrentLine.isEndingEqual('}', ';')) Write(NodeEnding);
+                    WriteLine();
                 }
             }
             if (ident_block) Indent--;

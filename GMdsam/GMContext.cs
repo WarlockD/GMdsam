@@ -86,38 +86,7 @@ namespace GameMaker
         static bool HasOpenedFile = false;
         public static string ErrorFileName = "errors.txt";
         public static bool HasFatalError { get; private set; }
-        public static ILBlock DecompileBlock(File.Code code)
-        {
-            /*
-            
-            var instructionsNew = GameMaker.Dissasembler.Instruction.Dissasemble(code, error);
-            if (Context.doAsm || Context.Debug)
-            {
-                GameMaker.Dissasembler.InstructionHelper.DebugSaveList(instructionsNew, 
-                    Context.FixDebugFileName(Path.ChangeExtension(code.Name, "asm")));
 
-                var graph = FlowAnalysis.ControlFlowGraphBuilder.Build(instructionsNew);
-                string file_Name = Context.FixDebugFileName(Path.ChangeExtension(code.Name, "dot"));
-                try
-                {
-                    graph.ExportGraph().Save(file_Name);
-                }
-                catch (Exception e)
-                {
-                    error.Error("Could not create .dot file: {0} Ex:{1}", file_Name, e.Message);
-                }
-            }
-            */
-            // Don't need any of that above since we don't do asms anymore
-            var error = Context.MakeErrorContext(code);
-            ILBlock block = new ILBlock();
-            if (Context.Version == UndertaleVersion.V10000)
-                block.Body =  new Dissasembler.OldByteCodeAst().Build(code, error);
-            else
-                block.Body = new Dissasembler.NewByteCodeToAst().Build(code, error);
-            block = new ILAstBuilder().Build(block, error);
-            return block;
-        }
         const string ObjectNameHeader = "gml_Object_";
         enum MType{
             Info,
@@ -179,6 +148,11 @@ namespace GameMaker
             public string Name {  get { return Name; } }
             internal ErrorContext(string code)
             {
+                if(code.Contains("gml_"))
+                {
+                    code = code.Replace("gml_Script_", "").Replace("gml_Object_","");
+
+                }
                 this.code = code;
             }
           

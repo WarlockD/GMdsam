@@ -121,7 +121,7 @@ namespace GameMaker.Writers
         ConcurrentDictionary<int, string> objectsUsed = new ConcurrentDictionary<int, string>();
         ILBlock DecompileCode(File.Code codeData)
         {
-            ILBlock block = Context.DecompileBlock(codeData);
+            ILBlock block = codeData.Block;
             foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>(x => !x.isGlobal))
             {
                 var type = GetVarType(v);
@@ -154,7 +154,7 @@ namespace GameMaker.Writers
         }
         public void Write(File.Script script, ILBlock block=null)
         {
-            if(block == null) block = Context.DecompileBlock(script.Code);
+            if(block == null) block = script.Code.Block;
             if (block == null)
             {
                 Context.Error("Missing block data for {0}", script.Code.Name);
