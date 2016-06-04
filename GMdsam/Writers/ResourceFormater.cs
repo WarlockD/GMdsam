@@ -206,34 +206,30 @@ namespace GameMaker.Writers
         }
         static Regex match_value = new Regex(@"\""[^\,]\,", RegexOptions.Compiled);
 
-        public static string FormatLine(string line, int field_size)
+        public static void CountLine(string line, int[] fieldmaxes)
         {
-            StringBuilder sb = new StringBuilder();
+            int fieldpos = 0;
             int start = -1;
             for (int i = 0; i < line.Length; i++)
             {
                 char c = line[i];
-                sb.Append(c);
                 if (start >= 0) start++;
                 if (c == '"' && start == -1) start = 0;
-                else if (c == ',' && start >0)
+                else if (c == ',' || c == '}' && start >0)
                 {
-                    int extra = field_size-start;
-                    if (extra > 0) sb.Append(' ', extra);
+                    if (start > 0 && fieldmaxes[fieldpos] < start) fieldmaxes[fieldpos] = start;
+                    fieldpos++;
                     start = -1;
                 }
             }
-            return sb.ToString();
         }
         public virtual void WriteAll<T>(IEnumerable<T> all) where T : File.GameMakerStructure
         {
-            WriteLine('[');
-            this.Indent++;
-            bool need_comma = false;
+            
+            List<string> lines = new List<string>();
+            int[] fieldmaxes = null;
             foreach (var a in all)
             {
-                if (need_comma) WriteLine(',');
-                else need_comma = true;
                 using (MemoryStream ssw = new MemoryStream())
                 {
                     DataContractJsonSerializerSettings set = new DataContractJsonSerializerSettings();
@@ -243,10 +239,62 @@ namespace GameMaker.Writers
 
                     StreamReader sw = new StreamReader(ssw);
                     string line = sw.ReadToEnd();
-                    line = FormatLine(line, 20);
-                   // line = line.Replace("{", "{ ").Replace(",", ",\t").Replace(",\t\"audio_type\"", ",\t\t\"audio_type\"").Replace(":", ": ");
-                    Write(line);
+                    lines.Add(line);
+                    if (fieldmaxes == null) {
+                        int fieldCount = line.Count(x => x == ',')+1;
+                        fieldmaxes = new int[fieldCount];
+                    }
+                    CountLine(line, fieldmaxes);
                 }
+            }
+            Write('[');
+            bool needComma = false;
+            this.Indent++;
+            foreach(var line in lines)
+            {
+                StringBuilder sb = new StringBuilder();
+                int fieldpos = 0;
+                int lineShouldBe = -1;
+                bool infield = false;
+                foreach (var c in line)
+                {
+                    if (infield) lineShouldBe--;
+                    switch (c)
+                    {
+                        case '{':
+                            sb.Append(c);
+                            sb.Append(' ');
+                            break;
+                        case '}':
+                            sb.Append(' ');
+                            sb.Append(c);
+                            break;
+                        case '"':
+                            if (!infield)
+                            {
+                                infield = true;
+                                lineShouldBe = fieldmaxes[fieldpos++]+1;// always have atleast a space
+                            }
+                            sb.Append(c);
+                            break;
+                        case ':':
+                            sb.Append(c);
+                            sb.Append(' ');
+                            break;
+                        case ',':
+                            sb.Append(c);
+                            if (lineShouldBe > 0) sb.Append(' ', lineShouldBe);
+                            infield = false;
+                            break;
+                        default:
+                            sb.Append(c);
+                            break;
+                    }
+                }
+                if (needComma) Write(",");
+                else needComma = false;
+                WriteLine();
+                Write(sb.ToString());
             }
             WriteLine();
             this.Indent--;

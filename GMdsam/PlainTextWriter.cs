@@ -48,6 +48,8 @@ namespace GameMaker
         bool startwritten;
         string _lineheader;
         int _flushedPosition;
+        int tabPos;
+        public int[] TabStops { get; set; }
         public int Indent { get; set; }
 
         public string CurrentLine { get { return line.ToString(); } set { line.Clear(); line.Append(value ?? ""); } }
@@ -94,6 +96,7 @@ namespace GameMaker
             Indent = 0;
             startwritten = false;
             this._flushedPosition = 0;
+            this.tabPos = 0;
         }
         public void ClearLine()
         {
@@ -120,6 +123,8 @@ namespace GameMaker
             this.startwritten = false;
             this._lineheader = null;
             this._flushedPosition = 0;
+            this.tabPos = 0;
+            this.TabStops = null;
         }
         public PlainTextWriter(TextWriter writer)
         {
@@ -165,6 +170,7 @@ namespace GameMaker
             buffer.Append(line);
             buffer.AppendLine();
             LineNumber++;
+            tabPos = 0;
             line.Clear();
             startwritten = false;
         }
@@ -202,10 +208,18 @@ namespace GameMaker
             {
                 case '\t':
                     {
-                        int div = (line.Length / Settings.TabMarks) * Settings.TabMarks + Settings.TabMarks;
-                        int mod = line.Length % Settings.TabMarks;
-                        int spaces_needed = div - line.Length;
-                        line.Append(' ', spaces_needed);
+                        if(TabStops != null && tabPos < TabStops.Length)
+                        {
+                            int tab = TabStops[tabPos++];
+                            if (tab < line.Length) line.Append(' ', line.Length - tab);
+                        } else
+                        {
+                            int div = (line.Length / Settings.TabMarks) * Settings.TabMarks + Settings.TabMarks;
+                            int mod = line.Length % Settings.TabMarks;
+                            int spaces_needed = div - line.Length;
+                            line.Append(' ', spaces_needed);
+                        }
+                        
                     }
                     c = default(char);
                     break;
