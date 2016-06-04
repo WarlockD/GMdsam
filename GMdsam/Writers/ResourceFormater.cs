@@ -204,30 +204,50 @@ namespace GameMaker.Writers
                 return sr.ReadToEnd();
             }
         }
-        static Regex match_value = new Regex(@"\""[^\,]\,", RegexOptions.Compiled);
 
-        public static void CountLine(string line, int[] fieldmaxes)
+        public string FindFieldPositionsAndFixString(string line, List<int> fieldmaxes)
         {
-            int fieldpos = 0;
-            int start = -1;
-            for (int i = 0; i < line.Length; i++)
+            StringBuilder sb = new StringBuilder(); // Instead of the chain of Replace statments, might as well do it here
+          int fieldpos = 0;
+            int vlength = 0;
+            for (int i = 0; i < line.Length; i++, vlength++)
             {
                 char c = line[i];
-                if (start >= 0) start++;
-                if (c == '"' && start == -1) start = 0;
-                else if (c == ',' || c == '}' && start >0)
-                {
-                    if (start > 0 && fieldmaxes[fieldpos] < start) fieldmaxes[fieldpos] = start;
-                    fieldpos++;
-                    start = -1;
+                switch(c){
+                    case '{':
+                        sb.Append(c);
+                        sb.Append(' ');
+                        vlength++;
+                        break;
+                    case ':':
+                    case '}':
+                        sb.Append(' ');
+                        sb.Append(c);
+                        vlength++;
+                        break;
+                    case ',':
+                        sb.Append(c);
+                        sb.Append('\t');
+                        if(fieldpos == fieldmaxes.Count) fieldmaxes.Add(vlength);
+                        int nvlength = fieldmaxes[fieldpos];
+                        if (vlength > nvlength) nvlength = vlength;
+                        vlength = nvlength;
+                        fieldmaxes[fieldpos] = nvlength;
+                        fieldpos++;
+                        break;
+                    default:
+                        sb.Append(c);
+                        break;
+
                 }
             }
+            return sb.ToString();
         }
         public virtual void WriteAll<T>(IEnumerable<T> all) where T : File.GameMakerStructure
         {
             
             List<string> lines = new List<string>();
-            int[] fieldmaxes = null;
+            List<int> fieldmaxes = new List<int>();
             foreach (var a in all)
             {
                 using (MemoryStream ssw = new MemoryStream())
@@ -236,67 +256,31 @@ namespace GameMaker.Writers
                     DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(T));
                     ser.WriteObject(ssw, a);
                     ssw.Position = 0;
-
                     StreamReader sw = new StreamReader(ssw);
-                    string line = sw.ReadToEnd();
+                    string line = FindFieldPositionsAndFixString(sw.ReadToEnd(), fieldmaxes);
                     lines.Add(line);
-                    if (fieldmaxes == null) {
-                        int fieldCount = line.Count(x => x == ',')+1;
-                        fieldmaxes = new int[fieldCount];
-                    }
-                    CountLine(line, fieldmaxes);
                 }
             }
             Write('[');
             bool needComma = false;
+            fieldmaxes[6] += 5;
+            fieldmaxes[7] += 5;
+            fieldmaxes[8] += 5;
+
+
             this.Indent++;
-            foreach(var line in lines)
+            TabStops = fieldmaxes.ToArray();
+            WriteLine();
+            PrintTabStops();
+            foreach (var line in lines)
             {
-                StringBuilder sb = new StringBuilder();
-                int fieldpos = 0;
-                int lineShouldBe = -1;
-                bool infield = false;
-                foreach (var c in line)
-                {
-                    if (infield) lineShouldBe--;
-                    switch (c)
-                    {
-                        case '{':
-                            sb.Append(c);
-                            sb.Append(' ');
-                            break;
-                        case '}':
-                            sb.Append(' ');
-                            sb.Append(c);
-                            break;
-                        case '"':
-                            if (!infield)
-                            {
-                                infield = true;
-                                lineShouldBe = fieldmaxes[fieldpos++]+1;// always have atleast a space
-                            }
-                            sb.Append(c);
-                            break;
-                        case ':':
-                            sb.Append(c);
-                            sb.Append(' ');
-                            break;
-                        case ',':
-                            sb.Append(c);
-                            if (lineShouldBe > 0) sb.Append(' ', lineShouldBe);
-                            infield = false;
-                            break;
-                        default:
-                            sb.Append(c);
-                            break;
-                    }
-                }
                 if (needComma) Write(",");
                 else needComma = false;
                 WriteLine();
-                Write(sb.ToString());
+                Write(line);
             }
             WriteLine();
+            TabStops = null;
             this.Indent--;
             WriteLine(']');
             Flush(); // flush it

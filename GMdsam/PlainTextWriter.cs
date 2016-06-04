@@ -174,6 +174,39 @@ namespace GameMaker
             line.Clear();
             startwritten = false;
         }
+        public void PrintTabStops()
+        {
+        
+            if (TabStops != null)
+            {
+                CheckHeadder();
+                foreach (var t in TabStops)
+                {
+                    while (t > line.Length) line.Append(' ');
+                    line.Append('|');
+                }
+                WriteLine();
+            }
+
+        }
+        void CheckHeadder()
+        {
+            if (!startwritten)
+            {
+                int space_to_skip = Indent * _settings.SpacesPerIdent;
+                if (_lineheader != null)
+                {
+                    if (_settings.HeaderOvewritesIdent)
+                        if (_lineheader.Length < space_to_skip)
+                            space_to_skip -= _lineheader.Length;
+                        else
+                            space_to_skip = 0;
+                    buffer.Append(_lineheader);
+                }
+                if (space_to_skip > 0) buffer.Append(' ', space_to_skip);
+                startwritten = true;
+            }
+        }
         // Since eveything pipes though here and even if I override
         // alot I STILL have to check for new lines, better to just use this
         public override void Write(char c)
@@ -188,22 +221,8 @@ namespace GameMaker
                 }
             }
             prev = c;
-            if (!startwritten)
-            {
-                if (Indent > 0 && c == ' ') return; // if we are using ident, we skip the starting spaces
-                int space_to_skip = Indent * _settings.SpacesPerIdent;
-                if (_lineheader != null)
-                {
-                    if (_settings.HeaderOvewritesIdent)
-                        if (_lineheader.Length < space_to_skip)
-                            space_to_skip -= _lineheader.Length;
-                        else
-                            space_to_skip = 0;
-                    buffer.Append(_lineheader);
-                }
-                if (space_to_skip > 0) buffer.Append(' ', space_to_skip);
-                startwritten = true;
-            }
+            CheckHeadder();
+            if (line.Length == 0 && Indent > 0 && c == ' ') return; 
             switch (c)
             {
                 case '\t':
@@ -211,7 +230,7 @@ namespace GameMaker
                         if(TabStops != null && tabPos < TabStops.Length)
                         {
                             int tab = TabStops[tabPos++];
-                            if (tab < line.Length) line.Append(' ', line.Length - tab);
+                            while (tab > line.Length) line.Append(' ');
                         } else
                         {
                             int div = (line.Length / Settings.TabMarks) * Settings.TabMarks + Settings.TabMarks;
@@ -277,13 +296,11 @@ namespace GameMaker
                     Flush();
                     if (_writer != null)
                     {
-                        _writer.Flush();
-                        _writer.Dispose();
+                        _stream.Dispose();
                         _writer = null;
                     }
                     if (_stream != null)
                     {
-                        _stream.Flush();
                         _stream.Dispose();
                         _stream = null;
                     }
