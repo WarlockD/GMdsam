@@ -226,6 +226,7 @@ namespace GameMaker.Writers
                         vlength++;
                         break;
                     case ',':
+
                         sb.Append(c);
                         sb.Append('\t');
                         if(fieldpos == fieldmaxes.Count) fieldmaxes.Add(vlength);
