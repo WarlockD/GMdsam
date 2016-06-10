@@ -10,8 +10,8 @@ namespace GameMaker.Ast
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
         Dictionary<ILLabel, List<ILLabel>> labelToBranch = new Dictionary<ILLabel, List<ILLabel>>();
-        Context.ErrorContext error;
-        public ControlFlowLabelMap(ILBlock method, Context.ErrorContext error)
+        ErrorContext error;
+        public ControlFlowLabelMap(ILBlock method, ErrorContext error)
         {
             this.error = error;
             foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
@@ -71,8 +71,8 @@ namespace GameMaker.Ast
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
         //  TypeSystem typeSystem;
-        Context.ErrorContext error;
-        public SimpleControlFlow(ILBlock method, Context.ErrorContext error)
+        ErrorContext error;
+        public SimpleControlFlow(ILBlock method, ErrorContext error)
         {
             this.error = error;
             //  this.typeSystem = Context.CurrentMethod.Module.TypeSystem;

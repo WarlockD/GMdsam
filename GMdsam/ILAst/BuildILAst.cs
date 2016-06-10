@@ -538,7 +538,7 @@ namespace GameMaker.Ast
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.Select(b => (ILNode) b).ToList();
                 error.Error("After Loop And Conditions failed, look at bad_after_stuff.txt");
-                error.CheckDebugThenSave(badmethod, "bad_after_stuff.txt");
+          //      Context.CheckDebugThenSave(badmethod, "bad_after_stuff.txt");
                 return true;
             }
             if(Context.Debug) Debug.Assert(badblocks.Count == 0);
@@ -638,8 +638,8 @@ namespace GameMaker.Ast
                 }
             } while (modified);
         }
-        Context.ErrorContext error;
-        public ILBlock Build(ILBlock method, Context.ErrorContext error)
+        ErrorContext error;
+        public ILBlock Build(ILBlock method, ErrorContext error)
         {
             if (method == null) throw new ArgumentNullException("method");
             if (error == null) throw new ArgumentNullException("error");

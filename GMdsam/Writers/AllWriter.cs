@@ -10,14 +10,13 @@ using System.Threading.Tasks;
 using GameMaker.Ast;
 using System.Text.RegularExpressions;
 using System.Runtime.Serialization.Json;
+using System.Threading;
 
 namespace GameMaker.Writers
 {
-    
+   
     public class AllWriter
     {
-        // http://stackoverflow.com/questions/4580397/json-formatter-in-c
-      
 
         ConcurrentBag<string> globals_vars = new ConcurrentBag<string>();
         ConcurrentBag<string> globals_arrays = new ConcurrentBag<string>();
@@ -26,7 +25,9 @@ namespace GameMaker.Writers
         DirectoryInfo scriptDirectory = null;
         DirectoryInfo objectDirectory = null;
         List<Task> tasks = new List<Task>();
-        public static string QuickCodeToLine(File.Code code,string context)
+ 
+
+        public static string QuickCodeToLine(File.Code code, string context)
         {
             return new AllWriter().CodeToSingleLine(code, context);
         }
@@ -38,10 +39,10 @@ namespace GameMaker.Writers
         {
             return new AllWriter().CodeToSingleLine(code, context, keep_newline);
         }
-        string CodeToSingleLine(File.Code c, string context, bool keep_newline=false)
+        string CodeToSingleLine(File.Code c, string context, bool keep_newline = false)
         {
             string code = null;
-            if(c.Size ==0) Debug.WriteLine("Code '" + c.Name + "' has no data but is regestered?");
+            if (c.Size == 0) Debug.WriteLine("Code '" + c.Name + "' has no data but is regestered?");
             if (c.Size > 0)
             {
                 BlockToCode output = CreateOutput(context);
@@ -52,34 +53,35 @@ namespace GameMaker.Writers
                 {
                     code = regex_newline.Replace(code, ";");
                     // replace all double/tripple commas and puts a space next to any statements so its slightly easyer to read in a line
-                    code = regex_commas.Replace(code, "; "); 
+                    code = regex_commas.Replace(code, "; ");
                     code = code.Trim();
                 }
                 return code;
-            } return null;
+            }
+            return null;
         }
         Dictionary<string, Action> actionLookup;
         public AllWriter()
         {
             actionLookup = new Dictionary<string, Action>();
-            actionLookup["backgrounds"] = StartWriteAllBackgrounds;
+            actionLookup["backgrounds"] = () => RunAllSimple("backgrounds", "Backgrounds: ", File.Backgrounds);
             actionLookup["objects"] = StartWriteAllObjects;
             actionLookup["scripts"] = StartWriteAllScripts;
-            actionLookup["sprites"] = StartWriteAllSprites;
-            actionLookup["rooms"] = StartWriteAllRooms;
+            actionLookup["sprites"] = () => RunAllSimple("sprites", "Sprites: ", File.Sprites);
+            actionLookup["rooms"] = () => RunAllSimple("rooms", "Rooms: ", File.Rooms);
             actionLookup["code"] = StartWriteAllCode;
-            actionLookup["fonts"] = StartWriteAllFonts;
+            actionLookup["fonts"] = () => RunAllSimple("fonts", "Fonts: ", File.Fonts);
             actionLookup["sounds"] = StartWriteAllSounds;
             actionLookup["textures"] = StartAllTextures;
         }
-        public IReadOnlyDictionary<string,Action> ActionLookup {  get { return actionLookup; } }
+        public IReadOnlyDictionary<string, Action> ActionLookup { get { return actionLookup; } }
 
-        CodeWriter GetScriptWriter(BlockToCode output)
+        static CodeWriter GetScriptWriter(BlockToCode output)
         {
             switch (Context.outputType)
             {
                 case OutputType.LoveLua:
-                    return (CodeWriter)new Lua.Writer(output);
+                    return (CodeWriter) new Lua.Writer(output);
                 case OutputType.GameMaker:
                     return (CodeWriter) new GameMaker.Writer(output);
                 default:
@@ -94,7 +96,7 @@ namespace GameMaker.Writers
         }
         public static BlockToCode CreateOutput(string name)
         {
-            BlockToCode output = new BlockToCode(new Context.ErrorContext(name));
+            BlockToCode output = new BlockToCode(new ErrorContext(name));
             return output;
         }
         static Regex regex_newline = new Regex(@"\s*(\r\n|\r|\n)\s*", RegexOptions.Compiled);
@@ -102,32 +104,31 @@ namespace GameMaker.Writers
         static Regex regex_commas = new Regex(@";(;*|[^ ])", RegexOptions.Compiled);
         //
 
-        async void Run(File.Script s, string filename=null)
+        static void Run(File.Script s, string filename)
         {
+            DateTime start = DateTime.Now;
             BlockToCode output = CreateOutput(s.Name);
             GetScriptWriter(output).Write(s);
-          //  if (Context.doGlobals) AddGlobals(output);
-            await output.AsyncWriteToFile(filename);
+            output.WriteToFile(filename);
         }
 
-        async void Run(File.GObject obj, string filename)
+        static void Run(File.GObject obj, string filename)
         {
             BlockToCode output = CreateOutput(obj.Name);
             GetScriptWriter(output).Write(obj);
-         //   if (Context.doGlobals) AddGlobals(output);
-            await output.AsyncWriteToFile(filename);
+            output.WriteToFile(filename);
         }
 
         void RunTask(File.GObject obj, string path)
         {
             if (Context.doThreads)
             {
-                Task task = new Task(()=> Run(obj,path), TaskCreationOptions.LongRunning);
+                Task task = new Task(() => Run(obj, path));
                 task.ContinueWith(ExceptionHandler, TaskContinuationOptions.OnlyOnFaulted);
                 tasks.Add(task);
                 task.Start();
             }
-            else Run(obj,path);
+            else Run(obj, path);
         }
         void RunTask(Action func)
         {
@@ -144,7 +145,7 @@ namespace GameMaker.Writers
         {
             if (Context.doThreads)
             {
-                Task task = new Task(() => Run(s, path), TaskCreationOptions.LongRunning);
+                Task task = new Task(() => Run(s, path));
                 task.ContinueWith(ExceptionHandler, TaskContinuationOptions.OnlyOnFaulted);
                 tasks.Add(task);
                 task.Start();
@@ -161,11 +162,11 @@ namespace GameMaker.Writers
                 {
                     Context.Info("Found Object '{0}': ", obj.Name);
                     RunTask(obj, obj.Name);
-                    while(obj.Parent > -1)
+                    while (obj.Parent > -1)
                     {
                         var p = File.Objects[obj.Parent];
                         Context.Info("    Found Parent '{0}': ", p.Name);
-                        RunTask(p,p.Name);
+                        RunTask(p, p.Name);
                         obj = p;
                     }
                     continue;
@@ -177,7 +178,7 @@ namespace GameMaker.Writers
                     RunTask(s, s.Name);
                     continue;
                 }
-                Context.Info("Found Type '{0}' of Name '{1}': ", a.GetType().ToString(),  a.Name);
+                Context.Info("Found Type '{0}' of Name '{1}': ", a.GetType().ToString(), a.Name);
             }
         }
         public void StartWriteAllScripts()
@@ -206,16 +207,18 @@ namespace GameMaker.Writers
             foreach (File.Texture o in File.Textures)
             {
                 RunTask(() =>
-                {
-                    string filename = Path.ChangeExtension(Path.Combine(path, "texture_" + o.Index), "png");
-                    using (FileStream fs = new FileStream(filename, FileMode.Create)) o.getStream().CopyTo(fs);
-                });
+                 {
+                     string filename = Path.ChangeExtension(Path.Combine(path, "texture_" + o.Index), "png");
+                     using (FileStream fs = new FileStream(filename, FileMode.Create)) o.getStream().CopyTo(fs);
+                 });
             }
         }
         public void StartWriteAllRooms()
         {
             var path = DeleteAllAndCreateDirectory("rooms");
-            foreach (var o in File.Rooms) {
+            foreach (var o in File.Rooms)
+            {
+               
                 RunTask(() =>
                 {
                     string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
@@ -228,6 +231,7 @@ namespace GameMaker.Writers
             var path = DeleteAllAndCreateDirectory("backgrounds");
             foreach (var o in File.Backgrounds)
             {
+                
                 RunTask(() =>
                 {
                     string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
@@ -235,23 +239,47 @@ namespace GameMaker.Writers
                 });
             }
         }
+        public void RunAllSimple<T>(string path_name, string name, IReadOnlyList<T> list) where T: File.INamedResrouce
+        {
+            var path = DeleteAllAndCreateDirectory(path_name);
+            if (Context.doThreads)
+            {
+                foreach (var o in list)
+                {
+                    RunTask(() =>
+                    {
+                        string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
+                        using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write((dynamic)o);
+                    });
+                }
+            }
+            else
+            {
+                using (ProgressBar bar = new ProgressBar(name))
+                {
+                    ErrorContext.ProgressBar = bar;
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        var o = list[i];
+                        bar.Report((double) i / list.Count);
+                        string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
+                        using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write((dynamic) o);
+                    }
+                    ErrorContext.ProgressBar = null;
+                }
+            }
+        }
+
         public void StartWriteAllSprites()
         {
-            var path = DeleteAllAndCreateDirectory("sprites");
-            foreach (var o in File.Sprites)
-            {
-                RunTask(() =>
-                {
-                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
-                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(o);
-                });
-            }
+            RunAllSimple("sprites", "Sprites: ", File.Sprites);
         }
         public void StartWriteAllFonts()
         {
             var path = DeleteAllAndCreateDirectory("fonts");
             foreach (var o in File.Fonts)
             {
+           
                 RunTask(() =>
                 {
                     string filename = Path.ChangeExtension(Path.Combine(path, o.Name), "json");
@@ -273,26 +301,29 @@ namespace GameMaker.Writers
         }
         public void StartWriteAllSounds()
         {
+            start = DateTime.Now;
             var path = DeleteAllAndCreateDirectory("sounds");
-            RunTask(() =>
-            {
-                string sounds_info = Path.ChangeExtension(Path.Combine(path, "sound_settings"), "json");
-                ResourceFormater fmt = new ResourceFormater(sounds_info);
-                fmt.WriteAll(File.Sounds);
-            });
+           
+            RunTask( () =>
+              {
+                  string sounds_info = Path.ChangeExtension(Path.Combine(path, "sound_settings"), "json");
+                  ResourceFormater fmt = new ResourceFormater(sounds_info);
+                  fmt.WriteAll(File.Sounds);
+              });
             foreach (var o in File.Sounds)
             {
                 Stream data = o.Data;
-                if(data != null)
+                if (data != null)
                 {
-                    RunTask(() =>
+                   
+                    RunTask( () =>
                     {
                         string filename = Path.ChangeExtension(Path.Combine(path, o.Name), o.extension);
                         using (FileStream fs = new FileStream(filename, FileMode.Create)) data.CopyTo(fs);
                     });
-                }  
+                }
             }
-           
+
         }
         DateTime start;
         public void StartWriteAllObjects()
@@ -302,28 +333,40 @@ namespace GameMaker.Writers
             string full_name = objectDirectory.FullName;
 
             start = DateTime.Now;
-            foreach(var o in File.Objects)
+            foreach (var o in File.Objects)
             {
                 objnames.Add(o.Name);
                 string filename = Path.Combine(full_name, o.Name);
                 RunTask(o, filename);
             }
         }
-    void ExceptionHandler(Task task)
+        void ExceptionHandler(Task task)
         {
             var exception = task.Exception;
-            Console.WriteLine(exception);
+            Context.Error(exception.ToString());
             throw exception;
         }
         public void FinishProcessing()
         {
             if (tasks.Count > 0)
             {
+                // we start here so we can keep track of progress.  But we don't know
+                // how many tasks we have till here, so while we SHOULD start them all when they are 
+                // created, I like using this progress bar
+                using(var progress = new ProgressBar()) {
+                    ErrorContext.ProgressBar = progress;
+                    int total = tasks.Count;
+                    int tasksDone = 0;
+                //    foreach (var t in tasks) t.Start();
+                    while (tasksDone < total)
+                    {
+                        tasksDone = 0;
+                        foreach (var t in tasks) if (t.IsCompleted) tasksDone++;
+                        progress.Report((double) tasksDone / total);
+                    }
+                    ErrorContext.ProgressBar = null;
+                }
                 Task.WaitAll(tasks.ToArray());
-                Task.WaitAll(tasks.ToArray());
-                DateTime stop = DateTime.Now;
-                TimeSpan time = stop.Subtract(start);
-                Debug.WriteLine("Time : {0}", time);
                 tasks.Clear();
             }
             if (ILNode.times.Count > 0)
@@ -335,46 +378,9 @@ namespace GameMaker.Writers
 
                     sw.WriteLine("Total Tick Average: {0}", timeAverage.Average());
                     sw.WriteLine();
-                    foreach (var c in ILNode.times.OrderBy(x=>x.Time)) sw.WriteLine("Count={0}  Time={1}", c.Count, c.Time);
+                    foreach (var c in ILNode.times.OrderBy(x => x.Time)) sw.WriteLine("Count={0}  Time={1}", c.Count, c.Time);
                 }
             }
-            if(scrptnames!= null && scrptnames.Count > 0)
-            {
-                using (StreamWriter sw = new StreamWriter("loadScripts.lua"))
-                {
-                    foreach (var s in scrptnames) sw.WriteLine("require 'scripts/{0}'", s);
-                }
-            }
-           if(objnames != null && objnames.Count > 0)
-            {
-                using (StreamWriter sw = new StreamWriter("loadObjects.lua"))
-                {
-                    foreach (var s in objnames) sw.WriteLine("require 'objects/{0}'", s);
-                }
-            }
-            
-            if(Context.doGlobals)
-            {
-                using (StreamWriter sw = new StreamWriter("globals.lua"))
-                {
-                    sw.WriteLine("local g = {");
-                    foreach (var v in globals_vars)
-                    {
-                        sw.Write("   ");
-                        sw.Write(v);
-                        sw.WriteLine(" = 0,");
-                    }
-                    foreach (var v in globals_arrays)
-                    {
-                        sw.Write("   ");
-                        sw.Write(v);
-                        sw.WriteLine(" = {},");
-                    }
-                    sw.WriteLine("} ");
-                    sw.WriteLine("globals = g");
-                }
-            }
-           
         }
     }
 }

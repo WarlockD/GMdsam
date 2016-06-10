@@ -62,7 +62,7 @@ namespace GameMaker.Writers
         public void Warning(string msg, ILNode node) { error.Warning(msg, node); }
         public void Info(string msg) { error.Info(msg); }
         public void Info(string msg, ILNode node) { error.Info(msg, node); }
-        public string Name { get { return error.Name; } }
+      //  public string Name { get { return error.Name; } }
         public void FatalError(string msg) { error.FatalError(msg); }
         public void FatalError(string msg, ILNode node) { error.FatalError(msg, node); }
         #endregion
@@ -77,7 +77,7 @@ namespace GameMaker.Writers
         }
         public BlockToCode(string filename, bool catch_infos = false) : base(filename)
         {
-            Init( new Context.ErrorContext(Path.GetFileNameWithoutExtension(filename)), catch_infos);
+            Init( new ErrorContext(Path.GetFileNameWithoutExtension(filename)), catch_infos);
         }
         public BlockToCode(IMessages error, TextWriter writer, bool catch_infos = false) : base(writer)
         {

@@ -16,9 +16,9 @@ namespace GameMaker.Ast
             return labelToCfNode[l];
         }
         uint nextLabelIndex = 0;
-        Context.ErrorContext error;
+        ErrorContext error;
 
-        public LoopsAndConditions(Context.ErrorContext error)//DecompilerContext context)
+        public LoopsAndConditions(ErrorContext error)//DecompilerContext context)
         {
             this.error = error;
         }

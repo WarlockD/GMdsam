@@ -94,6 +94,7 @@
     <Compile Include="GameMaker\ChunkTypes.cs" />
     <Compile Include="GameMaker\Resources.cs" />
     <Compile Include="GMContext.cs" />
+    <Compile Include="MyConsole.cs" />
     <Compile Include="PlainTextWriter.cs" />
     <Compile Include="Writers\AllWriter.cs" />
     <Compile Include="Writers\CodeWriter.cs" />

@@ -13,7 +13,7 @@ namespace GameMaker.Dissasembler
 
     public abstract class BuildAst
     {
-        protected Context.ErrorContext Error { get; private set; }
+        protected ErrorContext Error { get; private set; }
         protected BinaryReader r { get; private set; }
         Dictionary<int, ILLabel> labels = null;
         protected int CurrentPC { get; private set; }
@@ -33,7 +33,7 @@ namespace GameMaker.Dissasembler
             e.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
             return e;
         }
-        public List<ILNode> Build(File.Code code, Context.ErrorContext error=null)
+        public List<ILNode> Build(File.Code code, ErrorContext error=null)
         {
             if (code == null) throw new ArgumentNullException("code");
             Stream stream = code.Data;
@@ -41,7 +41,7 @@ namespace GameMaker.Dissasembler
             if (!stream.CanRead) throw new ArgumentException("Must be readable", "code_stream");
             if (!stream.CanSeek) throw new ArgumentException("Must be seekable", "code_stream");
             if (stream.Length == 0) return new List<ILNode>(); // empty stream
-            Error = error ?? new Context.ErrorContext(code.Name);
+            Error = error ?? new ErrorContext(code.Name);
             labels = new Dictionary<int, ILLabel>(); // cause they are all the same
             stream.Position = 0;
             r = new BinaryReader(stream);

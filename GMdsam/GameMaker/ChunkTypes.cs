@@ -976,7 +976,7 @@ namespace GameMaker
                         {
                             if (Context.Version != UndertaleVersion.V10000) throw new Exception("Cannot compile old code using new");
                             // Don't need any of that above since we don't do asms anymore
-                            var error = new Context.ErrorContext(name);
+                            var error = new ErrorContext(name);
                             ILBlock block = new ILBlock();
                             block.Body = new Dissasembler.OldByteCodeAst().Build(this, error);
                             block = new ILAstBuilder().Build(block, error);
@@ -1021,7 +1021,7 @@ namespace GameMaker
                         {
                             if (Context.Version != UndertaleVersion.V10001) throw new Exception("Cannot compile new code using old");
                             // Don't need any of that above since we don't do asms anymore
-                            var error = new Context.ErrorContext(name);
+                            var error = new ErrorContext(name);
                             ILBlock block = new ILBlock();
                             block.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
                             block = new ILAstBuilder().Build(block, error);

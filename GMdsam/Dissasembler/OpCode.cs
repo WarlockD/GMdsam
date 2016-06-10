@@ -326,7 +326,7 @@ namespace GameMaker.Dissasembler
             return ret;
         }
         // I had multipul passes on this so trying to combine it all to do one pass
-        public static  List<Instruction> Dissasemble(File.Code code, Context.ErrorContext error)
+        public static  List<Instruction> Dissasemble(File.Code code, ErrorContext error)
         {
             if (code == null) throw new ArgumentNullException("code");
             Stream rawStream = code.Data;

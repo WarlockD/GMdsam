@@ -350,7 +350,7 @@ namespace GameMaker.Writers
         }
         public virtual void Write(File.Code code)
         {
-            using (var output = new BlockToCode(new Context.ErrorContext(code.Name), this))
+            using (var output = new BlockToCode(new ErrorContext(code.Name), this))
             {
                 new GameMaker.Writer(output).WriteCode(code);
                 Write(output.ToString());
