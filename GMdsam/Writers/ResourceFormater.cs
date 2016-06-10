@@ -326,7 +326,11 @@ namespace GameMaker.Writers
             }
             WriteAny(room);
         }
-  
+        public virtual void Write(File.Texture texture)
+        {
+            
+            texture.getStream().CopyTo(BaseStream);
+        }
         public virtual void Write(File.GObject o)
         {
             WriteAny(o);

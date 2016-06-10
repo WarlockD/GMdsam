@@ -119,6 +119,8 @@ namespace GameMaker
     }
     public interface IMessages
     {
+        void Message(string msg);
+        void Message(string msg, Ast.ILNode node);
         void Error(string msg);
         void Warning(string msg);
         void Info(string msg);
@@ -130,6 +132,14 @@ namespace GameMaker
     }
     public static class IMessagesExtensions
     {
+        public static void Message(this IMessages msg, string str, params object[] o)
+        {
+            msg.Message(string.Format(str, o));
+        }
+        public static void Message(this IMessages msg, string str, ILNode n, params object[] o)
+        {
+            msg.Message(string.Format(str, o),n);
+        }
         public static void Error(this IMessages msg, string str, params object[] o)
         {
             msg.Error(string.Format(str, o));
@@ -168,10 +178,12 @@ namespace GameMaker
     {
         enum MType
         {
+            All=0,
             Info,
             Warning,
             Error,
             Fatal,
+            Message, // always goes though
         }
         static StreamWriter fileOutput = null;
         const string ErrorFileName = "errors.txt";
@@ -210,9 +222,13 @@ namespace GameMaker
             meh = new LastNewLineHack() { stream = fileOutput };
             _singleton.Info("Error Output Starts");
         }
-
+        static MType printMoreThanThis = MType.Warning;
+        public static void PrintInfoAndAbove() { printMoreThanThis = MType.Info; }
+        public static void PrintErrosAndAbove() { printMoreThanThis = MType.Error; }
+        public static void PrintEveything() { printMoreThanThis = MType.All; }
         void DoMessage(MType type, string msg, Ast.ILNode node)
         {
+           
             string timestamp = TimeStampString;
             StringBuilder sb = new StringBuilder();
             sb.Append(type.ToString());
@@ -243,13 +259,18 @@ namespace GameMaker
             else sb.Append(msg);
             lock (_singleton)
             {
-                if (ProgressBar != null) ProgressBar.Pause();
+               
                 string o = sb.ToString();
-                Console.WriteLine(o);
+                if (type >= printMoreThanThis)
+                {
+                    if (ProgressBar != null) ProgressBar.Pause();
+                    Console.WriteLine(o);
+                    if (ProgressBar != null) ProgressBar.UnPause();
+                }
                 fileOutput.WriteLine(o);
 
                 System.Diagnostics.Debug.WriteLine(o); // just because I don't look at console all the time
-                if (ProgressBar != null) ProgressBar.UnPause();
+                
             }
             
         }
@@ -265,13 +286,21 @@ namespace GameMaker
         {
             return Context.MakeDebugFileName(code_name, filename);
         }
+        public void Message(string msg)
+        {
+            DoMessage(MType.Message, msg, null);
+        }
+        public void Message(string msg, ILNode n)
+        {
+            DoMessage(MType.Message, msg, n);
+        }
         public void Info(string msg)
         {
             DoMessage(MType.Info, msg, null);
         }
         public void Warning(string msg)
         {
-            DoMessage(MType.Warning, msg,  null);
+            DoMessage(MType.Info, msg,  null);
         }
         public void Error(string msg)
         {

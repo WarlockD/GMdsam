@@ -709,28 +709,7 @@ namespace GameMaker
                 rcm.WriteAllChangesToBytes();
             }
         }
-        public static HashSet<System.Drawing.Color>[] CollectTextureColors()
-        {
-            var textureCache = Sprite.TextureCache;
-            HashSet<System.Drawing.Color> allcoclors = new HashSet<System.Drawing.Color>();
-            HashSet<System.Drawing.Color>[] textureColor = new HashSet<System.Drawing.Color>[textureCache.Count];
-            for (int i = 0; i < textureColor.Length; i++)
-            {
-                Bitmap bmp = new Bitmap(textureCache[i]);
-                var currentHash = textureColor[i] = new HashSet<System.Drawing.Color>();
 
-                for (int y = 0; y < bmp.Height; y++)
-                    for (int x = 0; x < bmp.Width; x++)
-                    {
-                        System.Drawing.Color c = bmp.GetPixel(x, y);
-                        currentHash.Add(c);
-                        allcoclors.Add(c);
-                    }
-                Context.Info("Texture {0} has {1} colors",i, currentHash.Count);
-            }
-            Context.Info("All textures have  {0} colors", allcoclors.Count);
-            return textureColor;
-        }
         public static void LoadEveything()
         {
             CheckStrings();

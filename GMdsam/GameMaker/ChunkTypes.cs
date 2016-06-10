@@ -24,6 +24,10 @@ namespace GameMaker
         {
             void ReadRaw(BinaryReader r);
         }
+        public interface IImageResorce
+        {
+            Image Image { get; }
+        }
         public interface IDataResource
         {
             Stream getStream();
@@ -40,6 +44,7 @@ namespace GameMaker
             public int Index { get { return index ?? -1; } }
             public string Name {  get { return name; } }
             protected abstract void InternalRead(BinaryReader r);
+
             public void ReadFromDataWin(BinaryReader r, int index)
             {
                 this.index = index;
@@ -154,7 +159,7 @@ namespace GameMaker
 
         // This class is just a simple filler for the serilizatin I use
         [DataContract]
-        public class Texture : GameMakerStructure, IDataResource
+        public class Texture : GameMakerStructure, IDataResource, IImageResorce
         {
             int _pngLength;
             int _pngOffset;
@@ -163,6 +168,17 @@ namespace GameMaker
             static readonly byte[] pngSigBytes = new byte[] { 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a };
             static readonly string pngSig = System.Text.Encoding.UTF8.GetString(pngSigBytes);
 
+            Image _cache = null;
+            public Image Image
+            {
+                get
+                {
+                    if(_cache == null) _cache = Bitmap.FromStream(getStream());
+                    return _cache;
+                }
+            }
+
+            
             public Stream getStream()
             {
                 return new MemoryStream(File.rawData, _pngOffset, _pngLength, false, false);
@@ -196,7 +212,7 @@ namespace GameMaker
 
 
         [DataContract]
-        public class SpriteFrame : GameMakerStructure
+        public class SpriteFrame : GameMakerStructure, IImageResorce
         {
             [DataMember(Order = 10)]
             public short X;
@@ -221,6 +237,22 @@ namespace GameMaker
             [DataMember(Order = 20)]
             public short Texture_Index;
 
+            Bitmap _cache = null;
+            public Image Image
+            {
+                get
+                {
+                    if (_cache == null)
+                    {
+                        Image texture = File.Textures[Texture_Index].Image;
+                        _cache = new Bitmap(this.Width, this.Height); //, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+                        using (Graphics g = Graphics.FromImage(_cache))
+                            g.DrawImage(texture, Offset_X, Offset_Y, new Rectangle(X, Y, Width, Height), GraphicsUnit.Pixel);
+       
+                    }
+                    return _cache;
+                }
+            }
             protected override void InternalRead(BinaryReader r) {
                 X = r.ReadInt16();
                 Y = r.ReadInt16();
@@ -273,34 +305,28 @@ namespace GameMaker
            
             public int[] MaskOffsets; 
             // lots of data, so we just keep the offsets since we have the raw file
-
-            static List<Image> textureCache;
-
-            public static IReadOnlyList<Image> TextureCache
+            public IEnumerable<Image> FrameImages
             {
                 get
                 {
-                    if (textureCache == null) textureCache = File.Textures.Select(t => Bitmap.FromStream(t.getStream())).ToList();
-                    return textureCache;
+                    foreach (var f in Frames) yield return f.Image;
                 }
             }
-            static Sprite()
+            List<Image> _maskCache = null;
+            public IReadOnlyList<Image> Masks
             {
-                DirectoryInfo info = new DirectoryInfo(".");
-                foreach(var f in info.GetFiles("*.png")) f.Delete();
-            }
-            public Bitmap FrameToBitmap(int index)
-            {
-
-                SpriteFrame frame = Frames[index];
-                Bitmap sprite = new Bitmap(this.Width, this.Height); //, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
-                using (Graphics g = Graphics.FromImage(sprite))
-                {
-                    g.DrawImage(TextureCache[frame.Texture_Index], frame.Offset_X, frame.Offset_Y, new Rectangle(frame.X, frame.Y, frame.Width, frame.Height), GraphicsUnit.Pixel);
-
+                get {
+                    if(_maskCache == null)
+                    {
+                        _maskCache = new List<Image>();
+                        if (has_masks)
+                        {
+                            for (int i = 0; i < MaskOffsets.Length; i++)
+                                _maskCache.Add(MaskToBitmap(i));
+                        } 
+                    }
+                    return _maskCache;
                 }
-            //    sprite.Save(this.Name + "_frame_" + index + ".png");
-                return sprite;
             }
             IEnumerable<bool> GetPixelData(int index)
             {
@@ -337,11 +363,8 @@ namespace GameMaker
                         bool on = ((pixel >> bit) & 1) != 0;
 
                         test.SetPixel(x, y, on ? System.Drawing.Color.White : System.Drawing.Color.Black);
-                        //     g.
-                        //     numArray[i * width + j / 8] = (byte)(num6 | (byte)((stream_0.ReadBool() ? 1 : 0) << (7 - (j & 7) & 31)));
                     }
                 }
-              //  test.Save(this.Name + "_mask_" + index + ".png");
                 return test;
                 // I thought of making this indexed, but png saves it quite small, smaller than indexed!
                 // Not sure about internaly though
@@ -533,13 +556,26 @@ namespace GameMaker
             }
         };
         [DataContract]
-        public class Background : GameMakerStructure, INamedResrouce
+        public class Background : GameMakerStructure, INamedResrouce, IImageResorce
         {
-            [DataMember(EmitDefaultValue = false, Order = 20)]
-            public bool Trasparent { get; private set; }
-            public bool Smooth { get; private set; }
-            public bool Preload { get; private set; }
-            public SpriteFrame Frame { get; private set; }
+            [DataMember(Order = 10)]
+            public bool Trasparent;
+            [DataMember(Order = 11)]
+            public bool Smooth;
+            [DataMember(Order = 12)]
+            public bool Preload;
+            [DataMember(Order = 13)]
+            public SpriteFrame Frame;
+
+            public Image Image
+            {
+                get
+                {
+                    return Frame.Image;
+                }
+            }
+
+            
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
@@ -615,19 +651,21 @@ namespace GameMaker
                 public bool Foreground;
                 [DataMember(Order = 3)]
                 public int Background_Index;
-                [DataMember(Order = 4)]
-                public int X;
+                [DataMember(EmitDefaultValue =false, Order = 4)]
+                public string Background_Name {  get { return Background_Index >= 0 ? File.Backgrounds[Background_Index].Name : null; } set { } }
                 [DataMember(Order = 5)]
-                public int Y;
+                public int X;
                 [DataMember(Order = 6)]
-                public int Tiled_X;
+                public int Y;
                 [DataMember(Order = 7)]
-                public int Tiled_Y;
+                public int Tiled_X;
                 [DataMember(Order = 8)]
-                public int Speed_X;
+                public int Tiled_Y;
                 [DataMember(Order = 9)]
-                public int Speed_Y;
+                public int Speed_X;
                 [DataMember(Order = 10)]
+                public int Speed_Y;
+                [DataMember(Order = 11)]
                 public bool Stretch;
                 protected override void InternalRead(BinaryReader r)
                 {
@@ -653,7 +691,8 @@ namespace GameMaker
                 public int Y;
                 [DataMember(Order = 3)]
                 public int Object_Index;
-               
+                [DataMember(EmitDefaultValue = false, Order = 4)]
+                public string Object_Name { get { return Object_Index >= 0 ? File.Objects[Object_Index].Name : null; } set { } }
                 [DataMember(Order = 5)]
                 public int Id;
                 [DataMember(Order = 6)]
@@ -664,8 +703,6 @@ namespace GameMaker
                 public byte[] color;
                 [DataMember(Order = 9)]
                 public float Rotation;
-                [DataMember(EmitDefaultValue = false, Order = 11)]
-                public string Object_Name = null;
                 [DataMember(EmitDefaultValue = false, Order = 12)]
                 public string Room_Code = null;
                 public int Code_Offset;
@@ -832,30 +869,19 @@ namespace GameMaker
                     offset = r.ReadInt16();
                 }
             }
-            [DataMember(EmitDefaultValue = false, Order = 10)]
-            public string Description;
-            [DataMember(Order = 11)]
-            public int Size;
-            [DataMember(Order = 12)]
-            public bool Bold;
-            [DataMember(Order = 13)]
-            public bool Italic;
-            [DataMember(Order = 14)]
-            public int FirstChar;
-            [DataMember(Order = 15)]
-            public int LastChar;
-            [DataMember(Order = 16)]
-            public int AntiAlias;
-            [DataMember(Order = 17)]
-            public int CharSet;
-            [DataMember(Order = 18)]
-            public SpriteFrame Frame;
-            [DataMember(Order = 19)]
-            public float ScaleW;
-            [DataMember(Order = 20)]
-            public float ScaleH;
-            [DataMember(Order = 21)]
-            public Glyph[] Glyphs;
+        
+            [DataMember(EmitDefaultValue = false, Order = 10)] public string Description;
+            [DataMember(Order = 11)] public int Size;
+            [DataMember(Order = 12)]  public bool Bold;
+            [DataMember(Order = 13)] public bool Italic;
+            [DataMember(Order = 14)] public int FirstChar;
+            [DataMember(Order = 15)] public int LastChar;
+            [DataMember(Order = 16)]public int AntiAlias;
+            [DataMember(Order = 17)]public int CharSet;
+            [DataMember(Order = 18)]public SpriteFrame Frame;
+            [DataMember(Order = 19)]public float ScaleW;
+            [DataMember(Order = 20)]public float ScaleH;
+            [DataMember(Order = 21)]public Glyph[] Glyphs;
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset());

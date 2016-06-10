@@ -128,7 +128,7 @@ namespace GameMaker
         }
         static void Main(string[] args)
         {
-         //   TextWriterSaver.RedirectConsole("console.txt");
+            //   TextWriterSaver.RedirectConsole("console.txt");
             string dataWinFileName = args.ElementAtOrDefault(0);
             if (string.IsNullOrWhiteSpace(dataWinFileName))
             {
@@ -138,8 +138,8 @@ namespace GameMaker
             try
             {
 #endif
-                File.LoadDataWin(dataWinFileName);
-                File.LoadEveything();
+            File.LoadDataWin(dataWinFileName);
+            File.LoadEveything();
 #if !DEBUG
             }
 
@@ -148,14 +148,33 @@ namespace GameMaker
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
 #endif
-         //  Context.doThreads = false;
+          //  Context.doThreads = false;
+            Context.doXML = true;
             string toSearch = null;
             int pos = 1;
+
             var w = new Writers.AllWriter();
             while (pos < args.Length)
             {
                 switch (args[pos])
                 {
+                    case "-mask":
+                        pos++;
+                        Context.saveAllMasks = true;
+                        break;
+                    case "-png":
+                        pos++;
+                        Context.saveAllPngs = true;
+                        break;
+                    case "-xml":
+                        pos++;
+                        Context.doXML = true;
+                        break;
+                    case "-json":
+                        pos++;
+                        Context.doXML = false;
+                        break;
+                        /* // search disabled for now
                     case "-s":
                         {
                             pos++;
@@ -165,6 +184,7 @@ namespace GameMaker
                             pos = args.Length;
                         }
                         break;
+                        */
                     case "-old":
                         pos++;
                         Context.Version = UndertaleVersion.V10000;

@@ -56,6 +56,8 @@ namespace GameMaker.Writers
             if (catch_infos) node_infos = new Dictionary<ILNode, NodeInfo>();
         }
         #region IMessages Interface
+        public void Message(string msg) { error.Message(msg); }
+        public void Message(string msg, ILNode node) { error.Message(msg, node); }
         public void Error(string msg) { error.Error(msg); }
         public void Error(string msg, ILNode node) { error.Error(msg, node); }
         public void Warning(string msg) { error.Warning(msg); }

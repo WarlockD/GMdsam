@@ -30,6 +30,9 @@ namespace GameMaker
         static public CancellationToken ct;
         static public bool doGlobals = true;
         static public bool makeObject = false;
+        static public bool doXML = false;
+        static public bool saveAllPngs = false;
+        static public bool saveAllMasks = false;
         static public OutputType outputType = OutputType.GameMaker;
         static public bool doAsm = false;
         static public bool doThreads = true;
@@ -42,6 +45,10 @@ namespace GameMaker
         public static void Info(string msg, params object[] o)
         {
             ErrorContext.Out.Info(msg, o);
+        }
+        public static void Message(string msg, params object[] o)
+        {
+            ErrorContext.Out.Message(msg, o);
         }
         public static void Warning(string msg, params object[] o)
         {
