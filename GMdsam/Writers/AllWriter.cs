@@ -148,7 +148,16 @@ namespace GameMaker.Writers
             {
                 RunAllSimple("rooms", "Rooms: ", File.Rooms);
             };
-            actionLookup["code"] = () => RunAllSimple("code", "Code", File.Codes);
+            actionLookup["code"] = () =>
+            {
+                RunAllSimple("code", "Codes", File.Codes, (string path, File.Code s) =>
+                {
+                    string filename = Path.ChangeExtension(Path.Combine(path, s.Name),"js");
+                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(s);
+
+                });
+
+            }; RunAllSimple("code", "Code", File.Codes);
             actionLookup["fonts"] = () =>
             {
                 RunAllSimple("fonts", "Fonts", File.Fonts);

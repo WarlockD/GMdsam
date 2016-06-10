@@ -189,7 +189,7 @@ namespace GameMaker.Writers
         bool make_pretty;
         public ResourceFormater(TextWriter writer, bool make_pretty = true) : base(writer) { this.make_pretty = make_pretty; }
         public ResourceFormater(bool make_pretty = true) : base() { this.make_pretty = make_pretty; }
-        public ResourceFormater(string filename, bool make_pretty = true) : base(Path.ChangeExtension(filename, "json")) { this.make_pretty = make_pretty; }
+        public ResourceFormater(string filename, bool make_pretty = true) : base(filename) { this.make_pretty = make_pretty; }
 
         string DefaultJSONSerilizeToString<T>(T o) where T : GameMakerStructure
         {
