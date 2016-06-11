@@ -30,7 +30,7 @@ namespace GameMaker
         }
         public interface IDataResource
         {
-            Stream getStream();
+            Stream Data { get; }
         }
         [DataContract]
         public abstract class GameMakerStructure : IEquatable<GameMakerStructure> //: ISerializable
@@ -41,7 +41,7 @@ namespace GameMaker
             [DataMember(EmitDefaultValue = false, Order = 1)]
             protected string name;
             public int Position {  get { return position; } }
-            public int Index { get { return index ?? -1; } }
+            public int Index { get { return index ?? -1; } set { index = value < 0 ? (int?) null : (int) value; } }
             public string Name {  get { return name; } }
             protected abstract void InternalRead(BinaryReader r);
 
@@ -148,12 +148,8 @@ namespace GameMaker
             {
                 get
                 {
-                    return getStream();
+                    return sound_index >= 0 ? File.rawAudio[sound_index].Data : null;
                 }
-            }
-            public Stream getStream()
-            {
-                return sound_index >= 0 ? File.rawAudio[sound_index].Data : null;
             }
         }
 
@@ -173,16 +169,18 @@ namespace GameMaker
             {
                 get
                 {
-                    if(_cache == null) _cache = Bitmap.FromStream(getStream());
+                    if (_cache == null) _cache = Bitmap.FromStream(Data);
                     return _cache;
                 }
             }
-
-            
-            public Stream getStream()
+            public Stream Data
             {
-                return new MemoryStream(File.rawData, _pngOffset, _pngLength, false, false);
+                get
+                {
+                    return new MemoryStream(File.rawData, _pngOffset, _pngLength, false, false);
+                }
             }
+           
             protected override void InternalRead(BinaryReader r)
             {
                 int dummy = r.ReadInt32(); // Always 1
@@ -244,11 +242,21 @@ namespace GameMaker
                 {
                     if (_cache == null)
                     {
-                        Image texture = File.Textures[Texture_Index].Image;
-                        _cache = new Bitmap(this.Width, this.Height); //, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
-                        using (Graphics g = Graphics.FromImage(_cache))
-                            g.DrawImage(texture, Offset_X, Offset_Y, new Rectangle(X, Y, Width, Height), GraphicsUnit.Pixel);
-       
+                        try
+                        {
+                            Image texture = File.Textures[Texture_Index].Image;
+                            lock (texture)
+                            {
+                                _cache = new Bitmap(this.Width, this.Height); //, System.Drawing.Imaging.PixelFormat.Format1bppIndexed);
+                                using (Graphics g = Graphics.FromImage(_cache))
+                                    g.DrawImage(texture, Offset_X, Offset_Y, new Rectangle(X, Y, Width, Height), GraphicsUnit.Pixel);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Context.Error("Excpetion in {0}: {1}", e.Message);
+                            throw e;
+                        }
                     }
                     return _cache;
                 }
@@ -315,18 +323,20 @@ namespace GameMaker
             List<Image> _maskCache = null;
             public IReadOnlyList<Image> Masks
             {
-                get {
-                    if(_maskCache == null)
+                get
+                {
+                    if (_maskCache == null)
                     {
                         _maskCache = new List<Image>();
+
                         if (has_masks)
                         {
                             for (int i = 0; i < MaskOffsets.Length; i++)
                                 _maskCache.Add(MaskToBitmap(i));
-                        } 
+                        }
                     }
                     return _maskCache;
-                }
+                }      
             }
             IEnumerable<bool> GetPixelData(int index)
             {
@@ -417,6 +427,8 @@ namespace GameMaker
             }
 
         }
+
+    
         [DataContract]
         public class GObject : GameMakerStructure, INamedResrouce
         {
@@ -588,6 +600,47 @@ namespace GameMaker
                 Frame.Read(r, -1);
             }
         };
+
+        [DataContract]
+        public class Path : GameMakerStructure, INamedResrouce
+        {
+            [DataContract]
+            public class Point
+            {
+                [DataMember(Order = 1)]
+                public float X;
+                [DataMember(Order = 2)]
+                public float Y;
+                [DataMember(Order = 3)]
+                public float Speed;
+            }
+            [DataMember(Order = 10)]
+            public int Kind;
+            [DataMember(Order = 11)]
+            public bool Closed;
+            [DataMember(Order = 12)]
+            public int Precision;
+            [DataMember(Order = 13)]
+            public Point[] Points;
+           protected override void InternalRead(BinaryReader r)
+            {
+                name = string.Intern(r.ReadStringFromNextOffset());
+                Kind = r.ReadInt32();
+                Closed = r.ReadIntBool();
+                Precision = r.ReadInt32();
+                int count = r.ReadInt32();
+                Points = new Point[count];
+                for(int i=0;i< count; i++)
+                {
+                    Point p = new Point();
+                    p.X = r.ReadSingle();
+                    p.Y = r.ReadSingle();
+                    p.Speed = r.ReadSingle();
+                    Points[i] = p;
+                }
+            }
+        };
+
         [DataContract]
         public class Room : GameMakerStructure, INamedResrouce
         {
@@ -764,8 +817,10 @@ namespace GameMaker
 
                 }
             };
-            [DataMember(EmitDefaultValue = false, Order = 10)]
+            [DataMember(EmitDefaultValue = false, Order = 7)]
             public string caption;
+            [DataMember(EmitDefaultValue = false, Order = 8)]
+            public int? room_order = null;
             [DataMember( Order = 11)]
             public int width;
             [DataMember(Order = 12)]
@@ -803,6 +858,7 @@ namespace GameMaker
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
                 caption = r.ReadStringFromNextOffset();
+                if (string.IsNullOrEmpty(caption)) caption = null;
                 width = r.ReadInt32();
                 height = r.ReadInt32();
                 speed = r.ReadInt32();
@@ -971,50 +1027,41 @@ namespace GameMaker
             }
         }
 
-        public class Code : GameMakerStructure, IDataResource, INamedResrouce
+        public abstract class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
             public int Size { get; protected set; }
-            [NonSerialized]
+
             public ILBlock block = null; // cached
-            [NonSerialized]
+
             protected int codePosition;
-            [NonSerialized]
-            protected ILBlock _block = null; // used 
-            
-            public Stream getStream()
-            {
-                return new MemoryStream(File.rawData, codePosition, Size, false, false);
-            }
+            protected Lazy<ILBlock> _block = null; // used 
+            public ILBlock Block { get { return _block.Value; } }
+
             public Stream Data
             {
                 get
                 {
-                    return getStream();
+                    return new MemoryStream(File.rawData, codePosition, Size, false, false);
                 }
             }
-
-            public virtual ILBlock Block
+            protected abstract ILBlock CreateNewBlock();
+            public Code()
             {
-                get
-                {
-                    if (_block == null && Size != 0)
-                    {
-                        lock (this) // we lock this object cause we need to compile for it
-                        {
-                            if (Context.Version != UndertaleVersion.V10000) throw new Exception("Cannot compile old code using new");
-                            // Don't need any of that above since we don't do asms anymore
-                            var error = new ErrorContext(name);
-                            ILBlock block = new ILBlock();
-                            block.Body = new Dissasembler.OldByteCodeAst().Build(this, error);
-                            block = new ILAstBuilder().Build(block, error);
-                            this._block = block;
-                        }
-                    }
-                    return _block;
-                }
+                _block = new Lazy<ILBlock>(CreateNewBlock);
             }
-
-
+        }
+        public class OldCode : Code
+        {
+            protected override ILBlock CreateNewBlock()
+            {
+                if (Context.Version != UndertaleVersion.V10000) throw new Exception("Cannot compile old code using new");
+                // Don't need any of that above since we don't do asms anymore
+                var error = new ErrorContext(name);
+                ILBlock block = new ILBlock();
+                block.Body = new Dissasembler.OldByteCodeAst().Build(this, error);
+                block = new ILAstBuilder().Build(block, error);
+                return block;
+            }
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
@@ -1027,37 +1074,20 @@ namespace GameMaker
         {
             public short LocalCount { get; private set; }
             public short ArgumentCount { get; private set; }
-            [NonSerialized]
             int wierd;
-            [NonSerialized]
             int offset;
-            public Stream Data
+
+            protected override ILBlock CreateNewBlock()
             {
-                get
-                {
-                    return getStream();
-                }
+                if (Context.Version != UndertaleVersion.V10001) throw new Exception("Cannot compile new code using old");
+                // Don't need any of that above since we don't do asms anymore
+                var error = new ErrorContext(name);
+                ILBlock block = new ILBlock();
+                block.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
+                block = new ILAstBuilder().Build(block, error);
+                return block;
             }
-            public override ILBlock Block
-            {
-                get
-                {
-                    if (_block == null)
-                    {
-                        lock (this) // we lock this object cause we need to compile for it
-                        {
-                            if (Context.Version != UndertaleVersion.V10001) throw new Exception("Cannot compile new code using old");
-                            // Don't need any of that above since we don't do asms anymore
-                            var error = new ErrorContext(name);
-                            ILBlock block = new ILBlock();
-                            block.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
-                            block = new ILAstBuilder().Build(block, error);
-                            this._block = block;
-                        }
-                    }
-                    return _block;
-                }
-            }
+
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
@@ -1065,7 +1095,7 @@ namespace GameMaker
                 LocalCount = r.ReadInt16();
                 ArgumentCount = r.ReadInt16();
                 wierd = r.ReadInt32();
-                codePosition = (int)r.BaseStream.Position+ wierd-4;
+                codePosition = (int) r.BaseStream.Position + wierd - 4;
                 // this kind of some silly  encryption?
                 offset = r.ReadInt32();
             }

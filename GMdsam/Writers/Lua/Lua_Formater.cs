@@ -194,7 +194,6 @@ namespace GameMaker.Writers.Lua
                     script_name = v.FunctionNameOverride;
                 else
                     script_name = v.Name;
-                //   Debug.Assert(!script_name.Contains("scr_damagestandard"));
                 Write(script_name);
                 Write('('); // self is normaly the first of eveything
                 WriteNodesComma(v.Arguments);

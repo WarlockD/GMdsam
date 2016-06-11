@@ -10,6 +10,7 @@ using GameMaker.Ast;
 using static GameMaker.File;
 using System.Runtime.Serialization.Json;
 using System.Diagnostics;
+using System.Runtime.Serialization;
 
 namespace GameMaker.Writers
 {
@@ -287,71 +288,8 @@ namespace GameMaker.Writers
             Flush(); // flush it
         }
    
-        public void WriteAny<T>(T o) where T : File.GameMakerStructure
-        {
-            using (MemoryStream ssw = new MemoryStream())
-            {
-                DataContractJsonSerializerSettings set = new DataContractJsonSerializerSettings();
-                DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(T));
-                ser.WriteObject(ssw, o);
-                if (make_pretty)
-                {
-                    var token_stream = new FromStream(ssw);
-                    WriteStart(token_stream);
-                } else
-                {
-                    StreamReader sw = new StreamReader(ssw);
-                    Write(sw.ReadToEnd());
-                }
-                Flush(); // flush it
-            }
-        }
-        public virtual void Write(File.Room room)
-        {
-            if (room.code_offset > 0 && room.Room_Code == null) // fill in room init
-            {
-                room.Room_Code = AllWriter.QuickCodeToLine(File.Codes[room.code_offset]);
-            }
-            foreach (var oi in room.Objects) // fill in instance init
-            {
-                if (oi.Code_Offset > 0 && oi.Room_Code == null)
-                {
-                    oi.Room_Code = AllWriter.QuickCodeToLine(File.Codes[oi.Code_Offset]);
-                }
-                if(oi.Object_Index > -1 && oi.Object_Name == null)
-                {
-                    oi.Object_Name = File.Objects[oi.Object_Index].Name;
-                }
-                
-            }
-            WriteAny(room);
-        }
-        public virtual void Write(File.Texture texture)
-        {
-            
-            texture.getStream().CopyTo(BaseStream);
-        }
-        public virtual void Write(File.GObject o)
-        {
-            WriteAny(o);
-        }
-        public virtual void Write(File.Font font)
-        {
-            WriteAny(font);
-        }
-        public virtual void Write(File.Sprite sprite)
-        {
-            WriteAny(sprite);
-        }
-        public virtual void Write(File.AudioFile o)
-        {
-            WriteAny(o);
-        }
-
-        public virtual void Write(File.Background b)
-        {
-            WriteAny(b);
-        }
+       
+     
         public virtual void Write(File.Code code)
         {
             using (var output = new BlockToCode(new ErrorContext(code.Name), this))

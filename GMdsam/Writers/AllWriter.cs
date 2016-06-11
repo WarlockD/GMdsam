@@ -15,18 +15,14 @@ using System.Runtime.Serialization;
 
 namespace GameMaker.Writers
 {
-   
+
     public class AllWriter
     {
 
         ConcurrentBag<string> globals_vars = new ConcurrentBag<string>();
         ConcurrentBag<string> globals_arrays = new ConcurrentBag<string>();
-        ConcurrentBag<string> scrptnames;
-        ConcurrentBag<string> objnames;
-        DirectoryInfo scriptDirectory = null;
-        DirectoryInfo objectDirectory = null;
-        List<Task> tasks = new List<Task>();
- 
+        ConcurrentBag<Task> tasks = new ConcurrentBag<Task>();
+
 
         public static string QuickCodeToLine(File.Code code, string context)
         {
@@ -61,128 +57,210 @@ namespace GameMaker.Writers
             }
             return null;
         }
-        Dictionary<string, Action> actionLookup;
+        List<CodeTask> _todo = null;
+        static string[] eveything = { "code", "textures", "objects", "scripts" };
+        public void AddAction(string start_name)
+        {
+            if (_todo == null) _todo = new List<CodeTask>();
+            string name = start_name.Trim().ToLower();
+            if (name == "everything")
+            {
+                foreach (var e in eveything) _AddAction(e);
+            }
+            else _AddAction(name);
+        }
+        void _AddAction(string name)
+        {
+            CodeTask progress = new CodeTask();
+            progress.Name = name;
+     
+            switch (name)
+            {
+                case "code":
+                    progress.Task = RunAllSimple("code", progress, File.Codes, (string path, File.Code s) =>
+                    {
+                        string filename = Path.ChangeExtension(Path.Combine(path, s.Name), "js");
+                        using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(s);
+                    });
+                    break;
+                case "textures":
+                    progress.Task = RunAllSimple("textures", progress, File.Textures, (string path, File.Texture t) =>
+                        {
+                            string filename = Path.ChangeExtension(Path.Combine(path, "texture_" + t.Index), "png");
+                            using (FileStream fs = new FileStream(filename, FileMode.Create)) t.Data.CopyTo(fs);
+                        });
+                    break;
+                case "objects":
+                    progress.Task = RunAllSimple("objects", progress, File.Objects, (string path, File.GObject o) =>
+                    {
+                        string filename = Path.Combine(path, o.Name);
+                        BlockToCode output = CreateOutput(o.Name);
+                        GetScriptWriter(output).Write(o);
+                        output.WriteToFile(filename);
+                    });
+                    break;
+                case "scripts":
+                    progress.Task = RunAllSimple("scripts", progress, File.Scripts, (string path, File.Script s) =>
+                    {
+                        string filename = Path.Combine(path, s.Name);
+                        BlockToCode output = CreateOutput(s.Name);
+                        GetScriptWriter(output).Write(s);
+                        output.WriteToFile(filename);
+
+                    });
+                   
+                    break;
+                case "everything":
+
+                default:
+                    Context.Error("{0} is not a valid chunk type", name);
+                    return;
+
+            }
+            _todo.Add(progress);
+        }
+
+        class CodeTask : IProgress<double>
+        {
+            public string Name;
+            public Task<TimeSpan> Task;
+            double _currentProgress = 0.0;
+            public double CurrentProgress { get { return _currentProgress; } }
+            public void Report(double value)
+            {
+                // Make sure value is in [0..1] range
+                value = Math.Max(0, Math.Min(1, value));
+                Interlocked.Exchange(ref _currentProgress, value);
+            }
+        }
         public AllWriter()
         {
-            actionLookup = new Dictionary<string, Action>();
-            actionLookup["backgrounds"] = () =>
-            {
-                RunAllSimple("backgrounds", "Backgrounds", File.Backgrounds);
-                if (Context.saveAllPngs)
-                {   // We want to save each individual sprite.  this eats ALOT of time
-                    RunAllSimple("backgrounds", "Background Images", File.Backgrounds, (string path, File.Background b) =>
-                    {
-                        string filename = Path.ChangeExtension(Path.Combine(path, b.Name), ".png"); // we just have one
-                        b.Frame.Image.Save(filename);
-                    });
-                }
-            };
-            actionLookup["objects"] = () =>
-            {
+            /*
 
-                RunAllSimple("objects", "Objects", File.Objects, (string path, File.GObject o) =>
-                {
-                    string filename = Path.Combine(path, o.Name);
-                    BlockToCode output = CreateOutput(o.Name);
-                    GetScriptWriter(output).Write(o);
-                    output.WriteToFile(filename);
-                });
-            };
-            actionLookup["scripts"] = () =>
-            {
-                RunAllSimple("scripts", "Scripts", File.Scripts, (string path, File.Script s) =>
-                {
-                    string filename = Path.Combine(path,s.Name);
-                    BlockToCode output = CreateOutput(s.Name);
-                    GetScriptWriter(output).Write(s);
-                    output.WriteToFile(filename);
+          AddAction("scripts", (IProgress<double> progress) =>
+          {
+              return RunAllSimple("scripts", progress, File.Scripts, (string path, File.Script s) =>
+              {
+                  string filename = Path.Combine(path, s.Name);
+                  BlockToCode output = CreateOutput(s.Name);
+                  GetScriptWriter(output).Write(s);
+                  output.WriteToFile(filename);
 
-                });
+              });
 
-            }; ;
-            actionLookup["sprites"] = () =>
-            {
-                RunAllSimple("sprites", "Sprites", File.Sprites);
-                if (Context.saveAllPngs)
-                {   // We want to save each individual sprite.  this eats ALOT of time
-                    RunAllSimple("sprites", "Sprite Images", File.Sprites, (string path, File.Sprite s) =>
-                    {
-                        if (s.Frames.Length == 0) return;
-                        else if (s.Frames.Length == 1)
-                        {
-                            string filename = Path.ChangeExtension(Path.Combine(path, s.Name), ".png"); // we just have one
-                            s.Frames[0].Image.Save(filename);
-                        }
-                        else // we want to cycle though them all
-                        {
-                            for (int i = 0; i < s.Frames.Length; i++)
-                            {
-                                string filename = Path.ChangeExtension(Path.Combine(path, s.Name + "_" + i), ".png"); // we just have one
-                                s.Frames[i].Image.Save(filename);
-                            }
-                        }
+          });
+          AddAction("sprites", (IProgress<double> progress) =>
+          {
+              return RunAllSimple("sprites", progress, File.Sprites);
+          });
 
-                    });
-                }
-                if (Context.saveAllMasks)
-                {
-                    RunAllSimple("sprites", "Sprite Masks", File.Sprites, (string path, File.Sprite s) =>
-                    {
-                        if (s.Masks.Count == 0) return;
-                        else if (s.Masks.Count == 1)
-                        {
-                            string filename = Path.ChangeExtension(Path.Combine(path, s.Name + "_mask"), ".png"); // we just have one
-                            s.Masks[0].Save(filename);
-                        } else
-                        {
-                            for (int i = 0; i < s.Masks.Count; i++)
-                            {
-                                string filename = Path.ChangeExtension(Path.Combine(path, s.Name + "_mask_" + i), ".png"); // we just have one
-                                s.Masks[i].Save(filename);
-                            }
-                        }
-                    });
-                }
-            };
-            actionLookup["rooms"] = () =>
-            {
-                RunAllSimple("rooms", "Rooms: ", File.Rooms);
-            };
-            actionLookup["code"] = () =>
-            {
-                RunAllSimple("code", "Codes", File.Codes, (string path, File.Code s) =>
-                {
-                    string filename = Path.ChangeExtension(Path.Combine(path, s.Name),"js");
-                    using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(s);
-
-                });
-
-            }; 
-            actionLookup["fonts"] = () =>
-            {
-                RunAllSimple("fonts", "Fonts", File.Fonts);
-            };
-            actionLookup["sounds"] = () =>
-            {
-                RunAllSimple("sounds", "Sounds", File.Sounds, (string path, File.AudioFile s) =>
-                {
-                    if (s.getStream() == null) return;
-                    string filename = Path.ChangeExtension(Path.Combine(path, s.Name), s.extension);
-                    using (FileStream fs = new FileStream(filename, FileMode.Create)) s.getStream().CopyTo(fs);
-                });
-                string settings_filename = Path.Combine(Directory.CreateDirectory("sounds").FullName, "sound_settings");
-                RunOneThing(settings_filename, File.Sounds);
-            };
-            actionLookup["textures"] = () =>
-            {
-                RunAllSimple("textures", "Textures", File.Textures, (string path, File.Texture t) =>
+              if (Context.saveAllPngs)
+              {   // We want to save each individual sprite.  this eats ALOT of time
+                  RunAllSimple("sprites", "Sprite Images", File.Sprites, (string path, File.Sprite s) =>
                   {
-                      string filename = Path.ChangeExtension(Path.Combine(path, "texture_" + t.Index), "png");
-                      using (FileStream fs = new FileStream(filename, FileMode.Create)) t.getStream().CopyTo(fs);
+                      if (s.Frames.Length == 0) return;
+                      else if (s.Frames.Length == 1)
+                      {
+                          string filename = Path.ChangeExtension(Path.Combine(path, s.Name), ".png"); // we just have one
+                          s.Frames[0].Image.Save(filename);
+                      }
+                      else // we want to cycle though them all
+                      {
+                          for (int i = 0; i < s.Frames.Length; i++)
+                          {
+                              string filename = Path.ChangeExtension(Path.Combine(path, s.Name + "_" + i), ".png"); // we just have one
+                              s.Frames[i].Image.Save(filename);
+                          }
+                      }
+
                   });
-            };
+                  if (Context.saveAllMasks)
+                  {
+                      RunAllSimple("sprites", "Sprite Masks", File.Sprites, (string path, File.Sprite s) =>
+                      {
+                          if (s.Masks.Count == 0) return;
+                          else if (s.Masks.Count == 1)
+                          {
+                              string filename = Path.ChangeExtension(Path.Combine(path, s.Name + "_mask"), ".png"); // we just have one
+                              s.Masks[0].Save(filename);
+                          }
+                          else
+                          {
+                              for (int i = 0; i < s.Masks.Count; i++)
+                              {
+                                  string filename = Path.ChangeExtension(Path.Combine(path, s.Name + "_mask_" + i), ".png"); // we just have one
+                                  s.Masks[i].Save(filename);
+                              }
+                          }
+                      });
+                  }
+              }
+          });
+          AddAction("rooms", () =>
+          {
+              RunAllSimple("rooms", "Rooms", File.Rooms, (string path, File.Room room) =>
+              {
+                  if (room.code_offset > 0 && room.Room_Code == null) // fill in room init
+                  {
+                      room.Room_Code = AllWriter.QuickCodeToLine(File.Codes[room.code_offset]);
+                  }
+                  foreach (var oi in room.Objects) // fill in instance init
+                  {
+                      if (oi.Code_Offset > 0 && oi.Room_Code == null)
+                      {
+                          oi.Room_Code = AllWriter.QuickCodeToLine(File.Codes[oi.Code_Offset]);
+                      }
+                      if (oi.Object_Index > -1 && oi.Object_Name == null)
+                      {
+                          oi.Object_Name = File.Objects[oi.Object_Index].Name;
+                      }
+                  }
+                  RunOneThing(path, room);
+              });
+          });
+          AddAction("backgrounds" ,() =>
+          {
+              RunAllSimple("backgrounds", "Backgrounds", File.Backgrounds);
+              if (Context.saveAllPngs)
+              {   // We want to save each individual sprite.  this eats ALOT of time
+                  RunAllSimple("backgrounds", "Background Images", File.Backgrounds, (string path, File.Background b) =>
+                  {
+                      string filename = Path.ChangeExtension(Path.Combine(path, b.Name), ".png"); // we just have one
+                      b.Frame.Image.Save(filename);
+                  });
+              }
+          });
+          AddAction("sounds", () =>
+          {
+              RunAllSimple("sounds", "Sounds", File.Sounds, (string path, File.AudioFile s) =>
+              {
+                  if (s.Data == null) return;
+                  string filename = Path.ChangeExtension(Path.Combine(path, s.Name), s.extension);
+                  using (FileStream fs = new FileStream(filename, FileMode.Create)) s.Data.CopyTo(fs);
+              });
+              string settings_filename = Path.Combine(Directory.CreateDirectory("sounds").FullName, "sound_settings");
+              RunOneThing(settings_filename, File.Sounds);
+          });
+
+
+          AddAction("fonts" , () =>
+          {
+
+              RunAllSimple("fonts", "Fonts", File.Fonts);
+              if (Context.saveAllPngs)
+              {
+                  RunAllSimple("sounds", "Sounds", File.Fonts, (string path, File.Font f) =>
+                  {
+                      string filename = Path.ChangeExtension(Path.Combine(path, f.Name), ".png"); // we just have one
+                      f.Frame.Image.Save(filename);
+                  });
+              }
+          });
+          AddAction("paths" , () => RunAllSimple("paths", "Paths", File.Paths));
+
+            */
         }
-        public IReadOnlyDictionary<string, Action> ActionLookup { get { return actionLookup; } }
+        //    public IReadOnlyDictionary<string, Action> ActionLookup { get { return actionLookup; } }
 
         static CodeWriter GetScriptWriter(BlockToCode output)
         {
@@ -213,20 +291,8 @@ namespace GameMaker.Writers
         //
 
 
-
-        void RunTask(Action func)
-        {
-            if (Context.doThreads)
-            {
-                Task task = new Task(func);
-                task.ContinueWith(ExceptionHandler, TaskContinuationOptions.OnlyOnFaulted);
-                tasks.Add(task);
-                task.Start();
-            }
-            else func();
-        }
         // Search disabled for now
-    /*
+        /*
         public void Search(string toSearch, bool parents) // also add object parents
         {
             Context.doGlobals = false; // don't do globals on search
@@ -257,13 +323,14 @@ namespace GameMaker.Writers
             }
         }
         */
- 
+
         static HashSet<string> directoryDeleted = new HashSet<string>();
         static string DeleteAllAndCreateDirectory(string dir)
         {
             var directory = Directory.CreateDirectory(dir);
-            if (!directoryDeleted.Contains(dir)) {
-         //       foreach (var f in directory.GetFiles()) f.Delete(); // skip this for right now
+            if (!directoryDeleted.Contains(dir))
+            {
+                //       foreach (var f in directory.GetFiles()) f.Delete(); // skip this for right now
                 directoryDeleted.Add(dir);
             }
             return directory.FullName;
@@ -271,42 +338,41 @@ namespace GameMaker.Writers
 
         public void DoneMessage(Task[] tasks, DateTime start, string name)
         {
-            if(tasks != null) Task.WaitAll(tasks);
+            if (tasks != null) Task.WaitAll(tasks);
+            Context.Message("{0} Finished in {1}", name, DateTime.Now - start);
+        }
+        public void DoneMessage(Task task, DateTime start, string name)
+        {
+            if (task != null) task.Wait();
             Context.Message("{0} Finished in {1}", name, DateTime.Now - start);
         }
         public void RunOneThing<T>(string path, T o) where T : File.GameMakerStructure, File.INamedResrouce
         {
-            string filename = Path.Combine(path, o.Name);
-            if (Context.doXML)
+            string filename = FixFilenameExtensionForSerialzer(Path.Combine(path, o.Name));
+            using (FileStream writer = new FileStream(filename, FileMode.Create))
             {
-                Type t = o.GetType();
-                FileStream writer = new FileStream(Path.ChangeExtension(filename, "xml"), FileMode.Create);
-                DataContractSerializer fmt = new DataContractSerializer(t);
-                fmt.WriteObject(writer, o);
-                writer.Close();
+                var serializer = GetSerializer(o.GetType());
+                serializer.WriteObject(writer, o);
             }
-            else
-            {
-                using (ResourceFormater fmt = new ResourceFormater(Path.ChangeExtension(filename, "json"))) fmt.Write((dynamic) o);
-            }
+        }
+        static string FixFilenameExtensionForSerialzer(string filename)
+        {
+            return Path.ChangeExtension(filename, Context.doXML ? "xml" : "json");
+        }
+        static XmlObjectSerializer GetSerializer(Type t)
+        {
+            return Context.doXML ? (XmlObjectSerializer) new DataContractSerializer(t) : (XmlObjectSerializer) new DataContractJsonSerializer(t);
         }
         public void RunOneThing<T>(string filename, IReadOnlyList<T> o) where T : File.GameMakerStructure, File.INamedResrouce
         {
-            if (Context.doXML)
+            using (FileStream writer = new FileStream(FixFilenameExtensionForSerialzer(filename), FileMode.Create))
             {
-                Type t = o.GetType();
-                FileStream writer = new FileStream(Path.ChangeExtension(filename, "xml"), FileMode.Create);
-                DataContractSerializer fmt = new DataContractSerializer(t);
-                fmt.WriteObject(writer, o);
-                writer.Close();
-            }
-            else
-            {
-                using (ResourceFormater fmt = new ResourceFormater(Path.ChangeExtension(filename, "json"))) fmt.Write((dynamic) o);
+                var serializer = GetSerializer(o.GetType());
+                serializer.WriteObject(writer, o);
             }
         }
-       
-        public void RunAllSimple<T>(string path_name, string name, IReadOnlyList<T> list, Action<string,T> action) where T : File.GameMakerStructure
+        // helper if you need to do one task then another
+        public Task<TimeSpan> RunAllSimple<T>(string path_name, IProgress<double> progress, IReadOnlyList<T> list, Action<string, T> action) where T : File.GameMakerStructure
         {
             DateTime start = DateTime.Now;
             var path = DeleteAllAndCreateDirectory(path_name);
@@ -315,81 +381,86 @@ namespace GameMaker.Writers
                 List<Task> insideTasks = new List<Task>();
                 foreach (var o in list)
                 {
-                    insideTasks.Add(Task.Factory.StartNew(() =>
+                    Task t = Task.Factory.StartNew(() =>
                     {
                         lock (o) action(path, o);
-                    }));
+                    });
+                    insideTasks.Add(t);
                 }
-                   
-               
-                tasks.AddRange(insideTasks);
-                if(name != null)
+                Task[] ret = insideTasks.ToArray();
+                return Task.Factory.StartNew<TimeSpan>(() =>
                 {
-                    Task fin = Task.Factory.StartNew(() => DoneMessage(insideTasks.ToArray(), start, name));
-                    tasks.Add(fin);
-                }
+                    int tasksDone = 0;
+                    while (tasksDone < ret.Length)
+                    {
+                        int currentDone = 0;
+                        foreach (var t in ret) if (t.IsCompleted) currentDone++;
+                        if (currentDone != tasksDone)
+                        {
+                            tasksDone = currentDone;
+                            progress.Report((double) tasksDone / (double) ret.Length);
+
+                        }
+                        Thread.Sleep(10); // sleep for 10 ms
+                    }
+                    return DateTime.Now - start;
+                });
             }
             else
             {
-                using (ProgressBar bar = new ProgressBar(name))
+                for (int i = 0; i < list.Count; i++)
                 {
-                    ErrorContext.ProgressBar = bar;
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        var o = list[i];
-                        bar.Report((double) i / list.Count);
-                        action(path, o);
-                    }
-                    ErrorContext.ProgressBar = null;
+                    var o = list[i];
+                    progress.Report((double) i / (double) list.Count);
+                    action(path, o);
                 }
-                DoneMessage(null, start, name);
+                return Task.FromResult<TimeSpan>(DateTime.Now - start);
             }
         }
-        public void RunAllSimple<T>(string path_name, string name, IReadOnlyList<T> list) where T : File.GameMakerStructure, File.INamedResrouce
+        public Task<TimeSpan> RunAllSimple<T>(string path_name, IProgress<double> progress, IReadOnlyList<T> list) where T : File.GameMakerStructure, File.INamedResrouce
         {
-            RunAllSimple(path_name, name, list, RunOneThing);
+            return RunAllSimple(path_name, progress, list, RunOneThing);
         }
 
-
-        void ExceptionHandler(Task task)
+        void ExceptionHandler(string name, string filename, Task task)
         {
-            var exception = task.Exception;
-            Context.Error(exception.ToString());
-            throw exception;
+            foreach (var e in task.Exception.Flatten().InnerExceptions)
+            {
+                Context.Error("{0}: Exception: {1}", e.Message);
+            }
         }
         public void FinishProcessing()
         {
-            if (tasks.Count > 0)
+            if (_todo != null && _todo.Count > 0)
             {
                 // we start here so we can keep track of progress.  But we don't know
                 // how many tasks we have till here, so while we SHOULD start them all when they are 
                 // created, I like using this progress bar
-                using(var progress = new ProgressBar()) {
-                    ErrorContext.ProgressBar = progress;
-                    int total = tasks.Count;
-                    int tasksDone = 0;
-                //    foreach (var t in tasks) t.Start();
-                    while (tasksDone < total)
-                    {
-                        tasksDone = 0;
-                        foreach (var t in tasks) if (t.IsCompleted) tasksDone++;
-                        progress.Report((double) tasksDone / total);
-                    }
-                    ErrorContext.ProgressBar = null;
-                }
-                tasks.Clear();
-            }
-            if (ILNode.times.Count > 0)
-            {
-                using (StreamWriter sw = new StreamWriter(Context.MoveFileToOldErrors("timeCollection.txt")))
+                using (var progress = new ProgressBar())
                 {
-                    List<double> timeAverage = new List<double>();
-                    foreach (var c in ILNode.times) timeAverage.Add(c.Time.Ticks);
+                    ErrorContext.ProgressBar = progress;
+                    double smallest = 0.0;
+                    while (_todo.Count > 0)
+                        for (int i = _todo.Count - 1; i >= 0; i--)
+                        {
+                            var ct = _todo[i];
+                            if (ct.Task.IsCompleted)
+                            {
+                                Context.Message("{0} finished in {1}", ct.Name, ct.Task.Result);
+                                _todo.RemoveAt(i);
 
-                    sw.WriteLine("Total Tick Average: {0}", timeAverage.Average());
-                    sw.WriteLine();
-                    foreach (var c in ILNode.times.OrderBy(x => x.Time)) sw.WriteLine("Count={0}  Time={1}", c.Count, c.Time);
+                            }
+                            else
+                            {
+                               // if (smallest > ct.CurrentProgress)
+                                    smallest = ct.CurrentProgress;
+                            }
+                        }
+                    progress.Report(smallest);
+                    Thread.Sleep(10);
                 }
+
+                ErrorContext.ProgressBar = null;
             }
         }
     }

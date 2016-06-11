@@ -136,27 +136,52 @@ namespace GameMaker.Writers
         }
         static Dictionary<string, Action<CodeWriter, ILCall>> calls = new Dictionary<string, Action<CodeWriter, ILCall>>();
         static Dictionary<string, Action<CodeWriter, ILValue>> assigns = new Dictionary<string, Action<CodeWriter, ILValue>>();
-        static CodeWriter()
+        static void InstanceArgument(CodeWriter writer, ILCall c, int index)
         {
-            calls["instance_create"] = (CodeWriter writer, ILCall c) =>
+            int i = ResourceArgument(File.Objects, c, index);
+            if (i >=0) writer.objectsUsed.TryAdd(i, File.Sprites[i].Name);
+        }
+        static void SpriteArgument(CodeWriter writer, ILCall c, int index)
+        {
+            int i = ResourceArgument(File.Sprites, c, index);
+            if(i >= 0) writer.spritesUsed.TryAdd(i, File.Sprites[i].Name);
+        }
+        static int ResourceArgument<T>(IReadOnlyList<T> list, ILCall c, int index) where T : File.GameMakerStructure, File.INamedResrouce
+        {
+            int i = -1;
+            if (c.Arguments[index].Code == GMCode.Constant)
             {
-                if (c.Arguments[2].Code == GMCode.Constant)
+                ILValue v = c.Arguments[index].Operand as ILValue;
+                i = (int) v;
+                if (i >= 0) v.ValueText = list[(int) v].Name;
+            }
+            return i;
+        }
+            static CodeWriter()
+        {
+            calls["instance_create"] = (CodeWriter writer, ILCall c) => InstanceArgument(writer, c, 2);
+            calls["instance_exists"] = (CodeWriter writer, ILCall c) => InstanceArgument(writer, c, 0);
+            calls["script_execute"] = (CodeWriter writer, ILCall c) => ResourceArgument(File.Scripts, c, 0);
+
+            
+            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILCall c) => SpriteArgument(writer, c, 0); 
+            calls["path_start"] = (CodeWriter writer, ILCall c) =>
+            {
+                ResourceArgument(File.Paths, c, 0);
+                if (c.Arguments[3].Code == GMCode.Constant)
                 {
-                    ILValue v = c.Arguments[2].Operand as ILValue;
-                    writer.objectsUsed.TryAdd((int)v, File.Objects[(int)v].Name);
+                    ILValue v = c.Arguments[3].Operand as ILValue;
+                    switch ((int) v)
+                    {
+                        case 0: v.ValueText = "path_action_stop"; break;
+                        case 1: v.ValueText = "path_action_restart"; break;
+                        case 2: v.ValueText = "path_action_continue"; break;
+                        case 3: v.ValueText = "path_action_reverse"; break;
+                        default:
+                            v.ValueText = null;
+                            break;
+                    }
                 }
-            };
-            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILCall c) =>
-            {
-                if (c.Arguments[0].Code == GMCode.Constant)
-                {
-                    ILValue v = c.Arguments[0].Operand as ILValue;
-                    writer.spritesUsed.TryAdd((int)v, File.Sprites[(int)v].Name);
-                }
-            };
-            assigns["sprite_index"] = (CodeWriter writer, ILValue v) =>
-            {
-                writer.spritesUsed.TryAdd((int)v, File.Sprites[(int)v].Name);
             };
 
         }

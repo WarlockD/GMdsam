@@ -102,22 +102,11 @@ namespace GameMaker
         }
         static void InstructionError(string message, params object[] o)
         {
-            Console.WriteLine("Useage <exe> data.win <-asm> [-s search_term] [-all (objects|scripts)");
-            Console.WriteLine("search_term will search all scripts or object names for the text and save that file as a *.cpp");
-            Console.WriteLine("-asm will also write the bytecode dissasembly");
-            Console.WriteLine("There will be some wierd gotos/labels in case statements.  Ignore them, I am still trying to find that bug");
-            if (message != null)
+            Console.WriteLine("Useage <exe> data.win <-png> <-mask>  [-all (objects|scripts|paths|codes|textures|sprites|sounds)");
+            Console.WriteLine("<-png> <-mask> will cut out and save all the masks and png's for sprites and backgrounds.  This dosn't effect textures though");
+            if(message != null)
             {
-                Console.WriteLine("Error: ");
-                if (o.Length > 0) message = string.Format(message, o);
-                foreach (var s in message.Split('\n'))
-                {
-                    string msg;
-                    if (s.Last() == '\r') msg = s.Remove(s.Length - 1);
-                    else msg = s;
-                    Console.WriteLine("   " + msg);
-                    Debug.WriteLine(msg);
-                }
+                Context.FatalError(message);
             }
             Environment.Exit(-1);
         }
@@ -134,23 +123,18 @@ namespace GameMaker
             {
                 InstructionError("Missing data.win file");
             }
-#if !DEBUG
             try
             {
-#endif
             File.LoadDataWin(dataWinFileName);
             File.LoadEveything();
-#if !DEBUG
             }
 
             catch (Exception e)
             {
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
-#endif
-          //  Context.doThreads = false;
+          // Context.doThreads = false;
             Context.doXML = true;
-            string toSearch = null;
             int pos = 1;
 
             var w = new Writers.AllWriter();
@@ -201,26 +185,16 @@ namespace GameMaker
                         {
                             pos++;
                             string option = args.ElementAtOrDefault(pos);
-                            List<Action> actions;
                             if (string.IsNullOrWhiteSpace(option) || option.ToLower() == "everything")
-                                actions = w.ActionLookup.Select(x => x.Value).ToList();
+                                w.AddAction("everything");
                             else
                             {
-                                actions = new List<Action>();
                                 do
                                 {
-                                    Action action;
-                                    if (!w.ActionLookup.TryGetValue(option.ToLower(), out action))
-                                    {
-                                        InstructionError("Invalide option '{0}' for -all", option);
-                                    }
-                                    actions.Add(action);
+                                    w.AddAction(option);
                                     option = args.ElementAtOrDefault(++pos);
                                 } while (!string.IsNullOrWhiteSpace(option));
-
-
                             }
-                            foreach (var a in actions) a();
                             w.FinishProcessing();
                         }
                         pos = args.Length;

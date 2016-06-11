@@ -16,7 +16,6 @@ namespace GameMaker
         {
             var arr = list.ToArray();
             if (arr.Length == 0) return true;
-            writer.Write(' ');
             int i = 0;
             for (; i < (arr.Length - 1); i++)
             {
@@ -27,9 +26,6 @@ namespace GameMaker
             }
             if (action(arr[i]))
                 writer.WriteLine();
-            else
-                writer.Write(' ');
-            writer.Write(' ');
             return false;
         }
         public static bool isEndingEqual(this StringBuilder sb, char t)

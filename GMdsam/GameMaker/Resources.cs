@@ -260,6 +260,7 @@ namespace GameMaker
         static List<Font> fonts = null;
         static List<Code> codes = null;
         static List<Script> scripts = null;
+        static List<Path> paths = null;
         static Dictionary<string, GameMakerStructure> namedResourceLookup = new Dictionary<string, GameMakerStructure>();
         static void InternalLoad()
         {
@@ -659,40 +660,14 @@ namespace GameMaker
         {
             if (codes == null)
             {
-                CheckList("CODE", ref codes); // fill out all the scripts first
-                RefactorCodeManager rcm = new RefactorCodeManager(File.rawData);
-                Chunk funcChunk = fileChunks["FUNC"]; // function names
-                Chunk varChunk = fileChunks["VARI"]; // var names
-
-                rcm.AddRefs(funcChunk.start, funcChunk.size);
-                rcm.AddRefs(varChunk.start, varChunk.size); // add all the reffs
-                rcm.WriteAllChangesToBytes();
-            }
-        }
-        static void NewRefactorCode()
-        {
-            if (codes == null)
-            {
-          
-                /*
-            int codepositionStart = 0;
-            //  // fill out all the scripts first
-
-            {
-                BinaryReader r = new BinaryReader(new MemoryStream(rawData));
-                r.BaseStream.Position = fileChunks["CODE"].start;
-                var entries = r.ReadChunkEntries();
-                codepositionStart = (int)r.BaseStream.Position; 
-                // ment for debug, to show where all the raw code starts at
-            }
-            */
-
                 RefactorCodeManager rcm = new RefactorCodeManager(File.rawData);
                 Chunk funcChunk = fileChunks["FUNC"]; // function names
                 Chunk varChunk = fileChunks["VARI"]; // var names
                 if(Context.Version == UndertaleVersion.V10000)
                 {
-                    CheckList("CODE", ref codes);
+                    List<OldCode> old_codes = new List<OldCode>();
+                    CheckList("CODE", ref old_codes);
+                    codes = old_codes.ToList<Code>();
                     rcm.AddRefs(funcChunk.start, funcChunk.size);
                     rcm.AddRefs(varChunk.start, varChunk.size); // old method
                 }else
@@ -702,16 +677,63 @@ namespace GameMaker
                     // It goes (count, entries, BLOCKOFALLCODE, entry, entry, .. ) and the offset positions are 
                     // based off the start of BLOCKOFCODE?
                     CheckList("CODE", ref new_codes);
-
-                    codes = new_codes.Select(x => (File.Code)x).ToList();
+                    codes = new_codes.ToList<Code>();
                     rcm.RefactorNewChunks(funcChunk, varChunk);
                 }
                 rcm.WriteAllChangesToBytes();
             }
         }
+        public static int[] RoomOrder;
+        static void LoadHeadderNew()
+        {
+            if (rawData == null) throw new FileLoadException("Data.win file not open");
+            var gen8_chunk = fileChunks["GEN8"];
+            BinaryReader r = new BinaryReader(new MemoryStream(rawData));
+            r.BaseStream.Position = gen8_chunk.start;
+            // start, not sure what some of these values are
+            int temp;
+            temp = r.ReadInt32();
+            string gameFileName = r.ReadStringFromNextOffset();
+            string someString = r.ReadStringFromNextOffset();
+            int roomMaxId = r.ReadInt32();
+            int roomMaxTileID = r.ReadInt32();
+            int gameID = r.ReadInt32();
+            int[] zero0= r.ReadInt32(4); // always zero?
+            string gameName = r.ReadStringFromNextOffset();
+            int[] version= r.ReadInt32(4);
+            int width = r.ReadInt32();
+            int height = r.ReadInt32();
+            int flags_maybe = r.ReadInt32();
+            int temp1 = r.ReadInt32(); // not a clue
+            byte[] byte16 = r.ReadBytes(16); // some kind of key?
+            long IthinkTime = r.ReadInt64();
+            string altName = r.ReadStringFromNextOffset();
+            int[] morestuffDebugMaybe = r.ReadInt32(6);
+            int roomOrder_count = r.ReadInt32();
+            RoomOrder = r.ReadInt32(roomOrder_count);
+            // hurmm.  in the old version the room order was off but here all the rooms are in numerical order
+            // still keep this just in case
+            if (roomOrder_count == rooms.Count)
+            {
 
+                SortedList<int, Room> test = new SortedList<int, Room>(rooms.ToDictionary(x => RoomOrder[x.Index]));
+                foreach(var kv in test)
+                {
+                    if(kv.Key != kv.Value.Index)
+                    {
+                        Debug.WriteLine("Room " + kv.Value.Name + " index changed from " + kv.Value.Index + " to " + kv.Key);
+                        kv.Value.Index = kv.Key;
+                    }
+                }
+                rooms = test.Values.ToList();
+            }
+
+            else Context.Error("Room Order is invalid, all rooms might not be ordered correctly");
+          
+        }
         public static void LoadEveything()
         {
+            DateTime start = DateTime.Now;
             CheckStrings();
             CheckList("TXTR", ref textures);
             CheckList("BGND", ref backgrounds);
@@ -722,16 +744,16 @@ namespace GameMaker
             CheckList("SOND", ref sounds);
             CheckList("FONT", ref fonts);
             CheckList("OBJT", ref objects);
-
-
-
+            CheckList("PATH", ref paths);
             CheckList("SCPT", ref scripts);
-            // CheckList("CODE", ref codes);
-        //    CollectTextureColors();
-            NewRefactorCode();
-          
-            DebugPring();
+
+            RefactorCode();
+            LoadHeadderNew(); // need to reorder the rooms so this needs to be red first
+            DateTime end = DateTime.Now;
+            Context.Message("data.win parsed in {0}", end - start);
         }
+
+        public static IReadOnlyList<Path> Paths { get { CheckList("PATH", ref scripts); return paths; } }
         public static IReadOnlyList<Script> Scripts { get { CheckList("SCPT", ref scripts); return scripts; } }
         public static IReadOnlyList<string> Strings { get { CheckStrings(); return stringList; } }
         public static IReadOnlyList<Code> Codes { get { RefactorCode(); return codes; } }
@@ -770,13 +792,7 @@ namespace GameMaker
                     namedResourceLookup.Add(nr.Name, t);
                 }
             }
-        }
-
-
-        public static void DebugPring()
-        {
-        }
-        
+        }        
         public static void LoadDataWin(string filename)
         {
             if (File.filename != null && File.rawData != null && File.filename == filename) return; // don't do anything, file already loaded

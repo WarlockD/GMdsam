@@ -209,7 +209,15 @@ namespace GameMaker.Writers
 
         public virtual void Write(ILValue v) {
             InsertLineInfo(v);
-            Write(v.ToString());
+            Write(v.ToString()); 
+            if (!(v.Value is string) && v.ValueText != null)
+            {
+                Write(BlockCommentStart);
+                Write(' ');
+                Write(v.ValueText);
+                Write(' ');
+                Write(BlockCommentEnd);
+            }
         }
         public virtual void Write(ILVariable v)
         {
