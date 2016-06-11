@@ -149,12 +149,15 @@ namespace GameMaker.Writers.Lua
             output.WriteLine("_objects[{1}] = new_{0}", obj.Name, obj.Index); // put it in both to make sure we can look it up by both
         }
 
-        protected override void WriteScript(File.Script script, ILBlock block, int arg_count)
+        protected override void WriteScript(ScriptInfo info)
         {
+            var script = info.Script;
+            var block = info.Block;
+
             output.WriteLine("_scripts = _scripts or {}");
             output.WriteLine("-- CodeName: {0} ", script.Name);
             output.Write("function {0}(self", script.Name);
-            for (int i = 0; i < arg_count; i++) output.Write(",argument{0}", i);
+            for (int i = 0; i < info.ArgumentCount; i++) output.Write(",argument{0}", i);
             output.WriteLine(") ");
             output.Write(block);
             output.WriteLine("end");

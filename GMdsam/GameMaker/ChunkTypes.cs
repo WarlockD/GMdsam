@@ -980,6 +980,7 @@ namespace GameMaker
             protected int codePosition;
             [NonSerialized]
             protected ILBlock _block = null; // used 
+            
             public Stream getStream()
             {
                 return new MemoryStream(File.rawData, codePosition, Size, false, false);
@@ -996,7 +997,7 @@ namespace GameMaker
             {
                 get
                 {
-                    if (_block == null)
+                    if (_block == null && Size != 0)
                     {
                         lock (this) // we lock this object cause we need to compile for it
                         {

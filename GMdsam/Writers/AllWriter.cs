@@ -157,7 +157,7 @@ namespace GameMaker.Writers
 
                 });
 
-            }; RunAllSimple("code", "Code", File.Codes);
+            }; 
             actionLookup["fonts"] = () =>
             {
                 RunAllSimple("fonts", "Fonts", File.Fonts);

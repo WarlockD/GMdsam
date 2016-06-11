@@ -10,11 +10,20 @@ using GameMaker.Ast;
 namespace GameMaker
 {
     // nifty https://gist.github.com/DanielSWolf/0ab6a96899cc5377bf54
-    /// <summary>
-    /// An ASCII progress bar
-    /// </summary>
-    public class ProgressBar : IDisposable, IProgress<double>
+    public class ProgressBarPositionalbe : ProgressBar
     {
+
+        protected override void UpdateText(string text)
+        {
+
+        }
+    }
+        /// <summary>
+        /// An ASCII progress bar
+        /// </summary>
+        public class ProgressBar : IDisposable, IProgress<double>
+    {
+        // wierd tangent,
         private const int blockCount = 10;
         private readonly TimeSpan animationInterval = TimeSpan.FromSeconds(1.0 / 8);
         private const string animation = @"|/-\";
@@ -73,7 +82,7 @@ namespace GameMaker
         {
             pause = false;
         }
-        private void UpdateText(string text)
+        protected virtual void UpdateText(string text)
         {
             // Get length of common portion
             int commonPrefixLength = 0;

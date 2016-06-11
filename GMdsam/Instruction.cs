@@ -78,10 +78,10 @@ namespace GameMaker
         Concat, // -- filler for lua or string math
         Array2D,
         Assign,
-        AssignAdd,
-        AssignSub,
-        AssignMul,
-        AssignDiv
+       // AssignAdd,
+    //    AssignSub,
+     //   AssignMul,
+      //  AssignDiv
             // there are more but meh
     }
     public static class GMCodeUtil

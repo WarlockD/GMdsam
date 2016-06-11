@@ -116,13 +116,16 @@ namespace GameMaker.Writers.GameMaker
             output.WriteLine();
         }
 
-        protected override void WriteScript(File.Script script, ILBlock block, int arg_count)
+        protected override void WriteScript(ScriptInfo info)
         {
+            var script = info.Script;
             output.WriteLine("// ScriptName: {0}", script.Name);
             output.WriteLine("// CodeName: {0} ", script.Code.Name);
-            output.WriteLine("// ArgumentCount: {0}", arg_count);
+            output.WriteLine("// ArgumentCount: {0}", info.ArgumentCount);
             output.WriteLine();
-            output.Write(block);
+            WriteLocals(info);
+            output.WriteLine();
+            output.Write(info.Block);
             output.WriteLine(); // extra next line
         }
     }
