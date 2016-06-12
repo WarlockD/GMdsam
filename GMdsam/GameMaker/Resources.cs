@@ -802,5 +802,19 @@ namespace GameMaker
 
 
         }
+        public static byte[] DataWinRaw
+        {
+            get
+            {
+                return rawData;
+            }
+        }
+        public static MemoryStream DataWinStream
+        {
+            get
+            {
+                return new MemoryStream(File.rawData);
+            }
+        }
     }
 }

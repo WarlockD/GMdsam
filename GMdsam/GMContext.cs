@@ -28,6 +28,7 @@ namespace GameMaker
         public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
 
         static public CancellationToken ct;
+        static public bool doAssigmentOffsets = false;
         static public bool doGlobals = true;
         static public bool makeObject = false;
         static public bool doXML = false;

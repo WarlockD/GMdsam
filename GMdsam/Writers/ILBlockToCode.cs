@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GameMaker.Ast;
+using System.Diagnostics;
 
 namespace GameMaker.Writers
 {
@@ -186,6 +187,15 @@ namespace GameMaker.Writers
             {
                 Write(" = "); // default
                 Write(right);
+                if(Context.doAssigmentOffsets&& right.Code == GMCode.Constant)
+                {
+                    ILValue value = right.Operand as ILValue;
+                    if(value != null && value.DataOffset != null)
+                    {
+                        Write(LineComment);
+                        Write(" Constant Offset=0x{0:X8} Size={1}",(int)value.DataOffset,value.ByteSize);
+                    }
+                }
             }
 
         }

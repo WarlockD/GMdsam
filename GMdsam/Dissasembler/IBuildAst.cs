@@ -13,6 +13,7 @@ namespace GameMaker.Dissasembler
 
     public abstract class BuildAst
     {
+        protected int StartingOffset { get; private set; }
         protected ErrorContext Error { get; private set; }
         protected BinaryReader r { get; private set; }
         Dictionary<int, ILLabel> labels = null;
@@ -41,6 +42,7 @@ namespace GameMaker.Dissasembler
             if (!stream.CanRead) throw new ArgumentException("Must be readable", "code_stream");
             if (!stream.CanSeek) throw new ArgumentException("Must be seekable", "code_stream");
             if (stream.Length == 0) return new List<ILNode>(); // empty stream
+            StartingOffset = code.Position;
             Error = error ?? new ErrorContext(code.Name);
             labels = new Dictionary<int, ILLabel>(); // cause they are all the same
             stream.Position = 0;
@@ -98,22 +100,27 @@ namespace GameMaker.Dissasembler
         }
         protected ILValue ReadConstant(GM_Type t)
         {
+            ILValue v = null;
+            int offset = (int)r.BaseStream.Position+StartingOffset;
             switch (t)
             {
-                case GM_Type.Double: return new ILValue(r.ReadDouble());
-                case GM_Type.Float: return new ILValue(r.ReadSingle());
-                case GM_Type.Int: return new ILValue(r.ReadInt32()); // function?
-                case GM_Type.Long: return new ILValue(r.ReadInt64()); // function?
-                case GM_Type.Bool: return new ILValue(r.ReadInt32() != 0);
+                case GM_Type.Double: v= new ILValue(r.ReadDouble()); break;
+                case GM_Type.Float: v= new ILValue(r.ReadSingle()); break;
+                case GM_Type.Int: v= new ILValue(r.ReadInt32()); break;// function?
+                case GM_Type.Long: v= new ILValue(r.ReadInt64()); break;// function?
+                case GM_Type.Bool: v= new ILValue(r.ReadInt32() != 0); break;
                 case GM_Type.String:
                     {
                         int i = r.ReadInt32();
-                        if (i < 0 || i >= File.Strings.Count) return new ILValue("$BADSTRINGVALUE$");
-                        else return new ILValue(File.Strings[i]);
+                        if (i < 0 || i >= File.Strings.Count) v= new ILValue("$BADSTRINGVALUE$");
+                        else v= new ILValue(File.Strings[i]);
                     }
+                    break;
                 default:
                     throw new Exception("Should not get here");
             }
+            if (Context.doAssigmentOffsets) v.DataOffset = offset;
+            return v;
         }
         protected ILExpression CreateExpression(GMCode code,  GM_Type[] types)
         {
@@ -144,7 +151,11 @@ namespace GameMaker.Dissasembler
                     e.Arguments.Add(new ILExpression(GMCode.Var, BuildVar(r.ReadInt32())));
                     break;
                 case GM_Type.Short:
-                    e.Arguments.Add(new ILExpression(GMCode.Constant, new ILValue((short)(CurrentRaw & 0xFFFF))));
+                    {
+                        ILValue v = new ILValue((short)(CurrentRaw & 0xFFFF));
+                        if (Context.doAssigmentOffsets) v.DataOffset = (int)(StartingOffset+r.BaseStream.Position - 4);
+                        e.Arguments.Add(new ILExpression(GMCode.Constant, v));
+                    }
                     break;
                 default:
                     e.Arguments.Add(new ILExpression(GMCode.Constant, ReadConstant(types[0])));

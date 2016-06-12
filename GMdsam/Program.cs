@@ -114,76 +114,76 @@ namespace GameMaker
             Console.WriteLine("All Done!");
             Environment.Exit(0);
         }
+        static int SetPreFlags(string[] args)
+        {
+            for(int i=1;i < args.Length; i++)
+            {
+                string a = args[i];
+                switch (a)
+                {
+                    case "-constOffsets":
+                        Context.doAssigmentOffsets = true;
+                        break;
+                    case "-mask":
+                        Context.saveAllMasks = true;
+                        break;
+                    case "-png":
+                        Context.saveAllPngs = true;
+                        break;
+                    case "-xml":
+                        Context.doXML = true;
+                        break;
+                    case "-json":
+                        Context.doXML = false;
+                        break;
+                    case "-old":
+                        Context.Version = UndertaleVersion.V10000;
+                        break;
+                    case "-debug":
+                        Context.Debug = true;
+                        break;
+                    case "-nothreading":
+                        Context.doThreads = false;
+                        break;
+                    case "-all":
+                        return i;
+                    default:
+                        InstructionError("bad flag '{0}'", a);
+                        return -1; // done
+                }
+            }
+            return -1;
+        }
         static void Main(string[] args)
         {
-            //   TextWriterSaver.RedirectConsole("console.txt");
+           // Context.doThreads = false;
+          //  Context.doXML = true;
+          //  Context.doAssigmentOffsets = true;
+            // ugh have to do it here?
             string dataWinFileName = args.ElementAtOrDefault(0);
             if (string.IsNullOrWhiteSpace(dataWinFileName))
             {
                 InstructionError("Missing data.win file");
             }
+            int pos = SetPreFlags(args);
             try
             {
-            File.LoadDataWin(dataWinFileName);
-            File.LoadEveything();
-            }
-
-            catch (Exception e)
+                File.LoadDataWin(dataWinFileName);
+                File.LoadEveything();
+            } catch (Exception e)
             {
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
-          // Context.doThreads = false;
-            Context.doXML = true;
-            int pos = 1;
-
-            var w = new Writers.AllWriter();
-            while (pos < args.Length)
+            
+            if(pos > 0)
             {
-                switch (args[pos])
+                var w = new Writers.AllWriter();
+                string option = args[pos];
+                switch (option)
                 {
-                    case "-mask":
-                        pos++;
-                        Context.saveAllMasks = true;
-                        break;
-                    case "-png":
-                        pos++;
-                        Context.saveAllPngs = true;
-                        break;
-                    case "-xml":
-                        pos++;
-                        Context.doXML = true;
-                        break;
-                    case "-json":
-                        pos++;
-                        Context.doXML = false;
-                        break;
-                        /* // search disabled for now
-                    case "-s":
-                        {
-                            pos++;
-                            toSearch = args.ElementAtOrDefault(pos);
-                            string option = args.ElementAtOrDefault(pos);
-                            w.Search(toSearch, true);
-                            pos = args.Length;
-                        }
-                        break;
-                        */
-                    case "-old":
-                        pos++;
-                        Context.Version = UndertaleVersion.V10000;
-                        break;
-                    case "-debug":
-                        pos++;
-                        Context.Debug = true;
-                        break;
-                    case "-nothreading":
-                        pos++;
-                        Context.doThreads = false;
-                        break;
                     case "-all":
                         {
-                            pos++;
-                            string option = args.ElementAtOrDefault(pos);
+                            option = args.ElementAtOrDefault(++pos);
                             if (string.IsNullOrWhiteSpace(option) || option.ToLower() == "everything")
                                 w.AddAction("everything");
                             else
@@ -194,20 +194,13 @@ namespace GameMaker
                                     option = args.ElementAtOrDefault(++pos);
                                 } while (!string.IsNullOrWhiteSpace(option));
                             }
-                            w.FinishProcessing();
                         }
-                        pos = args.Length;
-                        break;
-                    case "-lua":
-                        Context.outputType = OutputType.LoveLua;
-                        pos++;
-                        break;
-                    default:
-                        InstructionError("Invalide option '{0}'", args[pos]);
                         break;
                 }
+                w.FinishProcessing();
             }
-            w.FinishProcessing();
+
+           
             GoodExit();
         }
     }

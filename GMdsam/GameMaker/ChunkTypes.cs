@@ -1030,10 +1030,8 @@ namespace GameMaker
         public abstract class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
             public int Size { get; protected set; }
-
+            public int Position { get; protected set; }
             public ILBlock block = null; // cached
-
-            protected int codePosition;
             protected Lazy<ILBlock> _block = null; // used 
             public ILBlock Block { get { return _block.Value; } }
 
@@ -1041,7 +1039,7 @@ namespace GameMaker
             {
                 get
                 {
-                    return new MemoryStream(File.rawData, codePosition, Size, false, false);
+                    return new MemoryStream(File.rawData, Position, Size, false, false);
                 }
             }
             protected abstract ILBlock CreateNewBlock();
@@ -1067,7 +1065,7 @@ namespace GameMaker
                 name = string.Intern(r.ReadStringFromNextOffset());
                 Debug.Assert(!Name.Contains("gotobattle"));
                 Size = r.ReadInt32();
-                codePosition = this.Position + 8;
+                Position = this.Position + 8;
             }
         }
         public class NewCode : Code
@@ -1095,7 +1093,7 @@ namespace GameMaker
                 LocalCount = r.ReadInt16();
                 ArgumentCount = r.ReadInt16();
                 wierd = r.ReadInt32();
-                codePosition = (int) r.BaseStream.Position + wierd - 4;
+                Position = (int) r.BaseStream.Position + wierd - 4;
                 // this kind of some silly  encryption?
                 offset = r.ReadInt32();
             }

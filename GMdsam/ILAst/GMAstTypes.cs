@@ -299,6 +299,7 @@ namespace GameMaker.Ast
 
     public class ILValue : ILNode, IEquatable<ILValue>, IComparable<ILValue>
     {
+        public int? DataOffset = null;
         public override bool hasChildren { get { return false; } }
         public object Value { get; private set; }
         public GM_Type Type { get; private set; }
@@ -311,6 +312,27 @@ namespace GameMaker.Ast
         public ILValue(double i) { this.Value = i; Type = GM_Type.Double; }
         public ILValue(long i) { this.Value = i; Type = GM_Type.Long; }
         public ILValue(short i) { this.Value = (int)i; Type = GM_Type.Short; }
+        public int ByteSize
+        {
+            get
+            {
+                switch (Type)
+                {
+                    case GM_Type.Bool:
+                    case GM_Type.Var:
+                    case GM_Type.String:
+                    case GM_Type.Float:
+                    case GM_Type.Double:
+                        return 4;
+                    case GM_Type.Long:
+                        return 8;
+                    case GM_Type.Short:
+                        return 2;
+                    default:
+                        return -1;
+                }
+            }
+        }
         public ILValue(object o, GM_Type type)
         {
             if (o is short) this.Value = (int)((short)o);
