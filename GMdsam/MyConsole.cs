@@ -61,6 +61,7 @@ namespace GameMaker
             int percent = (int) (currentProgress * 100);
             StringBuilder sb = new StringBuilder();
             if (header_text != null) sb.Append(header_text);
+
             sb.AppendFormat("[{0}{1}] {2,3}% {3}", new string('#', progressBlockCount), new string('-', blockCount - progressBlockCount), percent, animation[animationIndex++ % animation.Length]);
             return sb.ToString();
         }
@@ -275,10 +276,11 @@ namespace GameMaker
                     if (ProgressBar != null) ProgressBar.Pause();
                     Console.WriteLine(o);
                     if (ProgressBar != null) ProgressBar.UnPause();
+                    System.Diagnostics.Debug.WriteLine(o); // just because I don't look at console all the time
                 }
                 fileOutput.WriteLine(o);
 
-                System.Diagnostics.Debug.WriteLine(o); // just because I don't look at console all the time
+                
                 
             }
             
