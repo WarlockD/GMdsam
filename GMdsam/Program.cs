@@ -21,7 +21,6 @@ namespace GameMaker
             StreamWriter redirect;
             TextWriter original;
             bool headerWritten = false;
-            string progress_string = null;
             TextWriterSaver() { }
             public static void ClearConsoleErrorRedirect()
             {

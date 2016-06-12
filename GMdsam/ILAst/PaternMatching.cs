@@ -521,7 +521,6 @@ namespace GameMaker.Ast
         public static bool MatchCaseBlock(this ILBasicBlock bb, out ILExpression caseCondition, out ILLabel caseLabel, out ILLabel nextCase)
         {
             int dupType = 0;
-            ILExpression pushSeq;
             ILExpression btExpresion;
             if (bb.Body.Count == 6 &&
                 bb.Body[0] is ILLabel &&

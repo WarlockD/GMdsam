@@ -214,22 +214,12 @@ namespace GameMaker
                 return DateTime.Now.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
             }
         }
-        class LastNewLineHack // hack ot make sure a new line shows up at the end of the error file
-        {
-            public StreamWriter stream;
-            ~LastNewLineHack()
-            {
-                stream.WriteLine();
-                stream = null;
-            }
-        }
-        static LastNewLineHack meh;
         static ErrorContext()
         {
             FileStream stream = new FileStream(ErrorFileName, FileMode.Append);
             fileOutput = new StreamWriter(stream, Console.Out.Encoding);
+            fileOutput.AutoFlush = true;
             _singleton = new ErrorContext();
-            meh = new LastNewLineHack() { stream = fileOutput };
             _singleton.Info("Error Output Starts");
         }
         static MType printMoreThanThis = MType.Warning;
@@ -284,6 +274,13 @@ namespace GameMaker
                 
             }
             
+        }
+        public void FlushAll()
+        {
+            lock (_singleton)
+            {
+                fileOutput.Flush();
+            }
         }
         public void CheckDebugThenSave(ILBlock block, string filename)
         {
