@@ -14,14 +14,83 @@ namespace GameMaker.Writers
 {
     public abstract class CodeWriter
     {
-        public enum VarType
+        public enum VarOwner
         {
-            BuiltIn = 0,
-            Normal = 1,
-            Array = 2,
-            Array2D = 4
+            Self = 0,
+            Global = 1,
+            BuiltIn = 3,
         }
-        ConcurrentDictionary<string, VarType> locals = new ConcurrentDictionary<string, VarType>();
+        public enum VarType 
+        {
+            Unkonwn=0,
+            Bool, // maybe not used
+            String,
+            Int,
+            Real,
+            SpriteIndex,
+            ObjectIndex,
+        }
+        public class LocalInfo
+        {
+            public string Name;
+            public List<ILVariable> Uses = new List<ILVariable>();
+            public List<ILExpression> assignments = new List<ILExpression>();
+            public VarType Type = VarType.Unkonwn;
+            public VarOwner Owner = VarOwner.Self;
+            public int ArrayDim = 0;
+            public bool Add(ILVariable v, out VarType type)
+            {
+                if (v.Name != Name) throw new ArgumentException("Name must be the same", "v");
+                type = VarType.Unkonwn;
+                if (v.isArray) {
+                    ArrayDim = 1;
+                    if (v.Index.Code == GMCode.Array2D) ArrayDim = 2;
+                } else {
+                    switch (v.Type)
+                    {
+                        case GM_Type.Bool:
+                            type = VarType.Bool;
+                            break;
+                        case GM_Type.Short:
+                        case GM_Type.Int:
+                        case GM_Type.Long:
+                            type = VarType.Int;
+                            break;
+                        case GM_Type.Float:
+                        case GM_Type.Double:
+                            type = VarType.Real;
+                            break;
+                        case GM_Type.String:
+                            type = VarType.String;
+                            break;
+                        case GM_Type.Var:
+                            type = VarType.Unkonwn;
+                            break;
+                        default:
+                            throw new Exception("Shouldn't get here");
+                    }
+                }
+                if (Type == VarType.Unkonwn) Type = type;
+                else if (ArrayDim == 0 && Type != type) return false;
+                lock(Uses) Uses.Add(v);
+                return true;
+            }
+            public LocalInfo(ILVariable v)
+            {
+                this.Name = v.Name;
+                this.Owner = v.isGlobal ? VarOwner.Global : VarOwner.Self;
+                if (Constants.IsDefined(this.Name)) this.Owner |= VarOwner.BuiltIn;
+                
+            }
+            public override string ToString()
+            {
+                string str =  "(" + Type + ")" + Owner + "." + Name;
+                if (ArrayDim == 1) str += "[]";
+                if(ArrayDim == 2) str += "[][]";
+                return str;
+            }
+        }
+        ConcurrentDictionary<string, LocalInfo> locals = new ConcurrentDictionary<string, LocalInfo>();
         Dictionary<string, List<ILExpression>> assignments = new Dictionary<string, List<ILExpression>>();
         Dictionary<string, List<ILCall>> funcCalls = new Dictionary<string, List<ILCall>>();
         ConcurrentDictionary<string, bool> wierdVars = new ConcurrentDictionary<string, bool>();// used to suppress errors on vars
@@ -37,7 +106,7 @@ namespace GameMaker.Writers
         public class CodeInfo
         {
            
-            public Dictionary<string, VarType> Locals;
+            public Dictionary<string, LocalInfo> Locals;
         }
         public class ObjectInfo : CodeInfo
         {
@@ -51,15 +120,7 @@ namespace GameMaker.Writers
             public int ArgumentCount;
             public ILBlock Block;
         }
-        public static VarType GetVarType(ILVariable v)
-        {
-            VarType type;
-            if (v.isArray)
-                type = v.Index.Code == GMCode.Array2D ?  VarType.Array2D : VarType.Array;
-            else
-                type = Constants.IsDefined(v.Name) ? VarType.BuiltIn :  VarType.Normal;
-            return type;
-        }
+        
         public class ActionInfo
         {
             public ILBlock Method;
@@ -96,12 +157,11 @@ namespace GameMaker.Writers
             {
 
                 output.Indent++;
-                WriteLocals("Locals", info.Locals.Where(x => x.Value == VarType.Normal).Select(x => x.Key).OrderBy(x => x).ToList());
-                WriteLocals("Local Arrays", info.Locals.Where(x => x.Value == VarType.Array).Select(x => x.Key).OrderBy(x => x).ToList());
-                WriteLocals("Local 2D Arrays", info.Locals.Where(x => x.Value == VarType.Array2D).Select(x => x.Key).OrderBy(x => x).ToList());
-                WriteLocals("BuiltIn", info.Locals.Where(x => x.Value == VarType.BuiltIn).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("Locals", info.Locals.Where(x => x.Value.ArrayDim == 0 && x.Value.Owner == VarOwner.Self).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("Local Arrays", info.Locals.Where(x => x.Value.ArrayDim > 0 && x.Value.Owner == VarOwner.Self).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("BuiltIn", info.Locals.Where(x => x.Value.Owner == VarOwner.BuiltIn).Select(x => x.Key).OrderBy(x => x).ToList());
 
-                WriteLocals("Both Array AND Normal", info.Locals.Where(x => x.Value.HasFlag(VarType.Normal) && x.Value.HasFlag(VarType.Array)).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("Both Array AND Normal", info.Locals.Where(x => x.Value.ArrayDim > 0 && x.Value.Type != VarType.Unkonwn).Select(x => x.Key).OrderBy(x => x).ToList());
                 output.Indent--;
             }
             WriteObjectUse();
@@ -146,25 +206,36 @@ namespace GameMaker.Writers
             int i = ResourceArgument(File.Sprites, c, index);
             if(i >= 0) writer.spritesUsed.TryAdd(i, File.Sprites[i].Name);
         }
-        static int ResourceArgument<T>(IReadOnlyList<T> list, ILCall c, int index) where T : File.GameMakerStructure, File.INamedResrouce
+        static int ResourceValue<T>(IReadOnlyList<T> list, ILValue v) where T : File.GameMakerStructure, File.INamedResrouce
         {
             int i = -1;
-            if (c.Arguments[index].Code == GMCode.Constant)
+            if(v != null && v.IntValue != null)
             {
-                ILValue v = c.Arguments[index].Operand as ILValue;
-                i = (int) v;
-                if (i >= 0) v.ValueText = list[(int) v].Name;
+                i = (int)v.IntValue;
+                if (i >= 0 && i < list.Count)
+                    v.ValueText = list[(int)v.IntValue].Name;
+                else
+                    v.ValueText = "Range?=" + i.DebugHex();
             }
-            return i;
+            return -1;
+        }
+        static int ResourceArgument<T>(IReadOnlyList<T> list, ILCall c, int index) where T : File.GameMakerStructure, File.INamedResrouce
+        {
+            if (c.Arguments[index].Code == GMCode.Constant)
+                return ResourceValue(list, c.Arguments[index].Operand as ILValue);
+            else
+                return -1;
         }
             static CodeWriter()
         {
             calls["instance_create"] = (CodeWriter writer, ILCall c) => InstanceArgument(writer, c, 2);
             calls["instance_exists"] = (CodeWriter writer, ILCall c) => InstanceArgument(writer, c, 0);
             calls["script_execute"] = (CodeWriter writer, ILCall c) => ResourceArgument(File.Scripts, c, 0);
-
+            calls["snd_play"] = (CodeWriter writer, ILCall c) => ResourceArgument(File.Sounds, c, 0);
             
-            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILCall c) => SpriteArgument(writer, c, 0); 
+            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILCall c) => SpriteArgument(writer, c, 0);
+
+            assigns["sprite_index"] = (CodeWriter writer, ILValue c) => ResourceValue(File.Sprites, c);
             calls["path_start"] = (CodeWriter writer, ILCall c) =>
             {
                 ResourceArgument(File.Paths, c, 0);
@@ -210,17 +281,21 @@ namespace GameMaker.Writers
             {
                 foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>(x => !x.isGlobal))
                 {
-                    var type = GetVarType(v);
-                    locals.AddOrUpdate(v.Name, type,
-                        (key, existingVal) =>
+                    locals.AddOrUpdate(v.Name,
+                        (key) => {
+                            var info = new LocalInfo(v);
+                            v.UserData = info;
+                            return info;
+                            },
+                         (key, existingVal) =>
                         {
-                            if (existingVal != type && !wierdVars.ContainsKey(v.Name)) // Stops the message repeating, atlesat on this object
-                        {
-                                output.Info("Game Bug, Variable '{0}' changes from normal to array", v.Name);
-                                wierdVars.TryAdd(v.Name, true);
+                            v.UserData = existingVal;
+                            VarType type;
+                            if (!existingVal.Add(v, out type))
+                            {
+                                Context.Warning("Meh");
                             }
-                            return existingVal | type;
-
+                            return existingVal;
                         });
                 }
             }
@@ -245,10 +320,12 @@ namespace GameMaker.Writers
                 }
             }
         }
+
         void CheckAllVars()
         {
             foreach (var kv in assignments.Where(x => Constants.IsDefined(x.Key)))
             {
+                // Try to resolve all the v types here
                 Action<CodeWriter, ILValue> action;
                 if (assigns.TryGetValue(kv.Key, out action))
                 {
@@ -271,6 +348,7 @@ namespace GameMaker.Writers
             {
                 AddBlockToLocals(block);
             }
+            block.ClearAndSetAllParents();
             return block;
         }
         public void Write(File.Script script)

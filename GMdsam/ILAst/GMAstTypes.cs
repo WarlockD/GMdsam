@@ -16,7 +16,10 @@ namespace GameMaker.Ast
 {
     public static class NodeOperations
     {
-      
+        public static bool isParent(this ILNode node, GMCode code)
+        {
+            return node != null && node.Parent != null && node.Parent.Match(code);
+        }
         public static bool Append<T>(this StringBuilder sb, T node, int ident) where T : ILNode
         {
             if (node != null) return node.ToStringBuilder(sb, ident);
@@ -97,6 +100,7 @@ namespace GameMaker.Ast
 
     public abstract class ILNode
     {
+        public object UserData = null;
         public abstract bool hasChildren { get; }
         public string Comment = null;
         ILNode _parent = null;

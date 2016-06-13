@@ -130,7 +130,7 @@ namespace GameMaker
         }
         public static string DebugHex(this int i)
         {
-            return string.Format("({0,-8} , {0:X8})", i);
+            return string.Format("{0}(0x{0:X8})", i);
         }
         //static Dictionary<string, int> allConstants = new Dictionary<string, int>();
         //   static Dictionary<string, int> intConstants;
@@ -179,10 +179,18 @@ namespace GameMaker
         {
             public readonly string Name;
             public readonly int ArgumentCount;
+            public readonly GM_Type Type;
             internal GlobalFunctionInfo(string name, int args)
             {
                 this.Name = name;
                 this.ArgumentCount = args;
+                this.Type = GM_Type.NoType;
+            }
+            internal GlobalFunctionInfo(string name, int args, GM_Type type)
+            {
+                this.Name = name;
+                this.ArgumentCount = args;
+                this.Type = type;
             }
         }
         static Dictionary<string, GlobalFunctionInfo> globalFunctions;
@@ -200,9 +208,13 @@ namespace GameMaker
             defined.Add(name);
             globalFunctions.Add(name, new GlobalFunctionInfo(name, args));
         }
-        
 
-        
+        static void AddFunction(string name, int args, GM_Type type)
+        {
+            defined.Add(name);
+            globalFunctions.Add(name, new GlobalFunctionInfo(name, args, type));
+        }
+
         static EventInfo[] eventInfo;
         public static bool EventHasNoNamedSub(int @event, int subEvent)
         {
@@ -369,7 +381,12 @@ namespace GameMaker
         }
 
         // functions that don't screw with the current object
-
+        public static  GM_Type GetFunctionType(string name)
+        {
+            GlobalFunctionInfo info;
+            if (globalFunctions.TryGetValue(name, out info)) return info.Type;
+            else return GM_Type.NoType;
+        }
         static void SetupGlobalFunctions()
         {
             globalFunctions = new Dictionary<string, GlobalFunctionInfo>();
@@ -897,8 +914,8 @@ namespace GameMaker
            AddFunction("rectangle_in_triangle", 10);
            AddFunction("rectangle_in_circle", 7);
            AddFunction("instance_find", 2);
-           AddFunction("instance_exists", 1);
-           AddFunction("instance_number", 1);
+           AddFunction("instance_exists", 1, GM_Type.Int);
+           AddFunction("instance_number", 1, GM_Type.Int);
            AddFunction("instance_position", 3);
            AddFunction("instance_nearest", 3);
            AddFunction("instance_furthest", 3);
@@ -907,7 +924,7 @@ namespace GameMaker
            AddFunction("instance_copy", 1);
            AddFunction("instance_change", 2);
            AddFunction("instance_destroy", 0);
-           AddFunction("instance_sprite", 1);
+           AddFunction("instance_sprite", 1, GM_Type.Int);
            AddFunction("position_empty", 2);
            AddFunction("position_meeting", 3);
            AddFunction("position_destroy", 2);
@@ -1092,7 +1109,7 @@ namespace GameMaker
            AddFunction("sprite_get_texture", 2);
            AddFunction("background_get_texture", 1);
            AddFunction("font_get_texture", 1);
-           AddFunction("texture_exists", 1);
+           AddFunction("texture_exists", 1, GM_Type.Int);
            AddFunction("texture_set_interpolation", 1);
            AddFunction("texture_set_interpolation_ext", 2);
            AddFunction("texture_set_blending", 1);
@@ -1108,10 +1125,10 @@ namespace GameMaker
            AddFunction("draw_set_font", 1);
            AddFunction("draw_set_halign", 1);
            AddFunction("draw_set_valign", 1);
-           AddFunction("string_width", 1);
-           AddFunction("string_height", 1);
-           AddFunction("string_width_ext", 3);
-           AddFunction("string_height_ext", 3);
+           AddFunction("string_width", 1, GM_Type.Int);
+           AddFunction("string_height", 1, GM_Type.Int);
+           AddFunction("string_width_ext", 3, GM_Type.Int);
+           AddFunction("string_height_ext", 3, GM_Type.Int);
            AddFunction("draw_text", 3);
            AddFunction("draw_text_ext", 5);
            AddFunction("draw_text_transformed", 6);
@@ -1349,45 +1366,45 @@ namespace GameMaker
            AddFunction("random_set_seed", 1);
            AddFunction("random_get_seed", 0);
            AddFunction("randomize", 0);
-           AddFunction("abs", 1);
-           AddFunction("round", 1);
-           AddFunction("floor", 1);
-           AddFunction("ceil", 1);
+           AddFunction("abs", 1, GM_Type.Int);
+           AddFunction("round", 1, GM_Type.Double);
+           AddFunction("floor", 1, GM_Type.Double);
+           AddFunction("ceil", 1, GM_Type.Double);
            AddFunction("sign", 1);
-           AddFunction("frac", 1);
-           AddFunction("sqrt", 1);
-           AddFunction("sqr", 1);
-           AddFunction("exp", 1);
-           AddFunction("ln", 1);
-           AddFunction("log2", 1);
-           AddFunction("log10", 1);
-           AddFunction("sin", 1);
-           AddFunction("cos", 1);
-           AddFunction("tan", 1);
-           AddFunction("arcsin", 1);
-           AddFunction("arccos", 1);
-           AddFunction("arctan", 1);
-           AddFunction("arctan2", 2);
-           AddFunction("dsin", 1);
-           AddFunction("dcos", 1);
-           AddFunction("dtan", 1);
-           AddFunction("darcsin", 1);
-           AddFunction("darccos", 1);
-           AddFunction("darctan", 1);
-           AddFunction("darctan2", 2);
-           AddFunction("degtorad", 1);
-           AddFunction("radtodeg", 1);
-           AddFunction("power", 2);
-           AddFunction("logn", 2);
-           AddFunction("min", -1);
-           AddFunction("max", -1);
-           AddFunction("min3", 3);
-           AddFunction("max3", 3);
-           AddFunction("mean", -1);
-           AddFunction("median", -1);
-           AddFunction("choose", -1);
-           AddFunction("clamp", 3);
-           AddFunction("lerp", 3);
+           AddFunction("frac", 1, GM_Type.Double);
+           AddFunction("sqrt", 1, GM_Type.Double);
+           AddFunction("sqr", 1, GM_Type.Double);
+           AddFunction("exp", 1, GM_Type.Double);
+           AddFunction("ln", 1, GM_Type.Double);
+           AddFunction("log2", 1, GM_Type.Double);
+           AddFunction("log10", 1, GM_Type.Double);
+           AddFunction("sin", 1, GM_Type.Double);
+           AddFunction("cos", 1, GM_Type.Double);
+           AddFunction("tan", 1, GM_Type.Double);
+           AddFunction("arcsin", 1, GM_Type.Double);
+           AddFunction("arccos", 1, GM_Type.Double);
+           AddFunction("arctan", 1, GM_Type.Double);
+           AddFunction("arctan2", 2, GM_Type.Double);
+           AddFunction("dsin", 1, GM_Type.Double);
+           AddFunction("dcos", 1, GM_Type.Double);
+           AddFunction("dtan", 1, GM_Type.Double);
+           AddFunction("darcsin", 1, GM_Type.Double);
+           AddFunction("darccos", 1, GM_Type.Double);
+           AddFunction("darctan", 1, GM_Type.Double);
+           AddFunction("darctan2", 2, GM_Type.Double);
+           AddFunction("degtorad", 1, GM_Type.Double);
+           AddFunction("radtodeg", 1, GM_Type.Double);
+           AddFunction("power", 2, GM_Type.Double);
+           AddFunction("logn", 2, GM_Type.Double);
+           AddFunction("min", -1, GM_Type.Double);
+           AddFunction("max", -1, GM_Type.Double);
+           AddFunction("min3", 3, GM_Type.Double);
+           AddFunction("max3", 3, GM_Type.Double);
+           AddFunction("mean", -1, GM_Type.Double);
+           AddFunction("median", -1, GM_Type.Double);
+           AddFunction("choose", -1, GM_Type.Double);
+           AddFunction("clamp", 3, GM_Type.Double);
+           AddFunction("lerp", 3, GM_Type.Double);
            AddFunction("dot_product", 4);
            AddFunction("dot_product_3d", 6);
            AddFunction("dot_product_normalised", 4);
@@ -1395,16 +1412,16 @@ namespace GameMaker
            AddFunction("math_set_epsilon", 1);
            AddFunction("math_get_epsilon", 0);
            AddFunction("angle_difference", 2);
-           AddFunction("real", 1);
-           AddFunction("string", 1);
+           AddFunction("real", 1, GM_Type.Double);
+           AddFunction("string", 1, GM_Type.String);
            AddFunction("int64", 1);
            AddFunction("ptr", 1);
            AddFunction("string_format", 3);
            AddFunction("chr", 1);
            AddFunction("ansi_char", 1);
            AddFunction("ord", 1);
-           AddFunction("string_length", 1);
-           AddFunction("string_byte_length", 1);
+           AddFunction("string_length", 1,GM_Type.Int);
+           AddFunction("string_byte_length", 1, GM_Type.Int);
            AddFunction("string_pos", 2);
            AddFunction("string_copy", 3);
            AddFunction("string_char_at", 2);
