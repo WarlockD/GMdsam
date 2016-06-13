@@ -25,9 +25,63 @@ namespace GameMaker
         Bool,
         Var,
         String,
-        Instance,
         Short = 15, // This is usally short anyway
+        Instance,
+        Sprite,
+        Sound, 
+        Path,
         NoType,
+    }
+    public static class GM_TypeExtensions
+    {
+        public static bool isReal(this GM_Type t) { return t == GM_Type.Double || t == GM_Type.Float;  }
+        public static bool isInstance(this GM_Type t) { return t == GM_Type.Instance || t == GM_Type.Sprite || t == GM_Type.Sound || t == GM_Type.Path; }
+        public static bool canBeInstance(this GM_Type t) { return t == GM_Type.Int || t == GM_Type.Short || t.isInstance(); }
+        public static bool isInteger(this GM_Type t) { return t == GM_Type.Int || t == GM_Type.Long || t == GM_Type.Short; }
+        public static bool isNumber(this GM_Type t) { return t.isReal() || t.isInteger() || !t.isInstance(); }
+
+        // This is the top dog, you can't convert this downward without a function or some cast
+        public static bool isBestVar(this GM_Type t) { return t.isInstance() || t == GM_Type.String || t == GM_Type.Double || t == GM_Type.Bool; }
+        public static GM_Type ConvertType(this GM_Type t0, GM_Type t1)
+        {
+            if (t0 == t1) return t0;
+            if (t1 == GM_Type.Bool) return t1; // bool ALWAYS overrides
+            if (t1.isBestVar()) return t1;
+            if (t0.isBestVar()) return t0;
+            switch (t0)
+            {
+                case GM_Type.Var:
+                    return t1; // Vars are general variables so we don't want that
+                case GM_Type.String:
+                case GM_Type.Bool:
+                    return t0; // bool ALWAYS overrides eveything
+                case GM_Type.Short:
+                case GM_Type.NoType:
+                    return t1; // whatever t1 is its better
+                case GM_Type.Double:
+                    Debug.Assert(!t1.isInstance());
+                    if (t1.isNumber()) return t0; // we can convert
+                    else if (t1.isInstance() || t1 == GM_Type.String) return t1; // instance is MUCH better than double, more important
+                    return t0;
+                case GM_Type.Sound:
+                case GM_Type.Instance:
+                case GM_Type.Sprite:
+                    if (t1 == GM_Type.Int || t1 == GM_Type.Short) return t0; // we can be an instance
+                    throw new Exception("Cannot convert this type to this");
+                case GM_Type.Int:
+                    if (t1 == GM_Type.Long || t1 == GM_Type.Float || t1 == GM_Type.Double || t1 == GM_Type.Instance || t1 == GM_Type.Sprite) return t1;
+                    else return t0;
+                case GM_Type.Long:
+                    if (t1 == GM_Type.Double) return t1;
+                    else return t0;
+                case GM_Type.Float:
+                    if (t1 == GM_Type.Double) return t1;
+                    else return t0;
+                default:
+                    throw new Exception("Canot get here");
+            }
+        }
+
     }
     public enum GMCode : int
     {

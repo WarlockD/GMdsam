@@ -89,14 +89,18 @@ namespace GameMaker.Dissasembler
             else if ((topByte & 160) == 0) types = new GM_Type[] { (GM_Type)(secondTopByte & 15), (GM_Type)((secondTopByte >> 4) & 15) };
             return types;
         }
+     
         protected ILVariable BuildVar(int operand)
         {
             int extra = (short)(CurrentRaw & 0xFFFF);
+            ILVariable v = null;
             // int loadtype = operand >> 24;
             if (extra != 0) // never see simple vars that are arrays
-                return new ILVariable(Context.LookupString(operand & 0x1FFFFF), extra);// simple var
+                v= new ILVariable(Context.LookupString(operand & 0x1FFFFF), extra);// simple var
             else
-                return new ILVariable(Context.LookupString(operand & 0x1FFFFF), extra,  operand >= 0);// standard for eveyone
+                v= new ILVariable(Context.LookupString(operand & 0x1FFFFF), extra,  operand >= 0);// standard for eveyone
+            Constants.FixAndCheckVarType(v);
+            return v;
         }
         protected ILValue ReadConstant(GM_Type t)
         {

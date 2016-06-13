@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GameMaker.Ast;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -84,7 +85,7 @@ namespace GameMaker
         {
             StringBuilder sb = new StringBuilder(50);
             sb.Append('"');
-            foreach (var c in s) sb.Append(JISONEscapeString(c));
+            foreach (var c in s) if (c == '\'') sb.Append(c); else  sb.Append(JISONEscapeString(c));
             sb.Append('"');
             return sb.ToString();
         }
@@ -167,12 +168,22 @@ namespace GameMaker
             public readonly bool CanRead;
             public readonly bool CanWrite;
             public readonly bool Global;
+            public readonly GM_Type Type;
             internal PropertyInfo(string name, bool canRead, bool canWrite, bool global)
             {
                 this.Name = name;
                 this.CanRead = canRead;
                 this.CanWrite = canWrite;
                 this.Global = global;
+                this.Type = GM_Type.Int;
+            }
+            internal PropertyInfo(string name, bool canRead, bool canWrite, bool global, GM_Type type)
+            {
+                this.Name = name;
+                this.CanRead = canRead;
+                this.CanWrite = canWrite;
+                this.Global = global;
+                this.Type = type;
             }
         }
         public class GlobalFunctionInfo
@@ -199,9 +210,31 @@ namespace GameMaker
         public static IReadOnlyDictionary<string, GlobalFunctionInfo> GlobalFunctions { get { return globalFunctions; } }
         static public IReadOnlyDictionary<string, PropertyInfo> Properties { get { return allProperties; } }
         public static bool IsDefined(string name) { return defined.Contains(name); }
+
+        // Trys to guess what the final type will be because of size
+      
+        public static bool FixAndCheckVarType(ILVariable v)
+        {
+            if (v.Type != GM_Type.NoType) return true;
+            if (v.isResolved)
+            {
+                if (Constants.IsDefined(v.Name))
+                {
+                    v.Type = Constants.Properties[v.Name].Type;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         static void AddProperty(string name, bool canRead, bool canWrite, bool global) {
             defined.Add(name);
             allProperties.Add(name, new PropertyInfo(name, canRead, canWrite, global));
+        }
+        static void AddProperty(string name, bool canRead, bool canWrite, bool global,GM_Type type)
+        {
+            defined.Add(name);
+            allProperties.Add(name, new PropertyInfo(name, canRead, canWrite, global,type));
         }
         static void AddFunction(string name, int args)
         {
@@ -381,11 +414,35 @@ namespace GameMaker
         }
 
         // functions that don't screw with the current object
-        public static  GM_Type GetFunctionType(string name)
+        public static GM_Type GetFunctionType(string name, ErrorContext error=null)
         {
-            GlobalFunctionInfo info;
-            if (globalFunctions.TryGetValue(name, out info)) return info.Type;
-            else return GM_Type.NoType;
+            if (error == null) error = ErrorContext.Out;
+            GM_Type t = GM_Type.NoType;
+             GlobalFunctionInfo info;
+            if (globalFunctions.TryGetValue(name, out info))
+            {
+                t = info.Type;
+                if (t == GM_Type.NoType)
+                {
+                    error.Error("Don't know the type of builtin function '{0}', defaulting to int", name);
+                    t = GM_Type.Int;
+                }
+                return t;
+            }
+            // Not found, ok lets try a script
+            File.Script script;
+            if (File.TryLookup(name, out script))
+            {
+                t = script.ReturnType;
+                if (t == GM_Type.NoType)
+                {
+                    error.Error("Don't know the type of user function '{0}', defaulting to int", name);
+                    t = GM_Type.Int;
+                }
+                AddFunction(name, script.ArgumentCount, t);
+                return t;
+            }
+            return GM_Type.NoType;
         }
         static void SetupGlobalFunctions()
         {
@@ -781,13 +838,13 @@ namespace GameMaker
            AddFunction("file_bin_seek", 2);
            AddFunction("file_bin_read_byte", 1);
            AddFunction("file_bin_write_byte", 2);
-           AddFunction("file_text_open_from_string", 1);
-           AddFunction("file_text_open_read", 1);
-           AddFunction("file_text_open_write", 1);
-           AddFunction("file_text_open_append", 1);
+           AddFunction("file_text_open_from_string", 1, GM_Type.Int);
+           AddFunction("file_text_open_read", 1, GM_Type.Int);
+           AddFunction("file_text_open_write", 1, GM_Type.Int);
+           AddFunction("file_text_open_append", 1, GM_Type.Int);
            AddFunction("file_text_close", 1);
-           AddFunction("file_text_read_string", 1);
-           AddFunction("file_text_read_real", 1);
+           AddFunction("file_text_read_string", 1, GM_Type.String);
+           AddFunction("file_text_read_real", 1, GM_Type.Float);
            AddFunction("file_text_readln", 1);
            AddFunction("file_text_eof", 1);
            AddFunction("file_text_eoln", 1);
@@ -798,14 +855,14 @@ namespace GameMaker
            AddFunction("file_open_write", 1);
            AddFunction("file_open_append", 1);
            AddFunction("file_close", 0);
-           AddFunction("file_read_string", 0);
-           AddFunction("file_read_real", 0);
+           AddFunction("file_read_string", 0, GM_Type.String);
+           AddFunction("file_read_real", 0, GM_Type.Float);
            AddFunction("file_readln", 0);
            AddFunction("file_eof", 0);
            AddFunction("file_write_string", 1);
            AddFunction("file_write_real", 1);
            AddFunction("file_writeln", 0);
-           AddFunction("file_exists", 1);
+           AddFunction("file_exists", 1, GM_Type.Bool);
            AddFunction("file_delete", 1);
            AddFunction("file_rename", 2);
            AddFunction("file_copy", 2);
@@ -841,11 +898,11 @@ namespace GameMaker
            AddFunction("registry_read_real_ext", 2);
            AddFunction("registry_exists_ext", 2);
            AddFunction("registry_set_root", 1);
-           AddFunction("ini_open_from_string", 1);
-           AddFunction("ini_open", 1);
+           AddFunction("ini_open_from_string", 1, GM_Type.Int);
+           AddFunction("ini_open", 1,GM_Type.Int);
            AddFunction("ini_close", 0);
-           AddFunction("ini_read_string", 3);
-           AddFunction("ini_read_real", 3);
+           AddFunction("ini_read_string", 3, GM_Type.String);
+           AddFunction("ini_read_real", 3, GM_Type.Float);
            AddFunction("ini_write_string", 3);
            AddFunction("ini_write_real", 3);
            AddFunction("ini_key_exists", 2);
@@ -877,8 +934,8 @@ namespace GameMaker
            AddFunction("move_wrap", 3);
            AddFunction("motion_set", 2);
            AddFunction("motion_add", 2);
-           AddFunction("distance_to_point", 2);
-           AddFunction("distance_to_object", 1);
+           AddFunction("distance_to_point", 2, GM_Type.Float);
+           AddFunction("distance_to_object", 1, GM_Type.Float);
            AddFunction("path_start", 4);
            AddFunction("path_end", 0);
            AddFunction("mp_linear_step", 4);
@@ -902,29 +959,29 @@ namespace GameMaker
            AddFunction("mp_grid_path", 7);
            AddFunction("mp_grid_draw", 1);
            AddFunction("mp_grid_to_ds_grid", 2);
-           AddFunction("collision_point", 5);
-           AddFunction("collision_rectangle", 7);
+           AddFunction("collision_point", 5, GM_Type.Instance);
+           AddFunction("collision_rectangle", 7,GM_Type.Instance);
            AddFunction("collision_circle", 6);
            AddFunction("collision_ellipse", 7);
-           AddFunction("collision_line", 7);
+           AddFunction("collision_line", 7, GM_Type.Instance);
            AddFunction("point_in_rectangle", 6);
            AddFunction("point_in_triangle", 8);
            AddFunction("point_in_circle", 5);
            AddFunction("rectangle_in_rectangle", 8);
            AddFunction("rectangle_in_triangle", 10);
            AddFunction("rectangle_in_circle", 7);
-           AddFunction("instance_find", 2);
-           AddFunction("instance_exists", 1, GM_Type.Int);
+           AddFunction("instance_find", 2, GM_Type.Instance);
+           AddFunction("instance_exists", 1, GM_Type.Bool);
            AddFunction("instance_number", 1, GM_Type.Int);
-           AddFunction("instance_position", 3);
+           AddFunction("instance_position", 3, GM_Type.Instance);
            AddFunction("instance_nearest", 3);
            AddFunction("instance_furthest", 3);
            AddFunction("instance_place", 3);
-           AddFunction("instance_create", 3);
+           AddFunction("instance_create", 3, GM_Type.Instance);
            AddFunction("instance_copy", 1);
            AddFunction("instance_change", 2);
            AddFunction("instance_destroy", 0);
-           AddFunction("instance_sprite", 1, GM_Type.Int);
+           AddFunction("instance_sprite", 1, GM_Type.Sprite);
            AddFunction("position_empty", 2);
            AddFunction("position_meeting", 3);
            AddFunction("position_destroy", 2);
@@ -998,10 +1055,10 @@ namespace GameMaker
            AddFunction("window_set_rectangle", 4);
            AddFunction("window_center", 0);
            AddFunction("window_default", 0);
-           AddFunction("window_get_x", 0);
-           AddFunction("window_get_y", 0);
-           AddFunction("window_get_width", 0);
-           AddFunction("window_get_height", 0);
+           AddFunction("window_get_x", 0, GM_Type.Int);
+           AddFunction("window_get_y", 0, GM_Type.Int);
+           AddFunction("window_get_width", 0, GM_Type.Int);
+           AddFunction("window_get_height", 0, GM_Type.Int);
            AddFunction("window_set_region_size", 3);
            AddFunction("window_get_region_width", 0);
            AddFunction("window_get_region_height", 0);
@@ -1032,26 +1089,26 @@ namespace GameMaker
            AddFunction("draw_get_color", 0);
            AddFunction("draw_get_colour", 0);
            AddFunction("draw_get_alpha", 0);
-           AddFunction("merge_color", 3);
-           AddFunction("make_color", 3);
-           AddFunction("make_color_rgb", 3);
-           AddFunction("make_color_hsv", 3);
-           AddFunction("color_get_red", 1);
-           AddFunction("color_get_green", 1);
-           AddFunction("color_get_blue", 1);
-           AddFunction("color_get_hue", 1);
-           AddFunction("color_get_saturation", 1);
-           AddFunction("color_get_value", 1);
-           AddFunction("merge_colour", 3);
-           AddFunction("make_colour", 3);
-           AddFunction("make_colour_rgb", 3);
-           AddFunction("make_colour_hsv", 3);
-           AddFunction("colour_get_red", 1);
-           AddFunction("colour_get_green", 1);
-           AddFunction("colour_get_blue", 1);
-           AddFunction("colour_get_hue", 1);
-           AddFunction("colour_get_saturation", 1);
-           AddFunction("colour_get_value", 1);
+           AddFunction("merge_color", 3, GM_Type.Int);
+           AddFunction("make_color", 3, GM_Type.Int);
+           AddFunction("make_color_rgb", 3, GM_Type.Int);
+           AddFunction("make_color_hsv", 3, GM_Type.Int);
+           AddFunction("color_get_red", 1, GM_Type.Int);
+           AddFunction("color_get_green", 1, GM_Type.Int);
+           AddFunction("color_get_blue", 1, GM_Type.Int);
+           AddFunction("color_get_hue", 1, GM_Type.Int);
+           AddFunction("color_get_saturation", 1, GM_Type.Int);
+           AddFunction("color_get_value", 1, GM_Type.Int);
+           AddFunction("merge_colour", 3, GM_Type.Int);
+           AddFunction("make_colour", 3, GM_Type.Int);
+           AddFunction("make_colour_rgb", 3, GM_Type.Int);
+           AddFunction("make_colour_hsv", 3, GM_Type.Int);
+           AddFunction("colour_get_red", 1, GM_Type.Int);
+           AddFunction("colour_get_green", 1, GM_Type.Int);
+           AddFunction("colour_get_blue", 1, GM_Type.Int);
+           AddFunction("colour_get_hue", 1, GM_Type.Int);
+           AddFunction("colour_get_saturation", 1, GM_Type.Int);
+           AddFunction("colour_get_value", 1, GM_Type.Int);
            AddFunction("draw_set_blend_mode", 1);
            AddFunction("draw_set_blend_mode_ext", 2);
            AddFunction("draw_set_color_write_enable", 4);
@@ -1308,29 +1365,29 @@ namespace GameMaker
            AddFunction("keyboard_set_map", 2);
            AddFunction("keyboard_get_map", 1);
            AddFunction("keyboard_unset_map", 0);
-           AddFunction("keyboard_check", 1);
-           AddFunction("keyboard_check_pressed", 1);
-           AddFunction("keyboard_check_released", 1);
-           AddFunction("keyboard_check_direct", 1);
+           AddFunction("keyboard_check", 1, GM_Type.Int);
+           AddFunction("keyboard_check_pressed", 1, GM_Type.Bool);
+           AddFunction("keyboard_check_released", 1, GM_Type.Bool);
+           AddFunction("keyboard_check_direct", 1, GM_Type.Int);
            AddFunction("mouse_check_button", 1);
            AddFunction("mouse_check_button_pressed", 1);
            AddFunction("mouse_check_button_released", 1);
            AddFunction("mouse_wheel_up", 0);
            AddFunction("mouse_wheel_down", 0);
            AddFunction("joystick_exists", 1);
-           AddFunction("joystick_direction", 1);
+           AddFunction("joystick_direction", 1, GM_Type.Int);
            AddFunction("joystick_name", 1);
            AddFunction("joystick_axes", 1);
            AddFunction("joystick_buttons", 1);
            AddFunction("joystick_has_pov", 1);
-           AddFunction("joystick_check_button", 2);
-           AddFunction("joystick_xpos", 1);
-           AddFunction("joystick_ypos", 1);
-           AddFunction("joystick_zpos", 1);
-           AddFunction("joystick_rpos", 1);
-           AddFunction("joystick_upos", 1);
-           AddFunction("joystick_vpos", 1);
-           AddFunction("joystick_pov", 1);
+           AddFunction("joystick_check_button", 2, GM_Type.Bool);
+           AddFunction("joystick_xpos", 1, GM_Type.Float);
+           AddFunction("joystick_ypos", 1,GM_Type.Float);
+           AddFunction("joystick_zpos", 1, GM_Type.Float);
+           AddFunction("joystick_rpos", 1, GM_Type.Float);
+           AddFunction("joystick_upos", 1, GM_Type.Float);
+           AddFunction("joystick_vpos", 1, GM_Type.Float);
+           AddFunction("joystick_pov", 1, GM_Type.Int);
            AddFunction("keyboard_clear", 1);
            AddFunction("mouse_clear", 1);
            AddFunction("io_clear", 0);
@@ -1359,7 +1416,7 @@ namespace GameMaker
            AddFunction("array_set_2D_pre", 4);
            AddFunction("array_set_2D_post", 4);
            AddFunction("array_get_2D", 3);
-           AddFunction("random", 1);
+           AddFunction("random", 1, GM_Type.Float);
            AddFunction("random_range", 2);
            AddFunction("irandom", 1);
            AddFunction("irandom_range", 2);
@@ -1419,19 +1476,19 @@ namespace GameMaker
            AddFunction("string_format", 3);
            AddFunction("chr", 1);
            AddFunction("ansi_char", 1);
-           AddFunction("ord", 1);
+           AddFunction("ord", 1, GM_Type.Int);
            AddFunction("string_length", 1,GM_Type.Int);
            AddFunction("string_byte_length", 1, GM_Type.Int);
            AddFunction("string_pos", 2);
            AddFunction("string_copy", 3);
-           AddFunction("string_char_at", 2);
+           AddFunction("string_char_at", 2, GM_Type.String);
            AddFunction("string_ord_at", 2);
            AddFunction("string_byte_at", 2);
            AddFunction("string_set_byte_at", 3);
            AddFunction("string_delete", 3);
            AddFunction("string_insert", 3);
-           AddFunction("string_lower", 1);
-           AddFunction("string_upper", 1);
+           AddFunction("string_lower", 1, GM_Type.String);
+           AddFunction("string_upper", 1, GM_Type.String);
            AddFunction("string_repeat", 2);
            AddFunction("string_letters", 1);
            AddFunction("string_digits", 1);
@@ -1439,11 +1496,11 @@ namespace GameMaker
            AddFunction("string_replace", 3);
            AddFunction("string_replace_all", 3);
            AddFunction("string_count", 2);
-           AddFunction("point_distance", 4);
-           AddFunction("point_distance_3d", 6);
-           AddFunction("point_direction", 4);
-           AddFunction("lengthdir_x", 2);
-           AddFunction("lengthdir_y", 2);
+           AddFunction("point_distance", 4, GM_Type.Float);
+           AddFunction("point_distance_3d", 6, GM_Type.Float);
+           AddFunction("point_direction", 4, GM_Type.Float);
+           AddFunction("lengthdir_x", 2, GM_Type.Float);
+           AddFunction("lengthdir_y", 2, GM_Type.Float);
            AddFunction("event_inherited", 0);
            AddFunction("event_perform", 2);
            AddFunction("event_user", 1);
@@ -1632,22 +1689,22 @@ namespace GameMaker
            AddFunction("effect_create_above", 5);
            AddFunction("effect_clear", 0);
            AddFunction("sprite_name", 1);
-           AddFunction("sprite_exists", 1);
-           AddFunction("sprite_get_name", 1);
-           AddFunction("sprite_get_number", 1);
-           AddFunction("sprite_get_width", 1);
-           AddFunction("sprite_get_height", 1);
-           AddFunction("sprite_get_transparent", 1);
-           AddFunction("sprite_get_smooth", 1);
-           AddFunction("sprite_get_preload", 1);
-           AddFunction("sprite_get_xoffset", 1);
-           AddFunction("sprite_get_yoffset", 1);
-           AddFunction("sprite_get_bbox_mode", 1);
-           AddFunction("sprite_get_bbox_left", 1);
-           AddFunction("sprite_get_bbox_right", 1);
-           AddFunction("sprite_get_bbox_top", 1);
-           AddFunction("sprite_get_bbox_bottom", 1);
-           AddFunction("sprite_get_precise", 1);
+           AddFunction("sprite_exists", 1,GM_Type.Bool);
+           AddFunction("sprite_get_name", 1, GM_Type.String);
+           AddFunction("sprite_get_number", 1, GM_Type.Int);
+           AddFunction("sprite_get_width", 1, GM_Type.Int);
+           AddFunction("sprite_get_height", 1, GM_Type.Int);
+           AddFunction("sprite_get_transparent", 1, GM_Type.Bool);
+           AddFunction("sprite_get_smooth", 1, GM_Type.Bool);
+           AddFunction("sprite_get_preload", 1, GM_Type.Bool);
+           AddFunction("sprite_get_xoffset", 1, GM_Type.Int);
+           AddFunction("sprite_get_yoffset", 1, GM_Type.Int);
+           AddFunction("sprite_get_bbox_mode", 1, GM_Type.Int);
+           AddFunction("sprite_get_bbox_left", 1, GM_Type.Int);
+           AddFunction("sprite_get_bbox_right", 1, GM_Type.Int);
+           AddFunction("sprite_get_bbox_top", 1, GM_Type.Int);
+           AddFunction("sprite_get_bbox_bottom", 1, GM_Type.Int);
+           AddFunction("sprite_get_precise", 1, GM_Type.Bool);
            AddFunction("sprite_collision_mask", 9);
            AddFunction("sprite_get_tpe", 2);
            AddFunction("sprite_set_offset", 3);
@@ -1712,9 +1769,9 @@ namespace GameMaker
            AddFunction("audio_emitter_velocity", 4);
            AddFunction("audio_emitter_falloff", 4);
            AddFunction("audio_emitter_gain", 2);
-           AddFunction("audio_play_sound", 3);
-           AddFunction("audio_play_sound_on", 4);
-           AddFunction("audio_play_sound_at", 9);
+           AddFunction("audio_play_sound", 3, GM_Type.Sound);
+           AddFunction("audio_play_sound_on", 4, GM_Type.Sound);
+           AddFunction("audio_play_sound_at", 9, GM_Type.Sound);
            AddFunction("audio_stop_sound", 1);
            AddFunction("audio_resume_sound", 1);
            AddFunction("audio_pause_sound", 1);
@@ -1764,7 +1821,7 @@ namespace GameMaker
            AddFunction("audio_sound_get_pitch", 1);
            AddFunction("audio_get_name", 1);
            AddFunction("audio_sound_set_track_position", 2);
-           AddFunction("audio_sound_get_track_position", 1);
+           AddFunction("audio_sound_get_track_position", 1, GM_Type.Float);
            AddFunction("audio_group_load", 1);
            AddFunction("audio_group_unload", 1);
            AddFunction("audio_group_is_loaded", 1);
@@ -2366,7 +2423,7 @@ namespace GameMaker
            AddFunction("steam_file_write_file", 2);
            AddFunction("steam_file_read", 1);
            AddFunction("steam_file_delete", 1);
-           AddFunction("steam_file_exists", 1);
+           AddFunction("steam_file_exists", 1, GM_Type.Bool);
            AddFunction("steam_file_size", 1);
            AddFunction("steam_file_share", 1);
            AddFunction("steam_publish_workshop_file", 4);
@@ -2564,6 +2621,12 @@ namespace GameMaker
            AddFunction("xboxone_chat_remove_user_from_channel", 2);
            AddFunction("xboxone_chat_set_muted", 2);
            AddFunction("browser_input_capture", 1);
+            // extra stuff
+
+            AddFunction("caster_load", 1, GM_Type.Sound);
+            AddFunction("scr_marker", 2, GM_Type.Instance);
+            AddFunction("caster_loop", 2, GM_Type.Sound);
+
         }
        
       
@@ -2712,7 +2775,7 @@ namespace GameMaker
             AddProperty("friction", true, true, true);
             AddProperty("gravity", true, true, true);
             AddProperty("gravity_direction", true, true, true);
-            AddProperty("object_index", true, false, true);
+            AddProperty("object_index", true, false, true, GM_Type.Instance);
             AddProperty("id", true, false, true);
             AddProperty("alarm", true, true, true);
             AddProperty("solid", true, true, true);
@@ -2723,7 +2786,7 @@ namespace GameMaker
             AddProperty("bbox_right", true, false, true);
             AddProperty("bbox_top", true, false, true);
             AddProperty("bbox_bottom", true, false, true);
-            AddProperty("sprite_index", true, true, true);
+            AddProperty("sprite_index", true, true, true, GM_Type.Sprite);
             AddProperty("image_index", true, true, true);
             AddProperty("image_single", true, true, true);
             AddProperty("image_number", true, false, true);
@@ -2778,6 +2841,7 @@ namespace GameMaker
             AddProperty("phy_collision_y", true, false, true);
             AddProperty("phy_col_normal_x", true, false, true);
             AddProperty("phy_col_normal_y", true, false, true);
+           
         }
         static Constants()
         {

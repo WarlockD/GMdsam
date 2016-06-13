@@ -263,64 +263,52 @@ namespace GameMaker.Ast
             }
             return false;
         }
-        // Trys to guess what the final type will be because of size
-        GM_Type BetterType(GM_Type t0, GM_Type t1)
-        {
-            if (t0 == t1) return t0;
-            if (t0 == GM_Type.Bool) t0 = GM_Type.Short;
-            if (t1 == GM_Type.Bool) t1 = GM_Type.Short; // ignore bools for right now
-            if (t0 == GM_Type.NoType || t0 == GM_Type.Short || t1 == GM_Type.Double || t1 == GM_Type.String) return t1;
-            if (t1 == GM_Type.NoType || t1 == GM_Type.Short || t0 == GM_Type.Double || t0 == GM_Type.String) return t0;
-            switch (t0)
-            {
-                case GM_Type.Int:
-                    if (t1 == GM_Type.Long || t1 == GM_Type.Float || t1 == GM_Type.Double) return t1;
-                    else return t0;
-                case GM_Type.Long:
-                    if( t1 == GM_Type.Double) return t1;
-                    else return t0;
-                case GM_Type.Float:
-                    if (t1 == GM_Type.Int || t1 == GM_Type.Double) return t1;
-                    else return t0;
-                default:
-                    throw new Exception("Canot get here");
-            }
-        }
+      
         bool ResolveVarAssigmentType(List<ILNode> nodes, ILExpression expr, int pos)
         {
             if (!expr.Match(GMCode.Assign)) return false;
             ILVariable v = expr.Operand as ILVariable;
-            if (v.Type != GM_Type.NoType) return false;
+            if (v.Type != GM_Type.NoType || v.isGlobal) return false;
+            if (Constants.FixAndCheckVarType(v)) return true;
+
             HashSet<GM_Type> types = new HashSet<GM_Type>();
-            foreach (var vs in expr.Arguments.Single().GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Call)){
-                // Need the types of functions
-                string name = vs.Operand is string ? vs.Operand as string : (vs.Operand as ILCall).Name;
-                GM_Type t = Constants.GetFunctionType(name);
-                if(t == GM_Type.NoType)
+            foreach (var vs in expr.Arguments.Single().GetSelfAndChildrenRecursive<ILExpression>())
+            {
+                GM_Type t = GM_Type.NoType;
+                switch (vs.Code)
                 {
-                    error.Error("Don't know the type of function '{0}'", name);
+                    case GMCode.Call:
+                        string name = vs.Operand is string ? vs.Operand as string : (vs.Operand as ILCall).Name;
+                        t = Constants.GetFunctionType(name,this.error);
+                        if (t == GM_Type.NoType)
+                        {
+                            error.Error("Fucntion does not exist '{0}', defaulting to int", name);
+                            t = GM_Type.Int;
+                        }
+                        break;
+                    case GMCode.Constant:
+                        t = (vs.Operand as ILValue).Type;
+                        break;
+                    case GMCode.Var:
+                        t = (vs.Operand as ILVariable).Type;
+                        break;
                 }
                 types.Add(t);
-            }
-            foreach (var vs in expr.Arguments.Single().GetSelfAndChildrenRecursive<ILExpression>(x => x.Code != GMCode.Call))
-            {
                 types.Add(vs.ExpectedType);
                 types.Add(vs.InferredType);
-                if(vs.Conv != null) types.UnionWith(vs.Conv);
+                if (vs.Conv != null) types.UnionWith(vs.Conv);
             }
             types.Remove(GM_Type.Var); // dosn't neeed to be there
             types.Remove(GM_Type.NoType); // dosn't neeed to be there
             if (types.Count == 0) return false;
-            if (types.Count == 1)
-            {
-                v.Type = types.Single();
-            }
+            else if (types.Count == 1) v.Type = types.Single();
             else // have to resolve it
             {
                 v.Type = GM_Type.NoType;
-                foreach (var t in types) v.Type = BetterType(v.Type, t);
-                Debug.Assert(v.Type != GM_Type.NoType);
+                foreach (var t in types) v.Type = v.Type.ConvertType(t);
+                
             }
+            Debug.Assert(v.Type != GM_Type.NoType);
             return true;
         }
         bool SimpleAssignments(List<ILNode> nodes, ILExpression expr, int pos)

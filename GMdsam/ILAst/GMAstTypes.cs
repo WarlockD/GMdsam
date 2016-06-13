@@ -179,13 +179,35 @@ namespace GameMaker.Ast
                 if (node != null) node.AccumulateSelfAndChildrenRecursive(list);
             }
         }
- 
+        /*
+        void AccumulateSelfAndChildrenRecursive(List<ILVariable> list)
+        {
+            ILExpression expr = this as ILExpression;
+            if (expr == null && expr.Code != GMCode.Var) return;
+            list.Add(expr.Operand as ILVariable);
+            foreach (var e in expr.Arguments)
+            {
+                if (e.Code == GMCode.Var) e.AccumulateSelfAndChildrenRecursive(list);
+            }
+        }
+        void AccumulateSelfAndChildrenRecursive(List<ILVariable> list, Func<ILVariable, bool> predicate)
+        {
+            ILExpression expr = this as ILExpression;
+            if (expr == null && expr.Code != GMCode.Var) return;
+            ILVariable v = expr.Operand as ILVariable;
+            if(v == null || predicate(v)) list.Add(expr.Operand as ILVariable);
+            if(v.Index is ILV)
+            foreach (var e in expr.Arguments)
+            {
+                if (e.Code == GMCode.Var) e.AccumulateSelfAndChildrenRecursive(list, predicate);
+            }
+        }
+        */
         void AccumulateSelfAndChildrenRecursive<T>(List<T> list, Func<T, bool> predicate) where T : ILNode
         {
             // Note: RemoveEndFinally depends on self coming before children
             T thisAsT = this as T;
-            if (thisAsT != null && (predicate == null || predicate(thisAsT)))
-                list.Add(thisAsT);
+            if (thisAsT != null && predicate(thisAsT)) list.Add(thisAsT);
             foreach (ILNode node in this.GetChildren())
             {
                 if (node != null)
@@ -481,8 +503,43 @@ namespace GameMaker.Ast
             return false;
         }
     }
-    public class ILVariable : ILNode, IEquatable<ILVariable>
+    public enum VarOwner
     {
+        Self,
+        Global,
+        BuiltIn=2,
+    } 
+    public class ILVariable : ILNode
+    {
+        public class ILVariableRef
+        {
+            public string Name;
+            public int Instance;
+            public GM_Type InferedType;
+            public HashSet<GM_Type> TypesSeen = new HashSet<GM_Type>();
+            public List<ILVariable> AllVars = new List<ILVariable>();
+            public override string ToString()
+            {
+                return '(' + InferedType.ToString() + ')' + Context.InstanceToString(Instance) + "." + Name;
+            }
+        }
+        static Dictionary<string, ILVariableRef> allVars = new Dictionary<string, ILVariableRef>();
+        public IReadOnlyDictionary<string, ILVariableRef> AllVars {  get { return allVars; } }
+
+        ILVariableRef GetRef(ILVariable v)
+        {
+            ILVariableRef r;
+            if(!allVars.TryGetValue(v.Name, out r)){
+                r = new ILVariableRef();
+                r.Name = v.Name;
+                r.Instance = v._instance;
+                r.InferedType = GM_Type.NoType;
+                allVars.Add(v.Name, r);
+            } 
+            r.AllVars.Add(v);
+            return r;
+        }
+        ILVariableRef _ref = null;
         public override bool hasChildren { get { return Index != null || _instance == 0; } }
         public override IEnumerable<ILNode> GetChildren()
         {
@@ -528,7 +585,11 @@ namespace GameMaker.Ast
                 else
                     _instance_node = value;
                 ILValue v = _instance_node as ILValue;
-                if (v != null) _instance = (int)v;
+                if (v != null)
+                {
+                    _instance = (int)v;
+                    if (_ref.Instance != _instance) _ref.Instance = _instance;
+                }
             }
         }
         public string InstanceName
@@ -553,6 +614,7 @@ namespace GameMaker.Ast
             this.Name = name;
             this.Index = null;
             this.isArray = isarray;
+            this._ref = GetRef(this);
         }
         ILVariable()
         {
@@ -562,7 +624,7 @@ namespace GameMaker.Ast
         public ILExpression Index = null; // not null if we have an index
         public bool isArray=false;
         public bool isResolved = false; // resolved expresion, we don't have to do anything to it anymore
-        public GM_Type Type = GM_Type.NoType;
+        public GM_Type Type { get { return _ref.InferedType; } set { _ref.InferedType = _ref.InferedType.ConvertType(value); } }
         // Returns the full name of the variable, even if its an array as long as the array access is constant
         // This format is near universal, so you can use it anywhere
         public string FullName
@@ -591,7 +653,7 @@ namespace GameMaker.Ast
         {
             get
             {
-                return !isLocal && _instance == -7;
+                return !isLocal && _instance == -5;
             }
         }
         public bool isSelf
@@ -601,20 +663,7 @@ namespace GameMaker.Ast
                 return isLocal ||  _instance == -1;
             }
         }
-        public bool Equals(ILVariable obj)
-        {
-            if (obj.isArray != this.isArray || obj.isLocal != this.isLocal) return false; // easy
-            if (isLocal) return obj.Name == Name;
-            if (obj._instance == 0 || _instance == 0) return false; // stack values are not resolved and not equal
-            else return obj.Name == Name && obj._instance == _instance;
-        }
-        public override bool Equals(object obj)
-        {
-            if (object.ReferenceEquals(obj, null)) return false;
-            if (object.ReferenceEquals(obj, this)) return true;
-            ILVariable test = obj as ILVariable;
-            return Equals(test);
-        }
+
         // The semi tricky one
         protected override bool InternalTreeEqual(ILNode node)
         {
@@ -626,10 +675,6 @@ namespace GameMaker.Ast
                 return v.Name == Name && Instance.TreeEqual(v.Instance);
             else
                 return v.Name == Name && Instance.TreeEqual(v.Instance) && Index.TreeEqual(v.Index);
-        }
-        public override int GetHashCode()
-        {
-            return Name.GetHashCode();
         }
         public override bool ToStringBuilder(StringBuilder sb, int ident)
         {
@@ -776,6 +821,21 @@ void ReportUnassignedILRanges(ILBlock method)
         public GM_Type ExpectedType { get; set; }
         public GM_Type InferredType { get; set; }
 
+        public HashSet<GM_Type> GetAllGMTypes()
+        {
+            HashSet<GM_Type> list = new HashSet<GM_Type>();
+            BuildGMTypes(list);
+            return list;
+        }
+        void BuildGMTypes(HashSet<GM_Type> list)
+        {
+            if (Code == GMCode.Constant) list.Add((Operand as ILValue).Type);
+            else if (Code == GMCode.Var) list.Add((Operand as ILVariable).Type);
+            if (Conv != null) list.UnionWith(Conv);
+            list.Add(ExpectedType);
+            list.Add(InferredType);
+            foreach (var a in Arguments) a.BuildGMTypes(list);
+        }
         public static readonly object AnyOperand = new object();
 
         // hacky but it works

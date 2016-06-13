@@ -235,7 +235,7 @@ namespace GameMaker.Writers
                             }));
             };
 
-            chunkActions["textures"] = (List<CodeTask> tasks) =>
+            chunkActions["objects"] = (List<CodeTask> tasks) =>
             {
                 tasks.Add(CodeTask.Create("objects", File.Objects, (string path, File.GObject o) =>
                         {
@@ -509,7 +509,7 @@ namespace GameMaker.Writers
                         for (int i = _todo.Count - 1; i >= 0; i--)
                         {
                             var ct = _todo[i];
-                            if (ct.isCompleted) _todo.RemoveAt(i);
+                            if (ct == null || ct.Task.IsCompleted) _todo.RemoveAt(i);
                             else
                             {
                                 totalTasks += ct.TotalTasks;

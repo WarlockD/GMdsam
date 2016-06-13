@@ -33,54 +33,29 @@ namespace GameMaker.Writers
         public class LocalInfo
         {
             public string Name;
+            public HashSet<GM_Type> GMTypes = new HashSet<GM_Type>();
             public List<ILVariable> Uses = new List<ILVariable>();
             public List<ILExpression> assignments = new List<ILExpression>();
-            public VarType Type = VarType.Unkonwn;
-            public VarOwner Owner = VarOwner.Self;
+            public GM_Type Type = GM_Type.NoType;
+            public VarOwner Owner;
             public int ArrayDim = 0;
-            public bool Add(ILVariable v, out VarType type)
+            public void Add(ILVariable v)
             {
                 if (v.Name != Name) throw new ArgumentException("Name must be the same", "v");
-                type = VarType.Unkonwn;
-                if (v.isArray) {
+                GMTypes.Add(v.Type);
+                if (v.isArray)
+                {
                     ArrayDim = 1;
                     if (v.Index.Code == GMCode.Array2D) ArrayDim = 2;
-                } else {
-                    switch (v.Type)
-                    {
-                        case GM_Type.Bool:
-                            type = VarType.Bool;
-                            break;
-                        case GM_Type.Short:
-                        case GM_Type.Int:
-                        case GM_Type.Long:
-                            type = VarType.Int;
-                            break;
-                        case GM_Type.Float:
-                        case GM_Type.Double:
-                            type = VarType.Real;
-                            break;
-                        case GM_Type.String:
-                            type = VarType.String;
-                            break;
-                        case GM_Type.Var:
-                            type = VarType.Unkonwn;
-                            break;
-                        default:
-                            throw new Exception("Shouldn't get here");
-                    }
-                }
-                if (Type == VarType.Unkonwn) Type = type;
-                else if (ArrayDim == 0 && Type != type) return false;
-                lock(Uses) Uses.Add(v);
-                return true;
+                } else Type = Type.ConvertType(v.Type);
+                lock (Uses) Uses.Add(v);
             }
             public LocalInfo(ILVariable v)
             {
                 this.Name = v.Name;
                 this.Owner = v.isGlobal ? VarOwner.Global : VarOwner.Self;
                 if (Constants.IsDefined(this.Name)) this.Owner |= VarOwner.BuiltIn;
-                
+                Add(v);
             }
             public override string ToString()
             {
@@ -161,7 +136,7 @@ namespace GameMaker.Writers
                 WriteLocals("Local Arrays", info.Locals.Where(x => x.Value.ArrayDim > 0 && x.Value.Owner == VarOwner.Self).Select(x => x.Key).OrderBy(x => x).ToList());
                 WriteLocals("BuiltIn", info.Locals.Where(x => x.Value.Owner == VarOwner.BuiltIn).Select(x => x.Key).OrderBy(x => x).ToList());
 
-                WriteLocals("Both Array AND Normal", info.Locals.Where(x => x.Value.ArrayDim > 0 && x.Value.Type != VarType.Unkonwn).Select(x => x.Key).OrderBy(x => x).ToList());
+                WriteLocals("Both Array AND Normal", info.Locals.Where(x => x.Value.ArrayDim > 0 && x.Value.Type != GM_Type.NoType).Select(x => x.Key).OrderBy(x => x).ToList());
                 output.Indent--;
             }
             WriteObjectUse();
@@ -290,11 +265,7 @@ namespace GameMaker.Writers
                          (key, existingVal) =>
                         {
                             v.UserData = existingVal;
-                            VarType type;
-                            if (!existingVal.Add(v, out type))
-                            {
-                                Context.Warning("Meh");
-                            }
+                            existingVal.Add(v);
                             return existingVal;
                         });
                 }
@@ -348,18 +319,31 @@ namespace GameMaker.Writers
             {
                 AddBlockToLocals(block);
             }
-            block.ClearAndSetAllParents();
+           // block.ClearAndSetAllParents();
             return block;
         }
         public void Write(File.Script script)
         {
             ILBlock block;
-                if (script.Code == null)
+            if (script.Code == null)
+            {
+                Context.Warning("Empty code Data for script");
+                return; // error
+            }
+            else
+            {
+                block = script.Block;
+                File.Code codeData = script.Code;
+                if (block == null)
                 {
-                    Context.Warning("Empty code Data for script");
-                    return; // error
+                    output.Error("Code '{0}' empty, but used here", codeData.Name);
                 }
-                else block = DecompileCode(script.Code);
+                else if (!codeUsed.ContainsKey(codeData.Name) || !codeUsed.TryAdd(codeData.Name, true)) // check if already done
+                {
+                    AddBlockToLocals(block);
+                }
+
+            }
             CheckAllVars();
             int arguments = 0;
             foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>())

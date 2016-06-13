@@ -986,13 +986,70 @@ namespace GameMaker
                 return new MemoryStream(File.rawData, _dataStart, Size, false, false);
             }
         }
-        public class Script : GameMakerStructure, IDataResource, INamedResrouce
+       
+       // string Regex argumentSearch = new Regex()
+        public class Script : GameMakerStructure, INamedResrouce
         {
-            public Stream Data
+            protected Lazy<ILBlock> _block = null; // used 
+           
+            GM_Type _returnType = GM_Type.NoType;
+            int _scriptIndex;
+            int _argumentCount;
+            void CountArguments(ILVariable v, ref int arg)
+            {
+                var match = Context.ScriptArgRegex.Match(v.Name);
+                if (match.Success)
+                {
+                    int i = int.Parse(match.Groups[1].Value);
+                    if (i > arg) arg = i;
+                }
+            }
+            void CountArguments(ILCall call, ref int arg)
+            {
+                foreach (var e in call.GetSelfAndChildrenRecursive<ILExpression>())
+                {
+                    if (e.Code == GMCode.Var) CountArguments(e.Operand as ILVariable, ref arg);
+                    else if(e.Code == GMCode.Call) CountArguments(e.Operand as ILCall, ref arg);
+                }
+            }
+            ILBlock CreateScriptBlock() { 
+                if(_scriptIndex < 0) return null;
+                ILBlock block = File.Codes[_scriptIndex].Block;
+                Debug.Assert(Name != "caster_play");
+             //   HashSet<GM_Type> types = new HashSet<GM_Type>();
+                _argumentCount = 0;
+                foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>())
+                {
+                    switch (e.Code)
+                    {
+                        case GMCode.Ret:
+                            types.UnionWith(e.GetAllGMTypes());
+                            break;
+                        case GMCode.Var:
+                            CountArguments(e.Operand as ILVariable, ref _argumentCount);
+                            break;
+                        case GMCode.Call:
+                            CountArguments(e.Operand as ILCall, ref _argumentCount);
+                            break;
+                    }
+                
+                }
+                _returnType = GM_Type.NoType;
+                foreach (var t in types) _returnType = _returnType.ConvertType(t);
+                return block;
+            }
+            public ILBlock Block { get { return _block.Value; } }
+
+            public GM_Type ReturnType
             {
                 get
                 {
-                    return getStream();
+                    if(!_block.IsValueCreated)
+                    {
+                        ILBlock block = _block.Value; // create it
+                        Debug.Assert(block != null);
+                    }
+                    return _returnType;
                 }
             }
             public Code Code {
@@ -1001,36 +1058,31 @@ namespace GameMaker
                     return _scriptIndex == -1 ? null : File.Codes[_scriptIndex];
                 }
             }
-            int _scriptIndex;
+        
+            public int ArgumentCount {  get
+                {
+                    if (!_block.IsValueCreated)
+                    {
+                        ILBlock block = _block.Value; // create it
+                        Debug.Assert(block != null);
+                    }
+                    return _argumentCount;
+                }
+            }
             // public byte[] RawSound { get; private set; }
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
                 _scriptIndex = r.ReadInt32();
+                _block = new Lazy<ILBlock>(CreateScriptBlock);
             }
 
-            public Stream getStream()
-            {
-                if (_scriptIndex == -1)
-                { // its not in the list but it might still be in the code list
-                    foreach (var o in File.Search(Name))
-                    {
-                        if (o == this) continue; // skip if its this
-                        Code c = o as Code;
-                        if (c == null) continue; // just looking for code
-                        return c.Data;
-                    }
-                    return null;
-                }
-                else
-                    return File.Codes[_scriptIndex].Data;
-            }
         }
 
         public abstract class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
             public int Size { get; protected set; }
-            public int Position { get; protected set; }
+            public int CodePosition { get; protected set; }
             public ILBlock block = null; // cached
             protected Lazy<ILBlock> _block = null; // used 
             public ILBlock Block { get { return _block.Value; } }
@@ -1039,7 +1091,7 @@ namespace GameMaker
             {
                 get
                 {
-                    return new MemoryStream(File.rawData, Position, Size, false, false);
+                    return new MemoryStream(File.rawData, CodePosition, Size, false, false);
                 }
             }
             protected abstract ILBlock CreateNewBlock();
@@ -1065,7 +1117,7 @@ namespace GameMaker
                 name = string.Intern(r.ReadStringFromNextOffset());
                 Debug.Assert(!Name.Contains("gotobattle"));
                 Size = r.ReadInt32();
-                Position = this.Position + 8;
+                CodePosition = this.Position + 8;
             }
         }
         public class NewCode : Code
@@ -1093,7 +1145,7 @@ namespace GameMaker
                 LocalCount = r.ReadInt16();
                 ArgumentCount = r.ReadInt16();
                 wierd = r.ReadInt32();
-                Position = (int) r.BaseStream.Position + wierd - 4;
+                CodePosition = (int) r.BaseStream.Position + wierd - 4;
                 // this kind of some silly  encryption?
                 offset = r.ReadInt32();
             }
