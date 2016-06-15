@@ -72,28 +72,7 @@ namespace GameMaker.Ast
         {
             expr.ILRanges.Add(new ILRange(address));
         }
-        public static bool MatchConstant(this ILNode node, GM_Type type, out ILValue value)
-        {
-            ILValue ret;
-            if(node.MatchConstant(out ret) && ret.Type == type)
-            {
-                value = ret;
-                return true;
-            }
-            value = default(ILValue);
-            return false;
-        }
-        public static bool MatchConstant(this ILNode node,  out ILValue value)
-        {
-            ILValue ret = node as ILValue;
-            if (ret == null && !node.Match(GMCode.Constant, out ret))
-            {
-                value = default(ILValue);
-                return false;
-            }
-            value = ret;
-            return true;
-        }
+
         public static ILLabel GotoLabel(this ILBasicBlock bb)
         {
             ILLabel label = (bb.Body[bb.Body.Count - 1] as ILExpression).Operand as ILLabel;
@@ -130,18 +109,11 @@ namespace GameMaker.Ast
             switch (e.Code)
             {
                 case GMCode.Constant: return true; // always
-                case GMCode.Var:
-                    if ((e.Operand as ILVariable).isResolved) return true;
-                    break;
-                case GMCode.Array2D:
-                    return true; // array index
-                case GMCode.Call:
-                    if ((e.Operand is ILCall)) return true;
-                    break;
+                case GMCode.Var: return true;
+                case GMCode.Call: return true;
                 default:
                     if (e.Code.isExpression() && e.Arguments.Count != 0) return true;
                     break;
-
             }
             return false;
         }
@@ -164,68 +136,23 @@ namespace GameMaker.Ast
             if (e == null) return false;
             return isExpressionResolved(e);
         }
-        public static bool MatchCall(this ILNode node, GM_Type type, out ILExpression call)
+        public static bool MatchType(this ILNode node, GM_Type type, out ILExpression expr)
         {
-            ILCall c = node as ILCall;
-            if(c != null && c.Type == type)
+            ILExpression e = node as ILExpression;
+            if(e != null && e.Type == type)
             {
-                call = new ILExpression(GMCode.Call, c);
+                expr = e;
                 return true;
             }
-            ILExpression e = node as ILExpression;
-            if(e != null && e.Code == GMCode.Call)
-            {
-                c = e.Operand as ILCall;
-                if (c != null && c.Type == type)
-                {
-                    call = new ILExpression(GMCode.Call, c);
-                    return true;
-                } else if(e.Operand is string && e.InferredType == type)
-                {
-                    call = e;
-                    return true;
-                }
-            }
-            call = default(ILExpression);
+            expr = default(ILExpression);
             return false;
         }
-        public static bool MatchCall(this ILNode node, GM_Type type)
+        public static bool MatchType(this ILNode node, GM_Type type)
         {
             ILExpression call;
-            return node.MatchCall(type, out call);
+            return node.MatchType(type, out call);
         }
-        public static bool MatchConstant(this ILNode node, GM_Type type)
-        {
-            ILValue ret;
-            if(node.MatchConstant(type,out ret) || node.MatchCall(type)) // try to match it on a call
-            {
-                return true;
-            }
-            return false;
-        }
-        public static bool MatchConstant<T>(this ILNode node, GM_Type type, out T value)
-        {
-            ILValue ret;
-            if (node.MatchConstant(type, out ret) && ret.Value is T)
-            {
-                value = (T) ret.Value;
-                return true;
-            }
-            value = default(T);
-            return false;
-        }
-
-        public static bool MatchIntConstant(this ILNode node, out ILValue value)
-        {
-            ILValue ret;
-            if (node.MatchConstant(out ret) && (ret.Type == GM_Type.Short || ret.Type == GM_Type.Int))
-            {
-                value = ret;
-                return true;
-            }
-            value = default(ILValue);
-            return false;
-        }
+  
         public static bool MatchIntConstant(this ILNode node, out int value)
         {
             ILValue ret;
@@ -259,38 +186,26 @@ namespace GameMaker.Ast
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code && expr.Arguments.Count == 0)
             {
-                if (expr.Operand is T)
-                {
-                    operand = (T) expr.Operand;
-                    return true;
-                }
-                // special case.  Tired of doing Match(code,ivalue) ivlaue is etc
-                ILValue v = expr.Operand as ILValue;
-                if (v.Value is T) 
-                {
-                    operand = (T) v.Value;
-                    return true;
-                }
+                operand = (T)expr.Operand;
+                return true;
             }
             operand = default(T);
             return false;
         }
-        public static bool Match(this ILNode node, GMCode code, out List<ILExpression> args)
+        public static bool Match(this ILNode node, GMCode code, out IList<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
-            if (expr != null && expr.Code == code)
+            if (expr != null && expr.Code == code && expr.Operand == null)
             {
-                Debug.Assert(expr.Operand == null);
                 args = expr.Arguments;
                 return true;
             }
             args = null;
             return false;
         }
-
         public static bool Match(this ILNode node, GMCode code, out ILExpression arg)
         {
-            List<ILExpression> args;
+            IList<ILExpression> args;
             if (node.Match(code, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -300,7 +215,7 @@ namespace GameMaker.Ast
             return false;
         }
 
-        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out List<ILExpression> args)
+        public static bool Match<T>(this ILNode node, GMCode code, out T operand, out IList<ILExpression> args)
         {
             ILExpression expr = node as ILExpression;
             if (expr != null && expr.Code == code)
@@ -316,7 +231,7 @@ namespace GameMaker.Ast
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg)
         {
-            List<ILExpression> args;
+            IList<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 1)
             {
                 arg = args[0];
@@ -328,7 +243,7 @@ namespace GameMaker.Ast
 
         public static bool Match<T>(this ILNode node, GMCode code, out T operand, out ILExpression arg1, out ILExpression arg2)
         {
-            List<ILExpression> args;
+            IList<ILExpression> args;
             if (node.Match(code, out operand, out args) && args.Count == 2)
             {
                 arg1 = args[0];
@@ -392,7 +307,7 @@ namespace GameMaker.Ast
             object filler;
             return bb.MatchSingleAndBr<object>(code, out filler, out arg, out brLabel);
         }
-        public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out List<ILExpression> args, out ILLabel brLabel)
+        public static bool MatchSingleAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out IList<ILExpression> args, out ILLabel brLabel)
         {
             {
                 if (bb.Body.Count == 3 &&
@@ -489,7 +404,7 @@ namespace GameMaker.Ast
             brLabel = null;
             return false;
         }
-        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out List<ILExpression> args, out ILLabel brLabel)
+        public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out IList<ILExpression> args, out ILLabel brLabel)
         {
             if (bb.Body.ElementAtOrDefault(bb.Body.Count - 2).Match(code, out operand, out args) &&
                 bb.Body.LastOrDefault().Match(GMCode.B, out brLabel))

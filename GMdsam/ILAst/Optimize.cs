@@ -14,10 +14,10 @@ namespace GameMaker.Ast
         /// Perform one pass of a given optimization on this block.
         /// This block must consist of only basicblocks.
         /// </summary>
-        public static bool RunOptimization(this ILBlock block, Func<List<ILNode>, ILBasicBlock, int, bool> optimization)
+        public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILBasicBlock, int, bool> optimization)
         {
             bool modified = false;
-            List<ILNode> body = block.Body;
+            IList<ILNode> body = block.Body;
             for (int i = body.Count - 1; i >= 0; i--)
             {
                 if (i < body.Count && optimization(body, (ILBasicBlock)body[i], i))
@@ -28,7 +28,7 @@ namespace GameMaker.Ast
             return modified;
         }
 
-        public static bool RunOptimization(this ILBlock block, Func<List<ILNode>, ILExpression, int, bool> optimization)
+        public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILExpression, int, bool> optimization)
         {
             bool modified = false;
             foreach (ILBasicBlock bb in block.Body)
@@ -56,13 +56,22 @@ namespace GameMaker.Ast
             ILExpression expr = node as ILExpression;
             return expr != null && expr.Code.IsUnconditionalControlFlow();
         }
-
-
+        public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILExpression> exprs)
+        {
+            if (exprs != null) foreach(var e in exprs) if(e.ILRanges != null) expr.ILRanges.AddRange(e.ILRanges);
+            return expr;
+        }
+        public static ILExpression WithILRanges(this ILExpression expr, params ILExpression[] exprs)
+        {
+            if (exprs != null) foreach (var e in exprs) if (e.ILRanges != null) expr.ILRanges.AddRange(e.ILRanges);
+            return expr;
+        }
         public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges)
         {
             if(ilranges!= null) expr.ILRanges.AddRange(ilranges);
             return expr;
         }
+
         public static ILExpression WithILRanges(this ILExpression expr, IEnumerable<ILRange> ilranges1, IEnumerable<ILRange> ilranges2)
         {
             if (ilranges1 != null) expr.ILRanges.AddRange(ilranges1);
@@ -130,51 +139,7 @@ namespace GameMaker.Ast
             }
             return false;
         }
-        // Clones the node to another expression or makes an expresson based off it
-        public static ILExpression ToExpresion(this ILNode n)
-        {
-            if (n == null) return null;
-            else if (n is ILValue) return new ILExpression(GMCode.Constant, n as ILValue);
-            else if (n is ILVariable) return new ILExpression(GMCode.Var, n as ILVariable);
-            else if (n is ILExpression) return new ILExpression(n as ILExpression);
-            else if (n is ILCall) return new ILExpression(GMCode.Call, n);
-            else throw new Exception("Should not happen here");
-        }
 
-
-        /// <summary>
-        /// Fixes an expression so that any extra Operand data is converted to an expresion
-        /// </summary>
-        /// <param name="n"></param>
-        /// <returns>True if its a push</returns>
-        public static bool FixPushExpression(this ILNode n)
-        {
-            // This should ONLY be run at the start
-            ILExpression e = n as ILExpression;
-            if (e == null || e.Code != GMCode.Push) return false; // not an expresson or null
-            if (e.Operand == null)
-            {
-                ILExpression arg = e.Arguments.Single();
-                if (arg.Code != GMCode.Constant || arg.Code != GMCode.Var) throw new Exception("sanity check");
-
-            }
-            else  // already processed
-            {
-                if (e.Code == GMCode.Constant || e.Code == GMCode.Var)
-                {
-                    ILExpression arg = null;
-                    object o = e.Operand;
-                    if (o is ILValue) arg = new ILExpression(GMCode.Constant, o as ILValue);
-                    else if (o is ILVariable) arg = new ILExpression(GMCode.Var, o as ILVariable);
-                    else if (o is ILCall) arg = new ILExpression(GMCode.Call, o);
-                    Debug.Assert(arg != null);
-                    e.Arguments.Clear(); // make sure
-                    e.Arguments.Add(arg);
-                    e.Operand = null;
-                }
-            }
-            return true;
-        }
         // Returns argument off a an expression or throws.  This is WAY to common so I made it an extension
         public static ILExpression MatchSingleArgument(this ILNode n)
         {
@@ -278,7 +243,7 @@ namespace GameMaker.Ast
 
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                List<ILNode> body = block.Body;
+                IList<ILNode> body = block.Body;
                 List<ILNode> newBody = new List<ILNode>(body.Count);
                 for (int i = 0; i < body.Count; i++)
                 {
@@ -359,102 +324,50 @@ namespace GameMaker.Ast
                 }
             }
         }
-        public static bool FixLuaStringAddExpression(ILExpression expr)
-        {
-            bool haveString = false; // check if we have a single string in the expression
-            var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
-            if (allNonAdds.Count ==0)
-            {
-                var allAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Add).ToList();
-                for (int i = 0; i < allAdds.Count; i++)
-                {
-                    var e = allAdds[i];
-                    if (haveString)
-                        e.Code = GMCode.Concat;
-                    else if (e.Arguments[0].MatchConstant(GM_Type.String) || e.Arguments[1].MatchConstant(GM_Type.String))
-                    {// if we match a string, they all have to be converted
-                        haveString = true;
-                        i = -1; // reset list
-                    }
-                }
-            }
-            return haveString;
-        } // 
-        public static bool FixLuaStringAddExpression(IList<ILNode> body, ILExpression expr, int pos)
-        {
-            bool haveString = false; // check if we have a single string in the expression
-            var allNonAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code.isExpression() && x.Code != GMCode.Add).ToList();
-            if (allNonAdds.Count > 0)
-            {
-                var allAdds = expr.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Add).ToList();
-                for (int i = 0; i < allAdds.Count; i++)
-                {
-                    var e = allAdds[i];
-                    if (haveString)
-                        e.Code = GMCode.Concat;
-                    else if (e.MatchConstant(GM_Type.String))
-                    {// if we match a string, they all have to be converted
-                        haveString = true;
-                        i = 0; // reset list
-                    }
-                }
-            }
-            return haveString;
-        }
-        public static bool FixLuaStringAdd(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
-            bool modified = false; // may need to optimzie this, can we just go though all the nodes?
-            // it makes sure where a concat can exisit it should, but we need to do a lot of refactoring
-            // on this latter
-            foreach(var a in head.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Assign))
-            {
-                modified |= FixLuaStringAddExpression(a);
-            }
-            foreach (var a in head.GetSelfAndChildrenRecursive<ILCall>())
-            {
-                foreach(var e in a.Arguments) modified |= FixLuaStringAddExpression(e);
-            }
-            foreach (var a in head.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Call))
-            {
-                foreach (var e in a.Arguments) modified |= FixLuaStringAddExpression(e);
-            }
-            return modified;
-        }
-
      
         // GM uses 1 and 0 as bool but uses conv to convert them so lets fix calls
         // like check() == 1 and change them to just check()
 
-        public static bool SimplifyBoolTypes(ILExpression expr)
+        public static bool SimplifyBoolTypes(ILExpression expr, out ILExpression nexpr)
         {
             ILExpression call;
-            int constant;
+            ILValue constant;
             if ((expr.Code == GMCode.Seq || expr.Code == GMCode.Sne) &&
-                (expr.Arguments[0].MatchCall(GM_Type.Bool, out call) ||
-                expr.Arguments[1].MatchCall(GM_Type.Bool, out call)) &&
-                (expr.Arguments[0].MatchIntConstant(out constant) ||
-                expr.Arguments[1].MatchIntConstant(out constant))
-                )
+                ((expr.Arguments.ElementAtOrDefault(0).MatchType(GM_Type.Bool, out call) && expr.Arguments.ElementAtOrDefault(1).Match(GMCode.Constant, out constant)) ||
+                (expr.Arguments.ElementAtOrDefault(1).MatchType(GM_Type.Bool, out call) && expr.Arguments.ElementAtOrDefault(2).Match(GMCode.Constant, out constant))) &&
+                constant.IntValue != null)
             {
-                if ((expr.Code == GMCode.Seq && constant == 0) || constant == 1) // have ot invert it
+                if ((expr.Code == GMCode.Seq && constant == 0) || constant == 1) // have to invert it
                     call = new ILExpression(GMCode.Not, null, call);
-                expr.Replace(call);
+                nexpr = call;
                 return true;
             }
+            nexpr = default(ILExpression);
             return false;
         }
-
-        public static bool SimplifyBoolTypes(List<ILNode> body, ILExpression expr, int pos)
+        public static bool SimplifyBoolTypes(IList<ILExpression> args)
         {
+            if (args.Count == 0) return false;
             bool modified = false;
-            if (expr.Code == GMCode.Push || expr.Code.isBranch())
+            for(int i=0;i< args.Count; i++)
             {
-                foreach(var e in expr.GetSelfAndChildrenRecursive<ILExpression>(x=>x.Code == GMCode.Seq || x.Code == GMCode.Sne))
-                {
-                    modified |= SimplifyBoolTypes(e);
+                ILExpression expr = args[i];
+                modified |= SimplifyBoolTypes(expr.Arguments);
+                ILExpression nexpr;
+                if (SimplifyBoolTypes(expr, out nexpr)) {
+                    args[i] = nexpr;
+                    modified |= true;
                 }
             }
             return modified;
+        }
+        public static bool SimplifyBoolTypes(IList<ILNode> body, ILExpression expr, int pos)
+        {
+            if (expr.Code == GMCode.Push || expr.Code.isBranch())
+            {
+                return SimplifyBoolTypes(expr.Arguments);
+            }
+            return false;
         }
 
         /// <summary>
@@ -464,7 +377,7 @@ namespace GameMaker.Ast
         /// <param name="method"></param>
 
         #region SimplifyLogicNot
-        public static bool SimplifyLogicNot(List<ILNode> body, ILExpression expr, int pos)
+        public static bool SimplifyLogicNot(IList<ILNode> body, ILExpression expr, int pos)
         {
             bool modified = false;
             expr = SimplifyLogicNot(expr, ref modified);

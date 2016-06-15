@@ -16,9 +16,10 @@ namespace GameMaker
 {
 
 
-    public enum GM_Type : byte
+    public enum GM_Type : int
     {
-        Double = 0,
+       
+        Double=0, 
         Float,
         Int,
         Long,
@@ -30,7 +31,8 @@ namespace GameMaker
         Sprite,
         Sound, 
         Path,
-        NoType,
+        NoType = -100,
+
     }
     public static class GM_TypeExtensions
     {
@@ -132,6 +134,8 @@ namespace GameMaker
         Concat, // -- filler for lua or string math
         Array2D,
         Assign,
+        VarUnresolved,
+        CallUnresolved
        // AssignAdd,
     //    AssignSub,
      //   AssignMul,

@@ -181,6 +181,7 @@ namespace GameMaker
         }
         static public string InstanceToString(int instance)
         {
+            
             switch (instance)
             {
                 case 0: return "stack";
@@ -195,9 +196,8 @@ namespace GameMaker
                 case -5:
                     return "global";
                 default:
-
+                    if (instance < 0 || instance >= File.Objects.Count) throw new ArgumentException("Instance out of range", "instance");
                     return File.Objects[instance].Name;
-                    // 
             }
         }
         static public string InstanceToString(ILValue value)
@@ -206,49 +206,9 @@ namespace GameMaker
             {
                 return InstanceToString((int)value);
             }
-            throw new Exception("bad");
+            throw new ArgumentException("Bad ILValue type","value");
         }
-        static public string InstanceToString(ILNode instance, BlockToCode output)
-        {
-            ILExpression e = instance as ILExpression;
-            if (e != null)
-            {
-                if (e.Code == GMCode.Constant)
-                    return InstanceToString(e.Operand as ILValue);
-                else
-                    return output.WriteToString(e);
-            }
-            ILValue value = instance as ILValue;
-            if (value != null) return InstanceToString(value);
-            ILVariable v = instance as ILVariable;
-            if (v != null) return output.WriteToString(v);
-            throw new Exception("Cannot display instance");
-        }
- 
-        static public ILExpression InstanceToExpression(ILExpression instance)
-        {
-            switch (instance.Code)
-            {
-                case GMCode.Constant:
-                    {
-                        ILValue value = instance.Operand as ILValue;
-                        if (value.Type == GM_Type.Short || value.Type == GM_Type.Int)
-                        {
-                            value.ValueText = InstanceToString((int) value);
-                        }
-                    }
-                    break;
-                case GMCode.Push: // it was a push, pull the arg out and try it
-                    return InstanceToExpression(instance.Arguments.Single());
-                case GMCode.Var:
-                    break; // if its a var like global.var.something = then just pass it though
-                case GMCode.Pop:
-                    break; // this is filler in to be filled in latter?  yea
-                default:
-                    throw new Exception("Something went wrong?");
-            }
-            return instance;// eveything else we just return as we cannot simplify it
-        }
+
         public static string KeyToString(int key)
         {
             string str = "unknown";

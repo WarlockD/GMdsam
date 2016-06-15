@@ -216,7 +216,7 @@ namespace GameMaker
         }
         static ErrorContext()
         {
-            FileStream stream = new FileStream(ErrorFileName, FileMode.Append);
+             FileStream stream = new FileStream(ErrorFileName, FileMode.Create);
             fileOutput = new StreamWriter(stream, Console.Out.Encoding);
             fileOutput.AutoFlush = true;
             _singleton = new ErrorContext();
@@ -317,6 +317,7 @@ namespace GameMaker
         public void FatalError(string msg)
         {
             DoMessage(MType.Fatal, msg, null);
+            Program.EnviromentExit(1);
             Environment.Exit(1);
         }
         public void Info(string msg, Ast.ILNode node)
@@ -334,7 +335,7 @@ namespace GameMaker
         public void FatalError(string msg, Ast.ILNode node)
         {
             DoMessage(MType.Fatal, msg,  node);
-            Environment.Exit(1);
+            Program.EnviromentExit(1);
         }
     }
 }

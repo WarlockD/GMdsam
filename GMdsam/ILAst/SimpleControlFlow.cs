@@ -32,7 +32,9 @@ namespace GameMaker.Ast
                     if (target != null)
                     {
                         labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-                        labelToBranch.GetOrDefault(target).Add(entry);
+                        List<ILLabel> labels;
+                        if (!labelToBranch.TryGetValue(target, out labels)) labelToBranch.Add(target, labels = new List<ILLabel>());
+                        labels.Add(entry);
                         continue;
                     }
                 }
@@ -111,7 +113,8 @@ namespace GameMaker.Ast
             if (MatchSwitchCase(head, out trueLabel, out falseLabel, out condition))
             {
                 var ranges = head.JoinILRangesFromTail(5);
-                expr = new ILExpression(GMCode.Bt, trueLabel, ranges, new ILExpression(GMCode.Seq, null, condition));
+                expr = new ILExpression(GMCode.Bt, trueLabel, new ILExpression(GMCode.Seq, null, condition));
+                expr.WithILRanges(ranges);
                 return true;
             }
             trueLabel = default(ILLabel);
@@ -160,7 +163,7 @@ namespace GameMaker.Ast
         }
         // changed the detection to use expresions...again.. and to make it more generic for
         // changing between a bunch of if statements or a big case statmet
-        public bool DetectSwitch_GenerateSwitch(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool DetectSwitch_GenerateSwitch(IList<ILNode> body, ILBasicBlock head, int pos)
         {
 
             bool modified = false;
@@ -172,7 +175,7 @@ namespace GameMaker.Ast
             if (MatchSwitchCaseAndBuildExpression(head, out trueLabel, out fallThough, out expr))
             {
                 ILExpression fswitch = new ILExpression(GMCode.Switch, null);
-                List<ILExpression> args = fswitch.Arguments;
+                IList<ILExpression> args = fswitch.Arguments;
                 List<ILLabel> labels = new List<ILLabel>();
                 List<ILNode> caseBlocks = new List<ILNode>();
                 ILLabel prev = head.EntryLabel();
@@ -257,7 +260,7 @@ namespace GameMaker.Ast
             }
             return modified;
         }
-        public bool DetectSwitch(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool DetectSwitch(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             // We can either convert the switch into a switch body or into a sequrence 
             // of branches.  Since Lua dosn't have a switch, it makes more sence to convert
@@ -267,7 +270,7 @@ namespace GameMaker.Ast
             else
                 return DetectSwitch_GenerateSwitch(body, head, pos);
         }
-        public bool DetectSwitch_GenerateBranches(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool DetectSwitch_GenerateBranches(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             bool modified = false;
             ILExpression condition;
@@ -403,7 +406,7 @@ namespace GameMaker.Ast
         }
         // These are for loops where the insides don't use the counting variable
         // so the compiler optimized it to just a temp push
-        public bool FixOptimizedForLoops(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool FixOptimizedForLoops(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             ILLabel trueLabel; // loop exit
             ILLabel falseLabel; // loop start
@@ -496,7 +499,7 @@ namespace GameMaker.Ast
         }
         // This is before the expression is processed, so ILValue's and constants havn't been assigned
 
-        public bool SimplifyTernaryOperator(List<ILNode> body, ILBasicBlock head, int pos)
+        public bool SimplifyTernaryOperator(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             Debug.Assert(body.Contains(head));
             //    Debug.Assert((head.Body[0] as ILLabel).Name != "Block_54");
@@ -511,7 +514,7 @@ namespace GameMaker.Ast
             ILExpression falseExpr;
             ILLabel falseFall;
 
-            List<ILExpression> finalFall;
+            IList<ILExpression> finalFall;
             ILLabel finalFalseFall;
             ILLabel finalTrueFall;
             if(head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
@@ -625,11 +628,11 @@ namespace GameMaker.Ast
                 ILExpression current = right;
                 while (current.Arguments[0].Match(code))
                     current = current.Arguments[0];
-                current.Arguments[0] = new ILExpression(code, null, left, current.Arguments[0]) { InferredType = GM_Type.Bool };
+                current.Arguments[0] = new ILExpression(code, GM_Type.Bool, left, current.Arguments[0]);
                 return right;
             }
             else {
-                return new ILExpression(code, null, left, right) { InferredType = GM_Type.Bool };
+                return new ILExpression(code, GM_Type.Bool, left, right);
             }
         }
         // somewhere, so bug, is leaving an empty block, I think because of switches

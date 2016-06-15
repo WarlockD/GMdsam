@@ -43,11 +43,6 @@ namespace GameMaker.Writers
             {
                 if (v.Name != Name) throw new ArgumentException("Name must be the same", "v");
                 GMTypes.Add(v.Type);
-                if (v.isArray)
-                {
-                    ArrayDim = 1;
-                    if (v.Index.Code == GMCode.Array2D) ArrayDim = 2;
-                } else Type = Type.ConvertType(v.Type);
                 lock (Uses) Uses.Add(v);
             }
             public LocalInfo(ILVariable v)
@@ -67,7 +62,7 @@ namespace GameMaker.Writers
         }
         ConcurrentDictionary<string, LocalInfo> locals = new ConcurrentDictionary<string, LocalInfo>();
         Dictionary<string, List<ILExpression>> assignments = new Dictionary<string, List<ILExpression>>();
-        Dictionary<string, List<ILCall>> funcCalls = new Dictionary<string, List<ILCall>>();
+        Dictionary<string, List<ILExpression>> funcCalls = new Dictionary<string, List<ILExpression>>();
         ConcurrentDictionary<string, bool> wierdVars = new ConcurrentDictionary<string, bool>();// used to suppress errors on vars
         ConcurrentDictionary<string, bool> codeUsed = new ConcurrentDictionary<string, bool>();
         ConcurrentDictionary<int, string> spritesUsed = new ConcurrentDictionary<int, string>();
@@ -169,14 +164,14 @@ namespace GameMaker.Writers
             if (code == null) throw new ArgumentNullException("code");
             WriteCode(code, DecompileCode(code));
         }
-        static Dictionary<string, Action<CodeWriter, ILCall>> calls = new Dictionary<string, Action<CodeWriter, ILCall>>();
+        static Dictionary<string, Action<CodeWriter, ILExpression>> calls = new Dictionary<string, Action<CodeWriter, ILExpression>>();
         static Dictionary<string, Action<CodeWriter, ILValue>> assigns = new Dictionary<string, Action<CodeWriter, ILValue>>();
-        static void InstanceArgument(CodeWriter writer, ILCall c, int index)
+        static void InstanceArgument(CodeWriter writer, ILExpression c, int index)
         {
             int i = ResourceArgument(File.Objects, c, index);
-            if (i >=0) writer.objectsUsed.TryAdd(i, File.Sprites[i].Name);
+            if (i >=0) writer.objectsUsed.TryAdd(i, File.Objects[i].Name);
         }
-        static void SpriteArgument(CodeWriter writer, ILCall c, int index)
+        static void SpriteArgument(CodeWriter writer, ILExpression c, int index)
         {
             int i = ResourceArgument(File.Sprites, c, index);
             if(i >= 0) writer.spritesUsed.TryAdd(i, File.Sprites[i].Name);
@@ -194,7 +189,7 @@ namespace GameMaker.Writers
             }
             return -1;
         }
-        static int ResourceArgument<T>(IReadOnlyList<T> list, ILCall c, int index) where T : File.GameMakerStructure, File.INamedResrouce
+        static int ResourceArgument<T>(IReadOnlyList<T> list, ILExpression c, int index) where T : File.GameMakerStructure, File.INamedResrouce
         {
             if (c.Arguments[index].Code == GMCode.Constant)
                 return ResourceValue(list, c.Arguments[index].Operand as ILValue);
@@ -203,15 +198,15 @@ namespace GameMaker.Writers
         }
             static CodeWriter()
         {
-            calls["instance_create"] = (CodeWriter writer, ILCall c) => InstanceArgument(writer, c, 2);
-            calls["instance_exists"] = (CodeWriter writer, ILCall c) => InstanceArgument(writer, c, 0);
-            calls["script_execute"] = (CodeWriter writer, ILCall c) => ResourceArgument(File.Scripts, c, 0);
-            calls["snd_play"] = (CodeWriter writer, ILCall c) => ResourceArgument(File.Sounds, c, 0);
+            calls["instance_create"] = (CodeWriter writer, ILExpression c) => InstanceArgument(writer, c, 2);
+            calls["instance_exists"] = (CodeWriter writer, ILExpression c) => InstanceArgument(writer, c, 0);
+            calls["script_execute"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Scripts, c, 0);
+            calls["snd_play"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Sounds, c, 0);
             
-            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILCall c) => SpriteArgument(writer, c, 0);
+            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILExpression c) => SpriteArgument(writer, c, 0);
 
             assigns["sprite_index"] = (CodeWriter writer, ILValue c) => ResourceValue(File.Sprites, c);
-            calls["path_start"] = (CodeWriter writer, ILCall c) =>
+            calls["path_start"] = (CodeWriter writer, ILExpression c) =>
             {
                 ResourceArgument(File.Paths, c, 0);
                 if (c.Arguments[3].Code == GMCode.Constant)
@@ -254,17 +249,19 @@ namespace GameMaker.Writers
         {
             lock (locals)
             {
-                foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>(x => !x.isGlobal))
+                foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Var))
                 {
+                    ILVariable v = e.Operand as ILVariable;
+                    if (v.isGlobal) continue;
                     locals.AddOrUpdate(v.Name,
                         (key) => {
                             var info = new LocalInfo(v);
-                            v.UserData = info;
+                          //  v.UserData = info;
                             return info;
                             },
                          (key, existingVal) =>
                         {
-                            v.UserData = existingVal;
+                          //  v.UserData = existingVal;
                             existingVal.Add(v);
                             return existingVal;
                         });
@@ -285,9 +282,9 @@ namespace GameMaker.Writers
                 foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Call))
                 {
                     ILCall c = e.Operand as ILCall;
-                    List<ILCall> vs;
-                    if (!funcCalls.TryGetValue(c.Name, out vs)) funcCalls.Add(c.Name, vs = new List<ILCall>());
-                    vs.Add(c);
+                    List<ILExpression> vs;
+                    if (!funcCalls.TryGetValue(c.Name, out vs)) funcCalls.Add(c.Name, vs = new List<ILExpression>());
+                    vs.Add(e);
                 }
             }
         }
@@ -305,7 +302,7 @@ namespace GameMaker.Writers
             }
             foreach (var kv in funcCalls.Where(x => Constants.IsDefined(x.Key)))
             {
-                Action<CodeWriter, ILCall> action;
+                Action<CodeWriter, ILExpression> action;
                 if (calls.TryGetValue(kv.Key, out action)) foreach(var c in kv.Value) action(this, c);
             }
         }
@@ -346,14 +343,14 @@ namespace GameMaker.Writers
             }
             CheckAllVars();
             int arguments = 0;
-            foreach (var v in block.GetSelfAndChildrenRecursive<ILVariable>())
+            foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x=>x.Code == GMCode.Var))
             {
+                ILVariable v = e.Operand as ILVariable;
                 Match match = Context.ScriptArgRegex.Match(v.Name);
                 if (match != null && match.Success)
                 {
                     int arg = int.Parse(match.Groups[1].Value) + 1; // we want the count
                     if (arg > arguments) arguments = arg;
-                    v.isLocal = true; // arguments are 100% local
                 }
             }
             ScriptInfo oi = new ScriptInfo();
@@ -379,16 +376,32 @@ namespace GameMaker.Writers
               //  var actions = einfo.Actions;
                 infos.Add(einfo);
                 einfo.Type = i;
-                Parallel.ForEach(obj.Events[i], e => // This too much?:P
+                if (Context.doThreads)
                 {
-                    Parallel.ForEach(e.Actions, a =>
+                    Parallel.ForEach(obj.Events[i], e => // This too much?:P
                     {
-                        File.Code codeData = File.Codes[a.CodeOffset];
-                        ILBlock block = DecompileCode(codeData);
-                        ActionInfo info = new ActionInfo() { Method = block, Name = Context.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
-                        actions.Add(info);
+                        Parallel.ForEach(e.Actions, a =>
+                        {
+                            File.Code codeData = File.Codes[a.CodeOffset];
+                            ILBlock block = DecompileCode(codeData);
+                            ActionInfo info = new ActionInfo() { Method = block, Name = Context.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
+                            actions.Add(info);
+                        });
                     });
-                });
+                } else
+                {
+                    foreach(var e in obj.Events[i])
+                    {
+                        foreach(var a in e.Actions)
+                        {
+                            File.Code codeData = File.Codes[a.CodeOffset];
+                            ILBlock block = DecompileCode(codeData);
+                            ActionInfo info = new ActionInfo() { Method = block, Name = Context.EventToString(i, e.SubType), SubType = e.SubType, Type = i };
+                            actions.Add(info);
+                        }
+                    }
+                }
+               
                 einfo.Actions = actions.OrderBy(x => x.Type).ToList();
             }
             CheckAllVars();

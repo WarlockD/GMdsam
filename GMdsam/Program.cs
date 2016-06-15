@@ -99,6 +99,12 @@ namespace GameMaker
                 get { return original.Encoding; }
             }
         }
+       public static void EnviromentExit(int i)
+        {
+            Ast.ILVariable.SaveAllVarRefs();
+            Environment.Exit(i);
+        }
+       
         static void InstructionError(string message, params object[] o)
         {
             Console.WriteLine("Useage <exe> data.win <-png> <-mask>  [-all (objects|scripts|paths|codes|textures|sprites|sounds)");
@@ -107,12 +113,12 @@ namespace GameMaker
             {
                 Context.FatalError(message);
             }
-            Environment.Exit(-1);
+            EnviromentExit(1);
         }
         static void GoodExit()
         {
             Console.WriteLine("All Done!");
-            Environment.Exit(0);
+            EnviromentExit(0);
         }
         static int SetPreFlags(string[] args)
         {

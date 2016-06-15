@@ -72,7 +72,7 @@ namespace GameMaker.Ast
             // Remove redundant continue
             foreach (ILWhileLoop loop in method.GetSelfAndChildrenRecursive<ILWhileLoop>())
             {
-                var body = loop.BodyBlock.Body;
+                var body = loop.Body.Body;
                 if (body.Count > 0 && body.Last().Match(GMCode.LoopContinue))
                 {
                     body.RemoveAt(body.Count - 1);
@@ -296,15 +296,10 @@ namespace GameMaker.Ast
                     return loop.Condition;
                 }
                 else {
-                    return Enter(loop.BodyBlock, visitedNodes);
+                    return Enter(loop.Body, visitedNodes);
                 }
             }
 
-            ILTryCatchBlock tryCatch = node as ILTryCatchBlock;
-            if (tryCatch != null)
-            {
-                return tryCatch;
-            }
 
             ILSwitch ilSwitch = node as ILSwitch;
             if (ilSwitch != null)
@@ -344,12 +339,6 @@ namespace GameMaker.Ast
                 return Exit(nodeParent, visitedNodes);
             }
 
-            if (nodeParent is ILTryCatchBlock)
-            {
-                // Finally blocks are completely ignored.
-                // We rely on the fact that try blocks can not be entered.
-                return Exit(nodeParent, visitedNodes);
-            }
 
             if (nodeParent is ILSwitch)
             {

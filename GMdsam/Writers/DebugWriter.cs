@@ -65,13 +65,9 @@ namespace GameMaker.Writers
             {
                 StringBuilder sb = new StringBuilder();
                 expr.AppendHeader(sb);
-                expr.ToStringBuilder(sb, 0);
+                expr.ToStringBuilder(sb);
                 Write(sb.ToString());
             }else Write(expr.ToString());
-        }
-        public override void Write(ILVariable v)
-        {
-            Write(v.ToString());
         }
         void WriteObject(object o)
         {
@@ -92,14 +88,6 @@ namespace GameMaker.Writers
         {
             Write(v.ToString());
         }
-        public override void Write(ILLabel label)
-        {
-            Write(":{0}:", label.Name);
-        }
-        public override void Write(ILCall v)
-        {
-            Write("ILCall?");
-        }
         public override void Write(ILCondition condition)
         {
             Write("ILCondition If ");
@@ -118,7 +106,7 @@ namespace GameMaker.Writers
             Write("ILWhileLoop If ");
             Write(loop.Condition); // want to make sure we are using the debug
             WriteLine(" do");
-            Write(loop.BodyBlock);
+            Write(loop.Body);
             WriteLine("ILWhileLoop end");
         }
         public override void Write(ILWithStatement with)

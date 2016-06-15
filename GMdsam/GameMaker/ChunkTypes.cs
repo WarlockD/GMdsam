@@ -1004,32 +1004,20 @@ namespace GameMaker
                     if (i > arg) arg = i;
                 }
             }
-            void CountArguments(ILCall call, ref int arg)
-            {
-                foreach (var e in call.GetSelfAndChildrenRecursive<ILExpression>())
-                {
-                    if (e.Code == GMCode.Var) CountArguments(e.Operand as ILVariable, ref arg);
-                    else if(e.Code == GMCode.Call) CountArguments(e.Operand as ILCall, ref arg);
-                }
-            }
             ILBlock CreateScriptBlock() { 
                 if(_scriptIndex < 0) return null;
                 ILBlock block = File.Codes[_scriptIndex].Block;
-                Debug.Assert(Name != "caster_play");
-             //   HashSet<GM_Type> types = new HashSet<GM_Type>();
+                HashSet<GM_Type> types = new HashSet<GM_Type>();
                 _argumentCount = 0;
-                foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>())
+                foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Ret || x.Code == GMCode.Var))
                 {
                     switch (e.Code)
                     {
                         case GMCode.Ret:
-                            types.UnionWith(e.GetAllGMTypes());
+                            types.Add(e.Type);
                             break;
                         case GMCode.Var:
                             CountArguments(e.Operand as ILVariable, ref _argumentCount);
-                            break;
-                        case GMCode.Call:
-                            CountArguments(e.Operand as ILCall, ref _argumentCount);
                             break;
                     }
                 
@@ -1086,7 +1074,7 @@ namespace GameMaker
             public ILBlock block = null; // cached
             protected Lazy<ILBlock> _block = null; // used 
             public ILBlock Block { get { return _block.Value; } }
-
+            public Dictionary<string, ILVariable> Locals { get; protected set; }
             public Stream Data
             {
                 get
@@ -1105,11 +1093,13 @@ namespace GameMaker
             protected override ILBlock CreateNewBlock()
             {
                 if (Context.Version != UndertaleVersion.V10000) throw new Exception("Cannot compile old code using new");
+                Locals = new Dictionary<string, ILVariable>();
                 // Don't need any of that above since we don't do asms anymore
                 var error = new ErrorContext(name);
                 ILBlock block = new ILBlock();
                 block.Body = new Dissasembler.OldByteCodeAst().Build(this, error);
-                block = new ILAstBuilder().Build(block, error);
+                block = new ILAstBuilder().Build(block, Locals, error);
+                block.FixParents();
                 return block;
             }
             protected override void InternalRead(BinaryReader r)
@@ -1130,11 +1120,16 @@ namespace GameMaker
             protected override ILBlock CreateNewBlock()
             {
                 if (Context.Version != UndertaleVersion.V10001) throw new Exception("Cannot compile new code using old");
+                Locals = new Dictionary<string, ILVariable>();
                 // Don't need any of that above since we don't do asms anymore
                 var error = new ErrorContext(name);
                 ILBlock block = new ILBlock();
+#if DEBUG
+                Debug.WriteLine("Decompiling: " + Name);
+#endif
                 block.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
-                block = new ILAstBuilder().Build(block, error);
+                block = new ILAstBuilder().Build(block, Locals,error);
+                block.FixParents();
                 return block;
             }
 

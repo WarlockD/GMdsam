@@ -225,7 +225,7 @@ namespace GameMaker.Ast
                                 basicBlock.Body.Add(new ILWhileLoop()
                                 {
                                     Condition = mustNegate ? condExpr : condExpr.NegateCondition(),
-                                    BodyBlock = new ILBlock()
+                                    Body = new ILBlock()
                                     {
                                         EntryGoto = new ILExpression(GMCode.B, trueLabel),
                                         Body = FindLoops(loopContents, node, false)
@@ -250,7 +250,7 @@ namespace GameMaker.Ast
                             Body = new List<ILNode>() {
                                 ILLabel.Generate("Loop"),
                                 new ILWhileLoop() {
-                                    BodyBlock = new ILBlock() {
+                                    Body = new ILBlock() {
                                         EntryGoto = new ILExpression(GMCode.B, (ILLabel)basicBlock.Body.First()),
                                         Body = FindLoops(loopContents, node, true)
                                     }
@@ -300,7 +300,7 @@ namespace GameMaker.Ast
                    
                     {
                         ILLabel[] caseLabels;
-                        List<ILExpression> conditions;
+                        IList<ILExpression> conditions;
                         ILLabel fallLabel;
                         // Switch
 
@@ -391,7 +391,7 @@ namespace GameMaker.Ast
                         // Two-way branch
                         ILLabel trueLabel;
                         ILLabel falseLabel;
-                        List<ILExpression> condExprs;
+                        IList<ILExpression> condExprs;
                         if (block.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExprs, out falseLabel) // be sure to invert this condition
                             && condExprs.Count > 0)  // its resolved
                         {

@@ -78,6 +78,7 @@
     <Compile Include="Dissasembler\IBuildAst.cs" />
     <Compile Include="Dissasembler\NewByteCodeAst.cs" />
     <Compile Include="Dissasembler\OldByteCodeAst.cs" />
+    <Compile Include="ILAst\ILBasicBlock.cs" />
     <Compile Include="ILAst\LoopAndConditions.cs" />
     <Compile Include="Dissasembler\OpCode.cs" />
     <Compile Include="ILAst\Optimize.cs" />
@@ -105,9 +106,6 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Writers\GameMaker\GM_Writer.cs" />
-    <Compile Include="Writers\Lua\Lua_Mutater.cs" />
-    <Compile Include="Writers\Lua\Lua_Formater.cs" />
-    <Compile Include="Writers\Lua\Lua_Writer.cs" />
     <Compile Include="Writers\ResourceFormater.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

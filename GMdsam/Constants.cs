@@ -212,17 +212,14 @@ namespace GameMaker
         public static bool IsDefined(string name) { return defined.Contains(name); }
 
         // Trys to guess what the final type will be because of size
-      
+
         public static bool FixAndCheckVarType(ILVariable v)
         {
             if (v.Type != GM_Type.NoType) return true;
-            if (v.isResolved)
+            if (Constants.IsDefined(v.Name))
             {
-                if (Constants.IsDefined(v.Name))
-                {
-                    v.Type = Constants.Properties[v.Name].Type;
-                    return true;
-                }
+                v.Type = Constants.Properties[v.Name].Type;
+                return true;
             }
             return false;
         }
@@ -424,8 +421,8 @@ namespace GameMaker
                 t = info.Type;
                 if (t == GM_Type.NoType)
                 {
-                    error.Error("Don't know the type of builtin function '{0}', defaulting to int", name);
-                    t = GM_Type.Int;
+                   // error.Error("Don't know the type of builtin function '{0}', defaulting to int", name);
+                 //   t = GM_Type.Int;
                 }
                 return t;
             }
@@ -436,8 +433,8 @@ namespace GameMaker
                 t = script.ReturnType;
                 if (t == GM_Type.NoType)
                 {
-                    error.Error("Don't know the type of user function '{0}', defaulting to int", name);
-                    t = GM_Type.Int;
+                 //   error.Error("Don't know the type of user function '{0}', defaulting to int", name);
+                 //   t = GM_Type.Int;
                 }
                 AddFunction(name, script.ArgumentCount, t);
                 return t;

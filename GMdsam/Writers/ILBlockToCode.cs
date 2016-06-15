@@ -142,45 +142,48 @@ namespace GameMaker.Writers
             Write(v);
 
             // I could check the second leaf, but meh
-            if (right.Arguments.Count == 2 && right.Arguments[0].TreeEqual(v))
-            {
-                ILValue cv;
-                switch (right.Code)
+            if (right.Arguments.Count == 2) {
+                ILVariable v2;
+                if (right.Arguments[0].Match(GMCode.Var, out v2))
                 {
-                    case GMCode.Add:
-                        if (right.Arguments[1].Match(GMCode.Constant, out cv) && cv.IntValue == 1)
-                            Write("++");
-                        else
-                        {
-                            Write(" += ");
+                    ILValue cv;
+                    switch (right.Code)
+                    {
+                        case GMCode.Add:
+                            if (right.Arguments[1].Match(GMCode.Constant, out cv) && cv.IntValue == 1)
+                                Write("++");
+                            else
+                            {
+                                Write(" += ");
+                                Write(right.Arguments[1]);
+                            }
+                            break;
+                        case GMCode.Sub:
+                            if (right.Arguments[1].Match(GMCode.Constant, out cv) && cv.IntValue == 1)
+                                Write("--");
+                            else
+                            {
+                                Write(" -= ");
+                                Write(right.Arguments[1]);
+                            }
+                            break;
+                        case GMCode.Mul:
+                            Write(" *= ");
                             Write(right.Arguments[1]);
-                        }
-                        break;
-                    case GMCode.Sub:
-                        if (right.Arguments[1].Match(GMCode.Constant, out cv) && cv.IntValue == 1)
-                            Write("--");
-                        else
-                        {
-                            Write(" -= ");
+                            break;
+                        case GMCode.Div:
+                            Write(" /= ");
                             Write(right.Arguments[1]);
-                        }
-                        break;
-                    case GMCode.Mul:
-                        Write(" *= ");
-                        Write(right.Arguments[1]);
-                        break;
-                    case GMCode.Div:
-                        Write(" /= ");
-                        Write(right.Arguments[1]);
-                        break;
-                    case GMCode.Mod:
-                        Write(" %= ");
-                        Write(right.Arguments[1]);
-                        break;
-                    default:
-                        Write(" = "); // default
-                        Write(right);
-                        break;
+                            break;
+                        case GMCode.Mod:
+                            Write(" %= ");
+                            Write(right.Arguments[1]);
+                            break;
+                        default:
+                            Write(" = "); // default
+                            Write(right);
+                            break;
+                    }
                 }
             }
             else
@@ -218,7 +221,6 @@ namespace GameMaker.Writers
         }
 
         public virtual void Write(ILValue v) {
-            InsertLineInfo(v);
             Write(v.ToString()); 
             if (!(v.Value is string) && v.ValueText != null)
             {
@@ -229,35 +231,7 @@ namespace GameMaker.Writers
                 Write(BlockCommentEnd);
             }
         }
-        public virtual void Write(ILVariable v)
-        {
-            InsertLineInfo(v);
-            
-            if (Constants.IsDefined(v.Name))
-            {
-                Write("builtin.");
-            } else
-            {
-                string instanceName = Context.InstanceToString(v.Instance, this);
-                Write(instanceName);
-                Write('.');
-            }
-            Write(v.Name);
-            if (v.isArray)
-            {
-                Write('[');
-                if (v.Index.Code == GMCode.Array2D)
-                {
-                    Write(v.Index.Arguments[0]);
-                    Write(',');
-                    Write(v.Index.Arguments[1]);
-                }
-                else Write(v.Index);
-                Write(']');
-            }
 
-
-        }
         protected void WritePreExpresion(string op, ILExpression expr) {
             Write(op);
             WriteParm(expr, 0);
@@ -274,7 +248,11 @@ namespace GameMaker.Writers
         {
             Write((dynamic) n);
         }
-
+        public virtual void Write(ILLabel label)
+        {
+            Write(label.Name);
+            Write(':');
+        }
         public virtual void Write(ILExpression expr)
         {
             InsertLineInfo(expr);
@@ -302,12 +280,36 @@ namespace GameMaker.Writers
                 case GMCode.LogicAnd: WriteTreeExpression("&&", expr); break;
                 case GMCode.LogicOr: WriteTreeExpression("||", expr); break;
                 case GMCode.Call:
-                    Write(expr.Operand as ILCall);
+                    {
+                        ILCall call = expr.Operand as ILCall;
+                        Write(call.Name);
+                        Write('('); // self is normaly the first of eveything
+                        WriteNodesComma(expr.Arguments);
+                        Write(')');
+                    }
                     break;
                 case GMCode.Constant: // primitive c# type
                     Write(expr.Operand as ILValue);
                     break;
                 case GMCode.Var:  // should be ILVariable
+                    {
+                        ILVariable v = expr.Operand as ILVariable;
+                        if (Constants.IsDefined(v.Name)) Write("builtin");
+                        else Write(v.InstanceName);
+                        Write('.');
+                        Write(v.Name);
+                        if(expr.Arguments.Count > 0)
+                        {
+                            Write('[');
+                            Write(expr.Arguments[0]);
+                            if(expr.Arguments.Count > 1)
+                            {
+                                Write(',');
+                                Write(expr.Arguments[1]);
+                            }
+                            Write(']');
+                        }
+                    }
                     Write(expr.Operand as ILVariable);
                     break;
                 case GMCode.Exit:
@@ -326,10 +328,27 @@ namespace GameMaker.Writers
                 case GMCode.Assign:
                     WriteAssign(expr.Operand as ILVariable, expr.Arguments.Single());
                     break;
-
+                // These shouldn't print, debugging
                 default:
+                    Write(expr.ToString());
+                    Flush();
+                    Close(); // we die here
+                    var root = expr.Root;
+                    using (StreamWriter sw = new StreamWriter("bad_write.txt"))
+                    {
+                        sw.Write(root.ToString());
+                        sw.Flush();
+                    }
                     throw new Exception("Not Implmented! ugh");
             }
+            if(expr.Comment != null)
+            {
+                Write(BlockCommentStart);
+                Write(' ');
+                Write(expr.Comment);
+                Write(' ');
+                Write(BlockCommentEnd);
+            } 
         }
         public virtual void Write(ILCondition condition) {
             InsertLineInfo(condition);
@@ -342,27 +361,6 @@ namespace GameMaker.Writers
                 Write(" else ");
                 WriteSingleLineOrBlock(condition.FalseBlock);
             }
-        }
-        public virtual void Write(ILCall v) {
-            InsertLineInfo(v);
-            if (v.FullTextOverride != null) // we havea ful name override so just write that
-            {
-                Write(v.FullTextOverride); // have to assump its a proper function
-            }
-            else
-            {
-                string script_name;
-                if (v.FunctionNameOverride != null)
-                    script_name = v.FunctionNameOverride;
-                else
-                    script_name = v.Name;
-                //   Debug.Assert(!script_name.Contains("scr_damagestandard"));
-                Write(script_name);
-                Write('('); // self is normaly the first of eveything
-                WriteNodesComma(v.Arguments);
-                Write(')');
-            }
-            if (v.Comment != null) Write(" */ {0}  */", v.Comment);
         }
         protected void WriteSingleLineOrBlock(ILBlock block)
         {
@@ -384,11 +382,11 @@ namespace GameMaker.Writers
             Write("while(");
             Write(loop.Condition); // want to make sure we are using the debug
             Write(") ");
-            WriteSingleLineOrBlock(loop.BodyBlock);
+            WriteSingleLineOrBlock(loop.Body);
         }
         public virtual void Write(ILWithStatement with) {
             InsertLineInfo(with);
-            string env = with.Enviroment.Code == GMCode.Constant ? Context.InstanceToString(with.Enviroment, this) : null;
+            string env = with.Enviroment.Code == GMCode.Constant ? Context.InstanceToString((int)(with.Enviroment.Operand as ILValue)) : null;
             if (env != null) WriteLine("// {0}", env);
             Write("with(");
             Write(with.Enviroment); // want to make sure we are using the debug
@@ -419,11 +417,6 @@ namespace GameMaker.Writers
             Indent--;
             Write("}");
         }
-        public virtual void Write(ILLabel n) {
-            InsertLineInfo(n);
-            Write("{0}:", n.Name);
-        }
-
         #endregion
         public void Write(ILBlock block)
         { // this is why we feed eveythign though this thing
@@ -441,11 +434,7 @@ namespace GameMaker.Writers
             node_infos = ni_backup;
             return sb.ToString();
         }
-        public string WriteToString(ILBlock block) 
-        {
-            throw new Exception("Cannot write blocks to string");
-        }
-        public virtual void WriteNodeList(IReadOnlyList<ILNode> body, bool ident_block)
+        public virtual void WriteNodeList(IList<ILNode> body, bool ident_block)
         {
             if (ident_block) Indent++;
             if (body.Count > 0)

@@ -100,8 +100,7 @@ namespace GameMaker.Dissasembler
                         var prev = list.Last.Value as ILExpression;
                         Debug.Assert(prev.Code != GMCode.Pop);
                         prev.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
-                        prev.InferredType = types[1];
-                        prev.Conv = prev.Conv.Concat(types).ToArray();
+                        prev.Types = types;
                     }
                     break;// ignore all Conv for now
                 case NewOpcode.popz: e = CreateExpression(GMCode.Popz, types); break;
@@ -136,7 +135,11 @@ namespace GameMaker.Dissasembler
                     e = CreateExpression(GMCode.Dup, types);
                     e.Operand = (int)(CurrentRaw & 0xFFFF); // dup type
                     break;
-                case NewOpcode.call: e = CreateExpression(GMCode.Call, types); e.Operand = File.Strings[r.ReadInt32()]; break;
+                case NewOpcode.call:
+                    e = CreateExpression(GMCode.CallUnresolved, types);
+                    e.Operand = ILCall.CreateCall(File.Strings[r.ReadInt32()], (int)(CurrentRaw & 0xFFFF));
+                    // since we can have var args on alot of functions, extra is used
+                    break;
                 case NewOpcode.ret: e = CreateExpression(GMCode.Ret, types); break;
                 case NewOpcode.exit: e = CreateExpression(GMCode.Exit, types); break;
                 case NewOpcode.b: e = CreateLabeledExpression(GMCode.B); break;
@@ -185,8 +188,8 @@ namespace GameMaker.Dissasembler
                     }
                     break;
                 case NewOpcode.pop:
-                    e = CreateExpression(GMCode.Pop, types); e.Operand = BuildVar(r.ReadInt32()); 
-                    // e = CreateExpression(GMCode.Pop, types, ReadOperand(CurrentRaw));
+                    e = CreateExpression(GMCode.Pop, types);
+                    e.Operand = BuildVar(r.ReadInt32()); 
                     break;
                 //      push = 192, // generic? -1
                 //  pushl = 193, // local? -7

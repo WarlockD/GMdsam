@@ -38,8 +38,7 @@ namespace GameMaker.Dissasembler
                         var prev = list.Last.Value as ILExpression;
                         Debug.Assert(prev.Code != GMCode.Pop);
                         prev.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
-                        prev.InferredType = types[1];
-                        prev.Conv = prev.Conv.Concat(types).ToArray();
+                        prev.Types = types;
                     }
                     break;// ignore all Conv for now
                 case GMCode.Popz: e = CreateExpression(GMCode.Popz, types); break;

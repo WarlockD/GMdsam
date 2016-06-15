@@ -120,7 +120,6 @@ namespace GameMaker.Writers
                         Context.Message("{0} finished in {1}", task_name, DateTime.Now - start);
                         ct._alldone = true;
                     }, TaskCreationOptions.LongRunning);
-                    ct.Task.Start();
                     return ct;
                 }
                 else
@@ -164,7 +163,6 @@ namespace GameMaker.Writers
                         
                         ct._alldone = true;
                     }, TaskCreationOptions.LongRunning);
-                    ct.Task.Start();
                     return ct;
                 }
                 else
@@ -384,8 +382,6 @@ namespace GameMaker.Writers
         {
             switch (Context.outputType)
             {
-                case OutputType.LoveLua:
-                    return (CodeWriter) new Lua.Writer(output);
                 case OutputType.GameMaker:
                     return (CodeWriter) new GameMaker.Writer(output);
                 default:
@@ -492,6 +488,8 @@ namespace GameMaker.Writers
         }
         public void FinishProcessing()
         {
+            ILVariable test;
+
             if (_todo != null && _todo.Count > 0)
             {
                 // ok, we have the jobs start them all up!

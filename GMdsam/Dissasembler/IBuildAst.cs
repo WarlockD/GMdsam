@@ -29,12 +29,11 @@ namespace GameMaker.Dissasembler
         {
             int absolute = GMCodeUtil.getBranchOffset(CurrentRaw) + CurrentPC;
             ILExpression e = new ILExpression(code, GetLabel(absolute));
-            e.Conv = null;
             e.Extra = (int)(CurrentRaw & 0xFFFF);
             e.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
             return e;
         }
-        public List<ILNode> Build(File.Code code, ErrorContext error=null)
+        public List<ILNode> Build(File.Code code,  ErrorContext error=null)
         {
             if (code == null) throw new ArgumentNullException("code");
             Stream stream = code.Data;
@@ -89,18 +88,13 @@ namespace GameMaker.Dissasembler
             else if ((topByte & 160) == 0) types = new GM_Type[] { (GM_Type)(secondTopByte & 15), (GM_Type)((secondTopByte >> 4) & 15) };
             return types;
         }
-     
-        protected ILVariable BuildVar(int operand)
+
+        protected UnresolvedVar BuildVar(int operand)
         {
+            string name = Context.LookupString(operand & 0x1FFFFF);
             int extra = (short)(CurrentRaw & 0xFFFF);
-            ILVariable v = null;
             // int loadtype = operand >> 24;
-            if (extra != 0) // never see simple vars that are arrays
-                v= new ILVariable(Context.LookupString(operand & 0x1FFFFF), extra);// simple var
-            else
-                v= new ILVariable(Context.LookupString(operand & 0x1FFFFF), extra,  operand >= 0);// standard for eveyone
-            Constants.FixAndCheckVarType(v);
-            return v;
+            return new UnresolvedVar() { Name = name, Operand = operand, Extra = extra };
         }
         protected ILValue ReadConstant(GM_Type t)
         {
@@ -129,7 +123,7 @@ namespace GameMaker.Dissasembler
         protected ILExpression CreateExpression(GMCode code,  GM_Type[] types)
         {
             ILExpression e = new ILExpression(code, null);
-            e.Conv = types;
+            e.Types = types;
             e.Extra = (int)(CurrentRaw & 0xFFFF);
             e.AddILRange(CurrentPC);
             return e;
@@ -138,7 +132,7 @@ namespace GameMaker.Dissasembler
         {
             Debug.Assert(operand != null);
             ILExpression e = new ILExpression(code, operand);
-            e.Conv = types;
+            e.Types = types;
             e.Extra = (int)(CurrentRaw & 0xFFFF);
             e.AddILRange(CurrentPC);
             return e;
@@ -146,13 +140,13 @@ namespace GameMaker.Dissasembler
         protected ILExpression CreatePushExpression(GMCode code, GM_Type[] types)
         {
             ILExpression e = new ILExpression(code, null);
-            e.Conv = types;
+            e.Types = types;
             e.Extra = (int)(CurrentRaw & 0xFFFF);
             e.AddILRange(CurrentPC);
             switch (types[0])
             {
                 case GM_Type.Var:
-                    e.Arguments.Add(new ILExpression(GMCode.Var, BuildVar(r.ReadInt32())));
+                    e.Operand = BuildVar(r.ReadInt32());
                     break;
                 case GM_Type.Short:
                     {
