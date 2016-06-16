@@ -47,7 +47,6 @@ namespace GameMaker.Writers
         }
         Dictionary<ILNode, NodeInfo> node_infos;
         public IReadOnlyDictionary<ILNode,NodeInfo> NodeInfos {  get { return node_infos; } }
-        StringBuilder line = null;
         IMessages error = null;
 
         void Init(IMessages error,bool catch_infos)
@@ -134,12 +133,12 @@ namespace GameMaker.Writers
                     return 8;
             }
         }
-
-        void WriteAssign(ILVariable v, ILExpression right)
+       
+        void WriteAssign(ILExpression left, ILExpression right)
         {
             // Lets make assign nice here, instead of having to
             // make another rule to fix the ast
-            Write(v);
+            WriteVariable(left);
 
             // I could check the second leaf, but meh
             if (right.Arguments.Count == 2) {
@@ -219,7 +218,7 @@ namespace GameMaker.Writers
             Write(expr.Arguments[index]);
             if (needParm) Write(')');
         }
-
+       
         public virtual void Write(ILValue v) {
             Write(v.ToString()); 
             if (!(v.Value is string) && v.ValueText != null)
@@ -252,6 +251,28 @@ namespace GameMaker.Writers
         {
             Write(label.Name);
             Write(':');
+        }
+        public virtual void WriteVariable(ILExpression ve)
+        {
+            Debug.Assert(ve.Code == GMCode.Var);
+            ILVariable v = ve.Operand as ILVariable;
+            if (v.Instance == 0)
+                Write(ve.Arguments[0]);
+            else
+                Write(v.InstanceName);
+            Write('.');
+            Write(v.Name);
+            if (ve.Arguments.Count > 1)
+            {
+                Write('[');
+                Write(ve.Arguments[1]);
+                if (ve.Arguments.Count == 3)
+                {
+                    Write(',');
+                    Write(ve.Arguments[2]);
+                }
+                Write(']');
+            }
         }
         public virtual void Write(ILExpression expr)
         {
@@ -292,25 +313,7 @@ namespace GameMaker.Writers
                     Write(expr.Operand as ILValue);
                     break;
                 case GMCode.Var:  // should be ILVariable
-                    {
-                        ILVariable v = expr.Operand as ILVariable;
-                        if (Constants.IsDefined(v.Name)) Write("builtin");
-                        else Write(v.InstanceName);
-                        Write('.');
-                        Write(v.Name);
-                        if(expr.Arguments.Count > 0)
-                        {
-                            Write('[');
-                            Write(expr.Arguments[0]);
-                            if(expr.Arguments.Count > 1)
-                            {
-                                Write(',');
-                                Write(expr.Arguments[1]);
-                            }
-                            Write(']');
-                        }
-                    }
-                    Write(expr.Operand as ILVariable);
+                    WriteVariable(expr);
                     break;
                 case GMCode.Exit:
                     Write("return // exit");
@@ -326,7 +329,8 @@ namespace GameMaker.Writers
                     Write("continue");
                     break;
                 case GMCode.Assign:
-                    WriteAssign(expr.Operand as ILVariable, expr.Arguments.Single());
+                    WriteAssign(expr.Arguments[0], expr.Arguments[1]);
+
                     break;
                 // These shouldn't print, debugging
                 default:
@@ -422,18 +426,7 @@ namespace GameMaker.Writers
         { // this is why we feed eveythign though this thing
             WriteNodeList(block.Body, true);
         }
-        public string WriteToString<T>(T node) where T: ILNode
-        {
-            StringBuilder sb = new StringBuilder(20);
-            var backup = this.line;
-            this.line = sb;
-            var ni_backup = node_infos;
-            node_infos = null;
-            Write(node);
-            this.line = backup;
-            node_infos = ni_backup;
-            return sb.ToString();
-        }
+
         public virtual void WriteNodeList(IList<ILNode> body, bool ident_block)
         {
             if (ident_block) Indent++;

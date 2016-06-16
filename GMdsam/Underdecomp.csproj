@@ -80,12 +80,10 @@
     <Compile Include="Dissasembler\OldByteCodeAst.cs" />
     <Compile Include="ILAst\ILBasicBlock.cs" />
     <Compile Include="ILAst\LoopAndConditions.cs" />
-    <Compile Include="Dissasembler\OpCode.cs" />
     <Compile Include="ILAst\Optimize.cs" />
     <Compile Include="ILAst\BuildILAst.cs" />
     <Compile Include="FlowAnalysis\ControlFlowEdge.cs" />
     <Compile Include="FlowAnalysis\ControlFlowGraph.cs" />
-    <Compile Include="FlowAnalysis\ControlFlowGraphBuilder.cs" />
     <Compile Include="FlowAnalysis\ControlFlowNode.cs" />
     <Compile Include="ILAst\GotoRemoval.cs" />
     <Compile Include="FlowAnalysis\GraphViz.cs" />
@@ -99,7 +97,6 @@
     <Compile Include="PlainTextWriter.cs" />
     <Compile Include="Writers\AllWriter.cs" />
     <Compile Include="Writers\CodeWriter.cs" />
-    <Compile Include="Writers\DebugWriter.cs" />
     <Compile Include="Writers\ILBlockToCode.cs" />
     <Compile Include="Instruction.cs" />
     <Compile Include="PListDict.cs" />

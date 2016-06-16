@@ -9,10 +9,11 @@ namespace GameMaker.Ast
     {
         Dictionary<ILLabel, int> labelGlobalRefCount = new Dictionary<ILLabel, int>();
         Dictionary<ILLabel, ILBasicBlock> labelToBasicBlock = new Dictionary<ILLabel, ILBasicBlock>();
-        Dictionary<ILLabel, List<ILLabel>> labelToBranch = new Dictionary<ILLabel, List<ILLabel>>();
+        Dictionary<ILLabel, HashSet<ILLabel>> labelToBranch = new Dictionary<ILLabel, HashSet<ILLabel>>();
         ErrorContext error;
         public ControlFlowLabelMap(ILBlock method, ErrorContext error)
         {
+            method.FixParents();
             this.error = error;
             foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
             {
@@ -26,45 +27,19 @@ namespace GameMaker.Ast
                 for (int i = 1; i < bb.Body.Count; i++)
                 {
                     ILNode n = bb.Body[i];
-                    ILLabel target = null;
                     ILExpression e = n as ILExpression;
-                    if (e != null) target = e.Operand as ILLabel;
-                    if (target != null)
+                    if (e == null) continue;
+                    foreach(var target in e.GetBranchTargets())
                     {
                         labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-                        List<ILLabel> labels;
-                        if (!labelToBranch.TryGetValue(target, out labels)) labelToBranch.Add(target, labels = new List<ILLabel>());
+                        HashSet<ILLabel> labels;
+                        if (!labelToBranch.TryGetValue(target, out labels)) labelToBranch.Add(target, labels = new HashSet<ILLabel>());
                         labels.Add(entry);
-                        continue;
                     }
                 }
             }
         }
-        public void ControlFlowLabelMapOld(ILBlock method)
-        {
-            // This single constructor is eating ALOT o time, renaming it and trying to considate it into one loop
-            foreach (ILLabel target in method.GetSelfAndChildrenRecursive<ILExpression>(e => e.IsBranch()).SelectMany(e => e.GetBranchTargets()))
-            {
-                labelGlobalRefCount[target] = labelGlobalRefCount.GetOrDefault(target) + 1;
-                labelToBranch[target] = new List<ILLabel>();
-            }
-            foreach (ILBasicBlock bb in method.GetSelfAndChildrenRecursive<ILBasicBlock>())
-            {
-                ILLabel entry = bb.EntryLabel();
-                ILExpression br = bb.Body.ElementAtOrDefault(bb.Body.Count - 2) as ILExpression;
-                ILExpression b = bb.Body.ElementAtOrDefault(bb.Body.Count - 1) as ILExpression;
-                if (br != null && (br.Code == GMCode.Bt || br.Code == GMCode.Bt)) labelToBranch[br.Operand as ILLabel].Add(entry);
-                if (b != null && b.Code == GMCode.B) labelToBranch[b.Operand as ILLabel].Add(entry);
-                //
-
-                foreach (ILLabel label in bb.GetChildren().OfType<ILLabel>())
-                {
-                    labelToBasicBlock[label] = bb;
-                }
-            }
-           
-        }
-        public List<ILLabel> LabelToParrents(ILLabel l) { return labelToBranch[l]; }
+        public HashSet<ILLabel> LabelToParrents(ILLabel l) { return labelToBranch[l]; }
         public ILBasicBlock LabelToBasicBlock(ILLabel l) { return labelToBasicBlock[l]; }
         public int LabelCount(ILLabel l) { return labelGlobalRefCount[l];  }
     }
@@ -206,6 +181,7 @@ namespace GameMaker.Ast
                 fswitch.Operand = labels.ToArray();
                 ILExpression pushSwitchExpression = startOfAllCases.Body.ElementAtOrDefault(startOfAllCases.Body.Count - 6) as ILExpression;
                 ILExpression switchCondition;
+                // We need to try to resolve this block somehow ugh
                 if (!pushSwitchExpression.Match(GMCode.Push, out switchCondition) || !switchCondition.isExpressionResolved()) { 
 
                     error.Error("switch failure " + startOfAllCases.ToString());

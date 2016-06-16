@@ -25,9 +25,47 @@ namespace GameMaker.Ast
                     modified = true;
                 }
             }
+            if (Context.Debug) block.FixParents();
             return modified;
         }
-
+        static bool CheckBlockBody(IList<ILNode> body, ILExpression expr, int i, Func<IList<ILNode>, ILExpression, int, bool>[] optimizations)
+        {
+            bool modified = false;
+            foreach (var optimization in optimizations) modified |= optimization(body, expr, i);
+            return modified;
+        }
+        // special case.  Since we are modifying the block alot in one go, lets try to do the entire block at once
+        public static bool RunOptimizationAndRestart(this ILBasicBlock bb, params Func<IList<ILNode>, ILExpression, int, bool>[] optimizations)
+        {
+            bool modified = false;
+            IList<ILNode> body = bb.Body;
+            int forever_loop = 0;
+            for (int i = bb.Body.Count - 1; i >= 0; i--)
+            {
+                ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
+                if (expr != null) // && optimization(bb.Body, expr, i))
+                {
+                    bool test = false;
+                    while (CheckBlockBody(body, expr, i, optimizations))
+                    {
+                        test = true;
+                        forever_loop++;
+                        Debug.Assert(forever_loop < 100); // no reason we are doing this many passes
+                    }
+                    modified |= test;
+                    if (test) i = bb.Body.Count;// backup
+                }
+            }
+            return modified;
+        }
+        public static bool RunOptimizationAndRestart(this ILBlock block, params Func<IList<ILNode>, ILExpression, int, bool>[] optimizations)
+        {
+           
+            bool modified = false;
+            foreach (ILBasicBlock bb in block.Body) modified |= bb.RunOptimizationAndRestart(optimizations);
+            if (Context.Debug) block.FixParents();
+            return modified;
+        }
         public static bool RunOptimization(this ILBlock block, Func<IList<ILNode>, ILExpression, int, bool> optimization)
         {
             bool modified = false;
@@ -42,6 +80,7 @@ namespace GameMaker.Ast
                     }
                 }
             }
+            if (Context.Debug) block.FixParents();
             return modified;
         }
     

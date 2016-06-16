@@ -104,16 +104,20 @@ namespace GameMaker
             Ast.ILVariable.SaveAllVarRefs();
             Environment.Exit(i);
         }
-       
-        static void InstructionError(string message, params object[] o)
+        static void InstructionError(string message)
         {
             Console.WriteLine("Useage <exe> data.win <-png> <-mask>  [-all (objects|scripts|paths|codes|textures|sprites|sounds)");
             Console.WriteLine("<-png> <-mask> will cut out and save all the masks and png's for sprites and backgrounds.  This dosn't effect textures though");
-            if(message != null)
+            if (message != null)
             {
                 Context.FatalError(message);
             }
             EnviromentExit(1);
+
+        }
+        static void InstructionError(string message, params object[] o)
+        {
+            InstructionError(string.Format(message, o));
         }
         static void GoodExit()
         {
@@ -125,6 +129,35 @@ namespace GameMaker
             for(int i=1;i < args.Length; i++)
             {
                 string a = args[i];
+                
+            }
+            return -1;
+        }
+        static void Main(string[] args)
+        {
+            // Context.doThreads = false;
+            //  Context.doXML = true;
+            //  Context.doAssigmentOffsets = true;
+            // ugh have to do it here?
+            string dataWinFileName = args.ElementAtOrDefault(0);
+            if (string.IsNullOrWhiteSpace(dataWinFileName))
+            {
+                InstructionError("Missing data.win file");
+            }
+            int pos = SetPreFlags(args);
+         //   try
+         //   {
+                File.LoadDataWin(dataWinFileName);
+                File.LoadEveything();
+          //  }
+         //   catch (Exception e)
+        //    {
+          //      InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
+        //    }
+            List<string> chunks = new List<string>();
+            foreach (var a in args.Skip(1))
+            {
+                if (string.IsNullOrWhiteSpace(a)) continue; // does this ever happen?
                 switch (a)
                 {
                     case "-constOffsets":
@@ -148,65 +181,31 @@ namespace GameMaker
                     case "-debug":
                         Context.Debug = true;
                         break;
-                    case "-nothreading":
+                    case "-nothread":
                         Context.doThreads = false;
                         break;
-                    case "-all":
-                        return i;
+                    case "-watch":
+                        Context.HackyDebugWatch = new HashSet<string>();
+                        break;
                     default:
-                        InstructionError("bad flag '{0}'", a);
-                        return -1; // done
-                }
-            }
-            return -1;
-        }
-        static void Main(string[] args)
-        {
-           // Context.doThreads = false;
-          //  Context.doXML = true;
-          //  Context.doAssigmentOffsets = true;
-            // ugh have to do it here?
-            string dataWinFileName = args.ElementAtOrDefault(0);
-            if (string.IsNullOrWhiteSpace(dataWinFileName))
-            {
-                InstructionError("Missing data.win file");
-            }
-            int pos = SetPreFlags(args);
-            try
-            {
-                File.LoadDataWin(dataWinFileName);
-                File.LoadEveything();
-            } catch (Exception e)
-            {
-                InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
-            }
-            
-            if(pos > 0)
-            {
-                var w = new Writers.AllWriter();
-                string option = args[pos];
-                switch (option)
-                {
-                    case "-all":
-                        {
-                            option = args.ElementAtOrDefault(++pos);
-                            if (string.IsNullOrWhiteSpace(option) || option.ToLower() == "everything")
-                                w.AddAction("everything");
-                            else
-                            {
-                                do
-                                {
-                                    w.AddAction(option);
-                                    option = args.ElementAtOrDefault(++pos);
-                                } while (!string.IsNullOrWhiteSpace(option));
-                            }
-                        }
+                        if (a[0] == '-') InstructionError("bad flag '{0}'", a);
+                        if (char.IsLetter(a[0])) chunks.Add(a);
                         break;
                 }
-                w.FinishProcessing();
             }
 
-           
+            var w = new Writers.AllWriter();
+            if (Context.HackyDebugWatch!= null)
+            {
+                Context.HackyDebugWatch = new HashSet<string>(chunks);
+                w.AddAction("code");
+            } else
+            {
+                if (chunks.Count == 0) chunks.Add("everything");
+                foreach (var a in chunks) w.AddAction(a);
+            }
+            
+            w.FinishProcessing();
             GoodExit();
         }
     }

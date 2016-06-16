@@ -89,13 +89,14 @@ namespace GameMaker.Dissasembler
             return types;
         }
 
-        protected UnresolvedVar BuildVar(int operand)
+        protected UnresolvedVar BuildUnresolvedVar(int operand)
         {
             string name = Context.LookupString(operand & 0x1FFFFF);
             int extra = (short)(CurrentRaw & 0xFFFF);
             // int loadtype = operand >> 24;
             return new UnresolvedVar() { Name = name, Operand = operand, Extra = extra };
         }
+
         protected ILValue ReadConstant(GM_Type t)
         {
             ILValue v = null;
@@ -146,7 +147,7 @@ namespace GameMaker.Dissasembler
             switch (types[0])
             {
                 case GM_Type.Var:
-                    e.Operand = BuildVar(r.ReadInt32());
+                        e.Operand = BuildUnresolvedVar(r.ReadInt32());
                     break;
                 case GM_Type.Short:
                     {

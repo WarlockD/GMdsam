@@ -189,7 +189,7 @@ namespace GameMaker.Dissasembler
                     break;
                 case NewOpcode.pop:
                     e = CreateExpression(GMCode.Pop, types);
-                    e.Operand = BuildVar(r.ReadInt32()); 
+                    e.Operand = BuildUnresolvedVar(r.ReadInt32()); 
                     break;
                 //      push = 192, // generic? -1
                 //  pushl = 193, // local? -7

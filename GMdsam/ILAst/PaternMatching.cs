@@ -68,6 +68,11 @@ namespace GameMaker.Ast
         {
             expr.ILRanges.AddRange(ilranges);
         }
+        public static void AddILRange(this ILExpression expr, ILNode n)
+        {
+            ILExpression e = n as ILExpression;
+            if (e != null && e.ILRanges != null) expr.AddILRange(e.ILRanges);
+        }
         public static void AddILRange(this ILExpression expr, int address)
         {
             expr.ILRanges.Add(new ILRange(address));
@@ -105,7 +110,13 @@ namespace GameMaker.Ast
         public static bool isExpressionResolved(this ILExpression e)
         {
             if (e == null) return false;
-            if (e.Code == GMCode.Push) e = e.MatchSingleArgument(); // go into
+            if (e.Code == GMCode.Push)
+            {
+                if (e.Operand != null)
+                    return false;
+                else
+                    e = e.MatchSingleArgument(); // go into
+            }
             switch (e.Code)
             {
                 case GMCode.Constant: return true; // always

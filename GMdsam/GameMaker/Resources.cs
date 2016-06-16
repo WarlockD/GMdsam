@@ -589,8 +589,7 @@ namespace GameMaker
                         {
                             uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
                             int position = (int)r.BaseStream.Position;
-                            var code = GMCodeUtil.getFromRaw(first);
-                            Debug.Assert((int)code == 217); // new call opcode
+                            Debug.Assert((first>>24) == 217); // new call opcode
                             int offset = r.ReadInt32() & 0x00FFFFFF;
                             Offsets[i] = position;
                             r.BaseStream.Position += offset - 8;
@@ -615,8 +614,8 @@ namespace GameMaker
                         {
                             uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
                             int position = (int) r.BaseStream.Position;
-                            var code = GMCodeUtil.getFromRaw(first);
-                                Debug.Assert(code == GMCode.Push || code == GMCode.Pop || code == GMCode.Call);
+                         //   var code = GMCodeUtil.getFromRaw(first);
+                         //       Debug.Assert(code == GMCode.Push || code == GMCode.Pop || code == GMCode.Call);
                             int offset = r.ReadInt32() & 0x00FFFFFF;
                             Offsets[i] = position;
                             r.BaseStream.Position += offset - 8;

@@ -282,17 +282,22 @@ namespace GameMaker
                 fileOutput.Flush();
             }
         }
+
+        public void DebugSave(ILBlock method, string filename, bool move = true)
+        {
+            if (this.code_name != null)
+                method.DebugSave(this.code_name, filename, move);
+            else
+                method.DebugSave(filename, move);
+        }
         public void CheckDebugThenSave(ILBlock block, string filename)
         {
             if (Context.Debug) DebugSave(block, filename);
         }
-        public void DebugSave(ILBlock block, string filename)
+
+        public string MakeDebugFileName(string filename,bool move=true)
         {
-            block.DebugSaveFile(Context.MakeDebugFileName(code_name, filename));
-        }
-        public string MakeDebugFileName(string filename)
-        {
-            return Context.MakeDebugFileName(code_name, filename);
+            return Context.MakeDebugFileName(code_name, filename,move);
         }
         public void Message(string msg)
         {

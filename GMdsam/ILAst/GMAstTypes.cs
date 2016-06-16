@@ -24,7 +24,8 @@ namespace GameMaker.Ast
             if (list.Count - index < count) throw new ArgumentOutOfRangeException("Len out of range");
             if (count > 0)
             { // ugh! I forgot I have to do this BACKWARDS
-                do list.RemoveAt(index); while (--count > 0); // slow but works
+                if (count == 1) list.RemoveAt(index);
+                else do list.RemoveAt(index); while (--count > 0); // slow but works
             }
         }
         public static bool isParent(this ILNode node, GMCode code)
@@ -68,44 +69,73 @@ namespace GameMaker.Ast
             }
             return false;
         }
-        public static void DebugSave(this ILBlock block, string FileName)
+        public static void DebugSave(this ILBlock block, string code_file, string filename,  bool move = true)
         {
-            using (PlainTextWriter sw = new PlainTextWriter(FileName))
+            filename = Context.MakeDebugFileName(code_file, filename,false);
+            block.DebugSave(filename, move); // moveing is handled here
+
+        }
+        public static void DebugSave(this ILNode node, string code_file, string filename, bool move = true)
+        {
+            filename = Context.MakeDebugFileName(code_file, filename, false);
+            node.DebugSave(filename, move); // moveing is handled here
+
+        }
+        public static void DebugSave(this ILBlock block, string filename, bool move = true)
+        {
+            if (move) filename = Context.MoveFileToOldErrors(filename);
+            using (PlainTextWriter sw = new PlainTextWriter(filename))
             {
                 block.FixParents();
-                ILNode root = block;
-                while (block.Parent != null) root = root.Parent;
-                foreach(var n in block.GetChildren()) sw.WriteLine(n);
+                ILNode root = block.Root;
+                foreach (var n in root.GetChildren()) sw.WriteLine(n);
                 sw.Flush();
+
             }
-          //  using (var output = new Writers.BlockToCode(FileName))
-          //      output.Write(block);
+            Context.Message("DebugSave Block Saved '{0}'", filename);
         }
-        public static void DebugSave(this ILNode node, string FileName)
+        public static void DebugSave(this ILNode node, string filename, bool move = true)
         {
-            using (PlainTextWriter sw = new PlainTextWriter(FileName))
+            if (move) filename = Context.MoveFileToOldErrors(filename);
+            using (PlainTextWriter sw = new PlainTextWriter(filename))
             {
                 node.FixParents();
-                ILNode root = node;
-                while (node.Parent != null) root = root.Parent;
-                foreach (var n in node.GetChildren()) sw.WriteLine(n);
+                sw.WriteLine("Node: ");
+                sw.WriteLine(node.ToString());
+                ILNode root = node.Root as ILBlock;
+                if(root != null)
+                {
+                    sw.WriteLine("Parent Block: ");
+                    foreach (var n in root.GetChildren()) sw.WriteLine(n);
+                }
                 sw.Flush();
             }
-            //  using (var output = new Writers.BlockToCode(FileName))
-            //      output.Write(block);
+            Context.Message("DebugSave Node Saved '{0}'", filename);
         }
     }
-
     public abstract class ILNode 
     {
         public object UserData = null;
         public string Comment = null;
         protected ILNode _parent = null;
-        protected ILNode _next = null;
-        protected ILNode _prev = null;
-        public ILNode Parent { get { return _parent; } }
-        public ILNode Next { get { return _next; } }
-        public ILNode Prev { get { return _prev; } }
+        HashSet<ILNode> _children = new HashSet<ILNode>();
+        public ILNode Parent {
+            get { return _parent; }
+            set
+            {
+                if (value == _parent) return;
+                if (_parent != null)  _parent._children.Remove(this);
+                if (value != null && !value._children.Contains(this))
+                    value._children.Add(this);
+                _parent = value;
+            }
+        }
+        public virtual bool Contains(ILNode n)
+        {
+            if (n == this) return true;
+            else return _children.Contains(n);
+        }
+        public IEnumerable<ILNode> TestChildren {  get { return _children; } }
         public ILNode Root
         {
             get
@@ -126,6 +156,7 @@ namespace GameMaker.Ast
                 yield return current;
             }
         }
+        // stupid method to fix the parrents
         public void FixParents()
         {
             foreach (var child in GetChildren())
@@ -134,6 +165,8 @@ namespace GameMaker.Ast
                 child.FixParents();
             }
         }
+        // takes the basic blocks, and links them all to parrents
+
         public IEnumerable<T> GetSelfAndChildrenRecursive<T>(Func<T, bool> predicate=null) where T : ILNode
         {
             List<T> result = new List<T>(16);
@@ -164,69 +197,63 @@ namespace GameMaker.Ast
             ToStringBuilder(sb);
             return sb.ToString();
         }
-        protected class NodeList<T> : Collection<T> where T: ILNode
+      
+    }
+    public class NodeList<T> : Collection<T> where T : ILNode
+    {
+        public ILNode Parrnt { get; private set; }
+        public NodeList(ILNode p) : base() { Parrnt = p; }
+        static IList<T> GetRootList(IList<T> start)
         {
-            public ILNode Parent { get; private set; }
-            public NodeList(ILNode p) : base() { this.Parent = p; }
-            public NodeList(ILNode p, IList<T> list) : base(list) { this.Parent = p; RefreshParents(); }
-            public void RefreshParents()
-            {
-                for(int i=0; i < Items.Count; i++)
-                {
-                    var n = Items[i];
-                    SetItemParent(n);
-                    n._prev = this.ElementAtOrDefault(i - 1);
-                    n._next = this.ElementAtOrDefault(i + 1);
-                }
-            }
-            void SetItemParent(T node)
-            {
-                if (node == null) throw new ArgumentNullException("node");
-                //  if (node is ILLabel) return; // we ignore ILabels as they are unique
-             //   if (node._parent != Parent && node._parent != null) throw new ArgumentException("Parent already set", "node");
-                node._parent = Parent;
-                node._next = node._prev = null;
-            }
-            void RemoveItemParent(T node)
-            {
-                if(node._parent == Parent) node._parent = node._next = node._prev = null;
-            }
-            protected override void InsertItem(int i, T n)
-            {
-                SetItemParent(n);
-                n._prev = this.ElementAtOrDefault(i - 1);
-                n._next = this.ElementAtOrDefault(i + 1);
-                base.InsertItem(i, n);
-            }
-            protected override void RemoveItem(int index)
-            {
-                var n = Items[index];
-                RemoveItemParent(n);
-                base.RemoveItem(index);
-            }
-            protected override void SetItem(int i, T n)
-            {
-                var old = Items[i];
-                old._parent = old._next = old._prev = null;
-                SetItemParent(n);
-                n._prev = this.ElementAtOrDefault(i - 1);
-                n._next = this.ElementAtOrDefault(i + 1);
-                base.SetItem(i, n);
-            }
-           
+            NodeList<T> test;
+            while ((test = start as NodeList<T>) != null)
+                start = test.Items;
+            return start;
+        }
+        public NodeList(ILNode p, IList<T> list) : base(GetRootList(list)) {
+            Parrnt = p;
+            foreach (var n in Items) n.Parent = this.Parrnt;
+        }
+        protected override void InsertItem(int i, T n)
+        {
+            n.Parent = this.Parrnt;
+            base.InsertItem(i, n);
+        }
+        protected override void RemoveItem(int index)
+        {
+            Items[index].Parent = null;
+            base.RemoveItem(index);
+        }
+        protected override void SetItem(int index, T n)
+        {
+            Items[index].Parent = null;
+            n.Parent = this.Parrnt;
+            base.SetItem(index, n);
+        }
+        protected override void ClearItems()
+        {
+            foreach (var n in Items) n.Parent = null;
         }
     }
     public abstract class ILHasBody  : ILNode
     {
         NodeList<ILNode> _body;
-        public IList<ILNode> Body {  get { return _body; } set { _body = new NodeList<ILNode>(this, value); } }
-        public ILHasBody() { _body = new NodeList<ILNode>(this); }
+        public IList<ILNode> Body {  get { return _body; }
+            set {
+                if (_body.Count > 0) _body.Clear();
+                _body = new NodeList<ILNode>(this, value);
+            }
+        }
+        public ILHasBody() {
+            _body = new NodeList<ILNode>(this);
+        }
+
         public override IEnumerable<ILNode> GetChildren() {  return _body; }
     }
     public abstract class ILHasArguments : ILNode
     {
         NodeList<ILExpression> _arguments;
-        public IList<ILExpression> Arguments { get { return _arguments; } set { _arguments = new NodeList<ILExpression>(this, value); } }
+        public IList<ILExpression> Arguments { get { return _arguments; } set { if (_arguments.Count > 0) _arguments.Clear(); _arguments = new NodeList<ILExpression>(this, value); } }
         public ILHasArguments() { _arguments = new NodeList<ILExpression>(this); }
         public override IEnumerable<ILNode> GetChildren() { return _arguments; }
     }
@@ -295,7 +322,7 @@ namespace GameMaker.Ast
                 lock (_cache) _cache.Add(name,c);
                 if (c.isBuiltin) c._returnType = Constants.GetFunctionType(name);
             } // humm, forgot about var arg stuff like choose
-            Debug.WriteLineIf(argumentCount != c.ArgumentCount, "Call '" + name + "' diffrent args need " + argumentCount + " but original " + c.ArgumentCount);
+            Debug.WriteLineIf(name != "choise" && name != "script_execute" && argumentCount != c.ArgumentCount, "Call '" + name + "' diffrent args need " + argumentCount + " but original " + c.ArgumentCount);
             //Debug.Assert(c.ArgumentCount == argumentCount);
             return c;
         }
@@ -362,13 +389,7 @@ namespace GameMaker.Ast
                 }
             }
         }
-        public ILValue(object o, GM_Type type)
-        {
-            if (o is short) this.Value = (int)((short)o);
-            else if (type == GM_Type.String) this.ValueText = GMCodeUtil.EscapeString(o as string);
-            else this.Value = o;
-            Type = type;
-        }
+   
         public int? IntValue
         {
             get
@@ -501,16 +522,17 @@ namespace GameMaker.Ast
     }
     public class UnresolvedVar
     {
-        public ILExpression toExpression() { return new ILExpression(GMCode.VarUnresolved, this); }
         public string Name;
         public int Extra;
         public int Operand;
         public override string ToString()
         {
-            string str = Context.InstanceToString(Extra) + "." + Name;
+            string str = '?' + Context.InstanceToString(Extra) + "." + Name;
             if (Operand > 0) str += "[]";
+            str += '?';
             return str;
         }
+   
     }
     [DataContract]
     public class ILVariable
@@ -608,23 +630,31 @@ namespace GameMaker.Ast
         public static ILVariable CreateVariable(string name, int instance, Dictionary<string,ILVariable> locals)
         {
             if (name == null) throw new ArgumentNullException("name");
-            if (instance == 0) throw new ArgumentException("instance cannot be 0", "instnace");
+          //  if (instance == 0) throw new ArgumentException("instance cannot be 0", "instnace");
             ILVariable v=null;
-            if (instance == -5)
+            switch (instance)
             {
-                if(!_globals.TryGetValue(name, out v))
-                {
+                case -5:
+                    if (!_globals.TryGetValue(name, out v))
+                    {
+                        v = new ILVariable() { _name = string.Intern(name), _instance = instance, _arrayDim = 0 };
+                        lock (_globals) _globals.Add(name, v);
+                    }
+                    break;
+                case -1:
+                    if (!locals.TryGetValue(name, out v))
+                    {
+                        v = new ILVariable() { _name = string.Intern(name), _instance = instance, _arrayDim = 0 };
+                        lock (locals) locals.Add(name, v);
+                    }
+                    break;
+                case 0: // zero is stack but in this case, its a local var that has the instance
+                    v = new ILVariable() { _name = string.Intern(name), _instance = 0, _arrayDim = 0 };
+                    break;
+                default:
+                    if (instance < 0 || instance >= File.Objects.Count) throw new ArgumentOutOfRangeException("instance out of range of objets", "instance");
                     v = new ILVariable() { _name = string.Intern(name), _instance = instance, _arrayDim = 0 };
-                    lock (_globals) _globals.Add(name, v);
-                }
-            } else
-            {
-                if (!locals.TryGetValue(name, out v))
-                {
-                    v = new ILVariable() { _name = string.Intern(name), _instance = instance, _arrayDim = 0 };
-                    lock (locals) locals.Add(name, v);
-                }
-
+                    break;
             }
             Debug.Assert(v != null);
             return v;
@@ -811,7 +841,7 @@ void ReportUnassignedILRanges(ILBlock method)
         public List<ILRange> ILRanges { get; set; }
         
         public ILType TypesSeen { get { return _typesSeen; } }
-        public IEnumerable<GM_Type> Types { get { return _typesSeen.TypesSeen; } set { _typesSeen.AddTypes(value); } }
+        public IEnumerable<GM_Type> Types { get { return _typesSeen.TypesSeen; } set { if(value != null)_typesSeen.AddTypes(value); } }
 
         GM_Type _type = GM_Type.NoType;
         public GM_Type Type {
@@ -961,26 +991,30 @@ void ReportUnassignedILRanges(ILBlock method)
                 case GMCode.Var:
                     {
                         ILVariable v = Operand as ILVariable;
-                        sb.Append(v.InstanceName);
-                        sb.Append('.');
+                        if(v.Instance != 0)
+                        {
+                            sb.Append(v.InstanceName);
+                            sb.Append('.');
+                        }
                         sb.Append(v.Name);
-                        if(Arguments.Count > 0)
+                        if(Arguments.Count > 1)
                         {
                             sb.Append('[');
-                            Arguments[0].ToStringBuilder(sb);
-                            if(Arguments.Count ==2)
+                            Arguments[1].ToStringBuilder(sb);
+                            if(Arguments.Count ==3)
                             {
                                 sb.Append(',');
-                                Arguments[1].ToStringBuilder(sb);
+                                Arguments[2].ToStringBuilder(sb);
                             }
                             sb.Append(']');
                         }
                     }
                     break;
                 case GMCode.Assign:
-                    WriteOperand(sb);
+                    if (Arguments.Count != 2) goto default;
+                    Arguments[0].ToStringBuilder(sb);
                     sb.Append(" = ");
-                    Arguments.Single().ToStringBuilder(sb);
+                    Arguments[1].ToStringBuilder(sb);
                     break;
                 case GMCode.Call:
                     {

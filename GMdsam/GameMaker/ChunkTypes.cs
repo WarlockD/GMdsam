@@ -1072,8 +1072,25 @@ namespace GameMaker
             public int Size { get; protected set; }
             public int CodePosition { get; protected set; }
             public ILBlock block = null; // cached
-            protected Lazy<ILBlock> _block = null; // used 
-            public ILBlock Block { get { return _block.Value; } }
+            // This, honestly is great to use, the problem is that since I can turn on and off locking, it runs a seperate thread when creating this object 
+            // so its not truly single threaded
+            // so onward to the sync root patern
+            // protected Lazy<ILBlock> _block = null; 
+            private readonly object _syncRoot = new object();
+            private ILBlock _block = null;
+            public ILBlock Block {
+                get
+                {
+                    if (_block == null)
+                    {
+                        lock (_syncRoot)
+                        {
+                            if (_block == null) _block = CreateNewBlock();
+                        }
+                    }
+                    return _block;
+                }
+            }
             public Dictionary<string, ILVariable> Locals { get; protected set; }
             public Stream Data
             {
@@ -1083,10 +1100,10 @@ namespace GameMaker
                 }
             }
             protected abstract ILBlock CreateNewBlock();
-            public Code()
-            {
-                _block = new Lazy<ILBlock>(CreateNewBlock);
-            }
+          //  public Code()
+          //  {
+               // _block = new Lazy<ILBlock>(CreateNewBlock);
+           // }
         }
         public class OldCode : Code
         {
@@ -1125,11 +1142,32 @@ namespace GameMaker
                 var error = new ErrorContext(name);
                 ILBlock block = new ILBlock();
 #if DEBUG
+                bool watching = false;
                 Debug.WriteLine("Decompiling: " + Name);
+                if(Context.HackyDebugWatch !=null && Context.HackyDebugWatch.Contains(Name))
+                {
+                    foreach(var f in new DirectoryInfo(".").GetFiles(".txt"))
+                    {
+                        if (System.IO.Path.GetFileName(f.Name) != "errors.txt") f.Delete(); // clear out eveything
+                    }
+                    Context.Debug = true;
+                    Context.Message("Watching '" + Name + "'");
+                    watching = true;
+                }
 #endif
                 block.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
                 block = new ILAstBuilder().Build(block, Locals,error);
                 block.FixParents();
+#if DEBUG
+                if (watching)
+                {
+                    Context.Debug = false;
+                    watching = false;
+                    using (Writers.BlockToCode to = new Writers.BlockToCode(Name + "_watch.js"))
+                        to.Write(block);
+                        Context.FatalError("Finished watching '" + Name + "'");
+                }
+#endif
                 return block;
             }
 

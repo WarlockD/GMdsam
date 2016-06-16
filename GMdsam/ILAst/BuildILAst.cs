@@ -11,49 +11,7 @@ namespace GameMaker.Ast
     public static class ILAstBuilderExtensions
     {
       
-        public static int? GetPopDelta(this Instruction i)
-        {
-            int count = 0;
-            switch (i.Code)
-            {
-
-                case GMCode.Call:
-                    count = i.Extra; // number of args
-                    break;
-                case GMCode.Push:
-                    if (i.Types[0] == GM_Type.Var)
-                    {
-                        if (i.Extra == 0) count++; // the instance is on the stack
-                        if ((int)i.Operand >= 0) count++; // it is an array so need the index
-                    }
-                    break;
-                case GMCode.Pop:
-                    count = 1;
-                    if (i.Extra == 0) count++; // the instance is on the stack
-                    if ((int)i.Operand >= 0) count++; // it is an array so need the index
-                    break;
-                case GMCode.Dup:
-                    if (i.Extra == 0) count = 1;
-                    else count = 2; // we need to figure this out
-                    break;
-                default:
-                    count = i.Code.GetPopDelta();
-                    break;
-            }
-            return count;
-        }
-        public static int GetPushDelta(this Instruction i)
-        {
-            switch (i.Code)
-            {
-                case GMCode.Dup:
-                    if (i.Extra == 0) return 1;
-                    else return 2; // we need to figure this out
-                default:
-                    return i.Code.GetPushDelta();
-
-            }
-        }
+    
         public static List<T> CutRange<T>(this List<T> list, int start, int count)
         {
             List<T> ret = new List<T>(count);
@@ -175,249 +133,196 @@ namespace GameMaker.Ast
             }
             return false;
         }
-        bool ResolveVariable(ILExpression expr, ILExpression instance, ILExpression index = null)
+        void ResolveVariable(ILExpression expr, ILExpression instance = null, ILExpression index = null)
         {
-            UnresolvedVar uv;
-            if (expr.Match(GMCode.VarUnresolved, out uv))
+            Debug.Assert(expr != null);
+            UnresolvedVar uv = expr.Operand as UnresolvedVar;
+            Debug.Assert(uv != null);
+            ILVariable v = null;
+            if (uv.Extra != 0)
             {
-                if (uv.Operand >= 0)
+                Debug.Assert(instance == null);
+                instance = new ILExpression(GMCode.Constant, new ILValue(uv.Extra)); // create a fake instance value
+            }
+            instance = instance.MatchSingleArgument();
+            if (instance.Code == GMCode.Constant)
+            {
+                ILValue value = instance.Operand as ILValue;
+                v = ILVariable.CreateVariable(uv.Name, (int) value, this.locals);
+            }
+            else if (instance.Code == GMCode.Var)
+            {
+                v = ILVariable.CreateVariable(uv.Name, 0, this.locals);
+                (instance.Operand as ILVariable).Type = GM_Type.Instance; // make sure its an instance
+            }
+            else throw new Exception("humm");
+            if (uv.Operand >= 0)
+            {
+                Debug.Assert(index != null);
+                index = index.MatchSingleArgument();
+                if(index.Code == GMCode.Var)
                 {
-                    if (instance.isNodeResolved() && index.isNodeResolved())
-                    {
-                        index = index.MatchSingleArgument();
-                        instance = instance.MatchSingleArgument();
-                        Debug.Assert(instance.Code == GMCode.Constant);
-                        ILValue value = instance.Operand as ILValue;
-                        ILVariable v = ILVariable.CreateVariable(uv.Name, (int)value, this.locals);
-                        v.ArrayDimension = 1;
-                        expr.Operand = v;
-                        expr.Code = GMCode.Var;
-                        expr.WithILRanges(index, instance);
-                        expr.Arguments.Add(index);
-                        return true;
-                    }
-                } else
-                {
-                    if (instance.isNodeResolved())
-                    {
-                        instance = instance.MatchSingleArgument();
-                        Debug.Assert(instance.Code == GMCode.Constant);
-                        ILValue value = instance.Operand as ILValue;
-                        expr.Operand = ILVariable.CreateVariable(uv.Name, (int)value, this.locals);
-                        expr.Code = GMCode.Var;
-                        expr.WithILRanges(instance);
-                        return true;
-                    }
+                    ILVariable ivar = index.Operand as ILVariable; // indexs can only be ints, but they can be negitive?
+                    ivar.Type = GM_Type.Int;
                 }
             }
-            return false;
-        }
-        bool ResolveVariable(IList<ILNode> nodes, ref int i, ILExpression expr, bool remove = true)
-        {
-            ILExpression t_instance = null;
-            ILExpression t_index = null;
-            UnresolvedVar uv;
-            if (expr.Match(GMCode.VarUnresolved, out uv))
-            {
-                if (uv.Extra != 0)
-                {
-                    ILVariable v = ILVariable.CreateVariable(uv.Name, uv.Extra, locals);
-                    expr.Operand = v;
-                    expr.Code = GMCode.Var;
-                    return true; // create a simple var
-                }
-                else
-                {
-                    if (uv.Operand >= 0)
-                    {
-                        t_instance = nodes.ElementAtOrDefault(i - 2) as ILExpression;
-                        t_index = nodes.ElementAtOrDefault(i - 1) as ILExpression;
-                        if (t_instance.isNodeResolved() && t_index.isNodeResolved())
-                        {
-                            t_index = t_index.MatchSingleArgument();
-                            t_instance = t_instance.MatchSingleArgument();
-                            ILValue value = t_instance.Operand as ILValue;
-                            Debug.Assert(value != null);
-                            Debug.Assert(t_instance.Code == GMCode.Constant);
-                            ILVariable v = ILVariable.CreateVariable(uv.Name, (int)value, locals);
-                            v.ArrayDimension = 1;
-                            expr.Operand = v;
-                            expr.Code = GMCode.Var;
-                            expr.WithILRanges(t_index, t_instance);
-                            i -= 2;
-                            if (remove) nodes.RemoveRange(i, 2);
-                            return true;
-                        }
-                    }
-                    else
-                    {
-                        t_instance = nodes.ElementAtOrDefault(i - 1) as ILExpression;
-                        if (t_instance.isNodeResolved())
-                        {
-                            t_instance = t_instance.MatchSingleArgument();
-                            ILValue value = t_instance.Operand as ILValue;
-                            Debug.Assert(value != null);
-                            Debug.Assert(t_instance.Code == GMCode.Constant);
-                            expr.Operand = ILVariable.CreateVariable(uv.Name, (int)value, locals);
-                            expr.Code = GMCode.Var;
-                            expr.WithILRanges(t_instance);
-                            i--; // backup
-                            if (remove) nodes.RemoveAt(i);
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
+            else index = null;
+            Debug.Assert(v != null);
+            expr.Code = GMCode.Var;
+            expr.Operand = v;
+            expr.Arguments.Clear();
+            expr.Arguments.Add(instance);
+            if (index != null) expr.Arguments.Add(index);
         }
         bool MatchVariablePush(IList<ILNode> nodes, ILExpression expr, int pos)
         {
-            ILExpression ev;
-            UnresolvedVar v;
-            if(expr.Match(GMCode.Push, out v))
+            if (VarBuilderMatch(nodes, ref expr, pos, GMCode.Push))
             {
-                ev = new ILExpression(GMCode.VarUnresolved, v);
-                ResolveVariable(nodes, ref pos, ev);
-                expr.Operand = null;
-                expr.Arguments.Add(ev);
+                Debug.Assert(expr.Code == GMCode.Var);
+                nodes[pos] = new ILExpression(GMCode.Push, null, expr);
                 return true;
-            } else if (expr.Match(GMCode.Push, out ev) && ev.Code == GMCode.VarUnresolved)
-            {
-                ResolveVariable(nodes, ref pos, ev);
-                return ev.Code == GMCode.Var;
             }
             return false;
         }
       
-        bool ResolveVarAssigmentType(IList<ILNode> nodes, ILExpression expr, int pos)
+        bool VarBuilderMatchSimple(IList<ILNode> nodes, ref ILExpression expr, int pos, GMCode code)
         {
-            if (!expr.Match(GMCode.Assign)) return false;
-            ILVariable v = expr.Operand as ILVariable;
-            if (v.Type != GM_Type.NoType || v.isGlobal) return false;
-            if (Constants.FixAndCheckVarType(v)) return true;
-
-            HashSet<GM_Type> types = new HashSet<GM_Type>();
-            foreach (var vs in expr.Arguments.Single().GetSelfAndChildrenRecursive<ILExpression>())
+            UnresolvedVar uv;
+            if (expr.Match(code, out uv) && uv.Extra != 0)
             {
-                GM_Type t = GM_Type.NoType;
-                switch (vs.Code)
-                {
-                    case GMCode.Call:
-                        if (expr.Parent is ILBlock) continue; // don't need to worry about function calls that arn't in expressions
-                        string name = (vs.Operand as ILCall).Name;
-                        t = Constants.GetFunctionType(name,this.error);
-                        if (t == GM_Type.NoType)
-                        {
-                            error.Error("Fucntion type dosn't exist '{0}', defaulting to int", name);
-                            t = GM_Type.Int;
-                        }
-                        break;
-                    case GMCode.Constant:
-                        t = (vs.Operand as ILValue).Type;
-                        break;
-                    case GMCode.Var:
-                        t = (vs.Operand as ILVariable).Type;
-                        break;
-                }
-                types.Add(t);
-                types.UnionWith(vs.Types);
-            }
-            types.Remove(GM_Type.Var); // dosn't neeed to be there
-            types.Remove(GM_Type.NoType); // dosn't neeed to be there
-            
 
-            if (types.Count == 0) return false;
-            expr.Types = types;
-            if (types.Count == 1) v.Type = types.Single();
-            else // have to resolve it
-            {
-                v.Type = GM_Type.NoType;
-                foreach (var t in types) v.Type = v.Type.ConvertType(t);
-                
+               ResolveVariable(expr);
+                return true; 
             }
-            Debug.Assert(v.Type != GM_Type.NoType);
-            return true;
+            return false;
         }
-        bool SimpleAssignments(IList<ILNode> nodes, ILExpression expr, int pos)
+        bool VarBuilderMatchStack(IList<ILNode> nodes, ref ILExpression expr, int pos, GMCode code)
         {
-            bool modified = false;
-            if(expr.Code == GMCode.Pop)
+            UnresolvedVar uv;
+            ILExpression instance = null;
+            if (nodes.ElementAtOrDefault(pos + 1).Match(code, out uv) &&
+                uv.Extra == 0 && uv.Operand < 0 &&
+                expr.Match(GMCode.Push, out instance))
             {
-                UnresolvedVar uv = expr.Operand as UnresolvedVar;
-                if(uv != null)
-                {
-                    ILExpression ve = new ILExpression(GMCode.VarUnresolved, uv);
-                    if (!ResolveVariable(nodes, ref pos, ve)) return false;// exit if we can't resolve it
-                    expr.Operand = null;
-                    expr.Arguments.Add(ve); // add it to the first thing
-                    modified |= true;
-                }
-                ILVariable v = expr.Arguments.Single().Operand as ILVariable;
-                Debug.Assert(v != null);
-                ILExpression e;
-                if (nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out e) && e.isNodeResolved())
-                {
-                    expr.Code = GMCode.Assign;
-                    expr.Operand = v;
-                    expr.WithILRanges(expr.Arguments.Single(), (nodes.ElementAtOrDefault(pos - 1) as ILExpression));
-                    expr.Arguments.Clear();
-                    expr.Arguments.Add(e);
-                    nodes.RemoveAt(pos - 1); // remove the push
-                    modified |= true;
-                }
-            }
-            return modified;
-        }
-        bool ComplexAssignments(IList<ILNode> nodes, ILExpression expr, int pos)
-        {
-
-            int dupType = 0;
-
-            if (expr.Match(GMCode.Dup, out dupType))
-            {
-                ILExpression instance;
-                ILExpression index;
-                ILExpression expr_var = null; // compiler warning
-                if (dupType == 1 &&
-                     nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out expr_var) &&
-                     expr_var.Code == GMCode.VarUnresolved &&
-                    nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out index) && index.isNodeResolved() &&
-                    nodes.ElementAtOrDefault(pos - 2).Match(GMCode.Push, out instance) && instance.isNodeResolved())
-
-                {// this is usally an assign
-                    nodes.RemoveRange(pos - 2, 3); // lets remove the dup and the pushes, we are at the push var now
-                    Debug.Assert(ResolveVariable(expr_var, instance, index));// resolve it                   
-                }
-                else if (dupType == 0 &&
-                    nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out expr_var) &&
-                    expr_var.Code == GMCode.VarUnresolved &&
-                    nodes.ElementAtOrDefault(pos - 1).Match(GMCode.Push, out instance) && instance.isNodeResolved())
-
-                {
-                    nodes.RemoveRange(pos - 1, 2); // lets remove the dup and the pushes, we are at the push var now
-                    Debug.Assert(ResolveVariable(expr_var, instance));// resolve it   
-                }
-                else return false;
-
-               UnresolvedVar popVar = null;
-                Debug.Assert(expr_var.Code == GMCode.Var);
-                ILVariable v = expr_var.Operand as ILVariable;
-                for (int i = pos; i < nodes.Count; i++) // need to find the matching pop
-                {
-                    if (nodes[i].Match(GMCode.Pop, out popVar))
-                    {
-                        ILExpression e = nodes[i] as ILExpression;
-                        e.Operand = null;
-                        Debug.Assert(e.Arguments.Count == 0 && popVar.Name == v.Name); // only thing we can compare
-                        e.Arguments.Add(new ILExpression(expr_var)); // add it so it is cleared up in simple assignment
-                        e.WithILRangesAndJoin(expr_var.ILRanges); // copy the ranges cause its a dup
-                        break;
-                    }
-                }
-                Debug.Assert(popVar != null);
+                expr = nodes[pos + 1] as ILExpression;
+                ResolveVariable(expr, instance);
+                nodes.RemoveAt(pos);
                 return true;
             }
             return false;
+        }
+        bool VarBuilderMatchArray(IList<ILNode> nodes, ref ILExpression expr, int pos, GMCode code)
+        {
+            UnresolvedVar uv;
+            ILExpression instance = null;
+            ILExpression index = null;
+            if (nodes.ElementAtOrDefault(pos + 2).Match(code, out uv) &&
+                uv.Extra == 0 && uv.Operand >= 0 &&
+                nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out index) &&
+                expr.Match(GMCode.Push, out instance))
+            {
+                expr = nodes[pos + 2] as ILExpression;
+                ResolveVariable(expr, instance, index);
+                nodes.RemoveRange(pos, 2);
+                return true;
+            }
+            return false;
+        }
+        bool VarBuilderMatch(IList<ILNode> nodes, ref ILExpression expr, int pos, GMCode code)
+        {
+            return VarBuilderMatchSimple(nodes, ref expr, pos, code) || 
+                VarBuilderMatchStack(nodes, ref expr, pos, code) || 
+                VarBuilderMatchArray(nodes, ref expr, pos, code);
+        }
+        bool AssignValueTo(IList<ILNode> nodes, ILExpression expr, int pos)
+        {
+            IList<ILExpression> args;
+            ILExpression assigmentValue;
+            if (nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Assign, out args) &&
+                args.Count == 1 &&
+               expr.Match(GMCode.Push, out assigmentValue))
+            {
+                nodes.RemoveAt(pos);
+                args.Add(assigmentValue);
+
+                return true;
+            }
+            return false;
+        }
+        bool SimpleAssignments(IList<ILNode> nodes, ILExpression expr, int pos)
+        {
+            if (VarBuilderMatch(nodes, ref expr, pos, GMCode.Pop))
+            {
+                Debug.Assert(expr.Code == GMCode.Var);
+                nodes[pos] = new ILExpression(GMCode.Assign, null, expr);
+                return true;
+            }
+            return false;           
+        }
+        // Changed the design on this, just emulated the dup by replacing dup and inserting the values needed for the two unresolved assigns, it SHOULD all resolve
+        // though the pump
+        void FixComplexPop(IList<ILNode> nodes, ILExpression var_expr, int start, UnresolvedVar uv) // uv is only used for debugging
+        {
+            UnresolvedVar popVar = null; // the pop var that we dupped
+            for (int i = start; i < nodes.Count; i++) // need to find the matching pop, should be only a push up
+            {
+
+                if (nodes[i].Match(GMCode.Pop, out popVar))
+                {
+                    Debug.Assert(popVar.Name == uv.Name && uv.Operand == popVar.Operand && uv.Extra == popVar.Extra); // only thing we can compare
+                    ILExpression expr = nodes[i] as ILExpression;
+                    ILExpression assign = new ILExpression(GMCode.Assign, null, new ILExpression(var_expr));
+                    assign.WithILRanges(expr);
+                    nodes[i] = assign;
+                    break;
+                }
+            }
+        }
+        // This is like assign add, ++, etc
+        bool ComplexPopArray(IList<ILNode> nodes, ILExpression expr, int pos)
+        {
+            ILLabel l = nodes[0] as ILLabel;
+            int dupType = 0;
+            ILExpression instance=null;
+            ILExpression index=null;
+            UnresolvedVar uv = null; // compiler warning
+            if (nodes.ElementAtOrDefault(pos + 2).Match(GMCode.Dup, out dupType) && dupType == 1 && // stack var
+                expr.Match(GMCode.Push, out instance) &&
+                nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out index) &&
+                nodes.ElementAtOrDefault(pos + 3).Match(GMCode.Push, out uv))
+            {
+                expr = nodes[pos+3] as ILExpression;
+                Debug.Assert(expr.Operand is UnresolvedVar);
+                expr.AddILRange(nodes[2]); // add the dup to the offsets
+                nodes.RemoveRange(pos, 3); 
+                ResolveVariable(expr, instance, index); // fix it this way so we keep all the ILRanges
+                nodes[pos] = new ILExpression(GMCode.Push, null, expr);
+                FixComplexPop(nodes, expr, pos + 1, uv);
+                return true;
+            }
+            return false;
+        }
+        bool ComplexPopStack(IList<ILNode> nodes, ILExpression expr, int pos)
+        {
+            int dupType = 0;
+            ILExpression instance;
+            UnresolvedVar uv = null; // compiler warning
+            if (nodes.ElementAtOrDefault(pos+1).Match(GMCode.Dup, out dupType) && dupType == 0 && // stack var
+                expr.Match(GMCode.Push, out instance) &&
+                nodes.ElementAtOrDefault(pos+2).Match(GMCode.Push, out uv))
+            {
+                expr = nodes[pos + 3] as ILExpression;
+                Debug.Assert(expr.Operand is UnresolvedVar);
+                nodes.RemoveRange(pos, 2); // dup and instance
+                ResolveVariable(expr, instance);
+                FixComplexPop(nodes, expr, pos + 1,uv);
+                return true;
+            }
+            return false;
+        }
+        bool ComplexAssignments(IList<ILNode> nodes, ILExpression expr, int pos)
+        {
+            return ComplexPopStack(nodes, expr, pos) || ComplexPopArray(nodes, expr, pos);
         }
 
         // Try to make reduce conditional branches
@@ -566,25 +471,27 @@ namespace GameMaker.Ast
             Dictionary<GMCode, int> badCodes = new Dictionary<GMCode, int>();
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-                foreach (ILBasicBlock bb in block.Body)
+                foreach (ILBasicBlock bb in block.GetSelfAndChildrenRecursive<ILBasicBlock>())
                 {
-                    for (int i = bb.Body.Count - 1; i >= 0; i--)
+                    foreach (ILExpression expr in bb.GetSelfAndChildrenRecursive<ILExpression>())
                     {
-                        ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
-                        if (expr != null)
+                        if (expr.Operand is UnresolvedVar)
                         {
-                            if (expr.Code == GMCode.Dup || expr.Code == GMCode.Push || expr.Code == GMCode.Popz || expr.Code == GMCode.CallUnresolved || expr.Code == GMCode.VarUnresolved)
-                            {
-                                if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
-                                badCodes[expr.Code]++;
-                                badblocks.Add(bb);
-                            }
-                            else if ((expr.Code == GMCode.Bt || expr.Code == GMCode.Bf) && expr.Arguments.Count == 0)
-                            {
-                                if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
-                                badCodes[expr.Code]++;
-                                badblocks.Add(bb);
-                            }
+                            if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
+                            badCodes[expr.Code]++;
+                            badblocks.Add(bb);
+                        }
+                        else if (expr.Code == GMCode.Dup || expr.Code == GMCode.Push || expr.Code == GMCode.Popz || expr.Code == GMCode.CallUnresolved)
+                        {
+                            if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
+                            badCodes[expr.Code]++;
+                            badblocks.Add(bb);
+                        }
+                        else if ((expr.Code == GMCode.Bt || expr.Code == GMCode.Bf) && expr.Arguments.Count == 0)
+                        {
+                            if (!badCodes.ContainsKey(expr.Code)) badCodes[expr.Code] = 0;
+                            badCodes[expr.Code]++;
+                            badblocks.Add(bb);
                         }
                     }
                 }
@@ -618,12 +525,14 @@ namespace GameMaker.Ast
                
                 using (StreamWriter sw = new StreamWriter(dfilename))
                 {
+                    sw.WriteLine("Time : {0}", DateTime.Now);
                     sw.WriteLine("Filename: {0}", dfilename);
                     foreach (var kp in badCodes)
                         sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
                     sw.WriteLine();
                     sw.WriteLine(badmethod.ToString());
                 }
+                error.Message("Saved '{0}'", dfilename);
                 error.FatalError("Before graph sanity check failed, look at bad_block_dump.txt");
                 return true;
             }
@@ -660,23 +569,41 @@ namespace GameMaker.Ast
             }
             return false;
         }
-        public bool RunTestOptimization(ILBlock block)
-        {
-            bool modified = false;
-            foreach(ILBasicBlock bb in block.Body)
-            {
-                modified |= RunTestOptimiztion(bb, MatchVariablePush); // checks pushes for instance or indexs for vars
-                modified |= RunTestOptimiztion(bb, SimpleAssignments);
-                modified |= RunTestOptimiztion(bb, ComplexAssignments); // basicly self increment, this SHOULDN'T cross block boundrys
-                modified |= RunTestOptimiztion(bb, SimplifyBranches); // Any resolved pushes are put into a branch argument
-                modified |= RunTestOptimiztion(bb, CombineCall); // Any resolved pushes are put into a branch argument
-                modified |= RunTestOptimiztion(bb, CombineExpressions); // Any resolved pushes are put into a branch argument
-            }
-         //   block.DebugSave("test.txt");
-            return modified;
-        }
         ErrorContext error;
         Dictionary<string, ILVariable> locals = null;
+
+        // This resolves a block.  Only use functions that don't break the block boundry!
+        Func<IList<ILNode>, ILExpression, int, bool>[] singleBasicBlockOptimizations = null; 
+        bool ResolveBasicBlock(IList<ILNode> nodes, ILBasicBlock bb, int pos)
+        {
+            if (singleBasicBlockOptimizations == null)
+            {
+                singleBasicBlockOptimizations = new Func<IList<ILNode>, ILExpression, int, bool>[]
+                   {
+                    MatchVariablePush,  // checks pushes for instance or indexs for vars
+                       SimpleAssignments,
+                       AssignValueTo,
+                       ComplexAssignments, // basicly self increment, this SHOULDN'T cross block boundrys
+                       SimplifyBranches,   // Any resolved pushes are put into a branch argument
+                       CombineCall,        // Any resolved pushes are put into a branch argument
+                       CombineExpressions
+                   };
+            }
+            bool modified = bb.RunOptimizationAndRestart(singleBasicBlockOptimizations);
+            if (modified && Context.Debug) // It should be 100% resolved at this point
+            {
+                if (bb.RunOptimizationAndRestart(singleBasicBlockOptimizations))
+                {
+                    bb.DebugSave("badresolve.txt");
+                    bool test = bb.RunOptimizationAndRestart(singleBasicBlockOptimizations);
+
+
+
+                    Debug.Assert(!test);
+                }
+            }
+            return modified;
+        }
         public ILBlock Build(ILBlock method, Dictionary<string, ILVariable> locals, ErrorContext error)
         {
             if (method == null) throw new ArgumentNullException("method");
@@ -694,23 +621,22 @@ namespace GameMaker.Ast
             error.CheckDebugThenSave(method, "basic_blocks.txt");
 
             bool modified = false;
+         
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
              
                 do
                 {
                     modified = false;
+                    modified |= block.RunOptimization(ResolveBasicBlock); /// This fixes all internal block vars, simple dups, push expressions etc
                     modified |= block.RunOptimization(new SimpleControlFlow(method,error).DetectSwitch);
 
-                    modified |= block.RunOptimization(MatchVariablePush); // checks pushes for instance or indexs for vars
-                    modified |= block.RunOptimization(SimpleAssignments);
-                    modified |= block.RunOptimization(ComplexAssignments); // basicly self increment, this SHOULDN'T cross block boundrys
-                    modified |= block.RunOptimization(SimplifyBranches); // Any resolved pushes are put into a branch argument
-                    modified |= block.RunOptimization(CombineCall); // Any resolved pushes are put into a branch argument
-                    modified |= block.RunOptimization(CombineExpressions); // Any resolved pushes are put into a branch argument
-                  //  modified |= RunTestOptimization(block);
-                  //  modified |= block.RunOptimization(MultiDimenionArray);
 
+                
+
+                    //  modified |= RunTestOptimization(block);
+                    //  modified |= block.RunOptimization(MultiDimenionArray);
+      
                     modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
             //        modified |= block.RunOptimization(ResolveVarAssigmentType);  We need to change this as we are fixing the type system

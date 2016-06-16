@@ -230,15 +230,15 @@ namespace GameMaker.Writers
         {
             foreach (var e in list)
             {
-                ILValue value = e.Arguments.Single().Operand as ILValue;
+                ILValue value = e.Arguments[1].Operand as ILValue;
                 if (value != null) yield return value;
-                ILVariable vr = e.Arguments.Single().Operand as ILVariable;
+                ILVariable vr = e.Arguments[0].Operand as ILVariable;
                 if (vr == null) continue;
                 // We only go up one level
                 foreach(var ee in assignments.Where(x=>x.Key == vr.Name)) {
                     foreach(var eee in ee.Value)
                     {
-                        value = eee.Arguments.Single().Operand as ILValue;
+                        value = eee.Arguments[1].Operand as ILValue;
                         if (value != null) yield return value;
                     }
                     
@@ -271,7 +271,7 @@ namespace GameMaker.Writers
             {
                 foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x => x.Code == GMCode.Assign))
                 {
-                    ILVariable vr = e.Operand as ILVariable;
+                    ILVariable vr = e.Arguments[0].Operand as ILVariable ;
                     List<ILExpression> vs;
                     if (!assignments.TryGetValue(vr.Name, out vs)) assignments.Add(vr.Name, vs = new List<ILExpression>());
                     vs.Add(e);

@@ -88,17 +88,6 @@ namespace GameMaker.FlowAnalysis
         /// </remarks>
         public HashSet<ControlFlowNode> DominanceFrontier;
 
-        /// <summary>
-        /// Start of code block represented by this node. Only set for nodetype == Normal.
-        /// </summary>
-        public readonly Instruction Start;
-
-        /// <summary>
-        /// End of the code block represented by this node. Only set for nodetype == Normal.
-        /// The end is exclusive, the end instruction itself does not belong to this block.
-        /// </summary>
-        public readonly Instruction End;
-
 
         /// <summary>
         /// List of incoming control flow edges.
@@ -122,17 +111,10 @@ namespace GameMaker.FlowAnalysis
             this.NodeType = nodeType;
         }
 
-        internal ControlFlowNode(int blockIndex, Instruction start, Instruction end)
+        internal ControlFlowNode(int blockIndex)
         {
-            if (start == null)
-                throw new ArgumentNullException("start");
-            if (end == null)
-                throw new ArgumentNullException("end");
             this.BlockIndex = blockIndex;
             this.NodeType = ControlFlowNodeType.Normal;
-            this.Start = start;
-            this.End = end;
-            this.Offset = start.Address;
         }
 
 
@@ -158,26 +140,7 @@ namespace GameMaker.FlowAnalysis
             }
         }
 
-        /// <summary>
-        /// Gets all instructions in this node.
-        /// Returns an empty list for special nodes that don't have any instructions.
-        /// </summary>
-        public IEnumerable<Instruction> Instructions
-        {
-            get
-            {
-                Instruction inst = Start;
-                if (inst != null)
-                {
-                    yield return inst;
-                    while (inst != End)
-                    {
-                        inst = inst.Next;
-                        yield return inst;
-                    }
-                }
-            }
-        }
+ 
 
         public void TraversePreOrder(Func<ControlFlowNode, IEnumerable<ControlFlowNode>> children, Action<ControlFlowNode> visitAction)
         {
@@ -206,10 +169,6 @@ namespace GameMaker.FlowAnalysis
             {
                 case ControlFlowNodeType.Normal:
                     writer.Write("Block #{0}", BlockIndex);
-                    if (Start != null)
-                        writer.Write(": GM_{0,-4}", Start.Address);
-                    if (End != null)
-                        writer.Write(" to GM_{0,-4}", End.Address+End.Size);
                     break;
                 default:
                     writer.Write("Block #{0}: {1}", BlockIndex, NodeType);
@@ -223,12 +182,6 @@ namespace GameMaker.FlowAnalysis
             {
                 writer.WriteLine();
                 writer.Write("DominanceFrontier: " + string.Join(",", DominanceFrontier.OrderBy(d => d.BlockIndex).Select(d => d.BlockIndex.ToString())));
-            }
-            foreach (Instruction inst in this.Instructions)
-            {
-                writer.WriteLine();
-                writer.Write(inst.ToString());
-                // Disassembler.DisassemblerHelpers.WriteTo(inst, new PlainTextOutput(writer));
             }
            
             if (UserData != null)

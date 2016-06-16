@@ -25,6 +25,9 @@ namespace GameMaker
 
     public static class Context 
     {
+        static public HashSet<string> HackyDebugWatch = null;
+
+
         public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
 
         static public CancellationToken ct;
@@ -124,16 +127,16 @@ namespace GameMaker
         static Context()
         {
         }
-        static public string MakeDebugFileName(File.Code code, string file)
+        static public string MakeDebugFileName(File.Code code, string file,bool move = true)
         {
-            return MakeDebugFileName(code.Name, file);
+            return MakeDebugFileName(code.Name, file,move);
         }
-        static public string MakeDebugFileName(string code_name, string file)
+        static public string MakeDebugFileName(string code_name, string file, bool move = true)
         {
             string filename = Path.GetFileNameWithoutExtension(file);
             filename = code_name + "_" + filename + Path.GetExtension(file);
             filename = file.Replace(Path.GetFileName(file), filename); // so we keep any path information
-            return MoveFileToOldErrors(filename);
+            return move ? MoveFileToOldErrors(filename) : filename;
         }
 
         public static string EscapeChar(char v)
