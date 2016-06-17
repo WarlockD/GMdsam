@@ -293,7 +293,7 @@ namespace GameMaker.Ast
             {
                 expr = nodes[pos+3] as ILExpression;
                 Debug.Assert(expr.Operand is UnresolvedVar);
-                expr.AddILRange(nodes[2]); // add the dup to the offsets
+                expr.AddILRange(nodes[pos + 2]); // add the dup to the offsets
                 nodes.RemoveRange(pos, 3); 
                 ResolveVariable(expr, instance, index); // fix it this way so we keep all the ILRanges
                 nodes[pos] = new ILExpression(GMCode.Push, null, expr);
@@ -311,10 +311,12 @@ namespace GameMaker.Ast
                 expr.Match(GMCode.Push, out instance) &&
                 nodes.ElementAtOrDefault(pos+2).Match(GMCode.Push, out uv))
             {
-                expr = nodes[pos + 3] as ILExpression;
+                expr = nodes[pos + 2] as ILExpression;
                 Debug.Assert(expr.Operand is UnresolvedVar);
+                expr.AddILRange(nodes[pos + 1]); // add the dup to the offsets
                 nodes.RemoveRange(pos, 2); // dup and instance
                 ResolveVariable(expr, instance);
+                nodes[pos] = new ILExpression(GMCode.Push, null, expr);
                 FixComplexPop(nodes, expr, pos + 1,uv);
                 return true;
             }
@@ -441,7 +443,26 @@ namespace GameMaker.Ast
             }
             return false;
         }
-       
+
+        void TryPrintParrents(ILNode node)
+        {
+
+            foreach (var n in node.GetSelfAndChildrenRecursive<ILNode>())
+            {
+                HashSet<ILNode> nodes = new HashSet<ILNode>(n.TestChildren);
+                int ccount = n.TestChildren.Count();
+                int tcount = n.GetChildren().Count();
+                if (ccount == 0 && tcount == ccount) continue;
+
+                if (tcount == ccount)
+                {
+                    Debug.Assert(nodes.Overlaps(n.GetChildren()));
+                    Debug.WriteLine("Nodes Match: " + ccount);
+                }
+            }
+
+         
+        }
         bool AfterLoopsAndConditions(ILBlock method)
         {
             HashSet<ILBlock> badblocks = new HashSet<ILBlock>();
@@ -455,11 +476,15 @@ namespace GameMaker.Ast
             if (badblocks.Contains(method)) badblocks.Remove(method);
             if(badblocks.Count > 0) // we shouldn't have any branches anymore
             {
+                TryPrintParrents(method);
                 ILBlock badmethod = new ILBlock();
                 badmethod.Body = badblocks.Select(b => (ILNode) b).ToList();
                 error.Error("After Loop And Conditions failed, look at bad_after_stuff.txt");
-          //      Context.CheckDebugThenSave(badmethod, "bad_after_stuff.txt");
-                return true;
+                error.CheckDebugThenSave(badmethod, "bad_after_stuff.txt");
+                using (Writers.BlockToCode code = new Writers.BlockToCode("test.js"))
+                    code.Write(method);
+
+                    return true;
             }
             if(Context.Debug) Debug.Assert(badblocks.Count == 0);
             return false;
@@ -560,15 +585,7 @@ namespace GameMaker.Ast
                 }
             } while (modified);
         }
-        public static bool RunTestOptimiztion(ILBasicBlock bb, Func<IList<ILNode>, ILExpression, int, bool> optimization)
-        {
-            for (int i = bb.Body.Count - 1; i >= 0; i--)
-            {
-                ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
-                if (expr != null && optimization(bb.Body, expr, i)) return true;
-            }
-            return false;
-        }
+
         ErrorContext error;
         Dictionary<string, ILVariable> locals = null;
 
@@ -601,6 +618,7 @@ namespace GameMaker.Ast
 
                     Debug.Assert(!test);
                 }
+                
             }
             return modified;
         }
@@ -621,41 +639,35 @@ namespace GameMaker.Ast
             error.CheckDebugThenSave(method, "basic_blocks.txt");
 
             bool modified = false;
-         
+            bool debug_once = true;
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
-             
                 do
                 {
                     modified = false;
                     modified |= block.RunOptimization(ResolveBasicBlock); /// This fixes all internal block vars, simple dups, push expressions etc
-                    modified |= block.RunOptimization(new SimpleControlFlow(method,error).DetectSwitch);
+                    if (debug_once) { error.CheckDebugThenSave(method, "basic_blocks_resolved.txt"); debug_once = false; }
+                     modified |= block.RunOptimization(new SimpleControlFlow(method,error).DetectSwitch);
 
 
                 
-
-                    //  modified |= RunTestOptimization(block);
-                    //  modified |= block.RunOptimization(MultiDimenionArray);
+                    modified |= block.RunOptimization(MultiDimenionArray);
       
                     modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
                     modified |= block.RunOptimization(Optimize.SimplifyLogicNot);
-            //        modified |= block.RunOptimization(ResolveVarAssigmentType);  We need to change this as we are fixing the type system
-
 
                     modified |= block.RunOptimization(PushEnviromentFix); // match all with's with expressions
-                    // fixes expressions that add strings
-
                     modified |= block.RunOptimization(new SimpleControlFlow(method, error).SimplifyShortCircuit);
                     modified |= block.RunOptimization(new SimpleControlFlow(method, error).SimplifyTernaryOperator);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, error).MatchRepeatStructure);
+                    
 
-                    modified |= block.RunOptimization(new SimpleControlFlow(method, error).FixOptimizedForLoops);
+
                     modified |= block.RunOptimization(new SimpleControlFlow(method, error).JoinBasicBlocks);                                     
                     // somewhere, so bug, is leaving an empty block, I think because of switches
                     // It screws up the flatten block check for some reason
                     modified |= block.RunOptimization(new SimpleControlFlow(method, error).RemoveRedundentBlocks);
-                    if (Context.HasFatalError) return null;
                 } while (modified);
-                block.FixParents();
             }
             error.CheckDebugThenSave(method, "before_loops.txt");
             if (BeforeConditionsDebugSainityCheck(method)) return null ;// sainity check, evething must be ready for this
@@ -663,14 +675,13 @@ namespace GameMaker.Ast
             {
                 new LoopsAndConditions(error).FindLoops(block);
             }
-            if (Context.HasFatalError) return null;
+
             error.CheckDebugThenSave(method, "before_conditions.txt");
 
             foreach (ILBlock block in method.GetSelfAndChildrenRecursive<ILBlock>())
             {
                 new LoopsAndConditions(error).FindConditions(block);
             }
-            if (Context.HasFatalError) return null;
 
             error.CheckDebugThenSave(method, "before_flatten.txt");
             FlattenBasicBlocks(method);

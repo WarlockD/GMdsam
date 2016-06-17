@@ -296,6 +296,13 @@ namespace GameMaker.Ast
 
             return false;
         }
+        public static bool MatchAt<T>(this ILBasicBlock bb, int index, GMCode code, out T operand, out IList<ILExpression> args)
+        {
+            if (bb.Body.ElementAtOrDefault(index).Match(code, out operand, out args)) return true;
+            operand = default(T);
+            args = default(IList<ILExpression>);
+            return false;
+        }
         public static bool MatchAt<T>(this ILBasicBlock bb, int index, GMCode code, out T operand)
         {
             if (bb.Body.ElementAtOrDefault(index).Match(code, out operand)) return true;
@@ -306,6 +313,12 @@ namespace GameMaker.Ast
         {
             if (bb.Body.ElementAtOrDefault(index).Match(code, out arg)) return true;
             arg = default(ILExpression);
+            return false;
+        }
+        public static bool MatchAt(this ILBasicBlock bb, int index, GMCode code, out IList<ILExpression> args)
+        {
+            if (bb.Body.ElementAtOrDefault(index).Match(code, out args)) return true;
+            args = default(IList<ILExpression>);
             return false;
         }
         public static bool MatchAt(this ILBasicBlock bb, int index, GMCode code)

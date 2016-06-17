@@ -488,12 +488,15 @@ namespace GameMaker.Writers
         }
         public void FinishProcessing()
         {
-            ILVariable test;
+            if (!Context.doThreads) return;
 
             if (_todo != null && _todo.Count > 0)
             {
                 // ok, we have the jobs start them all up!
-            
+                foreach(var t in _todo)
+                {
+                    if (t.Task.Status != TaskStatus.WaitingToRun) t.Task.Start();
+                }
                 using (var progress = new ProgressBar())
                 {
                     ErrorContext.ProgressBar = progress;

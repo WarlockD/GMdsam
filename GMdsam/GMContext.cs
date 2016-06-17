@@ -34,7 +34,7 @@ namespace GameMaker
         static public bool doAssigmentOffsets = false;
         static public bool doGlobals = true;
         static public bool makeObject = false;
-        static public bool doXML = false;
+        static public bool doXML = true;
         static public bool saveAllPngs = false;
         static public bool saveAllMasks = false;
         static public OutputType outputType = OutputType.GameMaker;

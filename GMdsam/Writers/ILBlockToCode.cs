@@ -133,73 +133,66 @@ namespace GameMaker.Writers
                     return 8;
             }
         }
-       
+
         void WriteAssign(ILExpression left, ILExpression right)
         {
             // Lets make assign nice here, instead of having to
             // make another rule to fix the ast
             WriteVariable(left);
-
-            // I could check the second leaf, but meh
-            if (right.Arguments.Count == 2) {
-                ILVariable v2;
-                if (right.Arguments[0].Match(GMCode.Var, out v2))
+            ILVariable v = left.Operand as ILVariable;
+            ILExpression ver = right.Arguments.ElementAtOrDefault(0);
+            ILVariable v2;
+            if (ver != null && ver.Code == GMCode.Var && (v2 = ver.Operand as ILVariable).Name == v.Name)
+            {
+                // There are a few ways to do this, but the simplest way?  Turn them both into strings and compare them
+                // ... silly I know but its either that or build, from scrach, a equality system
+                if (ver.ToString() == left.ToString())
                 {
                     ILValue cv;
                     switch (right.Code)
                     {
                         case GMCode.Add:
                             if (right.Arguments[1].Match(GMCode.Constant, out cv) && cv.IntValue == 1)
+                            {
                                 Write("++");
+                                return;
+                            }
                             else
                             {
-                                Write(" += ");
-                                Write(right.Arguments[1]);
+                                Write("+");
+                                right = right.Arguments[1];
                             }
                             break;
                         case GMCode.Sub:
                             if (right.Arguments[1].Match(GMCode.Constant, out cv) && cv.IntValue == 1)
+                            {
                                 Write("--");
+                                return;
+                            }
                             else
                             {
-                                Write(" -= ");
-                                Write(right.Arguments[1]);
+                                Write("-");
+                                right = right.Arguments[1];
                             }
                             break;
                         case GMCode.Mul:
-                            Write(" *= ");
-                            Write(right.Arguments[1]);
+                            Write("*");
+                            right = right.Arguments[1];
                             break;
                         case GMCode.Div:
-                            Write(" /= ");
-                            Write(right.Arguments[1]);
+                            Write("/");
+                            right = right.Arguments[1];
                             break;
                         case GMCode.Mod:
-                            Write(" %= ");
-                            Write(right.Arguments[1]);
-                            break;
-                        default:
-                            Write(" = "); // default
-                            Write(right);
+                            Write("%");
+                            right = right.Arguments[1];
                             break;
                     }
                 }
             }
-            else
-            {
-                Write(" = "); // default
-                Write(right);
-                if(Context.doAssigmentOffsets&& right.Code == GMCode.Constant)
-                {
-                    ILValue value = right.Operand as ILValue;
-                    if(value != null && value.DataOffset != null)
-                    {
-                        Write(LineComment);
-                        Write(" Constant Offset=0x{0:X8} Size={1}",(int)value.DataOffset,value.ByteSize);
-                    }
-                }
-            }
-
+            Write("= "); // default
+            Write(right);
+            WriteOffset(right);
         }
         protected bool CheckParm(ILExpression expr, int index)
         {
@@ -218,7 +211,23 @@ namespace GameMaker.Writers
             Write(expr.Arguments[index]);
             if (needParm) Write(')');
         }
-       
+        public virtual void WriteOffset(ILNode n, bool block_comment=true)
+        {
+            if (Context.doAssigmentOffsets)
+            {
+                ILExpression e = n as ILExpression;
+                if(e.Code == GMCode.Constant)
+                {
+                    ILValue value = e.Operand as ILValue;
+                    if (value != null && value.DataOffset != null)
+                    {
+                        if(block_comment) Write(BlockCommentStart);
+                        Write(" Constant Offset=0x{0:X8} Size={1} ", (int) value.DataOffset, value.ByteSize);
+                        if (block_comment) Write(BlockCommentEnd);
+                    }
+                }
+            }
+        }
         public virtual void Write(ILValue v) {
             Write(v.ToString()); 
             if (!(v.Value is string) && v.ValueText != null)
@@ -265,12 +274,12 @@ namespace GameMaker.Writers
             if (ve.Arguments.Count > 1)
             {
                 Write('[');
-                Write(ve.Arguments[1]);
-                if (ve.Arguments.Count == 3)
+                if (ve.Arguments[1].Code == GMCode.Array2D)
                 {
+                    Write(ve.Arguments[1].Arguments[0]);
                     Write(',');
-                    Write(ve.Arguments[2]);
-                }
+                    Write(ve.Arguments[1].Arguments[1]);
+                } else Write(ve.Arguments[1]);
                 Write(']');
             }
         }
@@ -334,9 +343,12 @@ namespace GameMaker.Writers
                     break;
                 // These shouldn't print, debugging
                 default:
+                    Write("ExprError: ");
                     Write(expr.ToString());
                     Flush();
-                    Close(); // we die here
+                    error.Error("Expression error on line " + this.LineNumber);
+                    /*
+                  //  Close(); // we die here
                     var root = expr.Root;
                     using (StreamWriter sw = new StreamWriter("bad_write.txt"))
                     {
@@ -344,6 +356,8 @@ namespace GameMaker.Writers
                         sw.Flush();
                     }
                     throw new Exception("Not Implmented! ugh");
+                    */
+                    break;
             }
             if(expr.Comment != null)
             {
@@ -358,21 +372,34 @@ namespace GameMaker.Writers
             InsertLineInfo(condition);
             Write("if(");
             Write(condition.Condition); // want to make sure we are using the debug
-            Write(") ");
+            Write(")");
             WriteSingleLineOrBlock(condition.TrueBlock);
             if (condition.FalseBlock != null && condition.FalseBlock.Body.Count > 0)
             {
+                if (this.Column > 0 && this.CurrentLine != "}") WriteLine();
                 Write(" else ");
                 WriteSingleLineOrBlock(condition.FalseBlock);
             }
         }
+
+        bool SingleExpressionInBlock(ILBlock block, out ILExpression e)
+        {
+            if (block.Body.Count == 1 && (e = block.Body.SingleOrDefault() as ILExpression) != null) return true;
+            e = default(ILExpression);
+            return false;
+        }
         protected void WriteSingleLineOrBlock(ILBlock block)
         {
-            if (block.Body.Count == 1)
+            ILExpression e = null;
+            if (SingleExpressionInBlock(block, out e))
             {
-                Write(block.Body.Single()); // block writing handles node ending
-             //   if (NodeEnding != null) Write(NodeEnding);
-            }
+                if (e.ToString().Length + this.Column > 80) WriteLine();
+                this.Indent++;
+                Write(' ');
+                Write(e);
+                Write(';');
+                this.Indent--;
+            } 
             else
             {
                 WriteLine(" {");
@@ -380,21 +407,28 @@ namespace GameMaker.Writers
                 Write("}");
             }
         }
-
-        public virtual void Write(ILWhileLoop loop) {
+        public virtual void Write(ILRepeat loop)
+        {
             InsertLineInfo(loop);
-            Write("while(");
+            Write("repeat(");
             Write(loop.Condition); // want to make sure we are using the debug
             Write(") ");
             WriteSingleLineOrBlock(loop.Body);
         }
+        public virtual void Write(ILWhileLoop loop) {
+            InsertLineInfo(loop);
+            Write("while(");
+            Write(loop.Condition); // want to make sure we are using the debug
+            Write(")");
+            WriteSingleLineOrBlock(loop.Body);
+        }
         public virtual void Write(ILWithStatement with) {
             InsertLineInfo(with);
-            string env = with.Enviroment.Code == GMCode.Constant ? Context.InstanceToString((int)(with.Enviroment.Operand as ILValue)) : null;
+            string env = with.Condition.Code == GMCode.Constant ? Context.InstanceToString((int)(with.Condition.Operand as ILValue)) : null;
             if (env != null) WriteLine("// {0}", env);
             Write("with(");
-            Write(with.Enviroment); // want to make sure we are using the debug
-            Write(") ");
+            Write(with.Condition); // want to make sure we are using the debug
+            Write(")");
             WriteSingleLineOrBlock(with.Body);
         }
         public virtual void Write(ILSwitch f) {
@@ -405,11 +439,18 @@ namespace GameMaker.Writers
             Indent++;
             foreach (var c in f.Cases)
             {
-                foreach (var v in c.Values)
+                if (c.Values == null)
                 {
-                    Write("case ");
-                    Write(v);
-                    WriteLine(":");
+                    WriteLine("default:"); 
+                }
+                else
+                {
+                    foreach (var v in c.Values)
+                    {
+                        Write("case ");
+                        Write(v);
+                        WriteLine(":");
+                    }
                 }
                 Write((ILBlock) c); // write it as a block
             }
@@ -434,7 +475,10 @@ namespace GameMaker.Writers
             {
                 for (int i = 0; i < body.Count; i++)
                 {
-                    Write(body[i]);
+                    ILNode n = body[i];
+           //         ILExpression e = n as ILExpression;
+          //          if (e != null) Write('(' + e.Type.ToString() + ')');
+                    Write(n);
                     // prevents the semi-colen appering after the '}'  Soo annyed me
                     if (NodeEnding != null && !this.CurrentLine.isEndingEqual('}', ';')) Write(NodeEnding);
                     WriteLine();

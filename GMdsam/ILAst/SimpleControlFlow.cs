@@ -66,6 +66,113 @@ namespace GameMaker.Ast
             }
        
         }
+        void HackSaveNodes(IList<ILNode> body, string filename)
+        {
+            ILNode parrent = body[0].Parent;
+            ILBlock test = new ILBlock();
+            test.Body = body;
+            error.DebugSave(test, filename, false);
+            test.Body = null;
+            foreach (var n in body) n.Parent = parrent;
+        }
+        public bool MatchRepeatStructure(IList<ILNode> body, ILBasicBlock head, int pos)
+        {
+            ILExpression rcount;
+            ILExpression pushZero;
+            int dupMode = 0;
+            ILLabel fallthough;
+            ILLabel repeatBlock;
+            if (head.MatchLastAt(6, GMCode.Push, out rcount) && // header for a repeat, sets it up
+                head.MatchLastAt(5, GMCode.Dup, out dupMode) &&
+                head.MatchLastAt(4, GMCode.Push, out pushZero) &&
+                pushZero.Code == GMCode.Constant && (pushZero.Operand as ILValue).IntValue == 0 &&
+                head.MatchLastAt(3, GMCode.Sle) &&
+                head.MatchLastAndBr(GMCode.Bt, out fallthough, out repeatBlock))
+            {
+
+                // We have to seeperate the head from other bits of the block
+                // humm, mabye have to put this in the general build routine like we did with push V:(
+                head.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Sle, GMCode.Bt, GMCode.B);
+
+                ILBasicBlock header_block;
+                ILLabel header_label;
+                if (head.Body.Count == 1)
+                {// The head only has the label, so its safe to use this as the header
+                    header_block = head;
+                    header_label = head.EntryLabel();
+                }
+                else
+                {
+                    header_label = ILLabel.Generate("R");
+                    // We have to seperate the head.
+                    header_block = new ILBasicBlock();
+                    head.Body.Add(new ILExpression(GMCode.B, header_label));
+                    header_block.Body.Add(header_label);
+                    body.Insert(pos+1,header_block); // insert before the block so it looks in order
+                }
+
+                header_block.Body.Add(new ILExpression(GMCode.Repeat, repeatBlock, rcount));
+                header_block.Body.Add(new ILExpression(GMCode.B, fallthough)); 
+
+                 // NOW we got to find the block that matches
+                 
+                ILExpression subOneConstant;
+                ILLabel footerContinue, footerfallThough;
+                /*
+                 
+                
+                while (!(start.MatchLastAt(5, GMCode.Push, out subOneConstant) &&
+                     subOneConstant.Code == GMCode.Constant && (subOneConstant.Operand as ILValue).IntValue == 1 &&
+                     start.MatchLastAt(4, GMCode.Sub) &&
+                     start.MatchLastAt(3, GMCode.Dup, out dupMode) && dupMode == 0 &&
+                    start.MatchLastAndBr(GMCode.Bt, out footerContinue, out footerfallThough)))
+                {
+                    ILLabel next = start.GotoLabel();
+                    start = labelToBasicBlock[next];
+                }
+                */ // ok, on more complicated stuf like an internal loop, this fucks up, so we are going to do a hack
+                   // The popz fallthough comes RIGHT after the decrment for the repeate loop, so we are going to move up one from that
+                   // then check it
+                ILBasicBlock popzBlock = labelToBasicBlock[fallthough]; // 
+                Debug.Assert((popzBlock.Body[1] as ILExpression).Code == GMCode.Popz);
+                popzBlock.Body.RemoveAt(1); // remove the popz
+                ILBasicBlock footer = body[body.IndexOf(popzBlock) - 1] as ILBasicBlock;
+
+                if(footer.MatchLastAt(5, GMCode.Push, out subOneConstant) &&
+                     subOneConstant.Code == GMCode.Constant && (subOneConstant.Operand as ILValue).IntValue == 1 &&
+                     footer.MatchLastAt(4, GMCode.Sub) &&
+                     footer.MatchLastAt(3, GMCode.Dup, out dupMode) && dupMode == 0 &&
+                    footer.MatchLastAndBr(GMCode.Bt, out footerContinue, out footerfallThough)){
+                    Debug.Assert(footerfallThough == fallthough && repeatBlock == footerContinue); // sanity check
+                    footer.Body.RemoveTail(GMCode.Push, GMCode.Sub, GMCode.Dup, GMCode.Bt, GMCode.B);
+                    footer.Body.Add(new ILExpression(GMCode.B, header_block.EntryLabel()));
+
+
+                } else throw new Exception("Fuck me");
+
+
+                // Found!  Some sanity checks thogh
+                
+                /* MAJOR BUG UNFINSHED WORK ALERT!
+                * Ok, so this isn't used in undertale, but at some point, somone might want to do a break or continue
+                * Inside of a repeat statment.  I have NO clue why though, use a while?
+                * Anyway, if thats the case then you MUST change the target label of evetyhing going to start, to fallthough, otherwise
+                * the goto cleaner will start screaming at you and do alot of weird stuff
+                * fyi, like the with statments, I am converting this thing into a while loop so I don't have to have
+                * custom loop graph code for these things
+                * So, for now? convert start to loop back to head, head jumps to fallthough, and we remove the popz from the fall though
+                */
+             //   ILLabel.Generate("Block_", nextLabelIndex++);
+              
+
+          
+
+                return true;
+            }
+            return false;
+        }
+
+
         // Detect a switch block, combine them all, and either build a switch block or 
         // just a bunch of if statements
         // the trick is to get rid of the popv at the end of all these case statements
@@ -319,119 +426,6 @@ namespace GameMaker.Ast
         }
 
        
-   
-        bool MatchGeneratedLoopHeader(ILBasicBlock head, out ILLabel trueLabel, out ILLabel falseLabel, out ILExpression start)
-        {
-            Debug.Assert(head != null);
-            // The patern is
-            // Push StartingCount
-            // Dup it
-            // Push 0
-            // Sle 
-            // Bt skip
-            // :label
-            // ...
-            // push 1
-            // sub from Dup
-            // dup it
-            // bt dup to label
-            // popz
-            // in another way
-            // if constant > 0 do loop
-            // exit loop when constant == 0
-            // It feels like this is a loop
-            // mabey since the code dosn't need the i in a for loop, that the compiler removes
-            // the need for the variable humm
-            int dupType = 0;
-            ILExpression wierd;
- 
-            if(head.MatchLastAndBr(GMCode.Bt, out trueLabel, out falseLabel) &&
-                head.MatchLastAt(3, GMCode.Sle) &&
-                head.MatchLastAt(4, GMCode.Push, out wierd) && // its wierd cause why do we have this match in the first place
-                head.MatchLastAt(5, GMCode.Dup, out dupType) &&
-                dupType == 0 &&
-                head.MatchLastAt(6, GMCode.Push, out start) &&
-                wierd.Code == GMCode.Constant) // assume zero
-            {
-                return true;
-            }
-            start = default(ILExpression);
-            falseLabel = default(ILLabel);
-            trueLabel = default(ILLabel);
-            return false;
-        }
-        bool MatchGeneratedLoop(ILBasicBlock head, out ILLabel trueLabel, out ILLabel falseLabel, out ILExpression dec)
-        {
-            Debug.Assert(head != null);
-            // It feels like this is a loop
-            // mabey since the code dosn't need the i in a for loop, that the compiler removes
-            // the need for the variable humm
-            int dupType = 0;
-            if (head.MatchLastAndBr(GMCode.Bt,  out trueLabel, out falseLabel) &&
-                head.MatchLastAt(3, GMCode.Dup, out dupType) &&
-                dupType == 0 &&
-                head.MatchLastAt(4, GMCode.Sub) &&
-                head.MatchLastAt(5, GMCode.Push, out dec))
-            {
-                return true;
-            }
-            dec = default(ILExpression);
-            falseLabel = default(ILLabel);
-            trueLabel = default(ILLabel);
-            return false;
-        }
-        // These are for loops where the insides don't use the counting variable
-        // so the compiler optimized it to just a temp push
-        public bool FixOptimizedForLoops(IList<ILNode> body, ILBasicBlock head, int pos)
-        {
-            ILLabel trueLabel; // loop exit
-            ILLabel falseLabel; // loop start
-
-            ILExpression start;
-            bool modified = false;
-            if (MatchGeneratedLoopHeader(head, out trueLabel, out falseLabel, out start))
-            {
-                modified = true;
-                ILVariable tempVar = ILVariable.GenerateTemp("floop");
-                ILLabel newBlockLabel = ILLabel.Generate("FLOOP");
-
-                head.Body.RemoveTail(GMCode.Push, GMCode.Dup, GMCode.Push, GMCode.Sle, GMCode.Bt, GMCode.B);
-                head.Body.Add(new ILExpression(GMCode.Assign,  tempVar,  start )); // add the starting value
-                head.Body.Add(new ILExpression(GMCode.B, newBlockLabel)); // link it to the new while loop header
-   
-                ILBasicBlock newLoopHeadder = new ILBasicBlock();
-                newLoopHeadder.Body.Add(newBlockLabel);
-                newLoopHeadder.Body.Add(new ILExpression(GMCode.Bt, falseLabel, new ILExpression(GMCode.Seq, null, tempVar.ToExpresion(), new ILValue(0).ToExpresion())));
-                newLoopHeadder.Body.Add(new ILExpression(GMCode.B, trueLabel));
-
-                for (int i = 0; i < body.Count; i++)
-                {
-                    ILLabel trueLabelN;
-                    ILLabel falseLabelN;
-                    ILExpression dec; // not sure if there might be multipul blocks like this, but just loop though it all to be safe
-
-                    ILBasicBlock endBlock = body[i] as ILBasicBlock;
-                    if (MatchGeneratedLoop(endBlock, out trueLabelN, out falseLabelN, out dec) &&
-                        trueLabelN == falseLabel && falseLabelN == trueLabel // make sure the exit and loop start are the same
-                        )
-                    { 
-                        endBlock.Body.RemoveTail(GMCode.Push, GMCode.Sub, GMCode.Dup, GMCode.Bt, GMCode.B);
-                        endBlock.Body.Add(new ILExpression(GMCode.Assign, tempVar, new ILExpression(GMCode.Sub, null, tempVar.ToExpresion(), dec))); // add the starting value
-                        endBlock.Body.Add(new ILExpression(GMCode.B, newBlockLabel));
-                    }
-                }
-                if (modified)
-                {
-                    body.Add(newLoopHeadder);
-                    ILBasicBlock exitBlock = labelToBasicBlock[trueLabel];
-                    // popz here that pops the temp value
-                    Debug.Assert(exitBlock.MatchAt(1, GMCode.Popz));
-                    exitBlock.Body.RemoveAt(1); // just remove it
-                }
-            }
-            return modified;
-        }
-       
         public ILExpression ResolveTernaryExpression(ILExpression condExpr, ILExpression trueExpr, ILExpression falseExpr)
         {
             int? falseLocVar = falseExpr.Operand is ILValue ? (falseExpr.Operand as ILValue).IntValue : null;
@@ -490,7 +484,7 @@ namespace GameMaker.Ast
             ILExpression falseExpr;
             ILLabel falseFall;
 
-            IList<ILExpression> finalFall;
+           
             ILLabel finalFalseFall;
             ILLabel finalTrueFall;
             if(head.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) &&
@@ -511,6 +505,7 @@ namespace GameMaker.Ast
                 head.Body.RemoveTail(GMCode.Bt, GMCode.B);
                 body.RemoveOrThrow(trueBlock);
                 body.RemoveOrThrow(falseBlock);
+                IList<ILExpression> finalFall;
                 // figure out if its a wierd short or not
                 if (fallBlock.MatchSingleAndBr(GMCode.Bt, out finalTrueFall, out finalFall, out finalFalseFall) &&
                 finalFall.Count == 0)
@@ -529,6 +524,10 @@ namespace GameMaker.Ast
                     head.Body.Add(new ILExpression(GMCode.Push, null, newExpr));
                     // It should be combined in JoinBasicBlocks function
                     // so don't remove failblock
+                }else if(fallBlock.MatchAt(1,GMCode.Assign,  out finalFall)) // This is an assignment case and unsure what its for
+                {
+                    finalFall.Add(newExpr);
+                    finalFalseFall = fallBlock.EntryLabel();
                 }
                 Debug.Assert(finalFalseFall != null);
               

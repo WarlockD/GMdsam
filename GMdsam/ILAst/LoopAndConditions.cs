@@ -33,31 +33,7 @@ namespace GameMaker.Ast
                 graph.ComputeDominanceFrontier();
                 block.Body = FindLoops(new HashSet<ControlFlowNode>(graph.Nodes.Skip(2)), graph.EntryPoint, false); 
             }
-        }
-        public void FindWiths(ILBlock block)
-        {
-            if (block.Body.Count > 0)
-            {
-                List<ILBasicBlock> pushEnv = new List<ILBasicBlock>();
-                List<ILBasicBlock> popEnv = new List<ILBasicBlock>();
-                foreach (var bb in block.GetSelfAndChildrenRecursive<ILBasicBlock>())
-                {
-                    foreach(var n in bb.GetChildren())
-                    {
-                        ILExpression e = n as ILExpression;
-                        if(e != null)
-                        {
-                            if (e.Code == GMCode.Pushenv) pushEnv.Add(bb);
-                            if (e.Code == GMCode.Popenv) popEnv.Add(bb);
-                        }
-                    }
-                }
-                if (pushEnv.Count == 0 && popEnv.Count == 0) return;
-                Debug.WriteLine("WOOO");
-               
-            }
-        }
-  
+        }  
         public void FindConditions(ILBlock block)
         {
             if (block.Body.Count > 0)
@@ -159,9 +135,10 @@ namespace GameMaker.Ast
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
                     if (basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
-                         basicBlock.MatchLastAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel) )// built it the same way from the dissasembler
+                         basicBlock.MatchLastAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel) || // built it the same way from the dissasembler, this needs inverted
+                        basicBlock.MatchLastAndBr(GMCode.Repeat, out trueLabel, out condExpr, out falseLabel) ) // repeate loop is built like a while
                        {
-                        bool ispushEnv = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code == GMCode.Pushenv;
+                        GMCode loopType = (basicBlock.Body.ElementAt(basicBlock.Body.Count - 2) as ILExpression).Code;
                         ControlFlowNode trueTarget;
                         labelToCfNode.TryGetValue(trueLabel, out trueTarget);
                         ControlFlowNode falseTarget;
@@ -197,45 +174,53 @@ namespace GameMaker.Ast
                             }
 
 
-                        
+                            //Debug.Assert(false);
                             Debug.Assert(condExpr != null);
-                            
-
-                          
-                            if (ispushEnv)
+                            switch (loopType)
                             {
-                                // Use loop to implement the brtrue
-                                basicBlock.Body.RemoveTail(GMCode.Pushenv, GMCode.B);
-                                basicBlock.Body.Add(new ILWithStatement()
-                                {
-                                    Enviroment = condExpr, // we never negate 
-                                    Body = new ILBlock()
+                                case GMCode.Pushenv:
+                                    basicBlock.Body.RemoveTail(GMCode.Pushenv, GMCode.B);
+                                    basicBlock.Body.Add(new ILWithStatement()
                                     {
-                                        EntryGoto = new ILExpression(GMCode.B, trueLabel),
-                                        Body = FindLoops(loopContents, node, false)
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                // Use loop to implement the brtrue
-                                basicBlock.Body.RemoveRange(basicBlock.Body.Count - 2, 2);
-                               // basicBlock.Body.RemoveTail(GMCode.Bt, GMCode.B);
-
-                                basicBlock.Body.Add(new ILWhileLoop()
-                                {
-                                    Condition = mustNegate ? condExpr : condExpr.NegateCondition(),
-                                    Body = new ILBlock()
+                                        Condition = condExpr, // we never negate 
+                                        Body = new ILBlock()
+                                        {
+                                            EntryGoto = new ILExpression(GMCode.B, trueLabel),
+                                            Body = FindLoops(loopContents, node, false)
+                                        }
+                                    });
+                                    break;
+                                case GMCode.Bt: 
+                                    basicBlock.Body.RemoveTail(GMCode.Bt, GMCode.B);
+                                    basicBlock.Body.Add(new ILWhileLoop()
                                     {
-                                        EntryGoto = new ILExpression(GMCode.B, trueLabel),
-                                        Body = FindLoops(loopContents, node, false)
-                                    }
-                                });
-
-                               
+                                        Condition = mustNegate ? condExpr : condExpr.NegateCondition(),
+                                        Body = new ILBlock()
+                                        {
+                                            EntryGoto = new ILExpression(GMCode.B, trueLabel),
+                                            Body = FindLoops(loopContents, node, false)
+                                        }
+                                    });
+                                   
+                                    break;
+                                case GMCode.Repeat:
+                                    basicBlock.Body.RemoveTail(GMCode.Repeat, GMCode.B);
+                                    basicBlock.Body.Add(new ILRepeat()
+                                    {
+                                        Condition = condExpr, // we never negate 
+                                        Body = new ILBlock()
+                                        {
+                                            EntryGoto = new ILExpression(GMCode.B, trueLabel),
+                                            Body = FindLoops(loopContents, node, false)
+                                        }
+                                    });
+                                   
+                                    break;
+                                    
                             }
-
                             basicBlock.Body.Add(new ILExpression(GMCode.B, falseLabel));
+
+
                             result.Add(basicBlock);
 
                             scope.ExceptWith(loopContents);
@@ -245,11 +230,13 @@ namespace GameMaker.Ast
                     // Fallback method: while(true)
                     if (scope.Contains(node))
                     {
+                        Debug.Assert(false);
                         result.Add(new ILBasicBlock()
                         {
                             Body = new List<ILNode>() {
                                 ILLabel.Generate("Loop"),
                                 new ILWhileLoop() {
+                                    Condition = new ILExpression(GMCode.Constant, new ILValue(true)),
                                     Body = new ILBlock() {
                                         EntryGoto = new ILExpression(GMCode.B, (ILLabel)basicBlock.Body.First()),
                                         Body = FindLoops(loopContents, node, true)

@@ -1085,7 +1085,11 @@ namespace GameMaker
                     {
                         lock (_syncRoot)
                         {
-                            if (_block == null) _block = CreateNewBlock();
+                            if (_block == null)
+                            {
+                                if (!Context.doThreads) Context.Message("Starting Compiling Code '{0}'", Name);
+                                _block = CreateNewBlock();
+                            }
                         }
                     }
                     return _block;
@@ -1140,34 +1144,15 @@ namespace GameMaker
                 Locals = new Dictionary<string, ILVariable>();
                 // Don't need any of that above since we don't do asms anymore
                 var error = new ErrorContext(name);
-                ILBlock block = new ILBlock();
-#if DEBUG
-                bool watching = false;
-                Debug.WriteLine("Decompiling: " + Name);
-                if(Context.HackyDebugWatch !=null && Context.HackyDebugWatch.Contains(Name))
-                {
-                    foreach(var f in new DirectoryInfo(".").GetFiles(".txt"))
-                    {
-                        if (System.IO.Path.GetFileName(f.Name) != "errors.txt") f.Delete(); // clear out eveything
-                    }
-                    Context.Debug = true;
-                    Context.Message("Watching '" + Name + "'");
-                    watching = true;
-                }
-#endif
-                block.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
-                block = new ILAstBuilder().Build(block, Locals,error);
+                
+
+               
+                ILBlock dblock = new ILBlock();
+                dblock.Body = new Dissasembler.NewByteCodeToAst().Build(this, error);
+                ILBlock block = new ILAstBuilder().Build(dblock, Locals, error);
+                Debug.Assert(block != null);
                 block.FixParents();
-#if DEBUG
-                if (watching)
-                {
-                    Context.Debug = false;
-                    watching = false;
-                    using (Writers.BlockToCode to = new Writers.BlockToCode(Name + "_watch.js"))
-                        to.Write(block);
-                        Context.FatalError("Finished watching '" + Name + "'");
-                }
-#endif
+
                 return block;
             }
 

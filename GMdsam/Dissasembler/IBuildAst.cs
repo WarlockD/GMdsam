@@ -79,13 +79,29 @@ namespace GameMaker.Dissasembler
             r = null; // for GC
             return list.ToList();
         }
+        protected static GM_Type ReadRaw(uint i)
+        {
+            switch (i & 0xF)
+            {
+                case 0: return GM_Type.Double;
+                case 1: return GM_Type.Float;
+                case 2: return GM_Type.Int;
+                case 3: return GM_Type.Long;
+                case 4: return GM_Type.Bool;
+                case 5: return GM_Type.Var;
+                case 6: return GM_Type.String;
+                case 15: return GM_Type.Short;
+                default:
+                    throw new Exception("Bad type read");
+            }
+        }
         protected static GM_Type[] ReadTypes(uint rawCode)
         {
             uint topByte = (rawCode >> 24) & 255;
             uint secondTopByte = (rawCode >> 16) & 255;
             GM_Type[] types = null;
-            if ((topByte & 160) == 128) types = new GM_Type[] { (GM_Type)(secondTopByte & 15) };
-            else if ((topByte & 160) == 0) types = new GM_Type[] { (GM_Type)(secondTopByte & 15), (GM_Type)((secondTopByte >> 4) & 15) };
+            if ((topByte & 160) == 128) types = new GM_Type[] { ReadRaw(secondTopByte & 15) };
+            else if ((topByte & 160) == 0) types = new GM_Type[] { ReadRaw(secondTopByte & 15), ReadRaw((secondTopByte >> 4) & 15) };
             return types;
         }
 

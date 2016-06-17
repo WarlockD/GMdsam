@@ -137,7 +137,8 @@ namespace GameMaker
         Concat, // -- filler for lua or string math
         Array2D,
         Assign,
-        CallUnresolved
+        CallUnresolved,
+        Repeat , // The expression only holds the exit label, used for loopandcondition
         // AssignAdd,
         //    AssignSub,
         //   AssignMul,
@@ -229,7 +230,7 @@ namespace GameMaker
         }
         public static bool IsConditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.Switch || code == GMCode.Pushenv;
+            return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.Switch || code == GMCode.Pushenv || code == GMCode.Repeat;
         }
         public static bool isBranch(this GMCode code)
         {

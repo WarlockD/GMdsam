@@ -197,8 +197,33 @@ namespace GameMaker
             var w = new Writers.AllWriter();
             if (Context.HackyDebugWatch!= null)
             {
-                Context.HackyDebugWatch = new HashSet<string>(chunks);
-                w.AddAction("code");
+                Context.doThreads = false;
+                Context.Debug = true;
+                foreach (var f in new DirectoryInfo(".").GetFiles("*.txt"))
+                {
+                    if (System.IO.Path.GetFileName(f.Name) != "errors.txt") f.Delete(); // clear out eveything
+                }
+                foreach (var a in chunks)
+                {
+                    File.Code c;
+                    if (File.TryLookup(a, out c))
+                    {
+                        var error = new ErrorContext(c.Name);
+                        error.Message("Decompiling");
+                        Context.Debug = true;
+                        var block = c.Block;
+                        if (block != null)
+                        {
+                            using (Writers.BlockToCode to = new Writers.BlockToCode(c.Name + "_watch.js"))
+                                to.Write(block);
+                            error.Message("Finished Decompiling");
+                        }
+                        else error.Message("Block is null");
+                    }
+                    else Context.Error("Code '{0} not found", a);
+                }
+                //Context.HackyDebugWatch = new HashSet<string>(chunks);
+               // w.AddAction("code");
             } else
             {
                 if (chunks.Count == 0) chunks.Add("everything");

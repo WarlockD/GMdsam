@@ -113,12 +113,19 @@ namespace GameMaker.Ast
             Context.Message("DebugSave Node Saved '{0}'", filename);
         }
     }
+    // Used to tell if its a code block or an expression, label, etc
+    // mainly only used for pritty print
+
+    public interface ILNodeBlock { } 
+
     public abstract class ILNode 
     {
         public object UserData = null;
         public string Comment = null;
         protected ILNode _parent = null;
         HashSet<ILNode> _children = new HashSet<ILNode>();
+
+        // this works pritty well though the children part I never tested:P
         public ILNode Parent {
             get { return _parent; }
             set
@@ -202,12 +209,14 @@ namespace GameMaker.Ast
     public class NodeList<T> : Collection<T> where T : ILNode
     {
         public ILNode Parrnt { get; private set; }
-        public NodeList(ILNode p) : base() { Parrnt = p; }
+        public NodeList(ILNode p) : base(new List<T>(4)) { Parrnt = p; }
         static IList<T> GetRootList(IList<T> start)
         {
+            if (start == null) return new List<T>(4);
             NodeList<T> test;
             while ((test = start as NodeList<T>) != null)
                 start = test.Items;
+            if (start.IsReadOnly) start = new List<T>(start);// who'd a thought that arrays use an IList interface?
             return start;
         }
         public NodeList(ILNode p, IList<T> list) : base(GetRootList(list)) {
@@ -235,30 +244,25 @@ namespace GameMaker.Ast
             foreach (var n in Items) n.Parent = null;
         }
     }
-    public abstract class ILHasBody  : ILNode
+
+
+    public class ILBasicBlock : ILNode, ILNodeBlock
     {
-        NodeList<ILNode> _body;
-        public IList<ILNode> Body {  get { return _body; }
-            set {
+        NodeList<ILNode> _body=null;
+        public IList<ILNode> Body
+        {
+            get { return _body; }
+            set
+            {
                 if (_body.Count > 0) _body.Clear();
                 _body = new NodeList<ILNode>(this, value);
             }
         }
-        public ILHasBody() {
-            _body = new NodeList<ILNode>(this);
+        public ILBasicBlock() { _body = new NodeList<ILNode>(this); }
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            return _body;
         }
-
-        public override IEnumerable<ILNode> GetChildren() {  return _body; }
-    }
-    public abstract class ILHasArguments : ILNode
-    {
-        NodeList<ILExpression> _arguments;
-        public IList<ILExpression> Arguments { get { return _arguments; } set { if (_arguments.Count > 0) _arguments.Clear(); _arguments = new NodeList<ILExpression>(this, value); } }
-        public ILHasArguments() { _arguments = new NodeList<ILExpression>(this); }
-        public override IEnumerable<ILNode> GetChildren() { return _arguments; }
-    }
-    public class ILBasicBlock : ILHasBody
-    {
         public override void ToStringBuilder(StringBuilder sb)
         {
             foreach (var n in Body)
@@ -269,17 +273,24 @@ namespace GameMaker.Ast
             }
         }
     }
-    public class ILBlock : ILHasBody
+    public class ILBlock : ILNode, ILNodeBlock
     {
         public ILExpression EntryGoto;
-        public ILBlock(params ILNode[] body)
+        NodeList<ILNode> _body = null;
+        public ILBlock() { _body = new NodeList<ILNode>(this); }
+        public IList<ILNode> Body
         {
-            this.Body = body.ToList();
+            get { return _body; }
+            set
+            {
+                if (_body.Count > 0) _body.Clear();
+                _body = new NodeList<ILNode>(this, value);
+            }
         }
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.EntryGoto != null) yield return this.EntryGoto;
-            foreach (ILNode child in base.GetChildren()) yield return child;
+            if(_body != null) foreach(ILNode child in _body) yield return child;
         }
         public void DebugSaveFile(string filename)
         {
@@ -322,7 +333,7 @@ namespace GameMaker.Ast
                 lock (_cache) _cache.Add(name,c);
                 if (c.isBuiltin) c._returnType = Constants.GetFunctionType(name);
             } // humm, forgot about var arg stuff like choose
-            Debug.WriteLineIf(name != "choise" && name != "script_execute" && argumentCount != c.ArgumentCount, "Call '" + name + "' diffrent args need " + argumentCount + " but original " + c.ArgumentCount);
+          //  Debug.WriteLineIf(name != "choise" && name != "script_execute" && argumentCount != c.ArgumentCount, "Call '" + name + "' diffrent args need " + argumentCount + " but original " + c.ArgumentCount);
             //Debug.Assert(c.ArgumentCount == argumentCount);
             return c;
         }
@@ -476,7 +487,8 @@ namespace GameMaker.Ast
         // generates a label, gurntess unique
         public static ILLabel Generate(string name = "G")
         {
-            return Generate(name, generate_count++);
+            System.Threading.Interlocked.Increment(ref generate_count);
+            return Generate(name, generate_count);
         }
         public static ILLabel Generate(string name, int labelIndex)
         {
@@ -648,11 +660,16 @@ namespace GameMaker.Ast
                         lock (locals) locals.Add(name, v);
                     }
                     break;
+                case -2: // ? other instance, how does this work?
+                  //  Debug.Assert(false);
+                    v = new ILVariable() { _name = string.Intern(name), _instance = -2, _arrayDim = 0 };
+                    break;
                 case 0: // zero is stack but in this case, its a local var that has the instance
                     v = new ILVariable() { _name = string.Intern(name), _instance = 0, _arrayDim = 0 };
                     break;
                 default:
-                    if (instance < 0 || instance >= File.Objects.Count) throw new ArgumentOutOfRangeException("instance out of range of objets", "instance");
+                    Debug.Assert(instance >= 0);
+                        if (instance < 0 || instance >= File.Objects.Count) throw new ArgumentOutOfRangeException("instance out of range of objets", "instance");
                     v = new ILVariable() { _name = string.Intern(name), _instance = instance, _arrayDim = 0 };
                     break;
             }
@@ -830,8 +847,29 @@ void ReportUnassignedILRanges(ILBlock method)
 */
     }
 
-    public class ILExpression : ILHasArguments
+    public class ILExpression : ILNode
     {
+        // Use this to find how complex the expression tree is
+        public int ExpressionDepth
+        {
+            get
+            {
+                switch (Code)
+                {
+                    case GMCode.Var:
+                    case GMCode.Call:
+                    case GMCode.Constant:
+                        return 1; // leafs
+                    default:
+                        int i = 1;
+                        if (Code != GMCode.Call) foreach (var e in Arguments) i += e.ExpressionDepth;
+                        return i;
+                }
+            }
+        }
+        NodeList<ILExpression> _arguments;
+        public IList<ILExpression> Arguments { get { return _arguments; } set { if (_arguments.Count > 0) _arguments.Clear(); _arguments = new NodeList<ILExpression>(this, value); } }
+        public override IEnumerable<ILNode> GetChildren() { return _arguments; }
         ILType _typesSeen = new ILType();
 
         public GMCode Code { get; set; }
@@ -852,12 +890,9 @@ void ReportUnassignedILRanges(ILBlock method)
                     GM_Type t = GM_Type.NoType;
                     switch (Code)
                     {
-                        case GMCode.Call:
-                            t = (Operand as ILCall).ReturnType; break;
-                        case GMCode.Var:
-                            t = (Operand as ILVariable).Type; break;
-                        case GMCode.Constant:
-                            t = (Operand as ILValue).Type; break;
+                        case GMCode.Call: t = (Operand as ILCall).ReturnType; break;
+                        case GMCode.Var: t = (Operand as ILVariable).Type; break;
+                        case GMCode.Constant: t = (Operand as ILValue).Type; break;
                         default:
                             foreach (var e in Arguments) t = t.ConvertType(e.Type);
                             break;
@@ -870,36 +905,30 @@ void ReportUnassignedILRanges(ILBlock method)
 
         public static readonly object AnyOperand = new object();
 
-        public ILExpression(ILExpression i, List<ILRange> range = null) // copy it
+        public ILExpression(ILExpression i) // copy it
         {
             this.Code = i.Code;
             this.Operand = i.Operand; // don't need to worry about this
-            this.Arguments = new List<ILExpression>(i.Arguments.Count);
+            this._arguments = new NodeList<ILExpression>(this);
             if (i.Arguments.Count != 0) foreach (var n in i.Arguments) this.Arguments.Add(new ILExpression(n));
-            this.ILRanges = new List<ILRange>(range ?? i.ILRanges);
+            this.ILRanges = new List<ILRange>(i.ILRanges);
         }
-        public ILExpression(GMCode code, object operand, GM_Type type, params ILExpression[] args)
+        public ILExpression(GMCode code, object operand)
         {
-            if (operand is ILExpression)
-                throw new ArgumentException("operand");
-            this._type = type;
+            if (operand is ILExpression) throw new ArgumentException("operand");
             this.Code = code;
             this.Operand = operand;
-            this.Arguments = args == null ? new List<ILExpression>(2) : new List<ILExpression>(args);
+            this._arguments = new NodeList<ILExpression>(this) ;
             this.ILRanges = new List<ILRange>(1);
         }
-        public ILExpression(GMCode code, object operand, GM_Type type, List<ILExpression> args)
+        public ILExpression(GMCode code, object operand, params ILExpression[] args)
         {
-            if (operand is ILExpression)
-                throw new ArgumentException("operand");
-            this._type = type;
+            if (operand is ILExpression) throw new ArgumentException("operand");
             this.Code = code;
             this.Operand = operand;
-            this.Arguments = new List<ILExpression>(args);
+            this._arguments = args == null ? new NodeList<ILExpression>(this) : new NodeList<ILExpression>(this, args);
             this.ILRanges = new List<ILRange>(1);
         }
-        public ILExpression(GMCode code, GM_Type type, params ILExpression[] args) : this(code, null, type, args) { }
-        public ILExpression(GMCode code, object operand, params ILExpression[] args) : this(code, operand, GM_Type.NoType, args) { }
 
         public bool IsBranch()
         {
@@ -991,21 +1020,21 @@ void ReportUnassignedILRanges(ILBlock method)
                 case GMCode.Var:
                     {
                         ILVariable v = Operand as ILVariable;
-                        if(v.Instance != 0)
-                        {
+                        if (v.Instance != 0)
                             sb.Append(v.InstanceName);
-                            sb.Append('.');
-                        }
+                        else
+                            Arguments[0].ToStringBuilder(sb);
+                        sb.Append('.');
                         sb.Append(v.Name);
                         if(Arguments.Count > 1)
                         {
                             sb.Append('[');
-                            Arguments[1].ToStringBuilder(sb);
-                            if(Arguments.Count ==3)
+                            if(Arguments[1].Code == GMCode.Array2D)
                             {
+                                Arguments[1].Arguments[0].ToStringBuilder(sb);
                                 sb.Append(',');
-                                Arguments[2].ToStringBuilder(sb);
-                            }
+                                Arguments[1].Arguments[1].ToStringBuilder(sb);
+                            } else  Arguments[1].ToStringBuilder(sb);
                             sb.Append(']');
                         }
                     }
@@ -1067,36 +1096,43 @@ void ReportUnassignedILRanges(ILBlock method)
             return sb.ToString();
         }
     }
-
-    public class ILWhileLoop : ILNode
-    {
-        public ILExpression Condition;
-        public ILBlock Body;
-
-        public override IEnumerable<ILNode> GetChildren()
-        {
-            if (this.Condition != null)
-                yield return this.Condition;
-            if (this.Body != null)
-                yield return this.Body;
-        }
-
-        public override void ToStringBuilder(StringBuilder sb)
-        {
-            sb.Append("while(");
-            sb.Append(Condition);
-            sb.AppendLine(")");
-            sb.AppendLine("{");
-            Body.ToStringBuilder(sb);
-            sb.AppendLine("}");
-        }
-    }
    
-    public class ILCondition : ILNode
+    public class ILCondition : ILNode, ILNodeBlock
     {
-        public ILExpression Condition;
-        public ILBlock TrueBlock;   // Branch was taken
-        public ILBlock FalseBlock;  // Fall-though
+        ILExpression _condition = null;
+        ILBlock _trueBlock = null;
+        ILBlock _falseBlock = null;
+        public ILExpression Condition
+        {
+            get { return _condition; }
+            set
+            {
+                if (_condition != null) _condition.Parent = null;
+                if (value != null) value.Parent = this;
+                _condition = value;
+            }
+        }
+     
+        public ILBlock TrueBlock
+        {
+            get { return _trueBlock; }
+            set
+            {
+                if (_trueBlock != null) _trueBlock.Parent = null;
+                if (value != null) value.Parent = this;
+                _trueBlock = value;
+            }
+        }
+        public ILBlock FalseBlock// Fall-though
+        {
+            get { return _falseBlock; }
+            set
+            {
+                if (_falseBlock != null) _falseBlock.Parent = null;
+                if (value != null) value.Parent = this;
+                _falseBlock = value;
+            }
+        }
 
         public override IEnumerable<ILNode> GetChildren()
         {
@@ -1126,13 +1162,13 @@ void ReportUnassignedILRanges(ILBlock method)
         }
     }
    
-    public class ILSwitch : ILNode
+    public class ILSwitch : ILNode, ILNodeBlock
     {
 
         public class ILCase : ILBlock
         {
-            public List<ILExpression> Values = new List<ILExpression>();
-
+            NodeList<ILExpression> _values;
+            public IList<ILExpression> Values { get { return _values; } set { if (_values != null && _values.Count > 0) _values.Clear(); _values = new NodeList<ILExpression>(this, value); } }
             public override void ToStringBuilder(StringBuilder sb)
             {
                 foreach(var v in Values)
@@ -1144,9 +1180,33 @@ void ReportUnassignedILRanges(ILBlock method)
                 base.ToStringBuilder(sb);
             }
         }
-        public ILExpression Condition;
-        public List<ILCase> Cases = new List<ILCase>();
-        public ILBlock Default;
+        ILExpression _condition = null;
+        ILBlock _default = null;
+        NodeList<ILCase> _cases = null;
+        public IList<ILCase> Cases { get { return _cases; } set { if (_cases != null && _cases.Count > 0) _cases.Clear(); _cases = new NodeList<ILCase>(this, value); } }
+        public ILSwitch() { _cases = new NodeList<ILCase>(this); }
+        public ILExpression Condition
+        {
+            get { return _condition; }
+            set
+            {
+                if (_condition != null) _condition.Parent = null;
+                if (value != null) value.Parent = this;
+                _condition = value;
+            }
+        }
+
+        public ILBlock Default
+        {
+            get { return _default; }
+            set
+            {
+                if (_default != null) _default.Parent = null;
+                if (value != null) value.Parent = this;
+                _default = value;
+            }
+        }
+
         public override IEnumerable<ILNode> GetChildren()
         {
             if (this.Condition != null) yield return this.Condition;
@@ -1175,26 +1235,71 @@ void ReportUnassignedILRanges(ILBlock method)
             sb.AppendLine("}");
         }
     }
-
-    public class ILWithStatement : ILNode
+    public class ILWhileLoop : ILNode, ILNodeBlock // ... these are all the practicaly same struture, so why not make them inharenent another
     {
-        public static int withVars = 0;
-        public ILBlock Body = new ILBlock();
-        public ILExpression Enviroment;
+        ILExpression _condition = null;
+        ILBlock _body = null;
+        public ILExpression Condition
+        {
+            get { return _condition; }
+            set
+            {
+                if (_condition != null) _condition.Parent = null;
+                if (value != null) value.Parent = this;
+                _condition = value;
+            }
+        }
+
+        public ILBlock Body
+        {
+            get { return _body; }
+            set
+            {
+                if (_body != null) _body.Parent = null;
+                if (value != null) value.Parent = this;
+                _body = value;
+            }
+        }
+
         public override IEnumerable<ILNode> GetChildren()
         {
-            if (Enviroment != null) yield return Enviroment;
-            if (this.Body != null) yield return this.Body;
+            if (this.Condition != null)
+                yield return this.Condition;
+            if (this.Body != null)
+                yield return this.Body;
         }
+
+        public override void ToStringBuilder(StringBuilder sb)
+        {
+            sb.Append("while(");
+            sb.Append(Condition);
+            sb.AppendLine(")");
+            sb.AppendLine("{");
+            Body.ToStringBuilder(sb);
+            sb.AppendLine("}");
+        }
+    }
+    public class ILWithStatement : ILWhileLoop
+    {
         public override void ToStringBuilder(StringBuilder sb)
         {
             sb.Append("with(");
-            sb.Append(Enviroment);
+            sb.Append(Condition);
+            sb.AppendLine(")");
+            Body.ToStringBuilder(sb);
+        }
+    }
+    // Oh god damnit, I need to look at the documentation more
+    public class ILRepeat : ILWhileLoop
+    {
+        public override void ToStringBuilder(StringBuilder sb)
+        {
+            sb.Append("repeat(");
+            sb.Append(Condition);
             sb.AppendLine(")");
             Body.ToStringBuilder(sb);
         }
     }
 
-    
 }
 

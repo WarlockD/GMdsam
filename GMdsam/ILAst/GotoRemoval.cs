@@ -112,7 +112,8 @@ namespace GameMaker.Ast
                 // If there is no default block, remove empty case blocks
                 if (defaultCase == null || (defaultCase.Body.Count == 1 && defaultCase.Body.Single().Match(GMCode.LoopOrSwitchBreak)))
                 {
-                    ilSwitch.Cases.RemoveAll(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak));
+                    foreach (var c in ilSwitch.Cases.Where(b => b.Body.Count == 1 && b.Body.Single().Match(GMCode.LoopOrSwitchBreak)).ToList())
+                        ilSwitch.Cases.Remove(c);
                 }
             }
  
@@ -276,17 +277,6 @@ namespace GameMaker.Ast
             {
                 return cond.Condition;
             }
-            ILWithStatement with = node as ILWithStatement;
-            if (with != null)
-            {
-                if (with.Enviroment != null)
-                {
-                    return with.Enviroment;
-                }
-                else {
-                    return Enter(with.Body, visitedNodes);
-                }
-            }
 
             ILWhileLoop loop = node as ILWhileLoop;
             if (loop != null)
@@ -299,7 +289,6 @@ namespace GameMaker.Ast
                     return Enter(loop.Body, visitedNodes);
                 }
             }
-
 
             ILSwitch ilSwitch = node as ILSwitch;
             if (ilSwitch != null)
@@ -345,7 +334,7 @@ namespace GameMaker.Ast
                 return null;  // Implicit exit from switch is not allowed
             }
 
-            if (nodeParent is ILWhileLoop || nodeParent is ILWithStatement)
+            if (nodeParent is ILWhileLoop )
             {
                 return Enter(nodeParent, visitedNodes);
             }

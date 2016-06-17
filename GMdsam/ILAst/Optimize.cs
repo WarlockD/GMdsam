@@ -39,7 +39,6 @@ namespace GameMaker.Ast
         {
             bool modified = false;
             IList<ILNode> body = bb.Body;
-            int forever_loop = 0;
             for (int i = bb.Body.Count - 1; i >= 0; i--)
             {
                 ILExpression expr = bb.Body.ElementAtOrDefault(i) as ILExpression;
@@ -49,8 +48,6 @@ namespace GameMaker.Ast
                     while (CheckBlockBody(body, expr, i, optimizations))
                     {
                         test = true;
-                        forever_loop++;
-                        Debug.Assert(forever_loop < 100); // no reason we are doing this many passes
                     }
                     modified |= test;
                     if (test) i = bb.Body.Count;// backup
@@ -191,12 +188,14 @@ namespace GameMaker.Ast
     }
     class Optimize
     {
-        
+       
+      
         /// <summary>
         /// Group input into a set of blocks that can be later arbitraliby schufled.
         /// The method adds necessary branches to make control flow between blocks
         /// explicit and thus order independent.
         /// </summary>
+        ///  
         public static void SplitToBasicBlocks(ILBlock block,bool reducebranches=false)
         {
             int nextLabelIndex = 0;
