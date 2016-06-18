@@ -25,12 +25,14 @@ namespace GameMaker
 
     public static class Context 
     {
-        static public HashSet<string> HackyDebugWatch = null;
+      
 
 
         public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
 
         static public CancellationToken ct;
+        static public bool doSearch = false;
+        static public bool debugSearch = false;
         static public bool doAssigmentOffsets = false;
         static public bool doGlobals = true;
         static public bool makeObject = false;

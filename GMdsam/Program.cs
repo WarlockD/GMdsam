@@ -172,6 +172,9 @@ namespace GameMaker
                     case "-xml":
                         Context.doXML = true;
                         break;
+                    case "-search":
+                        Context.doSearch = true;
+                        break;
                     case "-json":
                         Context.doXML = false;
                         break;
@@ -185,7 +188,7 @@ namespace GameMaker
                         Context.doThreads = false;
                         break;
                     case "-watch":
-                        Context.HackyDebugWatch = new HashSet<string>();
+                        Context.debugSearch = true;
                         break;
                     default:
                         if (a[0] == '-') InstructionError("bad flag '{0}'", a);
@@ -195,7 +198,19 @@ namespace GameMaker
             }
 
             var w = new Writers.AllWriter();
-            if (Context.HackyDebugWatch!= null)
+            if (Context.doSearch)
+            {
+                var results = File.Search(chunks);
+                if (results.Count == 0) Context.Error("No data found in search");
+                string path = ".";
+                if (Context.doThreads)
+                {
+                    Parallel.ForEach(results, result => AllWriter.DoSingleItem(path,result));
+                } else
+                {
+                    foreach (var result in results) AllWriter.DoSingleItem(path, result);
+                }
+            } else if (Context.debugSearch)
             {
                 Context.doThreads = false;
                 Context.Debug = true;

@@ -192,7 +192,6 @@ namespace GameMaker.Writers
             }
             Write("= "); // default
             Write(right);
-            WriteOffset(right);
         }
         protected bool CheckParm(ILExpression expr, int index)
         {
@@ -211,30 +210,26 @@ namespace GameMaker.Writers
             Write(expr.Arguments[index]);
             if (needParm) Write(')');
         }
-        public virtual void WriteOffset(ILNode n, bool block_comment=true)
-        {
-            if (Context.doAssigmentOffsets)
-            {
-                ILExpression e = n as ILExpression;
-                if(e.Code == GMCode.Constant)
-                {
-                    ILValue value = e.Operand as ILValue;
-                    if (value != null && value.DataOffset != null)
-                    {
-                        if(block_comment) Write(BlockCommentStart);
-                        Write(" Constant Offset=0x{0:X8} Size={1} ", (int) value.DataOffset, value.ByteSize);
-                        if (block_comment) Write(BlockCommentEnd);
-                    }
-                }
-            }
-        }
+ 
         public virtual void Write(ILValue v) {
-            Write(v.ToString()); 
+            Write(v.ToString());
+            bool inblockComment = false;
+            
             if (!(v.Value is string) && v.ValueText != null)
             {
                 Write(BlockCommentStart);
+                inblockComment = true;
                 Write(' ');
                 Write(v.ValueText);
+            }
+            if (Context.doAssigmentOffsets)
+            {
+                if (!inblockComment) { Write(BlockCommentStart); Write(' '); inblockComment = true; }
+                else Write(", ");
+                Write("([0x{0:X8}],{1})", (int)v.DataOffset, v.ByteSize);
+            }
+            if (inblockComment)
+            {
                 Write(' ');
                 Write(BlockCommentEnd);
             }

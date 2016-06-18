@@ -12,6 +12,7 @@ using System.Collections.Specialized;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Drawing;
+using System.Collections.Concurrent;
 
 namespace GameMaker
 {
@@ -313,11 +314,59 @@ namespace GameMaker
         }
         static Dictionary<string, VarType> newvarTypeLookup = new Dictionary<string, VarType>();
         public static IReadOnlyDictionary<string,VarType> NewVarTypeLookup {  get { return newvarTypeLookup; } }
-        public static IEnumerable<INamedResrouce> Search(string name)
+        public static List<GameMakerStructure> Search(IEnumerable<string> names)
         {
-            return namedResourceLookup.Where(x => x.Key.Contains(name)).Select(x => (INamedResrouce) x.Value);
+            if (Context.doThreads)
+            {
+                ConcurrentBag<GameMakerStructure> bag = new ConcurrentBag<GameMakerStructure>();
+                Parallel.ForEach(names, name =>
+                {
+                    name = name.ToLower();
+                    Parallel.ForEach(namedResourceLookup.Values, o =>
+                    {
+                        if (o.Name.ToLower().Contains(name)) bag.Add(o);
+                    });
+                });
+               
+                return bag.ToList();
+            }
+            else
+            {
+                List<GameMakerStructure> bag = new List<GameMakerStructure>();
+                foreach (var n in names)
+                {
+                    var name = n.ToLower();
+                    foreach (var o in namedResourceLookup.Values)
+                    {
+                        if (o.Name.ToLower().Contains(name)) bag.Add(o);
+                    }
+                }
+                    
+                return bag;
+            }
         }
-
+        public static List<GameMakerStructure> Search(string name)
+        {
+           
+            if (Context.doThreads)
+            {
+                ConcurrentBag<GameMakerStructure> bag = new ConcurrentBag<GameMakerStructure>();
+                Parallel.ForEach(namedResourceLookup.Values, o =>
+                {
+                    if (o.Name.Contains(name)) bag.Add(o);
+                });
+                return bag.ToList();
+            } else
+            {
+                List<GameMakerStructure> bag = new List<GameMakerStructure>();
+                foreach(var o in namedResourceLookup.Values)
+                {
+                    if (o.Name.Contains(name)) bag.Add(o);
+                }
+                return bag;
+            }
+        
+        }
         public static bool TryLookup<T>(string name, out T ret) where T : GameMakerStructure
         {
             GameMakerStructure data;
