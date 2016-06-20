@@ -160,6 +160,13 @@ namespace GameMaker
                 if (string.IsNullOrWhiteSpace(a)) continue; // does this ever happen?
                 switch (a)
                 {
+                    case "-lua":
+                        Context.doLua = true;
+                        Context.doXML = false;
+                        break;
+                    case "-oneFile":
+                        Context.oneFile = true;
+                        break;
                     case "-constOffsets":
                         Context.doAssigmentOffsets = true;
                         break;
@@ -214,14 +221,16 @@ namespace GameMaker
             {
                 Context.doThreads = false;
                 Context.Debug = true;
+                var results = File.Search(chunks);
+                if (results.Count == 0) Context.FatalError("No data found in search");
                 foreach (var f in new DirectoryInfo(".").GetFiles("*.txt"))
                 {
                     if (System.IO.Path.GetFileName(f.Name) != "errors.txt") f.Delete(); // clear out eveything
                 }
-                foreach (var a in chunks)
+                foreach (var a in results)
                 {
-                    File.Code c;
-                    if (File.TryLookup(a, out c))
+                    File.Code c = a as File.Code;
+                    if (c != null)
                     {
                         var error = new ErrorContext(c.Name);
                         error.Message("Decompiling");

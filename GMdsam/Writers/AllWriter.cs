@@ -77,20 +77,68 @@ namespace GameMaker.Writers
         {
             public static void RunOneThing<T>(string filename, IReadOnlyList<T> o) where T : File.GameMakerStructure, File.INamedResrouce
             {
-                using (FileStream writer = new FileStream(FixFilenameExtensionForSerialzer(filename), FileMode.Create))
+                if (Context.doLua)
                 {
-                    var serializer = GetSerializer(o.GetType());
-                    serializer.WriteObject(writer, o);
+                    filename = Path.ChangeExtension(filename, "lua");
+                    Context.doXML = false; // to make sure we are making a json file
+                    using (MemoryStream writer = new MemoryStream())
+                    {
+                        var serializer = GetSerializer(o.GetType());
+                        serializer.WriteObject(writer, o);
+                        StreamWriter sw = new StreamWriter(filename);
+                        sw.Write(JsonToLua(writer));
+                        sw.Flush();
+                        sw.Close();
+                    }
                 }
+                else
+                {
+                    filename = FixFilenameExtensionForSerialzer(filename);
+                    using (FileStream writer = new FileStream(filename, FileMode.Create))
+                    {
+                        var serializer = GetSerializer(o.GetType());
+                        serializer.WriteObject(writer, o);
+                    }
+                }
+            }
+                static Regex match_json_name = new Regex(@"(""\w+""):", RegexOptions.Compiled);
+            public static string JsonToLua(Stream s)
+            {
+                s.Position = 0;
+                StreamReader sr = new StreamReader(s);
+                StringBuilder sb = new StringBuilder((int)sr.BaseStream.Length);
+                string eveything = sr.ReadToEnd(); // very hacky
+                var array_replacement = eveything.Replace('[', '{').Replace(']', '}');
+                var eqfix = match_json_name.Replace(array_replacement, (Match m) => "[" + m.Groups[1] + "]=");
+                var final = "local t=" + eqfix + "\r\n";
+                final += "return t\r\n";
+                return final;
             }
             public static void RunOneThing<T>(string path, T o) where T : File.GameMakerStructure, File.INamedResrouce
             {
-                string filename = FixFilenameExtensionForSerialzer(Path.Combine(path, o.Name));
-                using (FileStream writer = new FileStream(filename, FileMode.Create))
+                if (Context.doLua)
                 {
-                    var serializer = GetSerializer(o.GetType());
-                    serializer.WriteObject(writer, o);
+                    string filename = Path.ChangeExtension(Path.Combine(path, o.Name),"lua");
+                    Context.doXML = false; // to make sure we are making a json file
+                    using (MemoryStream writer = new MemoryStream())
+                    {
+                        var serializer = GetSerializer(o.GetType());
+                        serializer.WriteObject(writer, o);
+                        StreamWriter sw = new StreamWriter(filename);
+                        sw.Write(JsonToLua(writer));
+                        sw.Flush();
+                        sw.Close();
+                    }
                 }
+                else
+                {
+                    string filename = FixFilenameExtensionForSerialzer(Path.Combine(path, o.Name));
+                    using (FileStream writer = new FileStream(filename, FileMode.Create))
+                    {
+                        var serializer = GetSerializer(o.GetType());
+                        serializer.WriteObject(writer, o);
+                    }
+                }    
             }
             public static CodeTask Create<T>(string path_name, IReadOnlyList<T> list) where T : File.GameMakerStructure, File.INamedResrouce
             {
@@ -343,6 +391,7 @@ namespace GameMaker.Writers
         {
             CodeTask.RunOneThing(path, p);
         }
+      
         static AllWriter()
         {
             chunkActions = new Dictionary<string, Action<List<CodeTask>>>();
@@ -437,34 +486,25 @@ namespace GameMaker.Writers
             return directory.FullName;
         }
 
-        public void DoneMessage(Task[] tasks, DateTime start, string name)
-        {
-            if (tasks != null) Task.WaitAll(tasks);
-            Context.Message("{0} Finished in {1}", name, DateTime.Now - start);
-        }
-        public void DoneMessage(Task task, DateTime start, string name)
-        {
-            if (task != null) task.Wait();
-            Context.Message("{0} Finished in {1}", name, DateTime.Now - start);
-        }
-        public void RunOneThing<T>(string path, T o) where T : File.GameMakerStructure, File.INamedResrouce
-        {
-            string filename = FixFilenameExtensionForSerialzer(Path.Combine(path, o.Name));
-            using (FileStream writer = new FileStream(filename, FileMode.Create))
-            {
-                var serializer = GetSerializer(o.GetType());
-                serializer.WriteObject(writer, o);
-            }
-        }
         static string FixFilenameExtensionForSerialzer(string filename)
         {
             return Path.ChangeExtension(filename, Context.doXML ? "xml" : "json");
         }
         static XmlObjectSerializer GetSerializer(Type t)
         {
-            return Context.doXML ? (XmlObjectSerializer) new DataContractSerializer(t) : (XmlObjectSerializer) new DataContractJsonSerializer(t);
-        }
-     
+            if (Context.doXML)
+            {
+                var ser = new DataContractSerializer(t);
+                return (XmlObjectSerializer)ser;
+            }
+            else
+            {
+                var settings = new DataContractJsonSerializerSettings();
+                settings.UseSimpleDictionaryFormat = true;
+                var ser = new DataContractJsonSerializer(t, settings);
+                return (XmlObjectSerializer)ser;
+            }
+       }
 
         void ExceptionHandler(string name, string filename, Task task)
         {
@@ -475,6 +515,16 @@ namespace GameMaker.Writers
         }
         public void FinishProcessing()
         {
+            if (Context.oneFile)
+            {
+                CodeTask.RunOneThing("sprites", File.Sprites);
+                CodeTask.RunOneThing("rooms", File.Rooms);
+                CodeTask.RunOneThing("objects", File.Objects);
+                CodeTask.RunOneThing("backgrounds", File.Backgrounds);
+                CodeTask.RunOneThing("sounds", File.Sounds);
+                CodeTask.RunOneThing("paths", File.Paths);
+                CodeTask.RunOneThing("fonts", File.Fonts);
+            }
             if (!Context.doThreads) return;
 
             if (_todo != null && _todo.Count > 0)

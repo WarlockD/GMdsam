@@ -221,6 +221,7 @@ namespace GameMaker.Ast
                 nodes.ElementAtOrDefault(pos + 1).Match(GMCode.Push, out index) &&
                 expr.Match(GMCode.Push, out instance))
             {
+
                 expr = nodes[pos + 2] as ILExpression;
                 ResolveVariable(expr, instance, index);
                 nodes.RemoveRange(pos, 2);
@@ -645,8 +646,27 @@ namespace GameMaker.Ast
                 do
                 {
                     modified = false;
-                    modified |= block.RunOptimization(ResolveBasicBlock); /// This fixes all internal block vars, simple dups, push expressions etc
-                    if (debug_once) { error.CheckDebugThenSave(method, "basic_blocks_resolved.txt"); debug_once = false; }
+                  
+                        do // Does all the internal things to a blocks for other passes to be easyer
+                        {
+                            modified = false;
+                            modified |= block.RunOptimization(MatchVariablePush);  // checks pushes for instance or indexs for vars
+                            modified |= block.RunOptimization(SimpleAssignments);
+                            modified |= block.RunOptimization(AssignValueTo);
+                            modified |= block.RunOptimization(ComplexAssignments); // basicly self increment, this SHOULDN'T cross block boundrys
+                            modified |= block.RunOptimization(SimplifyBranches);  // Any resolved pushes are put into a branch argument
+                            modified |= block.RunOptimization(CombineCall);        // Any resolved pushes are put into a branch argument
+                            modified |= block.RunOptimization(CombineExpressions);
+
+                        } while (modified);
+                    if (Context.Debug)
+                    {
+                        if (debug_once) { error.CheckDebugThenSave(method, "basic_blocks_resolved.txt"); debug_once = false; }
+                    }
+                    
+
+
+                  
                      modified |= block.RunOptimization(new SimpleControlFlow(method,error).DetectSwitch);
 
 
