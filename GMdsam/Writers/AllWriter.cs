@@ -509,11 +509,14 @@ namespace GameMaker.Writers
             }
        }
 
-        void ExceptionHandler(string name, string filename, Task task)
+        void ExceptionHandler(string name, Task task)
         {
             foreach (var e in task.Exception.Flatten().InnerExceptions)
             {
-                Context.Error("{0}: Exception: {1}", e.Message);
+                Context.Error("{0}: Exception: {1}", name, e.Message);
+                if(e.InnerException!=null) Context.Error("{0}: Inner Exception: {1}", name, e.Message);
+                Context.Error("{0}: Stack Trace: {1}", name, e.StackTrace);
+                Context.Error("{0}: Source: {1}", name, e.Source);
             }
         }
         public void FinishProcessing()
@@ -533,10 +536,8 @@ namespace GameMaker.Writers
             if (_todo != null && _todo.Count > 0)
             {
                 // ok, we have the jobs start them all up!
-                foreach(var t in _todo)
-                {
-                    if (t.Task.Status != TaskStatus.WaitingToRun) t.Task.Start();
-                }
+                foreach (var t in _todo) t.Task.Start();
+           
                 using (var progress = new ProgressBar())
                 {
                     ErrorContext.ProgressBar = progress;
@@ -550,12 +551,20 @@ namespace GameMaker.Writers
                         for (int i = _todo.Count - 1; i >= 0; i--)
                         {
                             var ct = _todo[i];
-                            if (ct == null || ct.Task.IsCompleted) _todo.RemoveAt(i);
-                            else
+                            if (ct != null)
                             {
-                                totalTasks += ct.TotalTasks;
-                                tasksDone += ct.TasksFinished;
-                            }
+                                if(ct.Task.IsFaulted)
+                                {
+                                    ExceptionHandler(ct.Name, ct.Task);
+                                    Context.FatalError("Fatal exception in task");
+                                }
+                                if(ct.Task.IsCompleted) _todo.RemoveAt(i);
+                                else
+                                {
+                                    totalTasks += ct.TotalTasks;
+                                    tasksDone += ct.TasksFinished;
+                                }
+                            } else _todo.RemoveAt(i);
                         }
                         if(totalTasks > 0) progress.Report((double)tasksDone / totalTasks);
                         Thread.Sleep(50);
