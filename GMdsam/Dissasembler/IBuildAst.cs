@@ -41,7 +41,7 @@ namespace GameMaker.Dissasembler
             if (!stream.CanRead) throw new ArgumentException("Must be readable", "code_stream");
             if (!stream.CanSeek) throw new ArgumentException("Must be seekable", "code_stream");
             if (stream.Length == 0) return new List<ILNode>(); // empty stream
-            StartingOffset = code.Position;
+            StartingOffset = code.CodePosition;
             Error = error ?? new ErrorContext(code.Name);
             labels = new Dictionary<int, ILLabel>(); // cause they are all the same
             stream.Position = 0;
@@ -113,10 +113,10 @@ namespace GameMaker.Dissasembler
             return new UnresolvedVar() { Name = name, Operand = operand, Extra = extra };
         }
 
-        protected ILValue ReadConstant(GM_Type t)
+        static protected ILValue ReadConstant(BinaryReader r, GM_Type t)
         {
             ILValue v = null;
-            int offset = (int)r.BaseStream.Position+StartingOffset;
+            int offset = (int)r.BaseStream.Position;
             switch (t)
             {
                 case GM_Type.Double: v= new ILValue(r.ReadDouble()); break;
@@ -134,7 +134,7 @@ namespace GameMaker.Dissasembler
                 default:
                     throw new Exception("Should not get here");
             }
-            if (Context.doAssigmentOffsets) v.DataOffset = offset;
+            v.DataOffset = offset;
             return v;
         }
         protected ILExpression CreateExpression(GMCode code,  GM_Type[] types)
@@ -154,12 +154,31 @@ namespace GameMaker.Dissasembler
             e.AddILRange(CurrentPC);
             return e;
         }
+        void DebugILValueOffset(ILValue v)
+        {
+            Debug.Assert(v.DataOffset != null);
+            int offset = (int) v.DataOffset;
+            BinaryReader r = new BinaryReader(File.DataWinStream);
+            r.BaseStream.Position = offset;
+          
+            if(v.Type != GM_Type.Short)
+            {
+                ILValue test = ReadConstant(r, v.Type);
+                Debug.Assert(test.ToString() == v.ToString());
+            } else
+            {
+                uint raw = r.ReadUInt32();
+                short test = (short) (raw & 0xFFFF);
+                Debug.Assert(test == v.IntValue);
+            }
+        }
         protected ILExpression CreatePushExpression(GMCode code, GM_Type[] types)
         {
             ILExpression e = new ILExpression(code, null);
             e.Types = types;
             e.Extra = (int)(CurrentRaw & 0xFFFF);
             e.AddILRange(CurrentPC);
+            ILValue v = null;
             switch (types[0])
             {
                 case GM_Type.Var:
@@ -167,15 +186,22 @@ namespace GameMaker.Dissasembler
                     break;
                 case GM_Type.Short:
                     {
-                        ILValue v = new ILValue((short)(CurrentRaw & 0xFFFF));
-                        if (Context.doAssigmentOffsets) v.DataOffset = (int)(StartingOffset+r.BaseStream.Position - 4);
+                        v = new ILValue((short)(CurrentRaw & 0xFFFF));
+                        v.DataOffset = (int)(r.BaseStream.Position - 4);
                         e.Arguments.Add(new ILExpression(GMCode.Constant, v));
                     }
                     break;
                 default:
-                    e.Arguments.Add(new ILExpression(GMCode.Constant, ReadConstant(types[0])));
+                    v = ReadConstant(r, types[0]);
+                    e.Arguments.Add(new ILExpression(GMCode.Constant, v));
                     break;
             }
+            if (v != null)
+            {
+                v.DataOffset += StartingOffset ;
+                DebugILValueOffset(v);
+            }
+           
             return e;
         }
         protected abstract ILExpression CreateExpression(LinkedList<ILNode> list);

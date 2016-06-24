@@ -383,8 +383,11 @@ namespace GameMaker.Writers
             CodeTask.RunOneThing(path, f);
             if (Context.saveAllPngs)
             {
-                string filename = Path.ChangeExtension(Path.Combine(path, f.Name), ".png"); // we just have one
-                f.Frame.Image.Save(filename);
+                string filename = Path.ChangeExtension(Path.Combine(path, f.Name), ".fnt"); // we just have one
+                BMFontWriter.SaveAsBMFont(filename, f);
+
+           
+               // f.Frame.Image.Save(filename);
             }
         }
         static void DoFileWrite(string path, File.Path p)

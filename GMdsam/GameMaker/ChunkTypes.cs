@@ -990,11 +990,11 @@ namespace GameMaker
        // string Regex argumentSearch = new Regex()
         public class Script : GameMakerStructure, INamedResrouce
         {
-            protected Lazy<ILBlock> _block = null; // used 
-           
             GM_Type _returnType = GM_Type.NoType;
             int _scriptIndex;
             int _argumentCount;
+            private readonly object _syncRoot = new object();
+            private ILBlock _block = null;
             void CountArguments(ILVariable v, ref int arg)
             {
                 var match = Context.ScriptArgRegex.Match(v.Name);
@@ -1026,17 +1026,33 @@ namespace GameMaker
                 foreach (var t in types) _returnType = _returnType.ConvertType(t);
                 return block;
             }
-            public ILBlock Block { get { return _block.Value; } }
-
+            void CheckBlockCache()
+            {
+                if (_block == null)
+                {
+                    lock (_syncRoot)
+                    {
+                        if (_block == null)
+                        {
+                            if (!Context.doThreads) Context.Message("Starting Script Code '{0}'", Name);
+                            _block = CreateScriptBlock();
+                        }
+                    }
+                }
+            }
+            public ILBlock Block
+            {
+                get
+                {
+                    CheckBlockCache();
+                    return _block;
+                }
+            }
             public GM_Type ReturnType
             {
                 get
                 {
-                    if(!_block.IsValueCreated)
-                    {
-                        ILBlock block = _block.Value; // create it
-                        Debug.Assert(block != null);
-                    }
+                    CheckBlockCache();
                     return _returnType;
                 }
             }
@@ -1049,11 +1065,7 @@ namespace GameMaker
         
             public int ArgumentCount {  get
                 {
-                    if (!_block.IsValueCreated)
-                    {
-                        ILBlock block = _block.Value; // create it
-                        Debug.Assert(block != null);
-                    }
+                    CheckBlockCache();
                     return _argumentCount;
                 }
             }
@@ -1062,16 +1074,14 @@ namespace GameMaker
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
                 _scriptIndex = r.ReadInt32();
-                _block = new Lazy<ILBlock>(CreateScriptBlock);
             }
 
         }
-
+        
         public abstract class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
             public int Size { get; protected set; }
             public int CodePosition { get; protected set; }
-            public ILBlock block = null; // cached
             // This, honestly is great to use, the problem is that since I can turn on and off locking, it runs a seperate thread when creating this object 
             // so its not truly single threaded
             // so onward to the sync root patern
