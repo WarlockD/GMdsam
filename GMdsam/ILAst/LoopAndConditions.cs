@@ -194,7 +194,7 @@ namespace GameMaker.Ast
                                     basicBlock.Body.RemoveTail(GMCode.Bt, GMCode.B);
                                     basicBlock.Body.Add(new ILWhileLoop()
                                     {
-                                        Condition = mustNegate ? condExpr : condExpr.NegateCondition(),
+                                        Condition = mustNegate ? condExpr.NegateCondition() : condExpr,
                                         Body = new ILBlock()
                                         {
                                             EntryGoto = new ILExpression(GMCode.B, trueLabel),
