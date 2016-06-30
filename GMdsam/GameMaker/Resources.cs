@@ -129,7 +129,8 @@ namespace GameMaker
         public static string ReadStringFromNextOffset(this BinaryReader r)
         {
             int offset = r.ReadInt32();
-            return r.ReadStringFromOffset(offset);
+            string str = r.ReadStringFromOffset(offset);
+            return str;
         }
         public static string ReadStringFromOffset(this BinaryReader r, int offset)
         {
@@ -181,14 +182,6 @@ namespace GameMaker
                     entries[i] = new Entry(i, ientries[i], i + 1 < count ? ientries[i] : -1);
                 return entries;
             }
-        }
-        public static Entry[] ReadChunkEntries(this BinaryReader r, int offset)
-        {
-            var pos = r.BaseStream.Position;
-            r.BaseStream.Position = offset;
-            var ret = r.ReadChunkEntries();
-            r.BaseStream.Position = pos;
-            return ret;
         }
         public static IEnumerable<Entry> ForEachEntry(this BinaryReader r, Entry[] entries)
         {
@@ -247,8 +240,7 @@ namespace GameMaker
         static byte[] rawData = null;
         static string filename = null;
 
-        static Dictionary<int, string> stringCache = null;
-        static List<string> stringList = null;
+        static List<GString> strings = null;
 
         static List<SpriteFrame> spriteframes = null;
         static List<Texture> textures = null;
@@ -268,7 +260,7 @@ namespace GameMaker
             if (filename == null) throw new FileNotFoundException("No file name defined");
             if (rawData != null) return; // already loaded
             // Clear all the tables in case they arn't already
-            stringList = null;
+            strings = null;
             textures = null;
             sprites = null;
             objects = null;
@@ -382,26 +374,7 @@ namespace GameMaker
             ret = default(T);
             return false;
         }
-        static void CheckStrings()
-        {
-            if (stringList == null)
-            {
-                stringList = new List<string>();
-                stringCache = new Dictionary<int, string>();
-                Chunk chunk = fileChunks["STRG"];
-                using (BinaryReader r = new BinaryReader(new MemoryStream(rawData)))
-                {
-                    foreach (var e in r.ForEachEntry(chunk.start))
-                    {
-                        int string_size = r.ReadInt32(); //size 
-                        byte[] bstr = r.ReadBytes(string_size);
-                        string str = System.Text.Encoding.UTF8.GetString(bstr, 0, string_size);
-                        stringList.Add(str);
-                        stringCache[e.Position + 4] = str;
-                    }
-                }
-            }
-        }
+
         // Ok, this is stupid, but I get it
         // All the vars and function names are on a link list from one to another that tie to the name
         // to make this much easyer for the disassembler, we are going to change all these refrences
@@ -415,11 +388,11 @@ namespace GameMaker
             BinaryReader r;
             Dictionary<string, CodeNameRefrence> refs = new Dictionary<string, CodeNameRefrence>();
             Dictionary<int, CodeNameRefrence> offsetLookup = new Dictionary<int, CodeNameRefrence>();
-            Dictionary<string, int> stringToIndex = new Dictionary<string, int>();
+            Dictionary<string, int> stringToIndex;
             public RefactorCodeManager(byte[] rawData)
             {
                 r = new BinaryReader(new MemoryStream(rawData, true));
-                for (int i = 0; i < File.Strings.Count; i++) stringToIndex[File.Strings[i]] = i;
+                stringToIndex = File.Strings.ToDictionary( x => x.String, x => x.Index);
             }
             static string formatint(int i)
             {
@@ -782,7 +755,8 @@ namespace GameMaker
         public static void LoadEveything()
         {
             DateTime start = DateTime.Now;
-            CheckStrings();
+
+            CheckList("STRG", ref strings);
             CheckList("TXTR", ref textures);
             CheckList("BGND", ref backgrounds);
             CheckList("TPAG", ref spriteframes);
@@ -803,7 +777,7 @@ namespace GameMaker
 
         public static IReadOnlyList<Path> Paths { get { CheckList("PATH", ref scripts); return paths; } }
         public static IReadOnlyList<Script> Scripts { get { CheckList("SCPT", ref scripts); return scripts; } }
-        public static IReadOnlyList<string> Strings { get { CheckStrings(); return stringList; } }
+        public static IReadOnlyList<GString> Strings { get { CheckList("STRG", ref strings); return strings; } }
         public static IReadOnlyList<Code> Codes { get { RefactorCode(); return codes; } }
         public static IReadOnlyList<Font> Fonts { get { CheckList("FONT", ref fonts); return fonts; } }
         public static IReadOnlyList<Texture> Textures { get { CheckList("TXTR", ref textures); return textures; } }

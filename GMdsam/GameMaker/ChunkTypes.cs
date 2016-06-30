@@ -110,6 +110,30 @@ namespace GameMaker
             */
         }
         [DataContract]
+        public class GString : GameMakerStructure
+        {
+            [DataMember(Name = "Offset", Order = 10)]
+            public string Offset { get; set; }
+            [DataMember(Order = 11)]
+            public int Length;
+            [DataMember(Order = 12)]
+            public string String;
+
+            [OnSerializing]
+            void OnSerializing(StreamingContext context)
+            {
+                this.Offset = string.Format("0x{0:X8}", this.Position);
+            }
+            protected override void InternalRead(BinaryReader r)
+            {
+                Length = r.ReadInt32();
+                var bytes = r.ReadBytes(Length);  // The string is UTF8
+                this.String = System.Text.Encoding.UTF8.GetString(bytes);
+              //  this.EscapedString = Context.EscapeString(this.String);
+                this.Offset = string.Format("0x{0:8X}", this.Position);
+            }
+        }
+        [DataContract]
         public class AudioFile : GameMakerStructure, INamedResrouce, IDataResource
         {
             [DataMember(Order = 10)]

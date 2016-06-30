@@ -128,7 +128,7 @@ namespace GameMaker.Dissasembler
                     {
                         int i = r.ReadInt32();
                         if (i < 0 || i >= File.Strings.Count) v= new ILValue("$BADSTRINGVALUE$");
-                        else v= new ILValue(File.Strings[i]);
+                        else v= new ILValue(File.Strings[i].String);
                     }
                     break;
                 default:

@@ -15,9 +15,81 @@ using System.Runtime.Serialization;
 
 namespace GameMaker.Writers
 {
-
+    static class JsonHelper_Extensions
+    {
+        public static void ForEach<T>(this IEnumerable<T> ie, Action<T> action)
+        {
+            foreach (var i in ie)
+            {
+                action(i);
+            }
+        }
+    }
     public class AllWriter
     {
+       
+        // http://stackoverflow.com/questions/4580397/json-formatter-in-c
+        class JsonHelper
+        {
+            private const string INDENT_STRING = "    ";
+            public static string FormatJson(string str)
+            {
+                var indent = 0;
+                var quoted = false;
+                var sb = new StringBuilder();
+                for (var i = 0; i < str.Length; i++)
+                {
+                    var ch = str[i];
+                    switch (ch)
+                    {
+                        case '{':
+                        case '[':
+                            sb.Append(ch);
+                            if (!quoted)
+                            {
+                                sb.AppendLine();
+                                Enumerable.Range(0, ++indent).ForEach(item => sb.Append(INDENT_STRING));
+                            }
+                            break;
+                        case '}':
+                        case ']':
+                            if (!quoted)
+                            {
+                                sb.AppendLine();
+                                Enumerable.Range(0, --indent).ForEach(item => sb.Append(INDENT_STRING));
+                            }
+                            sb.Append(ch);
+                            break;
+                        case '"':
+                            sb.Append(ch);
+                            bool escaped = false;
+                            var index = i;
+                            while (index > 0 && str[--index] == '\\')
+                                escaped = !escaped;
+                            if (!escaped)
+                                quoted = !quoted;
+                            break;
+                        case ',':
+                            sb.Append(ch);
+                            if (!quoted)
+                            {
+                                sb.AppendLine();
+                                Enumerable.Range(0, indent).ForEach(item => sb.Append(INDENT_STRING));
+                            }
+                            break;
+                        case ':':
+                            sb.Append(ch);
+                            if (!quoted)
+                                sb.Append(" ");
+                            break;
+                        default:
+                            sb.Append(ch);
+                            break;
+                    }
+                }
+                return sb.ToString();
+            }
+        }
 
         ConcurrentBag<string> globals_vars = new ConcurrentBag<string>();
         ConcurrentBag<string> globals_arrays = new ConcurrentBag<string>();
@@ -75,7 +147,7 @@ namespace GameMaker.Writers
         }
         class CodeTask : IProgress<int>, IProgress<double>
         {
-            public static void RunOneThing<T>(string filename, IReadOnlyList<T> o) where T : File.GameMakerStructure, File.INamedResrouce
+            public static void RunOneThing<T>(string filename, IReadOnlyList<T> o) where T : File.GameMakerStructure
             {
                 if (Context.doLua)
                 {
@@ -182,7 +254,23 @@ namespace GameMaker.Writers
                     return null; // no task as its done
                 }
             }
+            public static CodeTask CreateSingle(string task_name, Action action) 
+            {
 
+                if (Context.doThreads)
+                {
+                    CodeTask ct = new CodeTask();
+                    ct.Name = task_name;
+                    ct.TotalTasks = 1;
+                    ct.Task = new Task(action);
+                    return ct;
+                }
+                else
+                {
+                    action();
+                    return null;
+                }
+            }
             public static CodeTask CreateSingle<T>(string path_name, string task_name, T o, Action<string, T> action) where T : File.GameMakerStructure
             {
                 if (Context.doThreads)
@@ -390,11 +478,28 @@ namespace GameMaker.Writers
                // f.Frame.Image.Save(filename);
             }
         }
+
+
         static void DoFileWrite(string path, File.Path p)
         {
             CodeTask.RunOneThing(path, p);
         }
-      
+        static void DoStrings(string filename)
+        {
+            //  CodeTask.RunOneThing("strings", File.Strings)
+            //  filename = FixFilenameExtensionForSerialzer(filename);
+            using (MemoryStream writer = new MemoryStream())
+            {
+                var serializer = GetSerializer(File.Strings.GetType());
+                serializer.WriteObject(writer, File.Strings);
+                writer.Position = 0;
+                string json = new StreamReader(writer).ReadToEnd();
+                if(!Context.doXML) json = JsonHelper.FormatJson(json);
+                filename = FixFilenameExtensionForSerialzer(filename);
+                using (StreamWriter sw = new StreamWriter(filename))
+                    sw.Write(json);
+            }
+        }
         static AllWriter()
         {
             chunkActions = new Dictionary<string, Action<List<CodeTask>>>();
@@ -408,6 +513,7 @@ namespace GameMaker.Writers
             chunkActions["sounds"] = (List<CodeTask> tasks) => tasks.Add(CodeTask.Create("sounds", File.Sounds, DoFileWrite));
             chunkActions["fonts"] = (List<CodeTask> tasks) => tasks.Add(CodeTask.Create("fonts", File.Fonts, DoFileWrite));
             chunkActions["paths"] = (List<CodeTask> tasks) => tasks.Add(CodeTask.Create("fonts", File.Fonts, DoFileWrite));
+            chunkActions["strings"] = (List<CodeTask> tasks) => tasks.Add(CodeTask.CreateSingle("String List", () => DoStrings("strings")));
         }
 
      
@@ -493,7 +599,7 @@ namespace GameMaker.Writers
         {
             return Path.ChangeExtension(filename, Context.doXML ? "xml" : "json");
         }
-        static XmlObjectSerializer GetSerializer(Type t)
+        public static XmlObjectSerializer GetSerializer(Type t)
         {
             if (Context.doXML)
             {
@@ -530,6 +636,7 @@ namespace GameMaker.Writers
                 CodeTask.RunOneThing("sounds", File.Sounds);
                 CodeTask.RunOneThing("paths", File.Paths);
                 CodeTask.RunOneThing("fonts", File.Fonts);
+                
             }
             if (!Context.doThreads) return;
 

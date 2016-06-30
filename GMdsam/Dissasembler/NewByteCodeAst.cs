@@ -137,7 +137,7 @@ namespace GameMaker.Dissasembler
                     break;
                 case NewOpcode.call:
                     e = CreateExpression(GMCode.CallUnresolved, types);
-                    e.Operand = ILCall.CreateCall(File.Strings[r.ReadInt32()], (int)(CurrentRaw & 0xFFFF));
+                    e.Operand = ILCall.CreateCall(File.Strings[r.ReadInt32()].String, (int)(CurrentRaw & 0xFFFF));
                     // since we can have var args on alot of functions, extra is used
                     break;
                 case NewOpcode.ret: e = CreateExpression(GMCode.Ret, types); break;
@@ -418,7 +418,7 @@ namespace GameMaker.Dissasembler
                             }
                             else
                             {
-                                string s = File.Strings[i];
+                                string s = File.Strings[i].String;
                                 writer.Write("${0}$", s);
                                 break;
                             }

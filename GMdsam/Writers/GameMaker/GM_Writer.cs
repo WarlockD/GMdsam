@@ -40,6 +40,7 @@ namespace GameMaker.Writers.GameMaker
         protected override void WriteObject(ObjectInfo info)
         {
             var obj = info.Object;
+          
             // start writing file
             // Headder
             output.WriteLine("Object:");

@@ -184,7 +184,7 @@ namespace GameMaker
         static public string LookupString(int index, bool escape = false)
         {
             index &= 0x1FFFFF;
-            return escape ? EscapeString(File.Strings[index]) : File.Strings[index] ;
+            return escape ? Context.EscapeString(File.Strings[index].String)  : File.Strings[index].String ;
         }
         static public string InstanceToString(int instance)
         {
