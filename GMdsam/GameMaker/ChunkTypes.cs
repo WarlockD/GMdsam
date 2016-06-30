@@ -227,7 +227,7 @@ namespace GameMaker
                     if (length < 0) throw new Exception("Ugh, have to fix this");
                     r.BaseStream.Position += length + 4; // plus the CRC
                 } while (chunk != "IEND");
-                _pngLength = (int)r.BaseStream.Position - Position;
+                _pngLength = (int)r.BaseStream.Position - _pngOffset;
             }
         }
 
