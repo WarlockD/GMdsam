@@ -66,6 +66,30 @@ namespace GameMaker
         {
             ErrorContext.Out.Error(msg, o);
         }
+        public static void Error(Exception e)
+        {
+            Context.Error("Exception: {0}",  e.Message);
+            if (e.InnerException != null) Context.Error("Inner Exception: {0}",  e.Message);
+            Context.Error("Stack Trace:\r\n{0}",  e.StackTrace);
+            Context.Error("Source: {0}",  e.Source);
+        }
+        public static void FatalError(Exception e)
+        {
+            Error(e);
+            Context.FatalError("Exception was fatal");
+        }
+        public static void Error(string name, Exception e)
+        {
+            Context.Error("{0}: Exception: {1}", name, e.Message);
+            if (e.InnerException != null) Context.Error("{0}: Inner Exception: {1}", name, e.Message);
+            Context.Error("{0}: Stack Trace: {1}", name, e.StackTrace);
+            Context.Error("{0}: Source: {1}", name, e.Source);
+        }
+        public static void FatalError(string name, Exception e)
+        {
+            Error(name, e);
+            Context.FatalError("Exception was fatal");
+        }
         public static void FatalError(string msg, params object[] o)
         {
             ErrorContext.Out.FatalError(msg, o);

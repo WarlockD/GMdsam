@@ -488,6 +488,7 @@ namespace GameMaker.Writers
         {
             //  CodeTask.RunOneThing("strings", File.Strings)
             //  filename = FixFilenameExtensionForSerialzer(filename);
+            var path = DeleteAllAndCreateDirectory("strings");
             using (MemoryStream writer = new MemoryStream())
             {
                 var serializer = GetSerializer(File.Strings.GetType());
@@ -495,7 +496,7 @@ namespace GameMaker.Writers
                 writer.Position = 0;
                 string json = new StreamReader(writer).ReadToEnd();
                 if(!Context.doXML) json = JsonHelper.FormatJson(json);
-                filename = FixFilenameExtensionForSerialzer(filename);
+                filename = FixFilenameExtensionForSerialzer(Path.Combine(path,filename));
                 using (StreamWriter sw = new StreamWriter(filename))
                     sw.Write(json);
             }
@@ -582,17 +583,48 @@ namespace GameMaker.Writers
             }
         }
         */
+        //http://stackoverflow.com/questions/1410127/c-sharp-test-if-user-has-write-access-to-a-folder
+        static private bool hasWriteAccessToFolder(string folderPath)
+        {
+            try
+            {
+                // Attempt to get a list of security permissions from the folder. 
+                // This will raise an exception if the path is read only or do not have access to view the permissions. 
+                System.Security.AccessControl.DirectorySecurity ds = Directory.GetAccessControl(folderPath);
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
 
         static HashSet<string> directoryDeleted = new HashSet<string>();
         static string DeleteAllAndCreateDirectory(string dir)
         {
-            var directory = Directory.CreateDirectory(dir);
-            if (!directoryDeleted.Contains(dir))
+            string exePath = Directory.GetCurrentDirectory();
+            if (!hasWriteAccessToFolder(Directory.GetCurrentDirectory()))
             {
-                //       foreach (var f in directory.GetFiles()) f.Delete(); // skip this for right now
-                directoryDeleted.Add(dir);
+                Context.Error("Do not have permision to write to directory '{0}'", exePath);
+                Context.FatalError("Please run as Administrator or move exe to another directory");
             }
-            return directory.FullName;
+            string path = Path.Combine(exePath, dir);
+            try
+            {
+                if (!directoryDeleted.Contains(path))
+                {
+                    Context.Info("Clearing old '{0}'  directory", path);
+                    if (Directory.Exists(path)) Directory.Delete(path, true);
+                    Directory.CreateDirectory(path);
+                    lock (directoryDeleted) directoryDeleted.Add(path);
+                }
+            } catch(Exception e)
+            {
+                Context.Error("Exception caught trying to crate '{0}' directory", path);
+                Context.FatalError(e);
+                throw e;
+            }
+            return path;
         }
 
         static string FixFilenameExtensionForSerialzer(string filename)
@@ -619,10 +651,7 @@ namespace GameMaker.Writers
         {
             foreach (var e in task.Exception.Flatten().InnerExceptions)
             {
-                Context.Error("{0}: Exception: {1}", name, e.Message);
-                if(e.InnerException!=null) Context.Error("{0}: Inner Exception: {1}", name, e.Message);
-                Context.Error("{0}: Stack Trace: {1}", name, e.StackTrace);
-                Context.Error("{0}: Source: {1}", name, e.Source);
+                Context.Error(name, e);
             }
         }
         public void FinishProcessing()
@@ -636,7 +665,7 @@ namespace GameMaker.Writers
                 CodeTask.RunOneThing("sounds", File.Sounds);
                 CodeTask.RunOneThing("paths", File.Paths);
                 CodeTask.RunOneThing("fonts", File.Fonts);
-                
+                CodeTask.RunOneThing("strings", File.Strings);
             }
             if (!Context.doThreads) return;
 
