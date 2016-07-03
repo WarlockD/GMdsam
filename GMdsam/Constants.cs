@@ -278,7 +278,10 @@ namespace GameMaker
             {
                 sb.Append(info.Name);
                 sb.Append('[');
-                sb.Append(subEvent);
+                if(info.Name == "ev_keyboard" || info.Name == "ev_keyrelease" || info.Name == "ev_keypress")
+                    sb.Append(Context.KeyToString(subEvent));
+                 else
+                    sb.Append(subEvent);
                 sb.Append(']');
             } else
             {

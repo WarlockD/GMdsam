@@ -35,7 +35,7 @@ namespace GameMaker
             if (chunk != null) return chunk.ToString();
             return null;
         }
-       
+
         public static void WriteStuff(this BinaryReader r, int count, string name = null)
         {
             if (name != null) Debug.WriteLine("Stuff: " + name);
@@ -175,7 +175,7 @@ namespace GameMaker
             else if (count == 0) return new Entry[0];
             else
             {
-              
+
                 Entry[] entries = new Entry[count];
                 int[] ientries = r.ReadInt32(count);
                 for (int i = 0; i < count; i++)
@@ -221,10 +221,10 @@ namespace GameMaker
         }
 
     }
-    public  static partial class File
+    public static partial class File
     {
-      
-       internal class Chunk
+
+        internal class Chunk
         {
             public readonly int start;
             public readonly int end;
@@ -255,6 +255,44 @@ namespace GameMaker
         static List<Script> scripts = null;
         static List<Path> paths = null;
         static Dictionary<string, GameMakerStructure> namedResourceLookup = new Dictionary<string, GameMakerStructure>();
+        public static bool ChangeVarValue(byte[] data, File.Code code, string name, int from_value, int to_value)
+        {
+            ErrorContext context = new ErrorContext(code.Name);
+            Ast.ILBlock block = code.Block;
+            bool found = false;
+            foreach (Ast.ILExpression expr in block.GetSelfAndChildrenRecursive<Ast.ILExpression>(x => x.Code == GMCode.Assign))
+            {
+                Ast.ILVariable v = expr.Arguments[0].Operand as Ast.ILVariable;
+                Ast.ILValue value;
+
+                if (v.Name == name &&
+                    Ast.PatternMatching.Match(expr.Arguments[1], GMCode.Constant, out value) && value.IntValue == from_value)
+                {
+                    found = true;
+                    Context.dataWinChanged |= true;
+                    Debug.Assert(value.DataOffset != null);
+                    int offset = (int)value.DataOffset;
+                    int convert = BitConverter.ToInt32(data, (int)value.DataOffset);
+                    if (value.Type == GM_Type.Short)
+                    {
+                        short snew_value = (short)to_value;
+                        data[offset++] = (byte)snew_value;
+                        data[offset++] = (byte)(snew_value >> 8);
+                    }
+                    else
+                    {
+                        data[offset++] = (byte)to_value;
+                        data[offset++] = (byte)(to_value >> 8);
+                        data[offset++] = (byte)(to_value >> 0x10);
+                        data[offset++] = (byte)(to_value >> 0x18);
+                    }
+                    int newConvert = BitConverter.ToInt32(data, (int)value.DataOffset);
+                    context.Message("Changed {0}={1} to {0}={2} at offset 0x{0:8x}", name, from_value, to_value, (int)value.DataOffset);
+                }
+            }
+            if(!found) context.Message("Could Not find {0}", name);
+            return found;
+        }
         static void InternalLoad()
         {
             if (filename == null) throw new FileNotFoundException("No file name defined");

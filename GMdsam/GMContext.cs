@@ -145,6 +145,7 @@ namespace GameMaker
                 Context.Error(e);
                 Context.FatalError("Could not create '{0}'", filename);
             }
+            Context.Info("Wrote file '{0}'", filename);
             return file;
         }
         public static StreamWriter CreateStreamWriter(string filename, bool fix_path)
@@ -158,7 +159,7 @@ namespace GameMaker
         public static void CheckAndSetOutputDirectory(string path=null)
         {
             if (outputDirectory != null) return; // we have our output directory anyway
-            if (string.IsNullOrWhiteSpace(path)) path = Directory.GetCurrentDirectory();
+            if (string.IsNullOrWhiteSpace(path)) path = Environment.CurrentDirectory;//    Directory.GetCurrentDirectory();
             if ((outputDirectory != null && outputDirectory.FullName == path)) return; // don't do anything
             var badchars = Path.GetInvalidPathChars();
             for(int i = 0; i < path.Length; i++)
@@ -182,9 +183,7 @@ namespace GameMaker
                 Context.FatalError("Invalid Char in Output Path:");
             }
 #endif
-            string filename = Path.GetFileName(path);
-            if (!string.IsNullOrWhiteSpace(filename)) Context.Warning("Path Contains a filename '{0}', striping filename", filename);
-            path = Path.GetDirectoryName(path);
+            if(!Directory.Exists(path)) Context.FatalError("Path Does not exisit '{0}', striping filename", path);
             HasFolderWritePermission(path); // we drop the application in this case
             outputDirectory = new DirectoryInfo(path);
 
@@ -194,6 +193,8 @@ namespace GameMaker
 
         static public CancellationToken ct;
         static public DirectoryInfo outputDirectory = null;
+        static public bool saveChangedDataWin = false;
+        static public bool dataWinChanged = false;
         static public bool deleteDirectorys = false;
         static public bool doLua = false;
         static public bool oneFile = false;
@@ -417,7 +418,7 @@ namespace GameMaker
 
         public static string KeyToString(int key)
         {
-            string str = "unknown";
+            string str = null;
             switch (key)
             {
                 case 0:
@@ -430,67 +431,6 @@ namespace GameMaker
                         str = "ANYKEY";
                         break;
                     }
-                case 2:
-                case 3:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 10:
-                case 11:
-                case 12:
-                case 14:
-                case 15:
-                case 20:
-                case 21:
-                case 22:
-                case 23:
-                case 24:
-                case 25:
-                case 26:
-                case 28:
-                case 29:
-                case 30:
-                case 31:
-                case 41:
-                case 42:
-                case 43:
-                case 44:
-                case 47:
-                case 58:
-                case 59:
-                case 60:
-                case 61:
-                case 62:
-                case 63:
-                case 64:
-                case 91:
-                case 92:
-                case 93:
-                case 94:
-                case 95:
-                case 108:
-                case 124:
-                case 125:
-                case 126:
-                case 127:
-                case 128:
-                case 129:
-                case 130:
-                case 131:
-                case 132:
-                case 133:
-                case 134:
-                case 135:
-                case 136:
-                case 137:
-                case 138:
-                case 139:
-                case 140:
-                case 141:
-                case 142:
-                case 143:
-                    break;
                 case 8:
                     {
                         str = "BACKSPACE";
@@ -973,6 +913,10 @@ namespace GameMaker
                         str = "TILD";
                         break;
                     }
+            }
+            if(str == null)
+            {
+                str = "UNKNOWN(" + key.ToString() + ")";
             }
             return str;
         }

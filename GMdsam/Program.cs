@@ -125,6 +125,10 @@ namespace GameMaker
             ErrorContext.StopErrorSystem();
             EnviromentExit(0);
         }
+        static void PatchMode()
+        {
+
+        }
         static void Main(string[] args)
         {
    
@@ -140,7 +144,7 @@ namespace GameMaker
             try
             {
                 File.LoadDataWin(dataWinFileName);
-                File.LoadEveything();
+               
             }
             catch (Exception e)
             {
@@ -148,11 +152,41 @@ namespace GameMaker
                 InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
             }
             List<string> chunks = new List<string>();
+            byte[] changedData = null;
             for(int i=1; i < args.Length; i++) {
                 string a = args[i];
                 if (string.IsNullOrWhiteSpace(a)) continue; // does this ever happen?
                 switch (a)
                 {
+                    case "-change":
+                        {
+                            if (changedData == null)
+                            {
+                                changedData = new byte[File.DataWinRaw.Length];
+                                Array.Copy(File.DataWinRaw, changedData, changedData.Length);
+                                File.LoadEveything();
+                            }
+                            Context.saveChangedDataWin = true;
+                            string code_name = args.ElementAtOrDefault(i + 1);
+                            string var_name = args.ElementAtOrDefault(i + 2);
+                            string from_value = args.ElementAtOrDefault(i + 3);
+                            string to_value = args.ElementAtOrDefault(i + 4);
+                            i += 4;
+
+                            File.Code code=null;
+                            File.Script script=null;
+                            if (File.TryLookup(code_name, out code) || File.TryLookup(code_name, out script))
+                            {
+                                if (script != null) code = script.Code;
+                                int from_int;
+                                int to_int;
+                                if (!int.TryParse(from_value, out from_int)) Context.FatalError("Cannot parse from value in -change");
+                                if (!int.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse from value in -change");
+                                File.ChangeVarValue(changedData, code, var_name, from_int, to_int);
+                            }
+                            else Context.Error("'{0}' code/script not found", code_name);
+                        }
+                        break;
                     case "-output":
                         {
                             i++;
@@ -208,58 +242,72 @@ namespace GameMaker
                 }
             }
             Context.CheckAndSetOutputDirectory();
+           
             ErrorContext.StartErrorSystem();
-            var w = new Writers.AllWriter();
-            if (Context.doSearch)
+            if (Context.saveChangedDataWin)
             {
-                var results = File.Search(chunks);
-                if (results.Count == 0) Context.Error("No data found in search");
-                string path = ".";
-                if (Context.doThreads)
+                using (var file = Context.CreateFileStream("changed_data.win", FileMode.Create, true))
                 {
-                    Parallel.ForEach(results, result => AllWriter.DoSingleItem(path,result));
-                } else
-                {
-                    foreach (var result in results) AllWriter.DoSingleItem(path, result);
+                    file.Write(changedData, 0, changedData.Length);
+                    file.Flush();
                 }
-            } else if (Context.debugSearch)
-            {
-                Context.doThreads = false;
-                Context.Debug = true;
-                var results = File.Search(chunks);
-                if (results.Count == 0) Context.FatalError("No data found in search");
-                foreach (var f in new DirectoryInfo(".").GetFiles("*.txt"))
-                {
-                    if (System.IO.Path.GetFileName(f.Name) != "errors.txt") f.Delete(); // clear out eveything
-                }
-                foreach (var a in results)
-                {
-                    File.Code c = a as File.Code;
-                    if (c != null)
-                    {
-                        var error = new ErrorContext(c.Name);
-                        error.Message("Decompiling");
-                        Context.Debug = true;
-                        var block = c.Block;
-                        if (block != null)
-                        {
-                            using (Writers.BlockToCode to = new Writers.BlockToCode(c.Name + "_watch.js"))
-                                to.Write(block);
-                            error.Message("Finished Decompiling");
-                        }
-                        else error.Message("Block is null");
-                    }
-                    else Context.Error("Code '{0} not found", a);
-                }
-                //Context.HackyDebugWatch = new HashSet<string>(chunks);
-               // w.AddAction("code");
             } else
             {
-                if (chunks.Count == 0) chunks.Add("everything");
-                foreach (var a in chunks) w.AddAction(a);
-            }
-            
-            w.FinishProcessing();
+                File.LoadEveything();
+                var w = new Writers.AllWriter();
+                if (Context.doSearch)
+                {
+                    var results = File.Search(chunks);
+                    if (results.Count == 0) Context.Error("No data found in search");
+                    string path = ".";
+                    if (Context.doThreads)
+                    {
+                        Parallel.ForEach(results, result => AllWriter.DoSingleItem(path, result));
+                    }
+                    else
+                    {
+                        foreach (var result in results) AllWriter.DoSingleItem(path, result);
+                    }
+                }
+                else if (Context.debugSearch)
+                {
+                    Context.doThreads = false;
+                    Context.Debug = true;
+                    var results = File.Search(chunks);
+                    if (results.Count == 0) Context.FatalError("No data found in search");
+                    foreach (var f in new DirectoryInfo(".").GetFiles("*.txt"))
+                    {
+                        if (System.IO.Path.GetFileName(f.Name) != "errors.txt") f.Delete(); // clear out eveything
+                    }
+                    foreach (var a in results)
+                    {
+                        File.Code c = a as File.Code;
+                        if (c != null)
+                        {
+                            var error = new ErrorContext(c.Name);
+                            error.Message("Decompiling");
+                            Context.Debug = true;
+                            var block = c.Block;
+                            if (block != null)
+                            {
+                                using (Writers.BlockToCode to = new Writers.BlockToCode(c.Name + "_watch.js"))
+                                    to.Write(block);
+                                error.Message("Finished Decompiling");
+                            }
+                            else error.Message("Block is null");
+                        }
+                        else Context.Error("Code '{0} not found", a);
+                    }
+                    //Context.HackyDebugWatch = new HashSet<string>(chunks);
+                    // w.AddAction("code");
+                }
+                else
+                {
+                    if (chunks.Count == 0) chunks.Add("everything");
+                    foreach (var a in chunks) w.AddAction(a);
+                }
+                w.FinishProcessing();
+            }   
             GoodExit();
         }
     }
