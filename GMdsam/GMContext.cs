@@ -190,7 +190,23 @@ namespace GameMaker
             // whew, path string is valid lets verify we can write to the directory
             // 
         }
-
+        public static string FormatDebugOffset(byte[] data, int index)
+        {
+            short svalue = BitConverter.ToInt16(data, index);
+            int ivalue = BitConverter.ToInt32(data, index);
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("Offset=0x{0:X8} ", index);
+            sb.AppendFormat("Int32(0x{0:X8},0) ", ivalue);
+            sb.AppendFormat("Int16(0x{0:X4},0) ", svalue);
+            sb.AppendFormat("Raw(");
+            for(int i = index;i < (index+4); i++)
+            {
+                if (i != 0) sb.Append(',');
+                sb.AppendFormat("0x{0:X2}",data[i]);
+            }
+            sb.Append(")");
+            return sb.ToString();
+        }
         static public CancellationToken ct;
         static public DirectoryInfo outputDirectory = null;
         static public bool saveChangedDataWin = false;

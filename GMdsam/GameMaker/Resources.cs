@@ -264,16 +264,23 @@ namespace GameMaker
         public static void ChangeOffset(byte[] data, uint offset, int value)
         {
             if ((offset + 4) > data.Length) Context.FatalError("Cannot change {0} at offset 0x{1:8X}: offset to big", value, offset);
+            int ioffset = (int)offset;
+            Context.Message("Changed From {0}", Context.FormatDebugOffset(data, ioffset));
             data[offset++] = (byte)value;
             data[offset++] = (byte)(value >> 8);
             data[offset++] = (byte)(value >> 0x10);
             data[offset++] = (byte)(value >> 0x18);
+            Context.Message("Changed   To {0}", Context.FormatDebugOffset(data, ioffset));
+
         }
         public static void ChangeOffset(byte[] data, uint offset, short value)
         {
             if ((offset + 2) > data.Length) Context.FatalError("Cannot change {0} at offset 0x{1:8X}: offset to big", value, offset);
+            int ioffset = (int)offset;
+            Context.Message("Changed From {0}", Context.FormatDebugOffset(data, ioffset));
             data[offset++] = (byte)value;
             data[offset++] = (byte)(value >> 8);
+            Context.Message("Changed   To {0}", Context.FormatDebugOffset(data, ioffset));
         }
         public static bool ChangeVarValue(byte[] data, File.Code code, string name, int from_value, int to_value)
         {
@@ -292,25 +299,14 @@ namespace GameMaker
                     Context.dataWinChanged |= true;
                     Debug.Assert(value.DataOffset != null);
                     int offset = (int)value.DataOffset;
-                    int convert = BitConverter.ToInt32(data, (int)value.DataOffset);
                     if (value.Type == GM_Type.Short)
-                    {
-                        short snew_value = (short)to_value;
-                        data[offset++] = (byte)snew_value;
-                        data[offset++] = (byte)(snew_value >> 8);
-                    }
+                        ChangeOffset(data, (uint)offset, (short)to_value);
                     else
-                    {
-                        data[offset++] = (byte)to_value;
-                        data[offset++] = (byte)(to_value >> 8);
-                        data[offset++] = (byte)(to_value >> 0x10);
-                        data[offset++] = (byte)(to_value >> 0x18);
-                    }
-                    int newConvert = BitConverter.ToInt32(data, (int)value.DataOffset);
-                    context.Message("Changed {0}={1} to {0}={2} at offset 0x{0:8x}", name, from_value, to_value, (int)value.DataOffset);
+                        ChangeOffset(data, (uint)offset, to_value);
+                    context.Message("Changed {0}={1} to {0}={2} at offset 0x{3:X8}", name, from_value, to_value, (int)value.DataOffset);
                 }
             }
-            if(!found) context.Message("Could Not find {0}", name);
+            if(!found) context.Message("Could Not find var '{0}'", name);
             return found;
         }
         static void InternalLoad()

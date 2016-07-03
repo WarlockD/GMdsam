@@ -129,6 +129,24 @@ namespace GameMaker
         {
 
         }
+        static bool TryParseOffset(string s, out uint value)
+        {
+            if (string.IsNullOrWhiteSpace(s)) { value = default(uint); return false; }
+            if (s != null && s.Length > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+                return uint.TryParse(s.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out value);
+            else
+                return uint.TryParse(s, System.Globalization.NumberStyles.Integer, null, out value);
+        }
+
+        static bool TryParseHex(string s, out int value)
+        {
+            if (string.IsNullOrWhiteSpace(s)) { value = default(int); return false; }
+            System.Globalization.NumberStyles style = System.Globalization.NumberStyles.Integer;
+            if (s != null && s.Length > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+                return int.TryParse(s.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out value);
+            else
+                return int.TryParse(s, System.Globalization.NumberStyles.Integer, null, out value);
+        }
         static void Main(string[] args)
         {
    
@@ -158,25 +176,19 @@ namespace GameMaker
                 if (string.IsNullOrWhiteSpace(a)) continue; // does this ever happen?
                 switch (a)
                 {
-                    case "-changeInt":
+                    case "-printOffset":
                         {
                             Context.saveChangedDataWin = true;
 
                             string offset_name = args.ElementAtOrDefault(i + 1);
-                            string to_value = args.ElementAtOrDefault(i + 2);
-                            i += 2;
+                            i += 1;
                             uint offset_int;
-                            short to_int;
-                            if (!uint.TryParse(offset_name, out offset_int)) Context.FatalError("Cannot parse offset value in -changeInt");
-                            if (!short.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse short value in -changeInt");
-                            if (changedData == null)
-                            {
-                                changedData = File.CopyData();
-                                File.LoadEveything();
-                            }
-                            File.ChangeOffset(changedData, offset_int, to_int);
+                            if (!TryParseOffset(offset_name, out offset_int)) Context.FatalError("Cannot parse {0} value in -printOffset", offset_name);
+                            Context.Message(Context.FormatDebugOffset(changedData ?? File.DataWinRaw, (int)offset_int));
                         }
                         break;
+                
+                    case "-changeInt":
                     case "-changeShort":
                         {
                             Context.saveChangedDataWin = true;
@@ -186,14 +198,15 @@ namespace GameMaker
                             i += 2;
                             uint offset_int;
                             int to_int;
-                            if (!uint.TryParse(offset_name, out offset_int)) Context.FatalError("Cannot parse offset value in -changeShort");
-                            if (!int.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse int value in -changeShort");
+                            if (!TryParseOffset(offset_name, out offset_int)) Context.FatalError("Cannot parse {0} value in -changeShort", offset_name);
+                            if (!TryParseHex(to_value, out to_int)) Context.FatalError("Cannot parse {0} value in -changeShort", to_value);
                             if (changedData == null)
                             {
                                 changedData = File.CopyData();
                                 File.LoadEveything();
                             }
-                            File.ChangeOffset(changedData, offset_int, to_int);
+                            if(a == "-changeShort") File.ChangeOffset(changedData, offset_int, (short)to_int);
+                            else File.ChangeOffset(changedData, offset_int, to_int);
                         }
                         break;
                     case "-changeVar":
@@ -205,8 +218,8 @@ namespace GameMaker
                             string to_value = args.ElementAtOrDefault(i + 4) ?? "";
                             int from_int;
                             int to_int;
-                            if (!int.TryParse(from_value, out from_int)) Context.FatalError("Cannot parse from value in -change");
-                            if (!int.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse from value in -change");
+                            if (!TryParseHex(from_value, out from_int)) Context.FatalError("Cannot parse {0} value in -change",from_value);
+                            if (!TryParseHex(to_value, out to_int)) Context.FatalError("Cannot parse {0} value in -change", to_value);
                             i += 4;
 
                             if (changedData == null)
@@ -285,11 +298,15 @@ namespace GameMaker
             ErrorContext.StartErrorSystem();
             if (Context.saveChangedDataWin)
             {
-                using (var file = Context.CreateFileStream("changed_data.win", FileMode.Create, true))
+                if (changedData != null)
                 {
-                    file.Write(changedData, 0, changedData.Length);
-                    file.Flush();
+                    using (var file = Context.CreateFileStream("changed_data.win", FileMode.Create, true))
+                    {
+                        file.Write(changedData, 0, changedData.Length);
+                        file.Flush();
+                    }
                 }
+              
             } else
             {
                 File.LoadEveything();
