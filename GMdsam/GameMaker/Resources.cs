@@ -238,6 +238,12 @@ namespace GameMaker
         }
         internal static Dictionary<string, Chunk> fileChunks = null;
         static byte[] rawData = null;
+        public static byte[] CopyData()
+        {
+            byte[] copy = new byte[File.rawData.Length];
+            Array.Copy(File.DataWinRaw, copy, copy.Length);
+            return copy;
+        }
         static string filename = null;
 
         static List<GString> strings = null;
@@ -255,6 +261,20 @@ namespace GameMaker
         static List<Script> scripts = null;
         static List<Path> paths = null;
         static Dictionary<string, GameMakerStructure> namedResourceLookup = new Dictionary<string, GameMakerStructure>();
+        public static void ChangeOffset(byte[] data, uint offset, int value)
+        {
+            if ((offset + 4) > data.Length) Context.FatalError("Cannot change {0} at offset 0x{1:8X}: offset to big", value, offset);
+            data[offset++] = (byte)value;
+            data[offset++] = (byte)(value >> 8);
+            data[offset++] = (byte)(value >> 0x10);
+            data[offset++] = (byte)(value >> 0x18);
+        }
+        public static void ChangeOffset(byte[] data, uint offset, short value)
+        {
+            if ((offset + 2) > data.Length) Context.FatalError("Cannot change {0} at offset 0x{1:8X}: offset to big", value, offset);
+            data[offset++] = (byte)value;
+            data[offset++] = (byte)(value >> 8);
+        }
         public static bool ChangeVarValue(byte[] data, File.Code code, string name, int from_value, int to_value)
         {
             ErrorContext context = new ErrorContext(code.Name);

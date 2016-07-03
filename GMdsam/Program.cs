@@ -158,30 +158,69 @@ namespace GameMaker
                 if (string.IsNullOrWhiteSpace(a)) continue; // does this ever happen?
                 switch (a)
                 {
-                    case "-change":
+                    case "-changeInt":
                         {
+                            Context.saveChangedDataWin = true;
+
+                            string offset_name = args.ElementAtOrDefault(i + 1);
+                            string to_value = args.ElementAtOrDefault(i + 2);
+                            i += 2;
+                            uint offset_int;
+                            short to_int;
+                            if (!uint.TryParse(offset_name, out offset_int)) Context.FatalError("Cannot parse offset value in -changeInt");
+                            if (!short.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse short value in -changeInt");
                             if (changedData == null)
                             {
-                                changedData = new byte[File.DataWinRaw.Length];
-                                Array.Copy(File.DataWinRaw, changedData, changedData.Length);
+                                changedData = File.CopyData();
                                 File.LoadEveything();
                             }
+                            File.ChangeOffset(changedData, offset_int, to_int);
+                        }
+                        break;
+                    case "-changeShort":
+                        {
+                            Context.saveChangedDataWin = true;
+
+                            string offset_name = args.ElementAtOrDefault(i + 1);
+                            string to_value = args.ElementAtOrDefault(i + 2);
+                            i += 2;
+                            uint offset_int;
+                            int to_int;
+                            if (!uint.TryParse(offset_name, out offset_int)) Context.FatalError("Cannot parse offset value in -changeShort");
+                            if (!int.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse int value in -changeShort");
+                            if (changedData == null)
+                            {
+                                changedData = File.CopyData();
+                                File.LoadEveything();
+                            }
+                            File.ChangeOffset(changedData, offset_int, to_int);
+                        }
+                        break;
+                    case "-changeVar":
+                        {
                             Context.saveChangedDataWin = true;
                             string code_name = args.ElementAtOrDefault(i + 1);
-                            string var_name = args.ElementAtOrDefault(i + 2);
-                            string from_value = args.ElementAtOrDefault(i + 3);
-                            string to_value = args.ElementAtOrDefault(i + 4);
+                            string var_name = args.ElementAtOrDefault(i + 2) ?? "";
+                            string from_value = args.ElementAtOrDefault(i + 3) ?? "";
+                            string to_value = args.ElementAtOrDefault(i + 4) ?? "";
+                            int from_int;
+                            int to_int;
+                            if (!int.TryParse(from_value, out from_int)) Context.FatalError("Cannot parse from value in -change");
+                            if (!int.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse from value in -change");
                             i += 4;
+
+                            if (changedData == null)
+                            {
+                                changedData = File.CopyData();
+                                File.LoadEveything();
+                            }
 
                             File.Code code=null;
                             File.Script script=null;
                             if (File.TryLookup(code_name, out code) || File.TryLookup(code_name, out script))
                             {
                                 if (script != null) code = script.Code;
-                                int from_int;
-                                int to_int;
-                                if (!int.TryParse(from_value, out from_int)) Context.FatalError("Cannot parse from value in -change");
-                                if (!int.TryParse(to_value, out to_int)) Context.FatalError("Cannot parse from value in -change");
+                           
                                 File.ChangeVarValue(changedData, code, var_name, from_int, to_int);
                             }
                             else Context.Error("'{0}' code/script not found", code_name);
