@@ -224,7 +224,7 @@ namespace GameMaker.Writers
             {
                 DateTime start = DateTime.Now;
                 task_name = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(task_name.ToLower());
-                var path = DeleteAllAndCreateDirectory(path_name);
+                var path = Context.DeleteAllAndCreateDirectory(path_name);
                 if (Context.doThreads)
                 {
                     CodeTask ct = new CodeTask();
@@ -291,7 +291,7 @@ namespace GameMaker.Writers
             {
                 DateTime start = DateTime.Now;
                 task_name = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(task_name.ToLower());
-                var path = DeleteAllAndCreateDirectory(path_name);
+                var path = Context.DeleteAllAndCreateDirectory(path_name);
                 if (Context.doThreads)
                 {
                     CodeTask ct = new CodeTask();
@@ -488,7 +488,7 @@ namespace GameMaker.Writers
         {
             //  CodeTask.RunOneThing("strings", File.Strings)
             //  filename = FixFilenameExtensionForSerialzer(filename);
-            var path = DeleteAllAndCreateDirectory("strings");
+            var path = Context.DeleteAllAndCreateDirectory("strings");
             using (MemoryStream writer = new MemoryStream())
             {
                 var serializer = GetSerializer(File.Strings.GetType());
@@ -583,49 +583,11 @@ namespace GameMaker.Writers
             }
         }
         */
-        //http://stackoverflow.com/questions/1410127/c-sharp-test-if-user-has-write-access-to-a-folder
-        static private bool hasWriteAccessToFolder(string folderPath)
-        {
-            try
-            {
-                // Attempt to get a list of security permissions from the folder. 
-                // This will raise an exception if the path is read only or do not have access to view the permissions. 
-                System.Security.AccessControl.DirectorySecurity ds = Directory.GetAccessControl(folderPath);
-                return true;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return false;
-            }
-        }
+      
 
-        static HashSet<string> directoryDeleted = new HashSet<string>();
-        static string DeleteAllAndCreateDirectory(string dir)
-        {
-            string exePath = Directory.GetCurrentDirectory();
-            if (!hasWriteAccessToFolder(Directory.GetCurrentDirectory()))
-            {
-                Context.Error("Do not have permision to write to directory '{0}'", exePath);
-                Context.FatalError("Please run as Administrator or move exe to another directory");
-            }
-            string path = Path.Combine(exePath, dir);
-            try
-            {
-                if (!directoryDeleted.Contains(path))
-                {
-                    Context.Info("Clearing old '{0}'  directory", path);
-                    if (Directory.Exists(path)) Directory.Delete(path, true);
-                    Directory.CreateDirectory(path);
-                    lock (directoryDeleted) directoryDeleted.Add(path);
-                }
-            } catch(Exception e)
-            {
-                Context.Error("Exception caught trying to crate '{0}' directory", path);
-                Context.FatalError(e);
-                throw e;
-            }
-            return path;
-        }
+
+
+    
 
         static string FixFilenameExtensionForSerialzer(string filename)
         {

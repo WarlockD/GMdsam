@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Threading;
 using GameMaker.Ast;
+using System.Collections.Concurrent;
 
 namespace GameMaker
 {
@@ -195,7 +196,6 @@ namespace GameMaker
             Fatal,
             Message, // always goes though
         }
-        static StreamWriter fileOutput = null;
         const string ErrorFileName = "errors.txt";
         public static ProgressBar ProgressBar = null;
         string code_name = null;
@@ -214,18 +214,77 @@ namespace GameMaker
                 return DateTime.Now.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
             }
         }
+        
         static ErrorContext()
         {
-             FileStream stream = new FileStream(ErrorFileName, FileMode.Create);
-            fileOutput = new StreamWriter(stream, Console.Out.Encoding);
-            fileOutput.AutoFlush = true;
             _singleton = new ErrorContext();
-            _singleton.Info("Error Output Starts");
         }
         static MType printMoreThanThis = MType.Warning;
         public static void PrintInfoAndAbove() { printMoreThanThis = MType.Info; }
         public static void PrintErrosAndAbove() { printMoreThanThis = MType.Error; }
         public static void PrintEveything() { printMoreThanThis = MType.All; }
+
+
+        // Since only one thread can access a file at once and I am getting out of order writes
+        // lets fix this to its own task
+        static bool _errorSystemRunning = false;
+        static Task errorSystem = null;
+        class TaskMessage
+        {
+            public string Message;
+            public MType type;
+        }
+        static ConcurrentBag<TaskMessage> messages = new ConcurrentBag<TaskMessage>();
+        public static void StopErrorSystem()
+        {
+            if (_errorSystemRunning)
+            {
+                _singleton.Info("Error Output Ends");
+                _errorSystemRunning = false;
+                errorSystem.Wait();
+            }
+            errorSystem = null;
+        }
+        public static void StartErrorSystem()
+        {
+            if (_errorSystemRunning) StopErrorSystem();
+            _errorSystemRunning = true;
+            errorSystem = Task.Factory.StartNew(() =>
+            {
+                try
+                {
+                    string error_filename = Context.MoveFileToOldErrors(ErrorFileName);
+                    using (StreamWriter sw = Context.CreateStreamWriter(ErrorFileName, false))
+                    {
+                        sw.AutoFlush = true;
+                        _singleton.Info("Error Output Starts");
+                        while (_errorSystemRunning)
+                        {
+                            if (!messages.IsEmpty)
+                            {
+                                TaskMessage msg;
+                                if (messages.TryTake(out msg)) sw.WriteLine(msg.Message);
+                            }
+                            Thread.Sleep(10);
+                        }
+                        sw.Flush(); // proerbly not needed with autoflush on
+                    }
+                } catch(Exception e)
+                {
+                    Context.Error(e);
+                    Context.FatalError("Error System Failed");
+                }
+            });
+        }
+        public static void ConsoleWriteLine(string msg)
+        {
+            lock (_singleton)
+            {
+                if (ProgressBar != null) ProgressBar.Pause();
+                Console.WriteLine(msg);
+                if (ProgressBar != null) ProgressBar.UnPause();
+            }
+        }
         void DoMessage(MType type, string msg, Ast.ILNode node)
         {
            
@@ -257,29 +316,13 @@ namespace GameMaker
                 }
             }
             else sb.Append(msg);
-            lock (_singleton)
+            string o = sb.ToString();
+            TaskMessage tm = new TaskMessage() { Message = o, type = type };
+            messages.Add(tm);
+            if (type >= printMoreThanThis)
             {
-               
-                string o = sb.ToString();
-                if (type >= printMoreThanThis)
-                {
-                    if (ProgressBar != null) ProgressBar.Pause();
-                    Console.WriteLine(o);
-                    if (ProgressBar != null) ProgressBar.UnPause();
-                    System.Diagnostics.Debug.WriteLine(o); // just because I don't look at console all the time
-                }
-                fileOutput.WriteLine(o);
-
-                
-                
-            }
-            
-        }
-        public void FlushAll()
-        {
-            lock (_singleton)
-            {
-                fileOutput.Flush();
+                ConsoleWriteLine(o);
+                System.Diagnostics.Debug.WriteLine(o); // just because I don't look at console all the time
             }
         }
 
@@ -322,8 +365,8 @@ namespace GameMaker
         public void FatalError(string msg)
         {
             DoMessage(MType.Fatal, msg, null);
+            StopErrorSystem();
             Program.EnviromentExit(1);
-            Environment.Exit(1);
         }
         public void Info(string msg, Ast.ILNode node)
         {
@@ -340,6 +383,7 @@ namespace GameMaker
         public void FatalError(string msg, Ast.ILNode node)
         {
             DoMessage(MType.Fatal, msg,  node);
+            StopErrorSystem();
             Program.EnviromentExit(1);
         }
     }

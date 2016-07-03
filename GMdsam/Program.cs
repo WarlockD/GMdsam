@@ -122,19 +122,12 @@ namespace GameMaker
         static void GoodExit()
         {
             Console.WriteLine("All Done!");
+            ErrorContext.StopErrorSystem();
             EnviromentExit(0);
-        }
-        static int SetPreFlags(string[] args)
-        {
-            for(int i=1;i < args.Length; i++)
-            {
-                string a = args[i];
-                
-            }
-            return -1;
         }
         static void Main(string[] args)
         {
+   
             // Context.doThreads = false;
             //  Context.doXML = true;
             //  Context.doAssigmentOffsets = true;
@@ -144,22 +137,33 @@ namespace GameMaker
             {
                 InstructionError("Missing data.win file");
             }
-            int pos = SetPreFlags(args);
-         //   try
-         //   {
+            try
+            {
                 File.LoadDataWin(dataWinFileName);
                 File.LoadEveything();
-          //  }
-         //   catch (Exception e)
-        //    {
-          //      InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
-        //    }
-            List<string> chunks = new List<string>();
-            foreach (var a in args.Skip(1))
+            }
+            catch (Exception e)
             {
+                Context.Error(e);
+                InstructionError("Could not open data.win file {0}\n Exception:", dataWinFileName, e.Message);
+            }
+            List<string> chunks = new List<string>();
+            for(int i=1; i < args.Length; i++) {
+                string a = args[i];
                 if (string.IsNullOrWhiteSpace(a)) continue; // does this ever happen?
                 switch (a)
                 {
+                    case "-output":
+                        {
+                            i++;
+                            string dir = args.ElementAtOrDefault(i);
+                            if(string.IsNullOrWhiteSpace(dir)) InstructionError("Missing otuput directory");
+                            Context.CheckAndSetOutputDirectory(dir);
+                        }
+                        break;
+                    case "-delete":
+                        Context.deleteDirectorys = true;
+                        break;
                     case "-lua":
                         Context.doLua = true;
                         Context.doXML = false;
@@ -203,7 +207,8 @@ namespace GameMaker
                         break;
                 }
             }
-
+            Context.CheckAndSetOutputDirectory();
+            ErrorContext.StartErrorSystem();
             var w = new Writers.AllWriter();
             if (Context.doSearch)
             {

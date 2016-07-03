@@ -83,7 +83,7 @@ namespace GameMaker.Ast
         }
         public static void DebugSave(this ILBlock block, string filename, bool move = true)
         {
-            if (move) filename = Context.MoveFileToOldErrors(filename);
+            filename = Context.MoveFileToOldErrors(filename,move);
             using (PlainTextWriter sw = new PlainTextWriter(filename))
             {
                 block.FixParents();
@@ -96,7 +96,7 @@ namespace GameMaker.Ast
         }
         public static void DebugSave(this ILNode node, string filename, bool move = true)
         {
-            if (move) filename = Context.MoveFileToOldErrors(filename);
+            filename = Context.MoveFileToOldErrors(filename, move);
             using (PlainTextWriter sw = new PlainTextWriter(filename))
             {
                 node.FixParents();

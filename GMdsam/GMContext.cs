@@ -9,6 +9,9 @@ using System.IO;
 using System.Threading;
 using GameMaker.Writers;
 using System.Text.RegularExpressions;
+using System.Web.Configuration;
+using System.Security.AccessControl;
+using System.Security.Principal;
 
 namespace GameMaker
 {
@@ -30,7 +33,168 @@ namespace GameMaker
 
         public static Regex ScriptArgRegex = new Regex(@"argument(\d+)", RegexOptions.Compiled);
 
+
+        // found this regex http://stackoverflow.com/questions/62771/how-do-i-check-if-a-given-string-is-a-legal-valid-file-name-under-windows/62888#62888
+        // not to shabby
+        static Regex validatePath = new Regex("(^(PRN|AUX|NUL|CON|COM[1-9]|LPT[1-9]|(\\.+)$)(\\..*)?$)|(([\\x00-\\x1f\\\\?*:\";‌​|/<>‌​])+)|([\\. ]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        // works too
+        //   Regex containsABadCharacter = new Regex("["
+        //     + Regex.Escape(new string(System.IO.Path.GetInvalidPathChars())) + "]");
+        //  if (containsABadCharacter.IsMatch(testName)) { return false; };
+
+        //http://stackoverflow.com/questions/1410127/c-sharp-test-if-user-has-write-access-to-a-folder
+        public static bool HasFolderWritePermission(string destDir)
+        {
+            do
+            {
+                if (string.IsNullOrEmpty(destDir) || !Directory.Exists(destDir)) break;
+                try
+                {
+                    DirectorySecurity security = Directory.GetAccessControl(destDir);
+                    SecurityIdentifier users = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+                    foreach (System.Security.AccessControl.AuthorizationRule rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+                    {
+                        if (rule.IdentityReference == users)
+                        {
+                            FileSystemAccessRule rights = ((FileSystemAccessRule)rule);
+                            if (rights.AccessControlType == AccessControlType.Allow)
+                            {
+                                if (rights.FileSystemRights == (rights.FileSystemRights | FileSystemRights.Modify | FileSystemRights.CreateDirectories | FileSystemRights.CreateFiles | FileSystemRights.Delete)) return true;
+                            }
+                        }
+                    }
+                    break;
+                }
+                catch
+                {
+                    break;
+                }
+            } while (false);
+            // ok, so the failsafe is to just try to create a directory, try to create a file in that directory, delete the file, then the directory.
+            // if we fail THAT then we know we cannot do it
+            try
+            {
+                string tempDir = Path.Combine(destDir,Path.GetRandomFileName());
+                var dir = Directory.CreateDirectory(tempDir);// can we create a folder
+                string tempFilename = Path.Combine(dir.FullName, Path.GetRandomFileName());
+                using (FileStream file = new FileStream(Path.Combine(dir.FullName,  tempFilename),FileMode.CreateNew)) {
+                    file.WriteByte(0); // can we write?
+                    file.Position = 0;
+                    file.ReadByte(); // can we read?
+                }
+                System.IO.File.Delete(tempFilename); // we can delete
+                dir.Delete();
+                return true; // its all good
+            } catch(Exception e)
+            {
+               
+                Context.Error(e);
+                Context.FatalError("Do not have write permissions for '{0}'", destDir);
+            }
+            return false;
+        }
+        static HashSet<string> directoryDeleted = new HashSet<string>();
+        // ugh, this could be called in a thread, so be sure to lock directoryDeleted
+        public static string DeleteAllAndCreateDirectory(string dir, bool overrideDelete=false)
+        {
+            string exePath = Context.outputDirectory.FullName;
+            string path = Path.Combine(exePath, dir);
+            try
+            {
+                if (!directoryDeleted.Contains(path))
+                {
+                    lock (directoryDeleted)
+                    {
+                        if (!directoryDeleted.Contains(path)) // I can't beleve I ran into this.  check again in the lock incase 
+                        {
+                            if (!Directory.Exists(path))
+                            {
+                                Directory.CreateDirectory(path);
+                                Context.Info("Creating directory '{0}' ", path);
+                            } else if (Context.deleteDirectorys)
+                            {
+                                Directory.Delete(path, true);
+                                Context.Info("Clearing old '{0}'  directory", path);
+                            }
+                            directoryDeleted.Add(path);
+                        }
+                    }
+
+                }
+            }
+            catch (Exception e)
+            {
+                Context.Error("Exception caught trying to crate '{0}' directory", path);
+                Context.FatalError(e);
+                throw e;
+            }
+            return path;
+        }
+        // Used to create a file stream to make sure its created in the correct path
+        public static FileStream CreateFileStream(string filename, FileMode mode, bool fix_path)
+        {
+            FileStream file = null;
+            try
+            {
+                if (fix_path) filename = Path.Combine(outputDirectory.FullName, filename);
+                file = new FileStream(filename, mode);
+                return file;
+            }
+            catch (Exception e)
+            {
+                Context.Error(e);
+                Context.FatalError("Could not create '{0}'", filename);
+            }
+            return file;
+        }
+        public static StreamWriter CreateStreamWriter(string filename, bool fix_path)
+        {
+            return new StreamWriter(CreateFileStream(filename, FileMode.Create, fix_path));
+        }
+        public static StreamWriter CreateStreamReader(string filename, bool fix_path)
+        {
+            return new StreamWriter(CreateFileStream(filename, FileMode.Open,fix_path));
+        }
+        public static void CheckAndSetOutputDirectory(string path=null)
+        {
+            if (outputDirectory != null) return; // we have our output directory anyway
+            if (string.IsNullOrWhiteSpace(path)) path = Directory.GetCurrentDirectory();
+            if ((outputDirectory != null && outputDirectory.FullName == path)) return; // don't do anything
+            var badchars = Path.GetInvalidPathChars();
+            for(int i = 0; i < path.Length; i++)
+            {
+                char c = path[i];
+                if (badchars.Contains(c))
+                {
+                    Context.Error("{0}", path);
+                    Context.Error(new string(' ', i) + "^");
+                    Context.FatalError("Invalid Char in Output Path:");
+                }
+            }
+
+#if false
+            // The validate dosn't work? humm
+            Match match = validatePath.Match(path);
+            if (match.Success)
+            {
+                Context.Error("{0}", path);
+                Context.Error(new string(' ',match.Length ) + "^");
+                Context.FatalError("Invalid Char in Output Path:");
+            }
+#endif
+            string filename = Path.GetFileName(path);
+            if (!string.IsNullOrWhiteSpace(filename)) Context.Warning("Path Contains a filename '{0}', striping filename", filename);
+            path = Path.GetDirectoryName(path);
+            HasFolderWritePermission(path); // we drop the application in this case
+            outputDirectory = new DirectoryInfo(path);
+
+            // whew, path string is valid lets verify we can write to the directory
+            // 
+        }
+
         static public CancellationToken ct;
+        static public DirectoryInfo outputDirectory = null;
+        static public bool deleteDirectorys = false;
         static public bool doLua = false;
         static public bool oneFile = false;
         static public bool doSearch = false;
@@ -130,28 +294,32 @@ namespace GameMaker
                 return now.ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
             }
         }
-        private static System.Object lockThis = new System.Object();
+        private static HashSet<string> old_files_moved = new HashSet<string>();
 
-        public static string MoveFileToOldErrors(string dfilename)
+        public static string MoveFileToOldErrors(string dfilename,bool move = true)
         {
-            if (System.IO.File.Exists(dfilename))
+            System.Diagnostics.Debug.Assert(dfilename == Path.GetFileName(dfilename));
+            string ffilename = Path.Combine(outputDirectory.FullName, dfilename);
+            if (move && !old_files_moved.Contains(ffilename))
             {
-                lock (lockThis) // hack for now
+                lock (old_files_moved) // hack for now
                 {
-                    var info = Directory.CreateDirectory("old_errors");
-                    int count = 0;
-                    string filename;
-                    do
+                    if (move && !old_files_moved.Contains(ffilename))
                     {
-                        filename = Path.Combine(info.FullName, ChangeEndOfFileName(dfilename, "_" + count++));
-                    } while (System.IO.File.Exists(filename));
-                    System.IO.File.Copy(dfilename, filename);
-                    System.IO.File.Delete(dfilename);
+                        old_files_moved.Add(ffilename);
+                        if (System.IO.File.Exists(ffilename))
+                        {
+                            string old_errors_path = Context.DeleteAllAndCreateDirectory("old_errors", true);
+                            old_errors_path = Path.Combine(old_errors_path, dfilename);
+                            // Search for a good file name
+                            for (int count = 0; System.IO.File.Exists(old_errors_path = ChangeEndOfFileName(dfilename, "_" + count)); count++) ;
+                            System.IO.File.Move(ffilename, old_errors_path); // move it
+                        }
+                    }
                 }
             }
-            return dfilename;
+            return ffilename;
         }
-       
         static Context()
         {
         }
@@ -163,10 +331,17 @@ namespace GameMaker
         {
             string filename = Path.GetFileNameWithoutExtension(file);
             filename = code_name + "_" + filename + Path.GetExtension(file);
-            filename = file.Replace(Path.GetFileName(file), filename); // so we keep any path information
-            return move ? MoveFileToOldErrors(filename) : filename;
-        }
+            string path = Path.Combine(Context.outputDirectory.FullName, filename);
 
+          //  filename = file.Replace(Path.GetFileName(file), filename); // so we keep any path information
+
+            return move ? MoveFileToOldErrors(path) : path;
+        }
+        static public string MakeDebugFileName(string filename, bool move = true)
+        {
+            string path = Path.Combine(Context.outputDirectory.FullName, filename);
+            return move ? MoveFileToOldErrors(path) : path;
+        }
         public static string EscapeChar(char v)
         {
             switch (v)
