@@ -206,7 +206,18 @@ namespace GameMaker.Writers
                 else
                     v.ValueText = "Range?=" + i.DebugHex();
             }
-            return -1;
+            return i;
+        }
+        static void handle_script_execute(CodeWriter writer, ILExpression c)
+        {
+            int index = ResourceArgument(File.Scripts, c, 0); // script name
+            switch (index)
+            {
+                case 149: // SCR_TEXT_SETUP
+                    ResourceArgument(File.Fonts, c, 1);
+                    ResourceArgument(File.Sounds, c, 8);
+                    break;
+            }
         }
         static int ResourceArgument<T>(IReadOnlyList<T> list, ILExpression c, int index) where T : File.GameMakerStructure, File.INamedResrouce
         {
@@ -229,9 +240,12 @@ namespace GameMaker.Writers
 
             calls["instance_create"] = (CodeWriter writer, ILExpression c) => InstanceArgument(writer, c, 2);
             calls["instance_exists"] = (CodeWriter writer, ILExpression c) => InstanceArgument(writer, c, 0);
-            calls["script_execute"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Scripts, c, 0);
+            calls["script_execute"] = handle_script_execute;
             calls["snd_play"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Sounds, c, 0);
             calls["snd_isplaying"] = (CodeWriter writer, ILExpression c) =>  ResourceArgument(File.Sounds, c, 0);
+
+            calls["audio_play_sound"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Sounds, c, 0);
+            calls["audio_is_playing"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Sounds, c, 0);
 
             calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILExpression c) => SpriteArgument(writer, c, 0);
 
@@ -254,6 +268,7 @@ namespace GameMaker.Writers
                     }
                 }
             };
+
 
         }
         IEnumerable<ILValue> FindAllConstantsAssigned( List<ILExpression> list, string vrname=null)
