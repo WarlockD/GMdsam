@@ -69,10 +69,10 @@ namespace GameMaker.Ast
             }
             return false;
         }
-        public static void DebugSave(this ILBlock block, string code_file, string filename,  bool move = true)
+        public static void DebugSave(this ILBlock block, string code_file, string filename,  bool ilranges = false, bool move = true)
         {
             filename = Context.MakeDebugFileName(code_file, filename,false);
-            block.DebugSave(filename, move); // moveing is handled here
+            block.DebugSave(filename, ilranges, move); // moveing is handled here
 
         }
         public static void DebugSave(this ILNode node, string code_file, string filename, bool move = true)
@@ -81,14 +81,42 @@ namespace GameMaker.Ast
             node.DebugSave(filename, move); // moveing is handled here
 
         }
-        public static void DebugSave(this ILBlock block, string filename, bool move = true)
+        public static string DebugILRanges(IEnumerable<ILRange> ranges)
+        {
+            StringBuilder sb = new StringBuilder();
+            bool need_comma = false;
+            sb.Append('[');
+            foreach(var r in ranges)
+            {
+                if (need_comma) sb.Append(','); else need_comma = true;
+                sb.Append(r.ToString());
+            }
+            sb.Append(']');
+            return sb.ToString();
+        }
+        public static void DebugSave(this ILBlock block, string filename, bool ilranges = false, bool move = true)
         {
             filename = Context.MoveFileToOldErrors(filename,move);
             using (PlainTextWriter sw = new PlainTextWriter(filename))
             {
+                sw.Indent += 2;
                 block.FixParents();
                 ILNode root = block.Root;
-                foreach (var n in root.GetChildren()) sw.WriteLine(n);
+                foreach (var n in root.GetChildren())
+                {
+                    if (ilranges)
+                    {
+                        ILExpression e = n as ILExpression;
+                        if (e != null)
+                        {
+                            e.WithILRanges(e.Arguments);
+                            ILRange.OrderAndJoin(e.ILRanges);
+                            sw.LineHeader = DebugILRanges(e.ILRanges);
+                        }
+                        else sw.LineHeader = null;
+                    }
+                    sw.WriteLine(n);
+                }
                 sw.Flush();
 
             }
@@ -646,6 +674,9 @@ namespace GameMaker.Ast
             ILVariable v=null;
             switch (instance)
             {
+                case -7: // negitive 7? This is a pure temp value, used in returns and passing stuff beetween instances?
+                    v = new ILVariable() { _name = string.Intern(name), _instance = -7, _arrayDim = 0 };
+                    break;
                 case -5:
                     if (!_globals.TryGetValue(name, out v))
                     {
@@ -758,7 +789,7 @@ namespace GameMaker.Ast
             if (From == To)
                 return To.ToString();
             else
-                return From.ToString() + "-" + To.ToString();
+                return '(' + From.ToString() + "-" + To.ToString() + ')';
         }
         public bool Contains(int value) { return value == From || value == To || (value > From && value < To); }
         public static void OrderAndJoin(List<ILRange> input)

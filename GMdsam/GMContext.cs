@@ -315,8 +315,7 @@ namespace GameMaker
 
         public static string MoveFileToOldErrors(string dfilename,bool move = true)
         {
-            System.Diagnostics.Debug.Assert(dfilename == Path.GetFileName(dfilename));
-            string ffilename = Path.Combine(outputDirectory.FullName, dfilename);
+            string ffilename = Path.Combine(outputDirectory.FullName, Path.GetFileName(dfilename));
             if (move && !old_files_moved.Contains(ffilename))
             {
                 lock (old_files_moved) // hack for now
@@ -418,6 +417,8 @@ namespace GameMaker
                     return "noone";
                 case -5:
                     return "global";
+                case -7:
+                    return "temp";
                 default:
                     if (instance < 0 || instance >= File.Objects.Count) throw new ArgumentException("Instance out of range", "instance");
                     return File.Objects[instance].Name;

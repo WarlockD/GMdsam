@@ -199,6 +199,10 @@ namespace GameMaker
         const string ErrorFileName = "errors.txt";
         public static ProgressBar ProgressBar = null;
         string code_name = null;
+        public string CodeName
+        {
+            get { return code_name; }
+        }
         ErrorContext() { }
         public ErrorContext(string code_name)
         {
@@ -326,16 +330,16 @@ namespace GameMaker
             }
         }
 
-        public void DebugSave(ILBlock method, string filename, bool move = true)
+        public void DebugSave(ILBlock method, string filename,  bool ilranges= false, bool move = true)
         {
             if (this.code_name != null)
-                method.DebugSave(this.code_name, filename, move);
+                method.DebugSave(this.code_name, filename, ilranges, move);
             else
-                method.DebugSave(filename, move);
+                method.DebugSave(filename, ilranges, move);
         }
-        public void CheckDebugThenSave(ILBlock block, string filename)
+        public void CheckDebugThenSave(ILBlock block, string filename,bool ilranges=false)
         {
-            if (Context.Debug) DebugSave(block, filename);
+            if (Context.Debug) DebugSave(block, filename,  ilranges);
         }
 
         public string MakeDebugFileName(string filename,bool move=true)

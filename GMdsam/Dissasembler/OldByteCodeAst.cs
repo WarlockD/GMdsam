@@ -48,7 +48,7 @@ namespace GameMaker.Dissasembler
             Break = 0xff
         }
         Dictionary<int, ILLabel> pushEnviroment = new Dictionary<int, ILLabel>();
-        protected override void Start(LinkedList<ILNode> list)
+        protected override void Start(List<ILNode> list)
         {
             pushEnviroment = new Dictionary<int, ILLabel>();
         }
@@ -56,27 +56,20 @@ namespace GameMaker.Dissasembler
         /// After label resolving and right before returning
         /// </summary>
         /// <param name="list"></param>
-        protected override void Finish(LinkedList<ILNode> list)
+        protected override void Finish(List<ILNode> list)
         {
             pushEnviroment = null;
         }
         // This pass accepts index or instance values being 
-        protected override ILExpression CreateExpression(LinkedList<ILNode> list)
+        protected override ILExpression CreateExpression(List<ILNode> list)
         {
             ILExpression e = null;
             OldCode nOpCode = (OldCode) (CurrentRaw >> 24);
             GM_Type[] types = ReadTypes(CurrentRaw);
             switch (nOpCode) // the bit switch
             {
-                case OldCode.Conv:
-                    if (list.Last != null)
-                    {
-                        var prev = list.Last.Value as ILExpression;
-                        Debug.Assert(prev.Code != GMCode.Pop);
-                        prev.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
-                        prev.Types = types;
-                    }
-                    break;// ignore all Conv for now
+               
+                case OldCode.Conv: e = CreateExpression(GMCode.Conv, types); break;
                 case OldCode.Popz: e = CreateExpression(GMCode.Popz, types); break;
                 case OldCode.Mul: e = CreateExpression(GMCode.Mul, types); break;
                 case OldCode.Div: e = CreateExpression(GMCode.Div, types); break;
@@ -105,7 +98,11 @@ namespace GameMaker.Dissasembler
                     e = CreateExpression(GMCode.Dup, types);
                     e.Operand = (int)(CurrentRaw & 0xFFFF); // dup type
                     break;
-                case OldCode.Call: e = CreateExpression(GMCode.Call, types); e.Operand = File.Strings[r.ReadInt32()]; break;
+                case OldCode.Call:
+                    e = CreateExpression(GMCode.CallUnresolved, types);
+                    e.Operand = ILCall.CreateCall(File.Strings[r.ReadInt32()].String, (int) (CurrentRaw & 0xFFFF));
+
+                     break;
                 case OldCode.Ret: e = CreateExpression(GMCode.Ret, types); break;
                 case OldCode.Exit: e = CreateExpression(GMCode.Exit, types); break;
                 case OldCode.B: e = CreateLabeledExpression(GMCode.B); break;
@@ -115,7 +112,8 @@ namespace GameMaker.Dissasembler
                 // We have to fix these to a lopp to emulate a while latter
                 case OldCode.Pushenv:
                     {
-                        //  Debug.WriteLine("Popenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
+
+                        Debug.WriteLine("Popenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}", CurrentPC, CurrentRaw, GMCodeUtil.getBranchOffset(CurrentRaw));
                         int sextra = CurrentPC + GMCodeUtil.getBranchOffset(CurrentRaw);
                         e = CreateExpression(GMCode.Pushenv, types, GetLabel(sextra + 1)); // we are one instruction after the pop
                         pushEnviroment.Add(sextra, GetLabel(CurrentPC)); // record the pop position
@@ -124,22 +122,19 @@ namespace GameMaker.Dissasembler
                 case OldCode.Popenv:
                     {
                         // We convert this to a Branch so the loop detecter will find it
-                        e = CreateExpression(GMCode.B, types);
-                        // e = CreateExpression(GMCode.Popenv, types);
-                        if (CurrentRaw == 0xBB70000)// its a break, ugh
+                        e = CreateExpression(GMCode.Popenv, types);
+                        // e = CreateExpression(GMCode.Popenv, types); 
+                        if (CurrentRaw == 0xbcf00000)// its a break, ugh, old break code ugh
                         {
-                            var last = list.Last;
-                            while (last != null)
+                            foreach (var last in list.Reverse<ILNode>().OfType<ILExpression>())
                             {
-                                ILExpression pushe = last.Value as ILExpression;
-                                if (pushe.Code == GMCode.Pushenv)
+                                if (last.Code == GMCode.Pushenv)
                                 {
-                                    e.Operand = GetLabel(pushe.ILRanges.First().From);
-                                    break;
+                                    e.Operand = last.Operand;
+                                    return e;
                                 }
-                                last = last.Previous;
                             }
-                            Debug.Assert(last != null);
+                            Debug.Assert(false);
                         }
                         else
                         {
@@ -154,8 +149,9 @@ namespace GameMaker.Dissasembler
                     }
                     break;
                 case OldCode.Pop:
-                    e = CreateExpression(GMCode.Pop, types); e.Operand = BuildUnresolvedVar(r.ReadInt32());
-                    // e = CreateExpression(GMCode.Pop, types, ReadOperand(CurrentRaw));
+                    e = CreateExpression(GMCode.Pop, types);
+                    e.Operand = BuildUnresolvedVar(r.ReadInt32());
+
                     break;
                 case OldCode.Push:
                     e = CreatePushExpression(GMCode.Push, types);

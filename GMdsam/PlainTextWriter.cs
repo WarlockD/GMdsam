@@ -201,9 +201,9 @@ namespace GameMaker
                             space_to_skip -= _lineheader.Length;
                         else
                             space_to_skip = 0;
-                    buffer.Append(_lineheader);
+                    line.Append(_lineheader);
                 }
-                if (space_to_skip > 0) buffer.Append(' ', space_to_skip);
+                if (space_to_skip > 0) line.Append(' ', space_to_skip);
                 startwritten = true;
             }
         }

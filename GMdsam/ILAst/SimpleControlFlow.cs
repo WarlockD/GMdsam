@@ -529,9 +529,13 @@ namespace GameMaker.Ast
                     finalFall.Add(newExpr);
                     finalFalseFall = fallBlock.EntryLabel();
                 }
-                Debug.Assert(finalFalseFall != null);
-              
-                head.Body.Add(new ILExpression(GMCode.B, finalFalseFall));         
+                if (finalFalseFall == null && fallBlock.MatchLastAt(0, GMCode.Ret))
+                    head.Body.Add(new ILExpression(GMCode.Ret, null));
+                else
+                {
+                    Debug.Assert(finalFalseFall != null);
+                    head.Body.Add(new ILExpression(GMCode.B, finalFalseFall));
+                }       
                 return true;
             }
             return false;

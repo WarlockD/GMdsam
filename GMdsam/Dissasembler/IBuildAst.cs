@@ -25,6 +25,11 @@ namespace GameMaker.Dissasembler
             if (!labels.TryGetValue(position, out l)) labels[position] = l = new ILLabel(position);
             return l;
         }
+        protected bool labelExists(int position)
+        {
+            ILLabel l;
+            return labels.TryGetValue(position, out l);
+        }
         protected ILExpression CreateLabeledExpression(GMCode code)
         {
             int absolute = GMCodeUtil.getBranchOffset(CurrentRaw) + CurrentPC;
@@ -47,37 +52,67 @@ namespace GameMaker.Dissasembler
             stream.Position = 0;
             r = new BinaryReader(stream);
             CurrentPC = 0;
-            LinkedList<ILNode> list = new LinkedList<ILNode>();
-            Dictionary<int, LinkedListNode<ILNode>> pcToExpressoin = new Dictionary<int, LinkedListNode<ILNode>>();
-            ILExpression e = null;
+            List<ILNode> list = new List<ILNode>();
+            Dictionary<int, int> pcToExpressoin = new Dictionary<int, int>();
+          
             Start(list);
             while (stream.Position < stream.Length)
             {
                 CurrentPC = (int)stream.Position / 4;
                 CurrentRaw = r.ReadUInt32();
-                e = CreateExpression(list);
+                ILExpression e = CreateExpression(list);
                 if (e != null)
                 {
-                    list.AddLast(e);
-                    pcToExpressoin.Add(CurrentPC, list.Last); // in case it points to a conv
+                    /*
+                    // hack here cause of issues
+                    if (e.Code == GMCode.Conv)
+                    {
+                        var prev = list.Last.Value as ILExpression;
+                        Debug.Assert(prev.Code != GMCode.Pop);
+                        prev.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
+                        prev.Types = e.Types; // don't add it
+                    }
+                    else
+                    */
+                    pcToExpressoin.Add(CurrentPC, list.Count);
+                    list.Add(e);
+                   
                 }
             }
-            bool needExit = e.Code != GMCode.Ret || e.Code != GMCode.Exit;
-        
-            int lastpc = (int)r.BaseStream.Position / 4;
-            ILLabel endLabel = GetLabel(lastpc);
+            CurrentPC = (int) stream.Position / 4;
+            if (labelExists(CurrentPC)) // there is a label that goes to the end of the code
+            {
+                CurrentPC = (int) stream.Position / 4;
+                CurrentRaw = 0;
+                pcToExpressoin.Add(CurrentPC, list.Count);
+                list.Add(CreateExpression(GMCode.Exit, null)); // make sure we got an exit as the last code
+            }
+           
             foreach (var l in labels)
             {
-                LinkedListNode<ILNode> n;
+                int n;
                 if (pcToExpressoin.TryGetValue(l.Key, out n))
-                {
-                    list.AddBefore(n, l.Value);
-                } else if(l.Key >= lastpc) list.AddLast(l.Value);
+                    list[n].UserData = l.Value;
             }
-            if (needExit) list.AddLast(new ILExpression(GMCode.Exit, null)); // make sure we got an exit as the last code
-            Finish(list);
-            r = null; // for GC
-            return list.ToList();
+            var rlist = new List<ILNode>();
+            for(int i=0; i < list.Count; i++)
+            {
+                ILExpression e = list[i] as ILExpression;
+                if (e != null) {
+                    if (e.UserData != null) { rlist.Add(e.UserData as ILLabel); e.UserData = null; }
+                    if (e.Code == GMCode.Conv)
+                    {
+                        ILExpression ne =  list[i+1] as ILExpression;
+                        ne.ILRanges.AddRange(e.ILRanges);
+                        ne.Types = e.Types;
+                        continue; // skip
+                    }
+                }
+                rlist.Add(list[i]);
+            }
+            Finish(rlist);
+
+            return rlist;
         }
         protected static GM_Type ReadRaw(uint i)
         {
@@ -108,7 +143,7 @@ namespace GameMaker.Dissasembler
         protected UnresolvedVar BuildUnresolvedVar(int operand)
         {
             string name = Context.LookupString(operand & 0x1FFFFF);
-            int extra = (short)(CurrentRaw & 0xFFFF);
+            int extra = (short) (CurrentRaw);// & 0xFFFF);
             // int loadtype = operand >> 24;
             return new UnresolvedVar() { Name = name, Operand = operand, Extra = extra };
         }
@@ -177,6 +212,7 @@ namespace GameMaker.Dissasembler
             ILExpression e = new ILExpression(code, null);
             e.Types = types;
             e.Extra = (int)(CurrentRaw & 0xFFFF);
+            Debug.Assert(e.ILRanges.Count == 0);
             e.AddILRange(CurrentPC);
             ILValue v = null;
             switch (types[0])
@@ -204,13 +240,13 @@ namespace GameMaker.Dissasembler
            
             return e;
         }
-        protected abstract ILExpression CreateExpression(LinkedList<ILNode> list);
+        protected abstract ILExpression CreateExpression(List<ILNode> list);
 
         /// <summary>
         /// Before reading the first opcode
         /// </summary>
         /// <param name="list"></param>
-        protected virtual void Start(LinkedList<ILNode> list)
+        protected virtual void Start(List<ILNode> list)
         {
 
         }
@@ -218,7 +254,7 @@ namespace GameMaker.Dissasembler
         /// After label resolving and right before returning
         /// </summary>
         /// <param name="list"></param>
-        protected virtual void Finish(LinkedList<ILNode> list)
+        protected virtual void Finish(List<ILNode> list)
         {
 
         }

@@ -75,7 +75,7 @@ namespace GameMaker.Dissasembler
         // the bytecode
         // This pass accepts index or instance values being 
         Dictionary<int, ILLabel> pushEnviroment = new Dictionary<int, ILLabel>();
-        protected override void Start(LinkedList<ILNode> list)
+        protected override void Start(List<ILNode> list)
         {
             pushEnviroment = new Dictionary<int, ILLabel>();
         }
@@ -83,26 +83,18 @@ namespace GameMaker.Dissasembler
         /// After label resolving and right before returning
         /// </summary>
         /// <param name="list"></param>
-        protected override void Finish(LinkedList<ILNode> list)
+        protected override void Finish(List<ILNode> list)
         {
             pushEnviroment = null;
         }
-        protected override ILExpression CreateExpression(LinkedList<ILNode> list)
+        protected override ILExpression CreateExpression(List<ILNode> list)
         {
             ILExpression e = null;
             NewOpcode nOpCode = (NewOpcode)(CurrentRaw >> 24);
             GM_Type[] types = ReadTypes(CurrentRaw);
             switch (nOpCode) // the bit switch
             {
-                case NewOpcode.conv:
-                    if (list.Last != null)
-                    {
-                        var prev = list.Last.Value as ILExpression;
-                        Debug.Assert(prev.Code != GMCode.Pop);
-                        prev.ILRanges.Add(new ILRange(CurrentPC, CurrentPC));
-                        prev.Types = types;
-                    }
-                    break;// ignore all Conv for now
+                case NewOpcode.conv: e = CreateExpression(GMCode.Conv, types); break;
                 case NewOpcode.popz: e = CreateExpression(GMCode.Popz, types); break;
                 case NewOpcode.mul: e = CreateExpression(GMCode.Mul, types); break;
                 case NewOpcode.div: e = CreateExpression(GMCode.Div, types); break;
@@ -162,18 +154,14 @@ namespace GameMaker.Dissasembler
                         // e = CreateExpression(GMCode.Popenv, types);
                         if (CurrentRaw == 0xBBF00000)// its a break, ugh
                         {
-                            var last = list.Last;
-                            while (last != null)
-                            {
-                                ILExpression pushe = last.Value as ILExpression;
-                                if (pushe.Code == GMCode.Pushenv)
+                            foreach(var last in list.Reverse<ILNode>().OfType<ILExpression>()){
+                                if (last.Code == GMCode.Pushenv)
                                 {
-                                    e.Operand = pushe.Operand;
-                                    break;
+                                    e.Operand = last.Operand;
+                                    return e;
                                 }
-                                last = last.Previous;
                             }
-                            Debug.Assert(last != null);
+                            Debug.Assert(false);
                         }
                         else
                         {
@@ -191,14 +179,6 @@ namespace GameMaker.Dissasembler
                     e = CreateExpression(GMCode.Pop, types);
                     e.Operand = BuildUnresolvedVar(r.ReadInt32()); 
                     break;
-                //      push = 192, // generic? -1
-                //  pushl = 193, // local? -7
-                //  pushg = 194, // global? -5 // id is the last bit?
-                //   pushb = 195, // built in? hummmm
-                // so it dosn't matter, the id is still put in there the same?
-                //      case NewOpcode.pushv: // I don't think you exisit little buddy
-                //         e = CreateExpression(GMCode.Push, types, operand);
-                //         break;
                 case NewOpcode.pushi:
                     Debug.Assert(types[0] == GM_Type.Short);
                     e = CreatePushExpression(GMCode.Push, types);

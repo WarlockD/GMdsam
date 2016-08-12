@@ -279,6 +279,9 @@ namespace GameMaker.Ast
                 }
             }
         }
+
+
+
         // This is like assign add, ++, etc
         bool ComplexPopArray(IList<ILNode> nodes, ILExpression expr, int pos)
         {
@@ -382,18 +385,58 @@ namespace GameMaker.Ast
                 }
             }
         }
-      
-   
-    
+        // found in AM2R, basicly if you want to do a return inside a with statement, game maker makes a temp value with an instance of -7?
+        // then does a popenv break, then does the return.  I think the popenv break is strictly to pop the envorment on the stack
+        //  cause of this we got to be sure to remove the break there
+        // mabye I should move popenv here instad of hacking it in the dissasembler humm
+        // we have to pre run this as its a patern matc till I get more data on how its asembled.
+
         // This should ONLY be run at the start
-        public void FixAllPushes(IList<ILNode> ast) // on the offchance we have a bunch of pushes, fix them for latter
+        public void FixAllPushesAndPopenv(IList<ILNode> ast) // on the offchance we have a bunch of pushes, fix them for latter
         {
-            foreach (var e in ast.OfType<ILExpression>())
+            for (int i = 0; i < ast.Count; i++)
             {
-                if (e.Code != GMCode.Push || e.Code != GMCode.Pop) continue; // not an expresson or null
+                ILExpression e = ast[i] as ILExpression;
+                if (e == null) continue; // might be a label
+
+                if (e.Code == GMCode.Popenv)
+                {
+                    if (e.Operand != null) e.Code = GMCode.B; // its turned into a branch.  Might just be easier as a break
+                    else
+                    {
+                        bool found = false;
+                        for (int j = i + 1; j < ast.Count; j++)
+                        {
+                            e = ast[j] as ILExpression;
+                            if (e == null) continue; // might be a label
+                            Debug.Assert(e != null);
+                            if (e.Code == GMCode.B || e.Code == GMCode.Bf || e.Code == GMCode.Ret || e.Code == GMCode.Bt || e.Code == GMCode.Exit)
+                            {
+                                found = true;
+                                break;
+
+                            }
+                        }
+                        if (found)
+                        {
+                            // we don't need the popenv
+                            ast.RemoveAt(i);
+                            i--; // eveything shifts down so we have to start here
+
+                        }
+                        else
+                        {
+                            // we didn't find another break, so fuck it, its a break.  Code it as such
+                            e.Code = GMCode.LoopOrSwitchBreak;
+                        }
+                    }
+                    continue;
+                }
+                if (e.Code != GMCode.Push || e.Code != GMCode.Pop || e.Code != GMCode.Call) continue; // not an expresson or null
                 Debug.Assert(e.Operand == null);
             }
         }
+
 
         public bool MultiDimenionArray(IList<ILNode> body, ILExpression expr, int pos)
         {
@@ -526,35 +569,44 @@ namespace GameMaker.Ast
             if (badblocks.Count > 0)
             {
                 ControlFlowLabelMap map = new ControlFlowLabelMap(method, error);
-
+                ILBlock badmethod = new ILBlock();
                 error.DebugSave(method, "bad_block_dump.txt");
                 //  HashSet<ILBasicBlock> callies = new HashSet<ILBasicBlock>();
-                foreach (var bb in badblocks.ToList())
+                try
                 {
-                    badblocks.UnionWith(bb.GetChildren()
-                        .OfType<ILExpression>()
-                        .Where(x => x.Operand is ILLabel)
-                        .Select(x => x.Operand as ILLabel)
-                        .Select(x => map.LabelToBasicBlock(x)));
+                    foreach (var bb in badblocks.ToList())
+                    {
+                        badblocks.UnionWith(bb.GetChildren()
+                            .OfType<ILExpression>()
+                            .Where(x => x.Operand is ILLabel)
+                            .Select(x => x.Operand as ILLabel)
+                            .Select(x => map.LabelToBasicBlock(x)));
 
-                    var p = map.LabelToParrents(bb.EntryLabel());
-                    p.Add(bb.GotoLabel());
+                        var p = map.LabelToParrents(bb.EntryLabel());
+                        p.Add(bb.GotoLabel());
 
-                    //  Debug.Assert(p.Count == 1);
-                    badblocks.UnionWith(p.Select(x => map.LabelToBasicBlock(x)));
-                    //  badblocks.Add(map.LabelToBasicBlock(p[0]));
+                        //  Debug.Assert(p.Count == 1);
+                        badblocks.UnionWith(p.Select(x => map.LabelToBasicBlock(x)));
+                        //  badblocks.Add(map.LabelToBasicBlock(p[0]));
+                    }
+                    badmethod.Body = badblocks.OrderBy(b => b.GotoLabelName()).Select(b => (ILNode) b).ToList();
+                } catch(Exception e)
+                {
+                    // we cannot build a map, so just copy bad blocks
+                    error.Error("Cannot build a map of the method, probery missing Label Exception: {0}", e.Message);
+                    badmethod.Body = method.Body;
                 }
-                ILBlock badmethod = new ILBlock();
-                badmethod.Body = badblocks.OrderBy(b => b.GotoLabelName()).Select(b => (ILNode) b).ToList();
+               
                 
                 string dfilename = error.MakeDebugFileName("bad_blocks.txt");
-               
+
                 using (StreamWriter sw = new StreamWriter(dfilename))
                 {
                     sw.WriteLine("Time : {0}", DateTime.Now);
                     sw.WriteLine("Filename: {0}", dfilename);
+                    sw.WriteLine("Code File: {0}", error.CodeName);
                     foreach (var kp in badCodes)
-                        sw.WriteLine("Code: {0} Count: {1}", kp.Key, kp.Value);
+                        sw.WriteLine("Code: \"{0}\" Count: {1}", kp.Key, kp.Value);
                     sw.WriteLine();
                     sw.WriteLine(badmethod.ToString());
                 }
@@ -630,12 +682,15 @@ namespace GameMaker.Ast
             if (locals == null) throw new ArgumentNullException("locals");
             this.error = error;
             this.locals = locals;
+            error.CheckDebugThenSave(method, "raw.txt",true);
             // Not sure I need this pass now 
-            FixAllPushes(method.Body); // makes sure all pushes have no operands and are all expressions for latter matches
+            // WE doo now, This converts popenv to either breaks or branchs.   This is needed
+            // as if you return from a pushenv, a popenv break is called
+            FixAllPushesAndPopenv(method.Body); // makes sure all pushes have no operands and are all expressions for latter matches
                 
 
             Optimize.RemoveRedundantCode(method);
-            error.CheckDebugThenSave(method, "raw.txt");
+           
             foreach (var block in method.GetSelfAndChildrenRecursive<ILBlock>()) Optimize.SplitToBasicBlocks(block,true);
             error.CheckDebugThenSave(method, "basic_blocks.txt");
 
