@@ -80,12 +80,20 @@ namespace GameMaker.Dissasembler
                 }
             }
             CurrentPC = (int) stream.Position / 4;
-            if (labelExists(CurrentPC)) // there is a label that goes to the end of the code
+            CurrentRaw = 0;
+            if(labelExists(CurrentPC)) // this is in case we do have a jump but we need to exit clean
             {
-                CurrentPC = (int) stream.Position / 4;
-                CurrentRaw = 0;
                 pcToExpressoin.Add(CurrentPC, list.Count);
                 list.Add(CreateExpression(GMCode.Exit, null)); // make sure we got an exit as the last code
+                // we HAVE to have an exit
+            } else 
+            {
+                ILExpression last = list.Last() as ILExpression;
+                if(last.Code != GMCode.Ret && last.Code != GMCode.Exit)
+                {
+                    pcToExpressoin.Add(CurrentPC, list.Count);
+                    list.Add(CreateExpression(GMCode.Exit, null)); // make sure we got an exit as the last code
+                }
             }
            
             foreach (var l in labels)

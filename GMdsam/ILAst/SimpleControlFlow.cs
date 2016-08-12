@@ -289,10 +289,10 @@ namespace GameMaker.Ast
                 ILExpression pushSwitchExpression = startOfAllCases.Body.ElementAtOrDefault(startOfAllCases.Body.Count - 6) as ILExpression;
                 ILExpression switchCondition;
                 // We need to try to resolve this block somehow ugh
-                if (!pushSwitchExpression.Match(GMCode.Push, out switchCondition) || !switchCondition.isExpressionResolved()) { 
+                if (!pushSwitchExpression.Match(GMCode.Push, out switchCondition) || !switchCondition.isExpressionResolved()) {
 
                     error.Error("switch failure " + startOfAllCases.ToString());
-                    
+
                     // Something not worky?
                     throw new Exception("switch failure");
 
@@ -305,7 +305,7 @@ namespace GameMaker.Ast
                 ILBasicBlock default_case = body[pos + 1] as ILBasicBlock;
                 Debug.Assert(default_case.EntryLabel() == endOfAllCases.GotoLabel());
                 ILBasicBlock end_of_switch = FindEndOfSwitch(default_case, out fallThough);
-                if(end_of_switch != null)
+                if (end_of_switch != null)
                 {
                     if (fallThough == null) // we have no default case
                     {
@@ -316,6 +316,8 @@ namespace GameMaker.Ast
                     {
                         // this is VERY time intensive, since I am lazy and don't want to otimzie, I will 
                         // only check 5 of the labels   
+                        /*
+                         This is USELESS ify ou have a return in the case block
                         for(int i=0; i < labels.Count && i < 5; i++)
                         {
                             ILLabel l = labels[i];
@@ -326,6 +328,8 @@ namespace GameMaker.Ast
                                 throw new Exception("end_of_switch");
                             }
                         }
+                        */
+                        Debug.Assert(end_of_switch.MatchAt(1, GMCode.Popz));
                         end_of_switch.Body.RemoveAt(1); // yeaa!
                     }
                 } else
@@ -341,6 +345,7 @@ namespace GameMaker.Ast
                 startOfAllCases.Body.Add(new ILExpression(GMCode.B, endOfAllCases.GotoLabel())); //  end_of_switch.EntryLabel()));
                 modified = true;
             }
+        
             return modified;
         }
         public bool DetectSwitch(IList<ILNode> body, ILBasicBlock head, int pos)
@@ -529,7 +534,7 @@ namespace GameMaker.Ast
                     finalFall.Add(newExpr);
                     finalFalseFall = fallBlock.EntryLabel();
                 }
-                if (finalFalseFall == null && fallBlock.MatchLastAt(0, GMCode.Ret))
+                if (finalFalseFall == null && fallBlock.MatchLastAt(1, GMCode.Ret))
                     head.Body.Add(new ILExpression(GMCode.Ret, null));
                 else
                 {

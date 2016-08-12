@@ -80,7 +80,7 @@ namespace GameMaker.Ast
 
         public static ILLabel GotoLabel(this ILBasicBlock bb)
         {
-            if (bb.MatchLastAt(0, GMCode.Ret) || bb.MatchLastAt(0, GMCode.Exit)) return null;
+            if (bb.MatchLastAt(1, GMCode.Ret) || bb.MatchLastAt(1, GMCode.Exit)) return null;
             ILLabel label = (bb.Body[bb.Body.Count - 1] as ILExpression).Operand as ILLabel;
             Debug.Assert(label != null);
             return label;
@@ -394,7 +394,7 @@ namespace GameMaker.Ast
         }
         public static bool MatchLastAt(this ILBasicBlock bb, int back, GMCode code)
         {
-            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back-1).Match(code)) return true;
+            if (bb.Body.ElementAtOrDefault(bb.Body.Count - back).Match(code)) return true;
             return false;
         }
         public static bool MatchLastAndBr<T>(this ILBasicBlock bb, GMCode code, out T operand, out ILLabel brLabel)
