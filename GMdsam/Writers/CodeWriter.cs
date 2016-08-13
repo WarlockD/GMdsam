@@ -247,8 +247,8 @@ namespace GameMaker.Writers
             calls["audio_play_sound"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Sounds, c, 0);
             calls["audio_is_playing"] = (CodeWriter writer, ILExpression c) => ResourceArgument(File.Sounds, c, 0);
 
-            calls["draw_sprite"] = calls["draw_sprite_ext"] = (CodeWriter writer, ILExpression c) => SpriteArgument(writer, c, 0);
-
+            calls["draw_sprite_ext"] = (CodeWriter writer, ILExpression c) => SpriteArgument(writer, c, 0);
+            calls["draw_sprite_ext"] = (CodeWriter writer, ILExpression c) => SpriteArgument(writer, c, 0);
             assigns["sprite_index"] = (CodeWriter writer, ILValue c) => ResourceValue(File.Sprites, c);
             calls["path_start"] = (CodeWriter writer, ILExpression c) =>
             {

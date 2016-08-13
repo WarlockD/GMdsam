@@ -616,6 +616,34 @@ namespace GameMaker.Ast
             }
             return false;
         }
+        // Ok, so on script returns, in some cases with popz or with statments, the return value is saved in 
+        // an instance of -7, and named $$$$temp$$$$, so to fix, it should be resolved so its a assign temp, then return
+        // fix it so its just a return. I guess this could worl on anthing other than temps...humm.
+        public bool FixTempReturnValues(IList<ILNode> body, ILExpression head, int pos)
+        {
+            IList<ILExpression> assign;
+            ILVariable v;
+            ILExpression retExpr;
+            ILVariable ret_v;
+            if (head.Match(GMCode.Assign, out assign) 
+               && assign.Count == 2 
+               && (v = assign[0].Operand as ILVariable) != null 
+              &&  v.Instance == -7 // its a temp
+                &&body.ElementAtOrDefault(pos+1).Match(GMCode.Ret, out retExpr) 
+                &&retExpr.Match(GMCode.Var) 
+                &&(ret_v = retExpr.Operand as ILVariable) != null 
+                &&  ret_v.Instance == v.Instance && ret_v.Name == v.Name 
+                ) {
+                // ok, all we need to do is remove the assign, and give its value to the return
+                body[pos + 1] = new ILExpression(GMCode.Ret, null, assign[1]);
+                body.RemoveAt(pos);
+
+                return true;
+            }
+            return false;
+           // temp.$$$$temp$$$$ = get_joybtnsprite(global.opjoybtn_sel)
+           //  Code = Ret Arguments = temp.$$$$temp$$$$
+        }
         void FixIfStatements(ILBlock method)
         {
             bool modified;
@@ -675,6 +703,11 @@ namespace GameMaker.Ast
             }
             return modified;
         }
+        // The if statements are resolved so now lets try to build case statements out of them
+        public void DetectSwitchFromIfStatements(ILBlock method)
+        {
+
+        }
         public ILBlock Build(ILBlock method, Dictionary<string, ILVariable> locals, ErrorContext error)
         {
             if (method == null) throw new ArgumentNullException("method");
@@ -712,8 +745,9 @@ namespace GameMaker.Ast
                             modified |= block.RunOptimization(SimplifyBranches);  // Any resolved pushes are put into a branch argument
                             modified |= block.RunOptimization(CombineCall);        // Any resolved pushes are put into a branch argument
                             modified |= block.RunOptimization(CombineExpressions);
+                            modified |= block.RunOptimization(FixTempReturnValues);
 
-                        } while (modified);
+                    } while (modified);
                     if (Context.Debug)
                     {
                         if (debug_once) { error.CheckDebugThenSave(method, "basic_blocks_resolved.txt"); debug_once = false; }
@@ -722,10 +756,10 @@ namespace GameMaker.Ast
 
 
                   
-                     modified |= block.RunOptimization(new SimpleControlFlow(method,error).DetectSwitch);
+                   //  modified |= block.RunOptimization(new SimpleControlFlow(method,error).DetectSwitch);
+             //       modified |= block.RunOptimization(new SimpleControlFlow(method, error).DetectSwitchAndConvertToBranches);
+                    modified |= block.RunOptimization(new SimpleControlFlow(method, error).DetectSwitch_GenerateSwitch);
 
-
-                
                     modified |= block.RunOptimization(MultiDimenionArray);
       
                     modified |= block.RunOptimization(Optimize.SimplifyBoolTypes);
@@ -742,6 +776,8 @@ namespace GameMaker.Ast
                     // somewhere, so bug, is leaving an empty block, I think because of switches
                     // It screws up the flatten block check for some reason
                     modified |= block.RunOptimization(new SimpleControlFlow(method, error).RemoveRedundentBlocks);
+                    // want to run this at the end to fix return stuff
+               
                 } while (modified);
             }
             error.CheckDebugThenSave(method, "before_loops.txt");
@@ -769,7 +805,7 @@ namespace GameMaker.Ast
 
             // This is cleaned up in ILSpy latter when its converted to another ast structure, but I clean it up here
             // cause I don't convert it and mabye not converting all bt's to bf's dosn't
-            FixIfStatements(method);
+         //   FixIfStatements(method);
 
            
 

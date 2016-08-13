@@ -134,6 +134,7 @@ namespace GameMaker.Ast
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
+                    Debug.Assert(!basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel));
                     if (basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
                          basicBlock.MatchLastAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel) || // built it the same way from the dissasembler, this needs inverted
                         basicBlock.MatchLastAndBr(GMCode.Repeat, out trueLabel, out condExpr, out falseLabel) ) // repeate loop is built like a while
@@ -286,14 +287,13 @@ namespace GameMaker.Ast
                     ILBasicBlock block = (ILBasicBlock)node.UserData;
                    
                     {
-                        ILLabel[] caseLabels;
                         IList<ILExpression> conditions;
                         ILLabel fallLabel;
                         // Switch
-
-                        if (block.MatchLastAndBr(GMCode.Switch, out caseLabels, out conditions, out fallLabel))
+                        FakeSwitch fswitch;
+                        if (block.MatchLastAndBr(GMCode.Switch, out fswitch, out conditions, out fallLabel))
                         {
-                            ILSwitch ilSwitch = new ILSwitch() { Condition = conditions[0].Arguments[0].Arguments[1] };
+                            ILSwitch ilSwitch = new ILSwitch() { Condition = fswitch.SwitchExpression };
                             block.Body[block.Body.Count - 2] = ilSwitch; // replace it, nothing else needs to be done!
                             result.Add(block); // except add it to the result, DOLT
                            
@@ -307,16 +307,16 @@ namespace GameMaker.Ast
                             if (fallTarget != null)
                                 frontiers.UnionWith(fallTarget.DominanceFrontier.Except(new[] { fallTarget }));
 
-                            foreach (ILLabel condLabel in caseLabels)
+                            foreach (ILLabel condLabel in fswitch.CaseExpressions.Select(x => x.Value))
                             {
                                 ControlFlowNode condTarget = null;
                                 labelToCfNode.TryGetValue(condLabel, out condTarget);
                                 if (condTarget != null)
                                     frontiers.UnionWith(condTarget.DominanceFrontier.Except(new[] { condTarget }));
                             }
-                            for (int i = 0; i < caseLabels.Length; i++)
+                            for (int i = 0; i < fswitch.CaseExpressions.Count; i++)
                             {
-                                ILLabel condLabel = caseLabels[i];
+                                ILLabel condLabel = fswitch.CaseExpressions[i].Value;
 
                                 // Find or create new case block
                                 ILSwitch.ILCase caseBlock = ilSwitch.Cases.FirstOrDefault(b => b.EntryGoto.Operand == condLabel);
@@ -347,7 +347,7 @@ namespace GameMaker.Ast
                                         });
                                     }
                                 }
-                                caseBlock.Values.Add(conditions[i].Arguments[0].Arguments[0]);
+                                caseBlock.Values.Add(fswitch.CaseExpressions[i].Key);
                             }
 
                             // Heuristis to determine if we want to use fallthough as default case

@@ -525,15 +525,16 @@ namespace GameMaker.Ast
         }
         public readonly string Name;
         public readonly int Offset;
-   
 
         public ILLabel(int offset)
         {
+            this.UserData = null;
             this.Name = "L" + offset;
             this.Offset = offset;
         }
         ILLabel(string name)
         {
+            this.UserData = null;
             this.Offset = -1;
             this.Name = name;
         }
@@ -963,12 +964,16 @@ void ReportUnassignedILRanges(ILBlock method)
 
         public bool IsBranch()
         {
-            return this.Operand is ILLabel || this.Operand is ILLabel[];
+            return this.Operand is ILLabel || this.Operand is ILLabel[] || this.Operand is FakeSwitch;
         }
         // better preformance
 
         public IEnumerable<ILLabel> GetBranchTargets()
         {
+            if(this.Operand is FakeSwitch)
+            {
+                return (this.Operand as FakeSwitch).CaseExpressions.Select(x => x.Value).ToList();
+            }
             if (this.Operand is ILLabel)
             {
                 return new ILLabel[] { (ILLabel) this.Operand };
@@ -1127,7 +1132,40 @@ void ReportUnassignedILRanges(ILBlock method)
             return sb.ToString();
         }
     }
-   
+    // used to pass a detected switch to LoopandConditions
+   public class FakeSwitch :ILNode
+    {
+        public ILExpression SwitchExpression;
+        public List<KeyValuePair<ILExpression, ILLabel>> CaseExpressions;
+        public override IEnumerable<ILNode> GetChildren()
+        {
+            if (this.SwitchExpression != null)
+                yield return this.SwitchExpression;
+            if (this.CaseExpressions != null)
+            {
+                foreach (var a in CaseExpressions)
+                {
+                    yield return a.Key;
+                    yield return a.Value;
+                }
+            }
+        }
+
+        public override void ToStringBuilder(StringBuilder sb)
+        {
+            sb.Append("switch(");
+            if (SwitchExpression == null) sb.Append("null"); else sb.Append(SwitchExpression);
+            sb.Append("){");
+            sb.AppendLine();
+            if (CaseExpressions != null)
+            foreach (var a in CaseExpressions)
+            {
+                sb.AppendFormat("case {0}: goto {1};", a.Key, a.Value);
+                sb.AppendLine();
+            }
+            sb.AppendLine("}");
+        }
+    }
     public class ILCondition : ILNode, ILNodeBlock
     {
         ILExpression _condition = null;
@@ -1192,7 +1230,6 @@ void ReportUnassignedILRanges(ILBlock method)
             }
         }
     }
-   
     public class ILSwitch : ILNode, ILNodeBlock
     {
 
@@ -1202,6 +1239,8 @@ void ReportUnassignedILRanges(ILBlock method)
             public IList<ILExpression> Values { get { return _values; } set { if (_values != null && _values.Count > 0) _values.Clear(); _values = new NodeList<ILExpression>(this, value); } }
             public override void ToStringBuilder(StringBuilder sb)
             {
+                if (Values == null) sb.AppendFormat("case NULL:");
+                else
                 foreach(var v in Values)
                 {
                     sb.Append("case ");
@@ -1250,6 +1289,7 @@ void ReportUnassignedILRanges(ILBlock method)
             Condition.ToStringBuilder(sb);
             sb.AppendLine(")");
             sb.AppendLine("{");
+            if(Cases != null)
             foreach(var c in Cases)
             {
                 sb.Append('\t');

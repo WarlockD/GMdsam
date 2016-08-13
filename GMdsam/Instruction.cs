@@ -230,7 +230,7 @@ namespace GameMaker
         }
         public static bool IsConditionalControlFlow(this GMCode code)
         {
-            return code == GMCode.Bt || code == GMCode.Bf || code == GMCode.Switch || code == GMCode.Pushenv || code == GMCode.Repeat;
+            return code == GMCode.Bt || code == GMCode.Bf  || code == GMCode.Switch || code == GMCode.Pushenv || code == GMCode.Repeat;
         }
         public static bool isBranch(this GMCode code)
         {
