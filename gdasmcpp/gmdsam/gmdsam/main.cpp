@@ -22,11 +22,16 @@ friend ito_binary_wraper operator >> (std::istream& stream, T &)
 int main(int argc, const char* argv[]) {
 	gm::DataWinFile file;
 	if (argc == 2) {
-		std::ifstream ufile;
-		ufile.open(argv[1], std::ios::binary | std::ios::in);
+		std::string filename = argv[1];
+		std::ifstream ufile(filename, std::ifstream::ate | std::ifstream::binary);
+		size_t size = ufile.tellg();
+		ufile.seekg(std::ios::beg, 0);
+		std::vector<uint8_t> data(size);
+		ufile.read(reinterpret_cast<char*>(data.data()), size);
 
-		if (ufile.bad()) return -1;
-		file.load(ufile);
+		if (ufile.bad()) 
+			return -1;
+		file.load(std::move(data));
 		ufile.close();
 	}
 	if (!file.has_data()) return -1;
@@ -36,11 +41,7 @@ int main(int argc, const char* argv[]) {
 	auto events = object.events();
 
 	for (auto test : events) {
-		for (auto al : test.second) {
-			for (auto a : al.actions()) {
-				//std::cout << "Name: " << a->name() << std::endl;
-			}
-		}
+		std::cout << test.first << ", " << test.second << std::endl;
 	}
 	return 0;
 }

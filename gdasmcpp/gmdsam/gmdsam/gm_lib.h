@@ -14,7 +14,185 @@
 #include <iomanip>
 #include <iterator>
 
+struct StreamInterface {
+	virtual void to_stream(std::ostream& os) const = 0;
+	virtual std::string to_string() const {
+		std::stringstream ss;
+		to_stream(ss);
+		return ss.str();
+	}
+	virtual ~StreamInterface() {}
+};
+inline std::ostream& operator<<(std::ostream& os, const StreamInterface& res) {
+	res.to_stream(os);
+	return os;
+}
+
 namespace gm {
+	// structore for event info
+	enum class e_event {
+		CreateEvent = 0,
+		DestroyEvent,
+		Alarm,
+		Step,
+		Collision,
+		Key,
+		JoystickMouse,
+		Other,
+		Draw,
+		Keypressed,
+		Keyreleased,
+		Trigger
+	};
+	class EventType : public StreamInterface {
+		size_t _event;
+		friend struct std::hash<gm::EventType>;
+	public:
+		
+		EventType(size_t event) : _event(event << 16) {}
+		EventType(size_t event, size_t sub_event) : _event(event << 16 | (sub_event & 0xFFFF)) {}
+		static EventType from_index(int index) { return EventType(index >> 16, index & 0xFFFF); }
+		size_t event() const { return _event >> 16; }
+		size_t sub_event() const { return _event & 0xFFFF; }
+		size_t raw() const { return _event; }
+		bool operator==(const EventType& other) const { return _event == other._event; }
+		bool operator!=(const EventType& other) const { return !(*this == other); }
+		bool operator<(const EventType& other) const { return _event < other._event; }
+		void to_stream(std::ostream& os) const override;
+	};
+};
+// custom specialization of std::hash can be injected in namespace std
+namespace std
+{
+	template<> struct hash<gm::EventType>
+	{
+		size_t operator()(gm::EventType const& e) const { return e._event; }
+	};
+}
+namespace util {
+	// Great taken from here
+	// http://zotu.blogspot.com/2010/01/creating-random-access-iterator.html
+	template<typename TT>
+	class PointerIterator {
+	public:
+		typedef std::random_access_iterator_tag iterator_category;
+		typedef TT value_type;
+		typedef TT* pointer;
+		typedef TT& reference;
+		typedef std::ptrdiff_t difference_type;
+		PointerIterator(pointer vec) : _list(vec) {}
+		PointerIterator() : _list(nullptr) {}
+		template<typename T2> PointerIterator(const PointerIterator<T2>& r) : _list(&(*r)) {}
+		template<typename T2> PointerIterator& operator=(const PointerIterator<T2>& r) { _list = &(*r); return *this; }
+		PointerIterator& operator++() { ++_list; return *this; }
+		PointerIterator& operator--() { --_list; return *this; }
+		PointerIterator operator++(int) { return PointerIterator(_list++); }
+		PointerIterator operator--(int) { return PointerIterator(_list--); }
+		PointerIterator& operator+=(const difference_type& n) { _list += n; return *this; }
+		PointerIterator& operator-=(const difference_type& n) { _list -= n; return *this; }
+		PointerIterator operator+(const difference_type& n) const { return PointerIterator(pointer(_list + n)); }
+		PointerIterator operator-(const difference_type& n) const { return PointerIterator(pointer(_list - n)); }
+		reference operator*() const { return *_list; }
+		pointer operator->() const { return _list; }
+		reference operator[](const difference_type& n) const { return _list[n]; }
+		template<typename T> friend bool operator==(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend bool operator!=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend bool operator<(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend bool operator>(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend bool operator<=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend bool operator>=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend typename PointerIterator<T>::difference_type operator+(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+		template<typename T> friend typename PointerIterator<T>::difference_type operator-(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+	private:
+		pointer _list;
+	};
+	template<typename T> bool operator==(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list == r2._list); }
+	template<typename T> bool operator!=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list != r2._list); }
+	template<typename T> bool operator<(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list < r2._list); }
+	template<typename T> bool operator>(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list > r2._list); }
+	template<typename T> bool operator>=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list >= r2._list); }
+	template<typename T> bool operator<=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list <= r2._list); }
+	template<typename T>
+	typename PointerIterator<T>::difference_type operator+(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return PointerIterator<T>(r1._list + r2._list); }
+	template<typename T>
+	typename PointerIterator<T>::difference_type operator-(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return PointerIterator<T>(r1._list - r2._list); }
+	
+	template <typename TT>
+	class StaticArray
+	{
+	public:
+		typedef typename TT value_type;
+		typedef typename TT* pointer;
+		typedef typename TT& reference;
+		typedef typename const TT* const_pointer;
+		typedef typename const TT& const_reference;
+		typedef typename std::ptrdiff_t difference_type;
+		typedef typename PointerIterator<const TT> const_iterator;
+		typedef typename PointerIterator<TT> iterator;
+		StaticArray() : _list(nullptr), _size(0) {  }
+		StaticArray(const_pointer list, size_t size) : _list(list), _size(size) {  }
+		const_iterator begin() const { return const_iterator(_list); }
+		const_iterator end() const { return const_iterator(_list + _size); }
+		size_t size() const { return _size; }
+		const_reference at(size_t i) const { return _list[i]; }
+		const_reference operator[](size_t i) const { return _list[i]; }
+		const_pointer data() const { return _list; }
+	protected:
+		const_pointer _list;
+		size_t _size;
+	};
+};
+namespace gm {
+	class Offsets : public util::StaticArray<uint32_t> {
+	public:
+		Offsets() : StaticArray(){  }
+		Offsets(const uint8_t* ptr) : StaticArray(reinterpret_cast<const uint32_t*>(ptr + sizeof(uint32_t)), *reinterpret_cast<const uint32_t*>(ptr)) {  }
+		Offsets(const uint8_t* ptr, size_t offset) : Offsets(ptr + offset) {}
+	};
+	template<typename VALUE_T>
+	class OffsetList {
+		const uint8_t* _data;
+		Offsets _list;
+	public:
+		class OffsetListIT {
+			const OffsetList& _vec;
+			size_t _pos;
+		public:
+			typedef typename std::bidirectional_iterator_tag iterator_category;
+			typedef typename VALUE_T value_type;
+			typedef typename long difference_type;
+			typedef typename const VALUE_T* pointer;
+			typedef typename const VALUE_T& reference;
+			OffsetListIT(const OffsetList& vec, size_t pos) : _vec(vec), _pos(pos) {}
+			OffsetListIT(const OffsetList& vec) : _vec(vec), _pos(0) {}
+			OffsetListIT& operator++() { _pos++; return *this; }
+			OffsetListIT operator++(int) { OffsetListIT copy(*this); _pos++; return copy; }
+			OffsetListIT& operator--() { _ pos--; return *this; }
+			OffsetListIT operator--(int) { OffsetListIT copy(*this); _pos--; return copy; }
+			const VALUE_T* operator*() const { return _vec.at(_pos); }
+			pointer operator->() const { return _list; }
+			bool operator==(const OffsetListIT& other) const { return   _pos == other._pos; }
+			bool operator!=(const OffsetListIT& other) const { return !(*this == other); }
+			bool operator<(const OffsetListIT& other) const { return _pos < other._pos; }
+			bool operator>(const OffsetListIT& other) const { return _pos > other._pos; }
+			bool operator<=(const OffsetListIT& other) const { return _pos <= other._pos; }
+			bool operator>=(const OffsetListIT& other) const { return _pos >= other._pos; }
+		};
+		typedef typename std::bidirectional_iterator_tag iterator_category;
+		typedef typename VALUE_T value_type;
+		typedef typename long difference_type;
+		typedef typename VALUE_T* pointer;
+		typedef typename VALUE_T& reference;
+		typedef typename OffsetListIT iterator;
+		OffsetList(const uint8_t* ptr,size_t offset) : _data(ptr), _list(ptr,offset) {}
+		OffsetList(const uint8_t* ptr, const uint8_t* list) : _data(ptr), _list(list) {}
+		size_t size() const { return _list.size(); }
+		const VALUE_T* at(size_t i) const { return reinterpret_cast<const VALUE_T*>(data + _list.at(i)); }
+		iterator begin() const { return OffsetList(this, 0); }
+		iterator end() const { return OffsetList(this, size()); }
+	};
+	
+
 	// class forces a struct/class to be non copyable or creatable
 	template<typename C> // ugh cannot do this in an undefined class , typename = std::enable_if<std::is_pod<C>::value>>
 	struct CannotCreate {
@@ -46,6 +224,9 @@ namespace gm {
 		{
 			typedef decltype(T::ResType) type;
 		};
+		template<typename T, typename = std::enable_if<std::is_arithmetic<T>::value>>
+		T cast(const uint8_t* ptr) { return *reinterpret_cast<const T*>(ptr); }
+
 		template<typename T>
 		const T* read_struct(const uint8_t*& ptr) {
 			const T* value = reinterpret_cast<const T*>(ptr);
@@ -53,9 +234,9 @@ namespace gm {
 			return value;
 		}
 		template<typename T>
-		T read_value(const uint8_t*& ptr) {
-			T value = *reinterpret_cast<const T*>(ptr);
-			ptr += sizeof(T);
+		T read_value(const uint8_t** ptr) {
+			T value = *reinterpret_cast<const T*>(*ptr);
+			*ptr += sizeof(T);
 			return value;
 		}
 		inline size_t simple_hash(const char *str)
@@ -98,7 +279,7 @@ namespace gm {
 		bool operator==(const GString& other) const { return _str == other._str; }
 		bool operator!=(const GString& other) const { return !(*this == other); }
 		bool operator==(const std::string& other) const { return other.compare(0,_len,_str) == 0; }
-		bool operator!=(const std::string& other) const { return  !(*this == other); }
+		bool operator!=(const std::string& other) const { return  other.compare(0, _len, _str) != 0; }
 	};
 	class FileHelper {
 		std::vector<uint8_t> _data;
@@ -110,9 +291,8 @@ namespace gm {
 		void load(std::vector<uint8_t>&& data) { _data = std::move(data);  _pos = 0; }
 		void load(std::istream& is)  {
 			_pos = 0;
-			auto pos = is.tellg();
 			is.seekg(std::ios::end, 0);
-			auto size = is.tellg() - pos;
+			size_t size = is.tellg();
 			_data.resize(size);
 			is.seekg(0);
 			is.read(reinterpret_cast<char*>(_data.data()), size);
@@ -219,14 +399,7 @@ namespace gm {
 		FUNC = 'FUNC',
 		STRG = 'STRG',
 	};
-	struct StreamInterface {
-		virtual void to_stream(std::ostream& os) const = 0;
-		virtual ~StreamInterface() {}
-	};
-	inline std::ostream& operator<<(std::ostream& os, const StreamInterface& res) {
-		res.to_stream(os);
-		return os;
-	}
+	
 	class OffsetInterface : public StreamInterface {
 	protected:
 		uint32_t _offset;
@@ -258,17 +431,19 @@ namespace gm {
 	};
 	class NameInterface : public IndexInterface {
 	protected:
+		constexpr static const char * NONAME = "<EMPTY>";
 		const char* _name;
 	public:
 		NameInterface(uint32_t offset, uint32_t index, const char* name) : _name(name), IndexInterface(offset,index) {}
 		const char* name() const { return _name; }
+		bool valid_name() const { return _name && *_name != '\0'; }
 		bool operator<(const NameInterface& other) const { return IndexInterface::operator<(other); }
 		bool operator==(const IndexInterface& other) const { return IndexInterface::operator==(other); }
 		bool operator!=(const IndexInterface& other) const { return IndexInterface::operator!=(other); }
 		virtual ~NameInterface() {}
 		virtual void to_stream(std::ostream& os) const override {
 			OffsetInterface::to_stream(os);
-			os << '(' << std::setfill(' ') << std::setw(4) << _index << ':' << _name << ')';
+			os << '(' << std::setfill(' ') << std::setw(4) << _index << ':' << (valid_name() ? _name : NONAME) << ')';
 		}
 	};
 	//http://stackoverflow.com/questions/36936584/how-to-write-constexpr-swap-function-to-change-endianess-of-an-integer
@@ -302,7 +477,7 @@ namespace gm {
 	protected:
 		const RAW_T* _raw;
 	public:
-		RawResource(std::istream& is) : OffsetInterface(is.tellg()) { is.read(reinterpret_cast<char*>(&_raw), sizeof(T)); }
+		RawResource(const uint8_t* data, size_t offset) : OffsetInterface(offset), _raw(reinterpret_cast<const RAW_T*>(data + offset)) {}
 		bool valid() const { return _raw != nullptr; }
 		const RAW_T& raw() const { return _raw; }
 	};
@@ -329,17 +504,6 @@ namespace gm {
 		// the exception will be func/code as the two versions I know about have diffrent structures
 		
 #pragma pack(push, 1)
-
-
-		// a general list of offsets  Most lists in a data win file start with an int size and a 
-		// list of offsets.  generaly the data of the lists starts right after the list
-		// itself but that is not guarenteed.  Never seen a negitive offset though
-		struct OffsetList : CannotCreate<OffsetList> {
-			uint32_t size;
-			const uint32_t* cast_array() const { return reinterpret_cast<const uint32_t*>(ptr_end() + sizeof(uint32_t)); }
-			inline const uint32_t at(size_t i) const { return cast_array()[i]; }
-			uint32_t total_size() const { return sizeof(uint32_t) + sizeof(uint32_t)* size; }
-		};
 
 		// All strings ARE null terminated within a data.win file.  However when you read offsets the point to 
 		// the string itself and NOT to this structure.  This structure is only in the STNG chunk
@@ -484,12 +648,6 @@ namespace gm {
 			int is_not;
 			int is_compiled; // should be zero?
 		};
-		struct ObjectEvent : CannotCreate<ObjectEvent> {
-			int sub_type;
-			////	uint32_t size;
-			//	inline const uint32_t at(size_t i) const { return (reinterpret_cast<const uint32_t*>(this) + 1)[i]; }
-			//	uint32_t total_size() const { return sizeof(uint32_t) + sizeof(uint32_t)* size; }
-		};
 		struct Object : CannotCreate<Object> {
 			int name_offset;
 			int sprite_index;
@@ -530,49 +688,13 @@ namespace gm {
 			//uint32_t frame_count;
 			//uint32_t frame_offsets[1];
 		};
+		struct OldCode : CannotCreate<OldCode> {
+			int name_offset;
+			int list_size;
+		};
 #pragma pack(pop)
 	};
 
-	template<class T>
-	class OffsetVector : public OffsetInterface {
-	public:
-		class OffsetVectorIt {
-			const OffsetVector& _vec;
-			size_t _pos;
-		public:
-			OffsetVectorIt(const OffsetVector& vec, size_t pos) : _vec(vec), _pos(pos) {}
-			OffsetVectorIt(const OffsetVector& vec) : _vec(vec), _pos(0) {}
-			OffsetVectorIt& operator++() { _pos++; return *this; }
-			OffsetVectorIt operator++(int) { OffsetVectorIt copy(*this); _pos++; return copy; }
-			OffsetVectorIt& operator--() { _ pos--; return *this; }
-			OffsetVectorIt operator--(int) { OffsetVectorIt copy(*this); _pos--; return copy; }
-			const T* operator*() const { return _vec.at(_pos); }
-			bool operator==(const OffsetVectorIt& other) const { return   _pos == other._pos; }
-			bool operator!=(const OffsetVectorIt& other) const { return !(*this == other); }
-			bool operator<(const OffsetVectorIt& other) const { return _pos < other._pos; }
-			bool operator>(const OffsetVectorIt& other) const { return _pos > other._pos; }
-			bool operator<=(const OffsetVectorIt& other) const { return _pos <= other._pos; }
-			bool operator>=(const OffsetVectorIt& other) const { return _pos >= other._pos; }
-		};
-		typedef OffsetVectorIt const_iterator;
-		typedef const_iterator iterator;
-		typedef ptrdiff_t difference_type;
-		typedef size_t size_type;
-		typedef T value_type;
-		typedef T* pointer;
-		typedef T& reference;
-		OffsetVector() :_data(nullptr), _rec(nullptr) {}
-		OffsetVector(const uint8_t* data, const uint8_t* list) : OffsetInterface(list-data), _data(data), _list(raw_type::OffsetList::cast(list)) {}
-		OffsetVector(const uint8_t* data, size_t offset) : OffsetInterface(offset), _data(data), _list(raw_type::OffsetList::cast(data, offset)) {}
-		const T* at(uint32_t i) const { return i < _list->size ? reinterpret_cast<const T*>(_data + _list->at(i)) : nullptr; }
-		const T& operator[](uint32_t i) const { return at(i); }
-		OffsetVectorIt begin() const { return OffsetVectorIt(*this, (size_t)0); }
-		OffsetVectorIt  end() const { return OffsetVectorIt(*this, size()); }
-		size_t size() const { return _list->size; }
-	private:
-		const uint8_t* _data;
-		const raw_type::OffsetList* _list;
-	};
 
 	class BitMask {
 		int _width;
@@ -623,14 +745,8 @@ namespace gm {
 	class Room : public Resource<raw_type::Room, ChunkType::ROOM> {
 	protected:
 		const char* _caption;
-		OffsetVector<raw_type::RoomView> _views;
-		OffsetVector<raw_type::RoomBackground> _backgrounds;
-		OffsetVector<raw_type::RoomObject> _objects;
-		OffsetVector<raw_type::RoomTile> _tiles;
 	public:
-		Room(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset) 
-			, _views(data,_raw->view_offset), _backgrounds(data, _raw->background_offset)
-			,_objects(data, _raw->object_offset), _tiles(data, _raw->tiles_offset) {}
+		Room(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset) {}
 		const char* caption() const { return _caption; }
 		int width() const { return _raw->width; }
 		int height() const { return _raw->height; }
@@ -642,10 +758,10 @@ namespace gm {
 		bool enable_views() const { return (_raw->flags & 1) != 0; }
 		bool view_clear_screen() const { return (_raw->flags & 2) != 0; }
 		bool clear_display_buffer() const { return (_raw->flags & 14) != 0; }
-		const OffsetVector<raw_type::RoomView>& views() const { return _views; }
-		const OffsetVector<raw_type::RoomBackground>& backgrounds() const { return _backgrounds; }
-		const OffsetVector<raw_type::RoomObject>& objects() const { return _objects; }
-		const OffsetVector<raw_type::RoomTile>& tiles() const { return _tiles; }
+		OffsetList<raw_type::RoomView> views() const { return OffsetList<raw_type::RoomView>(_raw->ptr_begin() - _offset, _raw->view_offset); }
+		OffsetList<raw_type::RoomBackground> backgrounds() const { return OffsetList<raw_type::RoomBackground>(_raw->ptr_begin() - _offset, _raw->background_offset); }
+		OffsetList<raw_type::RoomObject> objects() const { return OffsetList<raw_type::RoomObject>(_raw->ptr_begin() - _offset, _raw->object_offset); }
+		OffsetList<raw_type::RoomTile> tiles() const { return OffsetList<raw_type::RoomTile>(_raw->ptr_begin() - _offset, _raw->tiles_offset); }
 	};
 	class Sound : public Resource<raw_type::Sound, ChunkType::SOND> {
 	private:
@@ -686,7 +802,7 @@ namespace gm {
 	private:
 		const raw_type::SpriteFrame* _frame;
 		const char* _description;
-		OffsetVector<Glyph> _glyphs;
+		OffsetList<Glyph> _glyphs;
 	public:
 		Font(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset)
 			,_description(reinterpret_cast<const char*>(data + _raw->description_offset))
@@ -702,14 +818,14 @@ namespace gm {
 		const raw_type::SpriteFrame& frame() const { return *_frame; }
 		float scaleWidth() const { return _raw->scale_width; }
 		float scaleHeight() const { return _raw->scale_height; }
-		const OffsetVector<Glyph>& glyphs() const { return _glyphs; }
+	//	OffsetList<Glyph> glyphs() const { return OffsetList<Glyph>(_raw->ptr_begin()-_offset, _raw_glyphs; }
 	};
 
-	class Action : public RawResource<raw_type::ObjectAction> {
+	class Action : public Resource<raw_type::ObjectAction, ChunkType::BAD> {
 		const uint32_t* _code;
 	public:
-		Action(const uint8_t* data, size_t offset)
-			: RawResource(data, offset)
+		Action(const EventType& type, const uint8_t* data, size_t offset)
+			: Resource(type.raw(),data, offset)
 			, _code(_raw->code_offset > 0 ? reinterpret_cast<const uint32_t*>(data + _raw->code_offset):nullptr) {}
 		const uint32_t* code() const { return _code; }
 		int lib_id() const { return _raw->lib_id; }
@@ -724,25 +840,15 @@ namespace gm {
 		int is_relative() const { return _raw->is_relative; }
 		int is_not() const { return _raw->is_not; }
 		int is_compiled() const { return _raw->is_compiled; }
+		virtual void to_stream(std::ostream& os) const override {
+			OffsetInterface::to_stream(os);
+			os << "{ event : " << EventType::from_index(_index) << ", id : " << id() << " }";
+		}
 	};
 
-	class Event : public RawResource<raw_type::ObjectEvent> {
-		const uint32_t* _code;
-		OffsetVector<Action> _actions;
-		friend class Object;
-	public:
-		Event(const uint8_t* data, size_t offset)
-			: RawResource(data, offset)
-			, _actions(data, _raw->ptr_end()) { // the list is just past this
-			uint32_t test = *reinterpret_cast<const uint32_t*>(_raw->ptr_end());
-			auto action = _actions.at(0);
-		}
-		int sub_type() const { return _raw->sub_type; }
-		const OffsetVector<Action>& actions() const { return _actions; }
-	};
 	class Object : public Resource<raw_type::Object, ChunkType::OBJT> {
 		const raw_type::ObjectPhysicsVert* _physics_verts;
-		std::unordered_map<size_t, std::vector<Event>> _events;
+		std::unordered_map<EventType, Action> _events;
 	public:
 		Object(int index, const uint8_t* data, size_t offset)
 			: Resource(index, data, offset)
@@ -750,22 +856,27 @@ namespace gm {
 		{
 			auto ptr = _raw->ptr_end();
 			if (_raw->physics_vert_count > 0) ptr += _raw->physics_vert_count * sizeof(raw_type::ObjectPhysicsVert);
-			auto root = raw_type::OffsetList::cast(ptr);
-			if (root->size != 12) throw; // should always = 12?
+			Offsets root(ptr);
+			if (root.size() != 12) throw; // should always = 12?
 			// might be a way to template this to caculate the offsets but right now this works
-			for (size_t i = 0; i < root->size; i++) {
-				auto list = raw_type::OffsetList::cast(data + root->at(i));
-				if (list->size == 0)  continue;  // skip
-				std::vector<Event> events;
-				for (size_t e = 0; e < list->size; e++) {
-					std::cerr << "offset: " << list->at(e) << std::endl;
-					events.emplace_back(data, list->at(e));
+			for (uint32_t i = 0; i < root.size(); i++) {
+				Offsets list(data,root.at(i));
+				if (list.size() == 0)  continue;  // skip
+				for (uint32_t e : list) {
+					int sub_event = priv::cast<int>(data + e);
+					Offsets events(data, e+sizeof(uint32_t));
+					if (events.size() == 0) continue; // skip
+					for (uint32_t a : events)  {
+						EventType evt(i, sub_event);
+						_events.emplace(evt, Action(evt,data, a));
+					}
+				//	std::cerr << "offset: " << list->at(e) << std::endl;
+				//	events.emplace_back(data, list->at(e));
 				//	std::cerr << "name: " << events.back().actions().at(0)->raw()->name_offset << std::endl;
 				}
-				_events[i] = events;
 			}
 		}
-		const std::unordered_map<size_t, std::vector<Event>>& events() const { return _events; }
+		const std::unordered_map<EventType, Action>& events() const { return _events; }
 		int sprite_index() const { return _raw->sprite_index; }
 		bool visible() const { return _raw->visible != 0; }
 		bool solid() const { return _raw->solid != 0; }
@@ -777,16 +888,16 @@ namespace gm {
 	};
 
 	class Sprite : public Resource<raw_type::Sprite, ChunkType::SPRT> {
-		OffsetVector<raw_type::SpriteFrame> _frames;
 		const uint8_t* _masks;
 		// kind of a hack.  First number is an int of the size, after that
 		// its just an array of masks, not sure why there would be more than
 		// one though
 	public:
-		Sprite(int index, const uint8_t* data, size_t offset) : 
-			Resource(index, data, offset) 
-			, _frames(data, _raw->ptr_end())
-			, _masks(_raw->ptr_end() + (raw_type::SpriteFrame::raw_size() * _frames.size())) {}
+		Sprite(int index, const uint8_t* data, size_t offset) :
+			Resource(index, data, offset) {
+			size_t frames = priv::cast<uint32_t>(_raw->ptr_end());
+			_masks = data +  sizeof(uint32_t) + sizeof(uint32_t) * frames;
+		}
 		int width() const { return _raw->width; }
 		int height() const { return _raw->height; }
 		int left() const { return _raw->left; }
@@ -800,7 +911,7 @@ namespace gm {
 		int colcheck() const { return _raw->colcheck; }
 		int origin_x() const { return _raw->original_x; }
 		int origin_y() const { return _raw->original_y; }
-		const OffsetVector<raw_type::SpriteFrame>& frames() const { return _frames; }
+		OffsetList<raw_type::SpriteFrame>& frames() const { return OffsetList<raw_type::SpriteFrame>(_raw->ptr_begin()-_offset, _raw->ptr_end()); }
 		size_t mask_count() const { return *reinterpret_cast<const int*>(_masks); }
 		size_t mask_stride() const { return (width() + 7) / 8; }
 		BitMask mask_at(size_t index) const {

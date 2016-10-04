@@ -145,6 +145,7 @@
     <ClInclude Include="gm_lib.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="gm_lib.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
