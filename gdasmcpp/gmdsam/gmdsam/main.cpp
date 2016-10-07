@@ -24,7 +24,7 @@ int main(int argc, const char* argv[]) {
 	if (argc == 2) {
 		std::string filename = argv[1];
 		std::ifstream ufile(filename, std::ifstream::ate | std::ifstream::binary);
-		size_t size = ufile.tellg();
+		size_t size = (size_t)ufile.tellg();
 		ufile.seekg(std::ios::beg, 0);
 		std::vector<uint8_t> data(size);
 		ufile.read(reinterpret_cast<char*>(data.data()), size);
@@ -34,7 +34,8 @@ int main(int argc, const char* argv[]) {
 		file.load(std::move(data));
 		ufile.close();
 	}
-	if (!file.has_data()) return -1;
+	if (!file.has_data()) 
+		return -1;
 
 	auto object = file.resource_at<gm::Object>(217); // jerry
 	std::cout << "Object: " << object.name() << std::endl;

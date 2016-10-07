@@ -1,32 +1,6 @@
 #pragma once
-#include <cstdint>
-#include <vector>
+#include "global.h"
 
-#include <unordered_map>
-#include <unordered_set>
-#include <memory>
-#include <string>
-#include <functional>
-#include <stack>
-#include <string>
-#include <sstream>
-#include <iostream>
-#include <iomanip>
-#include <iterator>
-
-struct StreamInterface {
-	virtual void to_stream(std::ostream& os) const = 0;
-	virtual std::string to_string() const {
-		std::stringstream ss;
-		to_stream(ss);
-		return ss.str();
-	}
-	virtual ~StreamInterface() {}
-};
-inline std::ostream& operator<<(std::ostream& os, const StreamInterface& res) {
-	res.to_stream(os);
-	return os;
-}
 
 namespace gm {
 	// structore for event info
@@ -44,6 +18,7 @@ namespace gm {
 		Keyreleased,
 		Trigger
 	};
+
 	class EventType : public StreamInterface {
 		size_t _event;
 		friend struct std::hash<gm::EventType>;
@@ -69,127 +44,117 @@ namespace std
 		size_t operator()(gm::EventType const& e) const { return e._event; }
 	};
 }
-namespace util {
-	// Great taken from here
-	// http://zotu.blogspot.com/2010/01/creating-random-access-iterator.html
-	template<typename TT>
-	class PointerIterator {
-	public:
-		typedef std::random_access_iterator_tag iterator_category;
-		typedef TT value_type;
-		typedef TT* pointer;
-		typedef TT& reference;
-		typedef std::ptrdiff_t difference_type;
-		PointerIterator(pointer vec) : _list(vec) {}
-		PointerIterator() : _list(nullptr) {}
-		template<typename T2> PointerIterator(const PointerIterator<T2>& r) : _list(&(*r)) {}
-		template<typename T2> PointerIterator& operator=(const PointerIterator<T2>& r) { _list = &(*r); return *this; }
-		PointerIterator& operator++() { ++_list; return *this; }
-		PointerIterator& operator--() { --_list; return *this; }
-		PointerIterator operator++(int) { return PointerIterator(_list++); }
-		PointerIterator operator--(int) { return PointerIterator(_list--); }
-		PointerIterator& operator+=(const difference_type& n) { _list += n; return *this; }
-		PointerIterator& operator-=(const difference_type& n) { _list -= n; return *this; }
-		PointerIterator operator+(const difference_type& n) const { return PointerIterator(pointer(_list + n)); }
-		PointerIterator operator-(const difference_type& n) const { return PointerIterator(pointer(_list - n)); }
-		reference operator*() const { return *_list; }
-		pointer operator->() const { return _list; }
-		reference operator[](const difference_type& n) const { return _list[n]; }
-		template<typename T> friend bool operator==(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator!=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator<(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator>(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator<=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator>=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend typename PointerIterator<T>::difference_type operator+(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend typename PointerIterator<T>::difference_type operator-(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-	private:
-		pointer _list;
-	};
-	template<typename T> bool operator==(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list == r2._list); }
-	template<typename T> bool operator!=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list != r2._list); }
-	template<typename T> bool operator<(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list < r2._list); }
-	template<typename T> bool operator>(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list > r2._list); }
-	template<typename T> bool operator>=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list >= r2._list); }
-	template<typename T> bool operator<=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list <= r2._list); }
-	template<typename T>
-	typename PointerIterator<T>::difference_type operator+(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return PointerIterator<T>(r1._list + r2._list); }
-	template<typename T>
-	typename PointerIterator<T>::difference_type operator-(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return PointerIterator<T>(r1._list - r2._list); }
-	
-	template <typename TT>
-	class StaticArray
-	{
-	public:
-		typedef typename TT value_type;
-		typedef typename TT* pointer;
-		typedef typename TT& reference;
-		typedef typename const TT* const_pointer;
-		typedef typename const TT& const_reference;
-		typedef typename std::ptrdiff_t difference_type;
-		typedef typename PointerIterator<const TT> const_iterator;
-		typedef typename PointerIterator<TT> iterator;
-		StaticArray() : _list(nullptr), _size(0) {  }
-		StaticArray(const_pointer list, size_t size) : _list(list), _size(size) {  }
-		const_iterator begin() const { return const_iterator(_list); }
-		const_iterator end() const { return const_iterator(_list + _size); }
-		size_t size() const { return _size; }
-		const_reference at(size_t i) const { return _list[i]; }
-		const_reference operator[](size_t i) const { return _list[i]; }
-		const_pointer data() const { return _list; }
-	protected:
-		const_pointer _list;
-		size_t _size;
-	};
-};
 namespace gm {
-	class Offsets : public util::StaticArray<uint32_t> {
+	
+	class SymbolTable {
+	private:
+		struct _Symbol {
+			size_t _offset;
+			size_t _length;
+			char* _name;
+		};
+		struct _symbol_hasher {
+			size_t operator()(const _Symbol* s) const { return util::simple_hash(s->_name, s->_length); }
+		};
+		struct _symbol_equals {
+			bool operator()(const _Symbol* l, const _Symbol* r) const { return l->_length == r->_length && std::memcmp(l->_name, r->_name, l->_length) == 0; }
+		};
+		typedef std::unordered_set<_Symbol*, _symbol_hasher, _symbol_equals> sym_table;
+		typedef sym_table::iterator iterator;
+		sym_table _table;
+		_Symbol* find(const char* str, size_t length) {
+			_Symbol test = { 0, length, const_cast<char*>(str) };
+			auto it = _table.find(&test);
+			if (it != _table.end()) return *it;
+			else return nullptr;
+		}
+		_Symbol* emplace(const char* str, size_t length) {
+			_Symbol* ptr = find(str, length);
+			if (ptr != nullptr) return ptr; 
+			ptr = new _Symbol{ 0, length, new char[length + 1] };
+			std::strncpy(ptr->_name, str, length);
+			_table.emplace(ptr);
+			return ptr;
+		}
 	public:
-		Offsets() : StaticArray(){  }
-		Offsets(const uint8_t* ptr) : StaticArray(reinterpret_cast<const uint32_t*>(ptr + sizeof(uint32_t)), *reinterpret_cast<const uint32_t*>(ptr)) {  }
+		class Symbol {
+			_Symbol* _symbol;
+			friend class SymbolTable;
+			Symbol(_Symbol* ptr) : _symbol(ptr) {}
+		public:
+			const char* name() const { return _symbol->_name; }
+			size_t offset() const { return _symbol->_offset; }
+			void offset(size_t o) { _symbol->_offset = o; }
+			bool operator==(const Symbol& other) const { return other._symbol == _symbol; }
+			bool operator!=(const Symbol& other) const { return other._symbol != _symbol; }
+			void to_stream(std::ostream& os) {
+				os << "{ name : " << name() << ", offset : " << offset() << " }";
+			}
+		};
+		SymbolTable() {}
+		SymbolTable(const SymbolTable&) = delete;
+		~SymbolTable() {
+			for (auto& a : _table) {
+				delete[] a->_name;
+				delete[] a;
+			}
+			_table.clear();
+		}
+		SymbolTable& operator=(const SymbolTable&) = delete;
+		Symbol lookup(const std::string& s) { return Symbol(emplace(s.c_str(), s.length())); }
+	};
+	
+	namespace priv {
+		template<typename T, typename V = bool>
+		struct has_name_offset : std::false_type { };
+		template<typename T>
+		struct has_name_offset<T, typename std::enable_if<!std::is_same<decltype(std::declval<T>().name_offset), void>::value, bool>::type> : std::true_type
+		{
+			typedef decltype(std::declval<T>().name_offset) type;
+		};
+		template<typename T, typename V = bool>
+		struct is_resource : std::false_type { };
+		template<typename T>
+		struct is_resource<T, typename std::enable_if<!std::is_same<decltype(T::ResType), void>::value, bool>::type> : std::true_type
+		{
+			typedef decltype(T::ResType) type;
+		};
+	};
+	class Offsets : public util::PointerArray<const uint32_t> {
+	public:
+		Offsets() : PointerArray() {  }
+		Offsets(const uint8_t* ptr) : PointerArray(reinterpret_cast<const uint32_t*>(ptr + sizeof(uint32_t)), *reinterpret_cast<const uint32_t*>(ptr)) {  }
 		Offsets(const uint8_t* ptr, size_t offset) : Offsets(ptr + offset) {}
+		void to_debug(std::ostream& os) const {
+			PointerArray::to_debug(os);
+		}
 	};
 	template<typename VALUE_T>
 	class OffsetList {
 		const uint8_t* _data;
 		Offsets _list;
 	public:
-		class OffsetListIT {
-			const OffsetList& _vec;
-			size_t _pos;
-		public:
-			typedef typename std::bidirectional_iterator_tag iterator_category;
-			typedef typename VALUE_T value_type;
-			typedef typename long difference_type;
-			typedef typename const VALUE_T* pointer;
-			typedef typename const VALUE_T& reference;
-			OffsetListIT(const OffsetList& vec, size_t pos) : _vec(vec), _pos(pos) {}
-			OffsetListIT(const OffsetList& vec) : _vec(vec), _pos(0) {}
-			OffsetListIT& operator++() { _pos++; return *this; }
-			OffsetListIT operator++(int) { OffsetListIT copy(*this); _pos++; return copy; }
-			OffsetListIT& operator--() { _ pos--; return *this; }
-			OffsetListIT operator--(int) { OffsetListIT copy(*this); _pos--; return copy; }
-			const VALUE_T* operator*() const { return _vec.at(_pos); }
-			pointer operator->() const { return _list; }
-			bool operator==(const OffsetListIT& other) const { return   _pos == other._pos; }
-			bool operator!=(const OffsetListIT& other) const { return !(*this == other); }
-			bool operator<(const OffsetListIT& other) const { return _pos < other._pos; }
-			bool operator>(const OffsetListIT& other) const { return _pos > other._pos; }
-			bool operator<=(const OffsetListIT& other) const { return _pos <= other._pos; }
-			bool operator>=(const OffsetListIT& other) const { return _pos >= other._pos; }
-		};
 		typedef typename std::bidirectional_iterator_tag iterator_category;
 		typedef typename VALUE_T value_type;
 		typedef typename long difference_type;
 		typedef typename VALUE_T* pointer;
 		typedef typename VALUE_T& reference;
-		typedef typename OffsetListIT iterator;
+		typedef typename util::GenericIterator<VALUE_T,OffsetList> iterator;
 		OffsetList(const uint8_t* ptr,size_t offset) : _data(ptr), _list(ptr,offset) {}
 		OffsetList(const uint8_t* ptr, const uint8_t* list) : _data(ptr), _list(list) {}
 		size_t size() const { return _list.size(); }
 		const VALUE_T* at(size_t i) const { return reinterpret_cast<const VALUE_T*>(data + _list.at(i)); }
-		iterator begin() const { return OffsetList(this, 0); }
-		iterator end() const { return OffsetList(this, size()); }
+		iterator begin() const { return iterator(*this, 0); }
+		iterator end() const { return iterator(*this, size()); }
+		void to_debug(std::ostream& os) const {
+			for (size_t i = 0; i < size(); i++) {
+				size_t offset = _list.at(i);
+				os.stream() << std::setw(5) << std::left << i << ": ";
+				os << :ext::offset(_list.at(i)) << " = ";
+				os.write(at(i));
+				os << std::end;
+			}
+		}
 	};
 	
 
@@ -209,78 +174,8 @@ namespace gm {
 		CannotCreate& operator=(CannotCreate &&) = delete;  // undefined
 	};
 
-	namespace priv {
-		template<typename T, typename V = bool>
-		struct has_name_offset : std::false_type { };
-		template<typename T>
-		struct has_name_offset<T, typename std::enable_if<!std::is_same<decltype(std::declval<T>().name_offset), void>::value, bool>::type> : std::true_type
-		{
-			typedef decltype(std::declval<T>().name_offset) type;
-		};
-		template<typename T, typename V = bool>
-		struct is_resource : std::false_type { };
-		template<typename T>
-		struct is_resource<T, typename std::enable_if<!std::is_same<decltype(T::ResType), void>::value, bool>::type> : std::true_type
-		{
-			typedef decltype(T::ResType) type;
-		};
-		template<typename T, typename = std::enable_if<std::is_arithmetic<T>::value>>
-		T cast(const uint8_t* ptr) { return *reinterpret_cast<const T*>(ptr); }
-
-		template<typename T>
-		const T* read_struct(const uint8_t*& ptr) {
-			const T* value = reinterpret_cast<const T*>(ptr);
-			ptr += sizeof(T);
-			return value;
-		}
-		template<typename T>
-		T read_value(const uint8_t** ptr) {
-			T value = *reinterpret_cast<const T*>(*ptr);
-			*ptr += sizeof(T);
-			return value;
-		}
-		inline size_t simple_hash(const char *str)
-		{
-			size_t hash = 5381;
-			int c;
-			while (c = (unsigned char)(*str++)) hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-			return hash;
-		}
-		inline size_t simple_hash(const char *str, size_t len)
-		{
-			size_t hash = 5381;
-			while (len > 0) {
-				int c = *str++;
-				hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-				len--;
-			}
-			return hash;
-		}
-	};
-	// The entire file is read into
-	// carful with any strings read from this as they are only valid
-	// as long as FileHelper exists
-	// Container for const strings for unorded_map
-	class GString  {
-		size_t _len;
-		const char* _str;
-	public:
-		struct hash_func {
-			size_t operator()(const GString& str) const { return priv::simple_hash(str.c_str(), str.length()); }
-		};
-		GString(const char* str, size_t len) : _str(str), _len(len) {}
-		GString(const char* str) : GString(str, strlen(str)) {}
-		std::string operator*() const { return std::string(_str, _len); }
-		size_t size() const { return _len; }
-		size_t length() const { return _len; }
-		const char* begin() const { return _str; }
-		const char* end() const { return _str + _len; }
-		const char* c_str() const { return _str; }
-		bool operator==(const GString& other) const { return _str == other._str; }
-		bool operator!=(const GString& other) const { return !(*this == other); }
-		bool operator==(const std::string& other) const { return other.compare(0,_len,_str) == 0; }
-		bool operator!=(const std::string& other) const { return  other.compare(0, _len, _str) != 0; }
-	};
+	
+	
 	class FileHelper {
 		std::vector<uint8_t> _data;
 		size_t _pos;
@@ -292,8 +187,8 @@ namespace gm {
 		void load(std::istream& is)  {
 			_pos = 0;
 			is.seekg(std::ios::end, 0);
-			size_t size = is.tellg();
-			_data.resize(size);
+			std::streamsize size = is.tellg();
+			_data.resize((size_t)size);
 			is.seekg(0);
 			is.read(reinterpret_cast<char*>(_data.data()), size);
 		}
@@ -343,42 +238,7 @@ namespace gm {
 	
 
 
-	// Container for strings simple pointer strings.  Used for comparing and matching
-	// carful though
-	class Buffer {
-		const std::vector<uint8_t>& _data;
-		size_t _offset;
-		size_t _len;
-	public:
-		typedef std::vector<uint8_t>::const_iterator const_iterator;
-		Buffer(const std::vector<uint8_t>& data) : _data(data), _offset(0), _len(data.size()) {}
-		Buffer(const std::vector<uint8_t>& data, size_t offset, size_t len) : _data(data), _offset(offset), _len(len) {}
-		uint8_t operator[](size_t pos) const { return _data[pos + _offset]; }
-		const uint8_t* data() const { return _data.data() + _offset; }
-		const char* c_str() const { return reinterpret_cast<const char*>(_data.data() + _offset); }
-		const char* c_str_absolute(size_t offset) const { return reinterpret_cast<const char*>(_data.data() + offset); }
-		template<typename T>
-		const T* cast() const { return reinterpret_cast<const T*>(_data.data() + _offset); }
-		template<typename T>
-		const T* cast_absolute(size_t offset) const { return reinterpret_cast<const T*>(_data.data() + offset); }
-		template<typename T>
-		void read(const T*& data) { data = reinterpret_cast<const T*>(_data.data() + _offset); _offset += sizeof(T); }
-		template<typename T>
-		void read_absolute(const T*& data, size_t offset) const { data = reinterpret_cast<const T*>(_data.data() + offset); }
-		size_t size() const { return _len; }
-		size_t offset() const { return _offset; }
-		const std::vector<uint8_t>& vector() const { return _data; }
-		const_iterator begin() const { return _data.begin() + _offset; }
-		const_iterator end() const { return begin() + _len; }
-		bool operator==(const Buffer& other) const { return &_data == &other._data && _len == other._len && _offset == other._offset; }
-		bool operator!=(const Buffer& other) const { return !(*this == other); }
-	};
-	inline Buffer operator+(const Buffer& buffer, int amount) {
-		return Buffer(buffer.vector(), buffer.offset() + amount, buffer.size());
-	}
-	inline Buffer operator-(const Buffer& buffer, int amount) {
-		return Buffer(buffer.vector(), buffer.offset() - amount, buffer.size());
-	}
+	
 
 	enum class ChunkType : uint32_t {
 		BAD = 0,
@@ -418,7 +278,8 @@ namespace gm {
 	protected:
 		uint32_t _index;
 	public:
-		IndexInterface(uint32_t offset, uint32_t index) : OffsetInterface(offset), _index(index) {}
+		template<typename T, typename = std::enable_if<std::is_convertible<T,uint32_t>::value>::type>
+		IndexInterface(uint32_t offset, T index) : OffsetInterface(offset), _index(static_cast<uint32_t>(index)) {}
 		virtual ~IndexInterface() {}
 		uint32_t index() const { return _index; } // unique
 		bool operator<(const IndexInterface& other) const { return index() < other.index(); }
@@ -489,15 +350,16 @@ namespace gm {
 		const RAW_T* _raw;
 		struct _index_test {};
 		struct _name_test : _index_test {};
-		template<typename T = RAW_T, typename = std::enable_if<!HasNameOffset>::type>
-		Resource(int index, const uint8_t* data, size_t offset, _name_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index) { }
-		template<typename T = RAW_T, typename = std::enable_if<HasNameOffset>::type>
-		Resource(int index, const uint8_t* data, size_t offset, _index_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index, reinterpret_cast<const char*>(data + reinterpret_cast<const RAW_T*>(data + offset)->name_offset)) { }
+		template<typename T = RAW_T,  typename = std::enable_if<!HasNameOffset>::type>
+		Resource(uint32_t index, const uint8_t* data, uint32_t offset, _name_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index) { }
+		template<typename T = RAW_T,  typename = std::enable_if<HasNameOffset>::type>
+		Resource(uint32_t index, const uint8_t* data, uint32_t offset, _index_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index, reinterpret_cast<const char*>(data + reinterpret_cast<const RAW_T*>(data + offset)->name_offset)) { }
 	public:
 		Resource() : _name(), _index(-1), _raw(nullptr) {}
 		bool valid() const { return _raw != nullptr; }
 		const RAW_T* raw() const { return _raw; }
-		Resource(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset, _name_test{}) {}
+		template<typename T, typename = std::enable_if<std::is_convertible<T,uint32_t>::value>::type> // index handles the conversion
+		Resource(T index, const uint8_t* data, uint32_t offset) : Resource(static_cast<uint32_t>(index), data, offset, _name_test{}) {}
 	};
 	namespace raw_type {
 		// these are all the internal raw types in game maker that I could derive
@@ -732,7 +594,7 @@ namespace gm {
 	protected:
 		const raw_type::SpriteFrame* _frame;
 	public:
-		Background(int index, const uint8_t* data, size_t offset) :
+		Background(int index, const uint8_t* data, uint32_t offset) :
 			Resource(index, data, offset)
 		{
 			_frame = dynamic_cast<const raw_type::SpriteFrame*>(_frame + _raw->frame_offset);
@@ -746,7 +608,7 @@ namespace gm {
 	protected:
 		const char* _caption;
 	public:
-		Room(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset) {}
+		Room(int index, const uint8_t* data, uint32_t offset) : Resource(index, data, offset) {}
 		const char* caption() const { return _caption; }
 		int width() const { return _raw->width; }
 		int height() const { return _raw->height; }
@@ -769,7 +631,7 @@ namespace gm {
 		const char*  _extension;
 		const char*   _filename;
 	public:
-		Sound(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset) {}
+		Sound(int index, const uint8_t* data, uint32_t offset) : Resource(index, data, offset) {}
 
 		int audio_type() const { return _raw->audio_type; }
 		const char*   extension() const { return _extension; }
@@ -804,7 +666,7 @@ namespace gm {
 		const char* _description;
 		OffsetList<Glyph> _glyphs;
 	public:
-		Font(int index, const uint8_t* data, size_t offset) : Resource(index, data, offset)
+		Font(int index, const uint8_t* data, uint32_t offset) : Resource(index, data, offset)
 			,_description(reinterpret_cast<const char*>(data + _raw->description_offset))
 			, _frame(reinterpret_cast<const raw_type::SpriteFrame*>(data + _raw->frame_offset))
 			, _glyphs(data, offset + sizeof(RawResourceType)){}
@@ -824,7 +686,7 @@ namespace gm {
 	class Action : public Resource<raw_type::ObjectAction, ChunkType::BAD> {
 		const uint32_t* _code;
 	public:
-		Action(const EventType& type, const uint8_t* data, size_t offset)
+		Action(const EventType& type, const uint8_t* data, uint32_t offset)
 			: Resource(type.raw(),data, offset)
 			, _code(_raw->code_offset > 0 ? reinterpret_cast<const uint32_t*>(data + _raw->code_offset):nullptr) {}
 		const uint32_t* code() const { return _code; }
@@ -850,20 +712,30 @@ namespace gm {
 		const raw_type::ObjectPhysicsVert* _physics_verts;
 		std::unordered_map<EventType, Action> _events;
 	public:
-		Object(int index, const uint8_t* data, size_t offset)
+		Object(int index, const uint8_t* data, uint32_t offset)
 			: Resource(index, data, offset)
 			, _physics_verts(_raw->physics_vert_count > 0 ? raw_type::ObjectPhysicsVert::cast(_raw->ptr_end()) : nullptr)
 		{
 			auto ptr = _raw->ptr_end();
 			if (_raw->physics_vert_count > 0) ptr += _raw->physics_vert_count * sizeof(raw_type::ObjectPhysicsVert);
 			Offsets root(ptr);
+			//debug::debug_ptr<uint32_t> d(data,RawResourceSize+offset, 24);
 			if (root.size() != 12) throw; // should always = 12?
+			// ugh so the first 12 
+			ptr += sizeof(uint32_t) * 12;
+			debug::cerr << "Root:" << std::endl << root << std::endl;
+			debug::cerr << std::endl;
 			// might be a way to template this to caculate the offsets but right now this works
 			for (uint32_t i = 0; i < root.size(); i++) {
-				Offsets list(data,root.at(i));
-				if (list.size() == 0)  continue;  // skip
+				//int sub_event = util::cast<int>(data + e);
+				Offsets list(data + root.at(i));
+				//ptr += sizeof(uint32_t);
+				if (list.size() == 0)  continue;  
+				debug::cerr << "list:" << std::endl;
+				debug::cerr << list;
+				debug::cerr << std::endl;
 				for (uint32_t e : list) {
-					int sub_event = priv::cast<int>(data + e);
+					int sub_event = util::cast<int>(data + e);
 					Offsets events(data, e+sizeof(uint32_t));
 					if (events.size() == 0) continue; // skip
 					for (uint32_t a : events)  {
@@ -893,9 +765,9 @@ namespace gm {
 		// its just an array of masks, not sure why there would be more than
 		// one though
 	public:
-		Sprite(int index, const uint8_t* data, size_t offset) :
+		Sprite(int index, const uint8_t* data, uint32_t offset) :
 			Resource(index, data, offset) {
-			size_t frames = priv::cast<uint32_t>(_raw->ptr_end());
+			size_t frames = util::cast<uint32_t>(_raw->ptr_end());
 			_masks = data +  sizeof(uint32_t) + sizeof(uint32_t) * frames;
 		}
 		int width() const { return _raw->width; }
@@ -919,10 +791,6 @@ namespace gm {
 		}
 	};
 	
-	inline bool operator==(const GString& gstr, const std::string& str)  { return str == gstr.c_str(); }
-	inline bool operator!=(const GString& gstr, const std::string& str) { return str != gstr.c_str(); }
-	inline bool operator==(const std::string& str, const GString& gstr) { return str == gstr.c_str(); }
-	inline bool operator!=(const std::string& str, const GString& gstr) { return str != gstr.c_str(); }
 
 	class DataWinFile {
 		struct Chunk : CannotCreate<Chunk> {
@@ -976,7 +844,7 @@ namespace gm {
 			else return it->second->count;
 		}
 		template<class C, class = std::enable_if<priv::is_resource<C>::value>>
-		C resource_at(size_t index) const {
+		C resource_at(uint32_t index) const {
 			auto it = _chunks.find(chunk_traits<C::ResType>::swap_value());
 			if (it == _chunks.end()) throw; // not found
 			const Chunk* chunk = &(*it->second);

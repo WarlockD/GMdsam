@@ -18,6 +18,12 @@
     <ClInclude Include="gm_lib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="global.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="dsam.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -25,6 +31,12 @@
     </ClCompile>
     <ClCompile Include="gm_lib.cpp">
       <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="global.cpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="debug_window.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
