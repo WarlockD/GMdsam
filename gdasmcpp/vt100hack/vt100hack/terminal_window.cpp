@@ -102,8 +102,8 @@ class TerminalView : public CWindowImpl<TerminalView, CWindow, CDxAppWinTraits >
 	std::vector<Line*> _lines;
 	CImage _screen;
 public:
-	TerminalView() : _line_alloc(25), _lines(25) {
-		for (size_t i = 0; i < 25; i++) {
+	TerminalView() : _line_alloc(40), _lines(40) {
+		for (size_t i = 0; i < 40; i++) {
 			_lines[i] = _line_alloc.data() + i;
 		}
 	}
@@ -128,8 +128,9 @@ public:
 		else {
 			//	TCHAR cArray[1000];
 			//	m_edit.SetWindowText(cArray);
-			RedrawWindow();
+			
 			update_display();
+			RedrawWindow();
 		}
 	}
 	LRESULT OnCreate(LPCREATESTRUCT lpcs) {
@@ -153,7 +154,7 @@ public:
 		refresh_screen();
 	}
 	std::vector<uint32_t> _dma;
-	void draw_scanline(size_t line, size_t ch_line, const CharInfo* chars, size_t count) {
+	void draw_scanline(size_t line, size_t ch_line, uint8_t lattr, const CharInfo* chars, size_t count) {
 		uint32_t* bits = static_cast<uint32_t*>(_screen.GetPixelAddress(0, line));
 		bool last_bit = false;
 		count = (count * 8) > 800 ? 80 : count; //std::max(count, (count * 8)
@@ -171,6 +172,8 @@ public:
 		}
 	}
 	bool screen_rev = false;
+	std::vector<uint8_t> _char_buffer;
+	std::vector<uint8_t> _attrb_buffer;
 	void update_display(bool enable_avo=false) {
 		if (!vsync_happened) return;
 		size_t start = 0x2000;
@@ -190,6 +193,7 @@ public:
 			//if (*p != 0x7f) y++;
 			y++;
 			int x = 0;
+			_char_buffer.clear();
 			while (*p != 0x7f && p != maxp) {
 				unsigned char c = *p;
 				int attrs = enable_avo ? p[0x1000] : 0xF;
@@ -203,13 +207,18 @@ public:
 					c &= 0x7F;
 					if (screen_rev) inverse = ~inverse;
 					if (c == 0 || c == 127) c = ' ';
-					_lines.at(y)->line[x++].ch = c;
+					_char_buffer.push_back(c);
+
+					//_lines.at(y)->line[x++].ch = c;
 				}
 			//	if (lattr != 3) waddch(vidWin, ' ');
 			//	if (inverse) wattroff(vidWin, A_REVERSE);
 			//	if (uline) wattroff(vidWin, A_UNDERLINE);
 			//	if (bold) wattroff(vidWin, A_BOLD);
 			//	if (blink) wattroff(vidWin, A_BLINK);
+			}
+			if (!_char_buffer.empty()) {
+
 			}
 			if (p == maxp) {
 				//wprintw(msgWin,"Overflow line %d\n",i); wrefresh(msgWin);
