@@ -19,7 +19,9 @@ friend ito_binary_wraper operator >> (std::istream& stream, T &)
 	return ito_binary_wraper(stream);
 }
 */
+void init_test();
 int main(int argc, const char* argv[]) {
+	init_test();
 	gm::DataWinFile file;
 	if (argc == 2) {
 		std::string filename = argv[1];
@@ -44,5 +46,7 @@ int main(int argc, const char* argv[]) {
 	for (auto test : events) {
 		std::cout << test.first << ", " << test.second << std::endl;
 	}
+	while (true) {}
+
 	return 0;
 }
