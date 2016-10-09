@@ -3,6 +3,8 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <string>
+#include <sstream>
 
 #include <thread>
 #include <atomic>
@@ -17,7 +19,7 @@
 // wtl
 #include <atlapp.h>
 #include <atlimage.h>
-
+#include <cassert>
 
 //#ifdef __ATLSTR_H__
 //#define _CSTRING_NS	ATL
@@ -61,15 +63,23 @@ struct Glyph {
 	void load(char ch, bool double_height = false, bool double_width = false) {
 		for (int j = 0; j < 10; j++) {
 			uint8_t line = s_rom[(ch << 4) + j];
-			for (int b = 0; b < 8; b++) {// 0..7
+			for (int b = 7; b >=0; b--) {// 0..7
 										 //uint8_t bit = BIT((line << b), 7);
-				data[b + j * 8] = BIT((line << b), 7) ? true : false;
+				data[b + j * 8] = line & 0x1 ? true : false;
+				line >>= 1;
 			}
+		}
+	}
+	void to_stream(std::ostream& s) const {
+		for (int j = 0; j < 10; j++) {
+			for (int i = 0; i < 8; i++)
+				if (getPixel(i, j)) s << "*"; else s << ' ';
+			s << std::endl;
 		}
 	}
 	bool getPixel(int x, int y) const { return data[x + y * 8]; }
 };
-
+extern bool vsync_happened;
 extern uint8_t ram[];
 extern uint8_t touched[];
 CAppModule _Module;
@@ -86,7 +96,7 @@ class TerminalView : public CWindowImpl<TerminalView, CWindow, CDxAppWinTraits >
 		bool double_height;
 		bool double_width;
 		bool scroll;
-		Line() : double_height(false), double_width(false), scroll(true), line(83) {}
+		Line() : double_height(false), double_width(false), scroll(true), line(140) {}
 	};
 	std::vector<Line> _line_alloc;
 	std::vector<Line*> _lines;
@@ -105,58 +115,149 @@ public:
 	MSG_WM_PAINT(OnPaint)
 		MSG_WM_CREATE(OnCreate)
 		MSG_WM_DESTROY(OnDestroy)
-	//	MSG_WM_TIMER(OnTimer)
+		MSG_WM_TIMER(OnTimer)
 		//	MSG_WM_ERASEBKGND(OnEraseBkgnd)
 		//MESSAGE_HANDLER(WM_DESTROY, OnCreate)
 		//ON_PAINT
 	END_MSG_MAP()
 	DECLARE_WND_CLASS("TerminalView")
+	void OnTimer(UINT uTimerID)//, TIMERPROC pTimerProc)
+	{
+		if (1 != uTimerID)
+			SetMsgHandled(false);
+		else {
+			//	TCHAR cArray[1000];
+			//	m_edit.SetWindowText(cArray);
+			RedrawWindow();
+			update_display();
+		}
+	}
 	LRESULT OnCreate(LPCREATESTRUCT lpcs) {
 		for (size_t i = 0; i < 25; i++) {
 			_lines[i] = _line_alloc.data() + i;
 		}
-		if (!_screen.Create(800, 240, 32))
+		if (!_screen.Create(800, 320, 32))
 			throw 0;
-		putString(10, 10, "fuck me");
-		refresh_screen();
+		putString(10, 10, "abcdefghijklmnop");
+		putString(10, 11, "ABCDEFGHIJKLMNOP");
+		SetTimer(1, 1000 / 15);
+		//putString(0, 9, "at the end");
+		
 	}
 	void putString(int x, int y, const std::string& str) {
 		Line& line = *_lines.at(y);
-		for (size_t i = x; i < line.line.size() && i < str.size(); i++) {
-			line.line[i].ch = str.at(i);
+		auto it = str.begin();
+		for (size_t i = x; i < line.line.size() && it != str.end(); i++,it++) {
+			line.line[i].ch = *it;
 		}
+		refresh_screen();
+	}
+	std::vector<uint32_t> _dma;
+	void draw_scanline(size_t line, size_t ch_line, const CharInfo* chars, size_t count) {
+		uint32_t* bits = static_cast<uint32_t*>(_screen.GetPixelAddress(0, line));
+		bool last_bit = false;
+		count = (count * 8) > 800 ? 80 : count; //std::max(count, (count * 8)
+		for (size_t i = 0; i < count; i++) {
+			uint8_t char_line = s_rom[(chars[i].ch << 4) + ch_line];
+			for (int b = 7; b >= 0; b--) {
+				//bool bit = glyph.getPixel(b, y);
+				bool bit = char_line & 0x80 ? true : false;
+				if (!bit && last_bit) { bit = true; last_bit = false; }
+				else last_bit = bit;
+				*bits++ = bit ? RGB(0, 255, 0) : RGB(0, 0, 0);
+				//*line_ptr++ = bit ? RGB(0, 255, 0) : RGB(255, 255, 255);
+				char_line <<= 1;
+			}
+		}
+	}
+	bool screen_rev = false;
+	void update_display(bool enable_avo=false) {
+		if (!vsync_happened) return;
+		size_t start = 0x2000;
+		size_t next = start;
+		int lineno = 0;
+		const uint8_t* ptr = ram + start;
+		bool double_height = false;
+		bool double_width = false;
+		bool scrolling_region = false;
+		uint8_t line_attributes;
+		uint8_t lattr = 0xF;
+		int y = -1;
+		int inscroll = 0;
+		for (uint8_t i = 1; i < 27; i++) {
+			const char* p = (const char*)ram + start;
+			const char* maxp = p + 133;
+			//if (*p != 0x7f) y++;
+			y++;
+			int x = 0;
+			while (*p != 0x7f && p != maxp) {
+				unsigned char c = *p;
+				int attrs = enable_avo ? p[0x1000] : 0xF;
+				p++;
+				if (y > 0) {
+					bool inverse = (c & 128);
+					bool blink = !(attrs & 0x1);
+					bool uline = !(attrs & 0x2);
+					bool bold = !(attrs & 0x4);
+					bool altchar = !(attrs & 0x8);
+					c &= 0x7F;
+					if (screen_rev) inverse = ~inverse;
+					if (c == 0 || c == 127) c = ' ';
+					_lines.at(y)->line[x++].ch = c;
+				}
+			//	if (lattr != 3) waddch(vidWin, ' ');
+			//	if (inverse) wattroff(vidWin, A_REVERSE);
+			//	if (uline) wattroff(vidWin, A_UNDERLINE);
+			//	if (bold) wattroff(vidWin, A_BOLD);
+			//	if (blink) wattroff(vidWin, A_BLINK);
+			}
+			if (p == maxp) {
+				//wprintw(msgWin,"Overflow line %d\n",i); wrefresh(msgWin);
+				break;
+			}
+			// at terminator
+			p++;
+			unsigned char a1 = *(p++);
+			unsigned char a2 = *(p++);
+			//printf("Next: %02x %02x\n",a1,a2);fflush(stdout);
+			uint16_t next = (((a1 & 0x10) != 0) ? 0x2000 : 0x4000) | ((a1 & 0x0f) << 8) | a2;
+			lattr = ((a1 >> 5) & 0x3);
+			inscroll = ((a1 >> 7) & 0x1);
+			if (start == next) break;
+			start = next;
+		}
+		refresh_screen();
 	}
 	void refresh_screen() {
-		for (size_t l = 0; l < 24; l++) {
-			Line& line = *_lines.at(l);
-			for (size_t c = 0; c < line.line.size(); c++) {
-				auto info = line.line.at(c);
-				bool last_bit = false;
-				for (size_t scan_line = 0; scan_line < 10; scan_line++) {
-					uint32_t* bits = static_cast<uint32_t*>(_screen.GetPixelAddress(c * 8, scan_line + l * 10));
-					uint8_t char_line = s_rom[(info.ch << 4) + scan_line];
-					for (int b = 0; b < 8; b++) {
-						bool bit = BIT((char_line << b), 7) ? true : false;
-						if (!bit && last_bit) { bit = true; last_bit = false; }
-						else last_bit = bit;
-						bits[b] = bit ? RGB(0, 255, 0) : RGB(255, 255, 255);
-					}
-				}
+		size_t scan_line = 0;
+		auto it = _lines.begin();
+		HDC screen_dc = _screen.GetDC();
+		uint32_t* bits = static_cast<uint32_t*>(_screen.GetBits());
+		Glyph glyph;
+		for (size_t lineno = 0; lineno < 24; lineno++) {
+			Line& line = *_lines.at(lineno);
+			for (size_t y = 0; y < 10; y++, scan_line++) {
+				draw_scanline(scan_line, y, line.line.data(), line.line.size());
 
 			}
-
 		}
+		_screen.ReleaseDC();
 	}
 	void OnDestroy() {
+		KillTimer(1);
 		_screen.Destroy();
 	}
 	void OnPaint(HDC hdc) {
 		CPaintDC dc(*this);
-		//CRect rect;
-		//GetClientRect(&rect);
-		refresh_screen();
+		CRect rect;
+		GetClientRect(&rect);
+		rect.top = 20;
+		rect.left = 20;
+		_screen.BitBlt(dc, 20, 20);// rect);
+		//_screen.BitBlt
+		//dc.TextOutA(20, 20, "FUCK FUCK FUCK");
 		//_screen.Draw(dc, rect);
-		_screen.Draw(dc, 0,0);
+		//_screen.Draw(dc, 0,0);
 	}
 };
 class MemoryView : public CWindowImpl<MemoryView, CWindow, CDxAppWinTraits > {
@@ -183,66 +284,6 @@ public:
 	void OnClose() {
 		ShowWindow(SW_HIDE); // hide it instead of showing it
 		UpdateWindow();
-	}
-	void OnPaint(HDC hdc) {
-		CPaintDC dc(*this);
-		TEXTMETRIC font_metric;
-		CSize size;
-		CPoint point;
-		CRect rect;
-		CRect client_rect;
-		dc.GetTextMetricsA(&font_metric);
-		GetClientRect(&client_rect);
-		dc.FillSolidRect(&client_rect, RGB(255, 255, 255));
-		// black
-		//	int my, mx;
-		//	getmaxyx(memWin, my, mx);
-		//	int bavail = (mx - 7) / 3;
-		int bdisp = 16;
-		//	while (bdisp * 2 <= bavail) bdisp *= 2;
-
-		_tabs.clear();
-		point = CPoint();
-		_tabs.push_back(0);
-		point.x = font_metric.tmMaxCharWidth * 5;
-		point.y = 20;
-		dc.SetTextColor(RGB(0, 0, 0));
-
-		for (int b = 0; b < bdisp; b++) {
-			rect = CRect(point, CSize(0, 0));
-			int count = sprintf_s(_buffer, " %02X", b);
-			//dc.GetTextExtent(_buffer, count, &size);
-			//	dc.TextOutA()
-			dc.DrawTextA(_buffer, count, &rect, DT_SINGLELINE | DT_NOCLIP); // | DT_CALCRECT); // DT_CALCRECT
-		//	_tabs.push_back(point.x);
-			//dc.GetTextExtent(_buffer, count, &size);
-			point.x += font_metric.tmMaxCharWidth * 3;
-		}
-		uint16_t start = 0x2000;
-		int tab = 0;
-		for (int y = 1; y < 30; y++) {
-			dc.SetTextColor(RGB(0, 0, 0));
-			point.y = y * font_metric.tmHeight;
-			point.x = 0;
-			int count = sprintf_s(_buffer, "%04X:", start);
-			dc.TextOutA(point.x, point.y, _buffer);
-			point.x += font_metric.tmMaxCharWidth * 5;
-			for (int b = 0; b < bdisp; b++) {
-				if (!touched[start])
-					dc.SetBkColor(RGB(255, 255, 255));
-				else
-					dc.SetBkColor(RGB(0, 255, 0));
-				if (ram[start] == 00)
-					dc.SetTextColor(RGB(127, 127, 127));
-				else
-					dc.SetTextColor(RGB(0, 0, 0));
-				count = sprintf_s(_buffer, "%02X", ram[start++]);
-				
-				dc.TextOutA(point.x, point.y, _buffer);
-				point.x += font_metric.tmMaxCharWidth * 3;
-
-			}
-		}
 	}
 	
 	void OnTimer(UINT uTimerID)//, TIMERPROC pTimerProc)
@@ -291,10 +332,10 @@ public:
 
 	LRESULT OnCreate(LPCREATESTRUCT lpcs)
 	{
-
+		
 		RECT rcHorz;
 		GetClientRect(&rcHorz);
-		m_term.Create(m_hWnd, rcHorz, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+		m_term.Create(m_hWnd, rcHorz, NULL, WS_CHILD | WS_VISIBLE); // | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
 	//	m_edit.Create(m_hWnd, rcHorz, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
 		SetTimer(1, 1000);
 		SetMsgHandled(false);
@@ -349,7 +390,10 @@ public:
 
 	void OnPaint(HDC hdc) {
 		CPaintDC dc(*this);
-		_backbuffer.Draw(dc, 0, 0);
+	//	_backbuffer.Draw(dc, 0, 0);
+		CRect rect;
+		GetClientRect(&rect);
+		_backbuffer.StretchBlt(dc, rect);
 		/*
 
 		CDC dcImage;

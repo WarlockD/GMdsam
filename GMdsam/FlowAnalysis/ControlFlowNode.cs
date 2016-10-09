@@ -36,7 +36,6 @@ namespace GameMaker.FlowAnalysis
         /// Index of this node in the ControlFlowGraph.Nodes collection.
         /// </summary>
         public readonly int BlockIndex;
-        public List<ControlFlowNode> PopEnvNodes;
         /// <summary>
         /// Gets the IL offset of this node.
         /// </summary>
@@ -63,10 +62,6 @@ namespace GameMaker.FlowAnalysis
             get { return ImmediateDominator != null || NodeType == ControlFlowNodeType.EntryPoint; }
         }
 
-        /// <summary>
-        /// Signalizes that this node is a copy of another node.
-        /// </summary>
-        public ControlFlowNode CopyFrom { get; internal set; }
 
         /// <summary>
         /// Gets the immediate dominator (the parent in the dominator tree).

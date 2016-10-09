@@ -15,7 +15,7 @@
 #include <signal.h>
 #include <map>
 #include <ctype.h>
-
+bool vsync_happened = false;
 
 extern void int_on(void), int_off(void);
 extern void init_io(void), exit_io(void);
@@ -454,7 +454,9 @@ void Vt100Sim::run() {
 
 	has_breakpoints = (breakpoints.size() != 0);
 	while (1) {
+		vsync_happened = false;
 		if (running) {
+			vsync_happened = true;
 			step();
 			if (steps > 0) {
 				if (--steps == 0) { running = false; }
