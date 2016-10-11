@@ -4,22 +4,29 @@
 #include "nvr.h"
 #include "keyboard.h"
 #include "pusart.h"
+#ifdef max
+#undef max
+#undef min
+#endif
 #include <stdint.h>
 #include <set>
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <mutex>
 #include <functional>
 #include <vector>
-#ifdef max
-#undef max
-#undef min
-#endif
+#include <queue>
+
+
+/*
+
 
 namespace std {
 	template<class T> const T& min(const T& a, const T& b) { return (b < a) ? b : a; }
 	template<class T> const T& max(const T& a, const T& b) { return (a < b) ? b : a; }
 };
+*/
 class Timer {
 public:
 	Timer() : _start(std::chrono::system_clock::now()) {}
@@ -84,7 +91,12 @@ public:
 
 class Vt100Sim
 {
+	std::queue<uint32_t> _keys;
+	std::recursive_mutex _mutex;
+
 public:
+
+	//void push_key(uint32_t ascii, bool shift, bool ctl, bool alt);
   Vt100Sim(const char* romPath = 0,bool running=false, bool avo_on=true);
   ~Vt100Sim();
   void init();
@@ -94,7 +106,8 @@ public:
   Keyboard kbd;
   PUSART uart;
   uint8_t bright;
-private:
+
+  std::function<void()> m_vsync;
   const char* romPath;
   bool running;
   bool inputMode;

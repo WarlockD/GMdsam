@@ -3,7 +3,7 @@
 #include "8080/sim.h"
 #include "8080/simglb.h"
 #include <curses.h>
-
+/*
 Keyboard::Keyboard() : state(KBD_IDLE), latch(0), tx_buf_empty(true)
 {
     scan_iter = scan.end();
@@ -37,7 +37,7 @@ extern WINDOW* msgWin;
  *
  * There is a 9 character buffer for transmitting data to the host; this must
  * have at least 3 bytes free. If it doesn't the keyboard lock is asserted.
- */
+ 
 
 void Keyboard::set_status(uint8_t status)
 {
@@ -59,55 +59,62 @@ void Keyboard::set_status(uint8_t status)
 
 void Keyboard::keypress(uint8_t keycode)
 {
+	std::lock_guard<std::recursive_mutex> lock(_mutex);
   //printf("PRESS %02x\n",keycode);fflush(stdout);
     keys.insert(keycode);
 }
 
 bool Keyboard::clock(bool rising)
 {
-    if (!rising) { return false; }
-    switch (state) {
-    case KBD_IDLE:
-        break;
-    case KBD_SENDING:
-        if (clocks_until_next == 0) {
-	  scan = last_sent;
-		// hack around debounce problem
-	  last_sent = keys;
-	  scan.insert(keys.begin(),keys.end());
-            keys.clear();
-            scan_iter = scan.begin();
-            state = KBD_RESPONDING;
-            clocks_until_next = 160;
-            if (scan_iter == scan.end()) { clocks_until_next += 127; } else { clocks_until_next += *scan_iter; }
-            //printf("RSP MODE\n");fflush(stdout);
-        } else {
-            clocks_until_next--;
-        }
-        break;
-    case KBD_RESPONDING:
-        if (clocks_until_next == 0) {
-            if (scan_iter != scan.end()) {
-	      //wprintw(msgWin,"Sending %02x\n",*scan_iter);wrefresh(msgWin);
-	      //printf("SENDING KEY %02x\n",*scan_iter);fflush(stdout);
-                clocks_until_next = 160;
-                latch = *scan_iter;
-                scan_iter++;
-            } else {
-                latch = 0x7f;
-                state = KBD_IDLE;
-		//wprintw(msgWin,"End scan\n");wrefresh(msgWin);
-            }
-            return true;
-        }
-        clocks_until_next--;
-        return false;
-        break;
-    default:
-      wprintw(msgWin,"Bad state\n");wrefresh(msgWin);
-      
-    }
-    return false;
+	if (!rising) { return false; }
+	switch (state) {
+	case KBD_IDLE:
+		break;
+	case KBD_SENDING:
+		if (clocks_until_next == 0) {
+			scan = last_sent;
+			// hack around debounce problem
+			_mutex.lock();
+			last_sent = keys;
+			scan.insert(keys.begin(), keys.end());
+			keys.clear();
+			_mutex.unlock();
+			scan_iter = scan.begin();
+			state = KBD_RESPONDING;
+			clocks_until_next = 160;
+			if (scan_iter == scan.end()) { clocks_until_next += 127; }
+			else { clocks_until_next += *scan_iter; }
+			//printf("RSP MODE\n");fflush(stdout);
+		}
+		else {
+			clocks_until_next--;
+		}
+		break;
+	case KBD_RESPONDING:
+		if (clocks_until_next == 0) {
+			if (scan_iter != scan.end()) {
+				//wprintw(msgWin,"Sending %02x\n",*scan_iter);wrefresh(msgWin);
+				//printf("SENDING KEY %02x\n",*scan_iter);fflush(stdout);
+				clocks_until_next = 160;
+				latch = *scan_iter;
+				scan_iter++;
+			}
+			else {
+				latch = 0x7f;
+				state = KBD_IDLE;
+				//wprintw(msgWin,"End scan\n");wrefresh(msgWin);
+			}
+			return true;
+		}
+		clocks_until_next--;
+		return false;
+		break;
+	default:
+		wprintw(msgWin, "Bad state\n"); wrefresh(msgWin);
+
+	}
+	return false;
 }
 
 
+*/

@@ -29,7 +29,7 @@ extern int load_file(char *);
 
 
 
-Vt100Sim* sim;
+Vt100Sim* sim=nullptr;
 
 WINDOW* regWin;
 WINDOW* memWin;
@@ -292,11 +292,19 @@ void Vt100Sim::ioOut(BYTE addr, BYTE data) {
 
 
 static std::atomic_flag sigAlrm = { 0 };
+template<typename T>
+constexpr T VK_ASCII(T v) { return v >= '0' && v<='9' ?
+}
+/*
 
+*VK_0 - VK_9 are the same as ASCII '0' - '9' (0x30 - 0x39)
+* 0x40 : unassigned
+* VK_A - VK_Z are the same as ASCII 'A' - 'Z' (0x41 - 0x5A)
+*/
 std::map<int,uint8_t> make_code_map() {
   std::map<int,uint8_t> m;
   // 0x01, 0x02 (both) -> del
-  m[KEY_DC] = 0x03;
+  m[KEY_DC] = 0x03; 
   // ??? m[KEY_ENTER] = 0x04;
   // 0x04 -> nul
   m['p'] = 0x05;
@@ -336,7 +344,7 @@ std::map<int,uint8_t> make_code_map() {
   m[KEY_CANCEL] = 0x2a;	m[KEY_F(8)] = 0x2a; // Escape Key
 
   // 0x2b, 0x2c, 0x2d, 0x2e, 0x2f (Mirror of next 5)
-
+  
   m[KEY_UP] = 0x30;
   m[KEY_F(3)] = 0x31;
   m[KEY_F(1)] = 0x32;
@@ -440,6 +448,7 @@ bool hexParse(char* buf, int n, uint16_t& d) {
   return true;
 }
 StopWatch sig_alrm;
+
 
 void Vt100Sim::run() {
 	const int CPUHZ = 1000000;
@@ -638,6 +647,7 @@ void Vt100Sim::step()
   }
   if (dc12 && vertical.add_ticks(t)) {
     if (vertical.get_value()) {
+		if (m_vsync) m_vsync();
       int_data |= 0xe7;
       int_int = 1;
     }
@@ -656,7 +666,7 @@ void Vt100Sim::update() {
 
 void Vt100Sim::keypress(uint8_t keycode)
 {
-    kbd.keypress(keycode);
+    kbd.key_press((VT_KEY)keycode); 
 }
 
 void Vt100Sim::clearBP(uint16_t bp)
