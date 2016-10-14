@@ -18,24 +18,18 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="i8085.cpp">
-      <Filter>Header Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="global.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="main_window.cpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="i8085.h">
+    <ClInclude Include="global.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="cpu.h">
+    <ClInclude Include="main_window.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="i8085cpu.h">
+    <ClInclude Include="terminal_view.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

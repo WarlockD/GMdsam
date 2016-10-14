@@ -1,0 +1,18 @@
+digraph y {
+	edge [fontsize=10];
+	node [shape=box,fontsize=10];
+	orientation=landscape;
+	rankdir=LR;
+	/*
+	margin=0.2;
+	page="8.27,11.69"; // for A4 printing
+	ratio=auto;
+	*/
+
+	q0 [label="0:\l  $accept -> . escape $end\l  escape -> . '\\033'\l"];
+	q1 [label="1:\l  escape -> '\\033' . { $end }\l"];
+	q2 [label="2:\l  $accept -> escape . $end\l"];
+
+	q0 -> q1 [label="'\\033'"];
+	q0 -> q2 [label="escape"];
+}

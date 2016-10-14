@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vt100hack", "vt100hack\vt10
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vt100emu", "vt100emu\vt100emu.vcxproj", "{80185CAF-BF7B-4679-AE65-7CCB1753CF5A}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "byacc", "byacc\byacc.vcxproj", "{EE03D930-0738-4169-ABCE-AEC39746D9B6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +33,14 @@ Global
 		{80185CAF-BF7B-4679-AE65-7CCB1753CF5A}.Release|x64.Build.0 = Release|x64
 		{80185CAF-BF7B-4679-AE65-7CCB1753CF5A}.Release|x86.ActiveCfg = Release|Win32
 		{80185CAF-BF7B-4679-AE65-7CCB1753CF5A}.Release|x86.Build.0 = Release|Win32
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Debug|x64.ActiveCfg = Debug|x64
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Debug|x64.Build.0 = Debug|x64
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Debug|x86.ActiveCfg = Debug|Win32
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Debug|x86.Build.0 = Debug|Win32
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Release|x64.ActiveCfg = Release|x64
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Release|x64.Build.0 = Release|x64
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Release|x86.ActiveCfg = Release|Win32
+		{EE03D930-0738-4169-ABCE-AEC39746D9B6}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

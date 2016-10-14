@@ -144,15 +144,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="i8085.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cpu.h" />
     <ClInclude Include="global.h" />
-    <ClInclude Include="i8085.h" />
-    <ClInclude Include="i8085cpu.h" />
     <ClInclude Include="main_window.cpp" />
+    <ClInclude Include="main_window.h" />
+    <ClInclude Include="terminal_view.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

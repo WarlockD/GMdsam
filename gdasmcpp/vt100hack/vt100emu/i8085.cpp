@@ -1,4 +1,4 @@
-#include "cpu.h"
+#include "i8085.h"
 #include "i8085cpu.h"
 
 #define VERBOSE 0
@@ -63,7 +63,6 @@ namespace {
 		/* E */ 6, 10,10,16,11,12,7, 12,6, 6, 10,5, 11,10,7, 12,
 		/* F */ 6, 10,10,4, 11,12,7, 12,6, 6, 10,4, 11,10,7, 12
 	};
-	namespace priv {
 		template<class Function, std::size_t... Indices>
 		constexpr auto make_array_helper(Function f, std::index_sequence<Indices...>)
 			->std::array<typename std::result_of<Function(std::size_t)>::type, sizeof...(Indices)>
@@ -81,12 +80,51 @@ namespace {
 		constexpr size_t simple_bit_count(T x) { return x ? size_t(x & 1) + simple_bit_count(x >> 1) : 0; }
 		constexpr uint8_t zs_caculate(uint8_t i) { return ((i == 0) ? ZF : 0) | ((i & 128) ? SF : 0); }
 		constexpr uint8_t zsp_caculate(uint8_t i) { return zs_caculate(i) | ((simple_bit_count(i) & 1) ? 0 : PF); }
-	};
-	constexpr auto zs_flags = priv::make_array<256>(priv::zs_caculate);
-	constexpr auto zsp_flags = priv::make_array<256>(priv::zsp_caculate);
+
+	constexpr auto zs_flags = make_array<256>(zs_caculate);
+	constexpr auto zsp_flags = make_array<256>(zsp_caculate);
 };
+i8085_base::i8085_base(bool is_8085) {
 
 
+}
+
+void i8085_base::execute_set_input(int irqline, int state)
+{
+	int newstate = (state != CLEAR_LINE);
+
+	/* NMI is edge-triggered */
+	if (irqline == INPUT_LINE_NMI)
+	{
+		if (!m_nmi_state && newstate)
+			m_trap_pending = TRUE;
+		m_nmi_state = newstate;
+	}
+
+	/* RST7.5 is edge-triggered */
+	else if (irqline == I8085_RST75_LINE)
+	{
+		if (!m_irq_state[I8085_RST75_LINE] && newstate)
+			m_IM |= IM_I75;
+		m_irq_state[I8085_RST75_LINE] = newstate;
+	}
+
+	/* remaining sources are level triggered */
+	else if (irqline < ARRAY_LENGTH(m_irq_state))
+		m_irq_state[irqline] = state;
+}
+
+void i8085_base::reset() {
+	m_PC.d = 0;
+	m_HALT = 0;
+	m_IM &= ~IM_I75;
+	m_IM |= IM_M55 | IM_M65 | IM_M75;
+	m_after_ei = false;
+	m_trap_pending = FALSE;
+	m_trap_im_copy = 0;
+	set_inte(0);
+	set_sod(0);
+}
 /*
 UINT8 zs;
 int i, p;
