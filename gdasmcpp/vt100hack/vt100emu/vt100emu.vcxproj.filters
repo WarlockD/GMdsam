@@ -32,5 +32,8 @@
     <ClInclude Include="terminal_view.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="vt_terminal_parser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

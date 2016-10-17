@@ -14,7 +14,7 @@
 #define YYEOF          0
 #define YYPREFIX "yy"
 
-#define YYPURE 0
+#define YYPURE 1
 
 
 #if ! defined(YYSTYPE) && ! defined(YYSTYPE_IS_DECLARED)
@@ -37,11 +37,15 @@ typedef int YYSTYPE;
 
 /* Parameters sent to lex. */
 #ifdef YYLEX_PARAM
-# define YYLEX_DECL() yylex(void *YYLEX_PARAM)
-# define YYLEX yylex(YYLEX_PARAM)
+# ifdef YYLEX_PARAM_TYPE
+#  define YYLEX_DECL() yylex(YYSTYPE *yylval, YYLEX_PARAM_TYPE YYLEX_PARAM)
+# else
+#  define YYLEX_DECL() yylex(YYSTYPE *yylval, void * YYLEX_PARAM)
+# endif
+# define YYLEX yylex(&yylval, YYLEX_PARAM)
 #else
-# define YYLEX_DECL() yylex(void)
-# define YYLEX yylex()
+# define YYLEX_DECL() yylex(YYSTYPE *yylval)
+# define YYLEX yylex(&yylval)
 #endif
 
 /* Parameters sent to yyerror. */
@@ -57,51 +61,51 @@ extern int YYPARSE_DECL();
 #define YYERRCODE 256
 typedef short YYINT;
 static const YYINT yylhs[] = {                           -1,
-    0,    1,    1,    2,    2,    2,    5,    5,    5,    7,
-    7,    9,    9,    9,    9,   11,   11,   12,   12,   12,
-   12,   12,   12,   12,   12,   12,   12,    8,    8,    8,
-    8,    8,    8,    8,    8,    8,    8,    8,    8,    8,
-    8,    8,    8,   10,   10,   10,   10,   10,   10,   10,
-    3,    3,    3,    3,    6,    6,    6,    6,    6,    6,
-    4,    4,
+    0,    0,    1,    2,    2,    3,    3,    3,    6,    6,
+    6,    8,    8,   10,   10,   10,   10,   12,   12,   13,
+   14,   14,   14,   14,   14,   14,   14,   14,   14,   14,
+    9,    9,    9,    9,    9,    9,    9,    9,    9,    9,
+    9,    9,    9,    9,    9,    9,   11,   11,   11,   11,
+   11,   11,   11,    4,    4,    4,    4,    7,    7,    7,
+    7,    7,    7,    5,    5,
 };
 static const YYINT yylen[] = {                            2,
-    1,    1,    2,    2,    2,    2,    2,    2,    2,    2,
-    2,    2,    2,    2,    2,    2,    1,    1,    1,    1,
+    0,    2,    1,    1,    2,    2,    2,    2,    2,    2,
+    2,    2,    2,    2,    2,    2,    2,    2,    1,    1,
     1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
     1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
     1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
     1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
-    1,    1,
+    1,    1,    1,    1,    1,
 };
-static const YYINT yydefred[] = {                         0,
-    1,    0,
+static const YYINT yydefred[] = {                         1,
+    0,    3,    2,
 };
-static const YYINT yydgoto[] = {                          2,
-    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-    0,    0,
+static const YYINT yydgoto[] = {                          1,
+    3,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+    0,    0,    0,    0,
 };
-static const YYINT yysindex[] = {                       -27,
-    0,    0,
+static const YYINT yysindex[] = {                         0,
+  -27,    0,    0,
 };
 static const YYINT yyrindex[] = {                         0,
-    0,    0,
+    0,    0,    0,
 };
 static const YYINT yygindex[] = {                         0,
     0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
-    0,    0,
+    0,    0,    0,    0,
 };
 #define YYTABLESIZE 0
-static const YYINT yytable[] = {                          1,
+static const YYINT yytable[] = {                          2,
 };
 static const YYINT yycheck[] = {                         27,
 };
-#define YYFINAL 2
+#define YYFINAL 1
 #ifndef YYDEBUG
 #define YYDEBUG 0
 #endif
 #define YYMAXTOKEN 256
-#define YYUNDFTOKEN 271
+#define YYUNDFTOKEN 273
 #define YYTRANSLATE(a) ((a) > YYMAXTOKEN ? YYUNDFTOKEN : (a))
 #if YYDEBUG
 static const char *const yyname[] = {
@@ -115,10 +119,12 @@ static const char *const yyname[] = {
 0,0,0,0,0,0,"'\\233'",0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,0,"illegal-symbol",
+0,0,0,0,0,0,0,0,"illegal-symbol",
 };
 static const char *const yyrule[] = {
-"$accept : escape",
+"$accept : anywhere",
+"anywhere :",
+"anywhere : anywhere escape",
 "escape : '\\033'",
 "csi_entry : '\\233'",
 "csi_entry : escape '['",
@@ -136,6 +142,7 @@ static const char *const yyrule[] = {
 "csi_ignore : csi_entry ':'",
 "ground : csi_ignore range_40_7E",
 "ground : csi_dispatch",
+"mike : '0'",
 "range_digits : '0'",
 "range_digits : '1'",
 "range_digits : '2'",
@@ -188,11 +195,6 @@ static const char *const yyrule[] = {
 int      yydebug;
 int      yynerrs;
 
-int      yyerrflag;
-int      yychar;
-YYSTYPE  yyval;
-YYSTYPE  yylval;
-
 /* define the initial stack-sizes */
 #ifdef YYSTACKSIZE
 #undef YYMAXDEPTH
@@ -216,8 +218,6 @@ typedef struct {
     YYSTYPE  *l_base;
     YYSTYPE  *l_mark;
 } YYSTACKDATA;
-/* variables for the parser stack */
-static YYSTACKDATA yystack;
 
 #if YYDEBUG
 #include <stdio.h>	/* needed for printf */
@@ -280,6 +280,13 @@ static void yyfreestack(YYSTACKDATA *data)
 int
 YYPARSE_DECL()
 {
+    int      yyerrflag;
+    int      yychar;
+    YYSTYPE  yyval;
+    YYSTYPE  yylval;
+
+    /* variables for the parser stack */
+    YYSTACKDATA yystack;
     int yym, yyn, yystate;
 #if YYDEBUG
     const char *yys;
@@ -416,55 +423,87 @@ yyreduce:
 
     switch (yyn)
     {
-case 1:
-#line 7 "vt100.y"
-	{ clear(); mode(Mode::Escape); }
+case 2:
+#line 10 "vt100.y"
+	{}
 break;
 case 3:
-#line 9 "vt100.y"
-	{ clear(); mode(Mode::Csi); }
-break;
-case 4:
 #line 12 "vt100.y"
-	{ collect(yystack.l_mark[0]);}
+	{ clear(); mode(Mode::Escape); }
 break;
 case 5:
-#line 13 "vt100.y"
-	{ add_param(yystack.l_mark[0]);}
+#line 14 "vt100.y"
+	{ clear(); mode(Mode::Csi); }
 break;
 case 6:
-#line 14 "vt100.y"
-	{ add_param(yystack.l_mark[0]);}
+#line 17 "vt100.y"
+	{ collect(yystack.l_mark[0]);}
 break;
 case 7:
-#line 16 "vt100.y"
-	{ dispatch(yystack.l_mark[0]);}
+#line 18 "vt100.y"
+	{ add_param(yystack.l_mark[0]);}
 break;
 case 8:
-#line 17 "vt100.y"
-	{ dispatch(yystack.l_mark[0]);}
+#line 19 "vt100.y"
+	{ add_param(yystack.l_mark[0]);}
 break;
 case 9:
-#line 18 "vt100.y"
+#line 21 "vt100.y"
 	{ dispatch(yystack.l_mark[0]);}
 break;
 case 10:
-#line 20 "vt100.y"
-	{  collect(yystack.l_mark[0]); }
+#line 22 "vt100.y"
+	{ dispatch(yystack.l_mark[0]);}
 break;
 case 11:
-#line 21 "vt100.y"
+#line 23 "vt100.y"
+	{ dispatch(yystack.l_mark[0]);}
+break;
+case 12:
+#line 25 "vt100.y"
+	{  collect(yystack.l_mark[0]); }
+break;
+case 13:
+#line 26 "vt100.y"
 	{ collect(yystack.l_mark[0]);}
 break;
-case 16:
-#line 27 "vt100.y"
+case 18:
+#line 32 "vt100.y"
 	{ clear(); }
 break;
-case 17:
-#line 28 "vt100.y"
+case 19:
+#line 33 "vt100.y"
 	{ clear(); }
 break;
-#line 468 "vt100.cpp"
+case 20:
+#line 35 "vt100.y"
+	{ yyval = yystack.l_mark[0];}
+break;
+case 30:
+#line 36 "vt100.y"
+	{ yyval = yystack.l_mark[0]; }
+break;
+case 46:
+#line 37 "vt100.y"
+	{ yyval = yystack.l_mark[0]; }
+break;
+case 53:
+#line 38 "vt100.y"
+	{ yyval = yystack.l_mark[0]; }
+break;
+case 57:
+#line 39 "vt100.y"
+	{ yyval = yystack.l_mark[0]; }
+break;
+case 63:
+#line 41 "vt100.y"
+	{ yyval = yystack.l_mark[0];}
+break;
+case 65:
+#line 42 "vt100.y"
+	{ yyval = yystack.l_mark[0]; }
+break;
+#line 507 "vt100.cpp"
     }
     yystack.s_mark -= yym;
     yystate = *yystack.s_mark;

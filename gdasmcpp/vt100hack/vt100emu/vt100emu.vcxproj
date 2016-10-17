@@ -151,6 +151,7 @@
     <ClInclude Include="main_window.cpp" />
     <ClInclude Include="main_window.h" />
     <ClInclude Include="terminal_view.h" />
+    <ClInclude Include="vt_terminal_parser.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
