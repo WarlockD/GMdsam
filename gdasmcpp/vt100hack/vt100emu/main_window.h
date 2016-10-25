@@ -39,17 +39,17 @@ public:
 	void OnSize(UINT func, CSize size) {
 		m_term.ResizeClient(size.cx, size.cy, true);
 	}
+	int inc = 1;
 	void OnKeyDown(TCHAR ch, UINT status, UINT status0) {
 		if (moving) return;
 		moving = true;
-		if (ch == VK_UP) {
-			m_term.scroll(1);
+		switch (ch) {
+		case VK_UP: m_term.scroll(inc); break;
+		case VK_DOWN:m_term.scroll(-inc); break;
+		case VK_LEFT: inc--; break;
+		case VK_RIGHT: inc++; break;
+
 		}
-		else if (ch == VK_DOWN) {
-			m_term.scroll(-1);
-		}
-		//	sim->kbd.key_down((VT_KEY)vk_map[ch]);
-		//sim->kbd.key_press((VT_KEY)vk_map[ch]);
 	}
 	void OnKeyUp(TCHAR ch, UINT status, UINT status0) {
 		if (!moving) return;

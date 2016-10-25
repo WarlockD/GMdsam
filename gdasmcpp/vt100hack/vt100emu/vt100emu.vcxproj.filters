@@ -35,5 +35,8 @@
     <ClInclude Include="vt_terminal_parser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="VT100.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

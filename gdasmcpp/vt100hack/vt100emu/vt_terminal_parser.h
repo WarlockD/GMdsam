@@ -3,6 +3,55 @@
 #include <queue>
 #include <cassert>
 #include <array>
+#include <mutex>
+#include <condition_variable>
+
+
+struct Term
+{
+	enum  Attribute {
+		 NORMAL = 0,
+	 BOLD = 1,
+	 UNDER = 2,
+	 BLINK = 4,
+	 REVERSE = 8,
+	 SINGLE_W_H = 16,
+	 DOUBLE_W = 32,
+	 DOUBLE_T = 64,
+	 DOUBLE_B = 128
+	};
+	virtual int getRowCount() = 0;
+	virtual int getColumnCount() = 0;
+	virtual int getCharWidth() = 0;
+	virtual int getCharHeight() = 0;
+	virtual void setFont(int paramInt) = 0;
+	virtual void setCursor(int paramInt1, int paramInt2) = 0;
+	virtual void setLEDs(int paramInt) = 0;
+	virtual void clear() = 0;
+	virtual void draw_cursor() = 0;
+	virtual void redraw(int paramInt1, int paramInt2, int paramInt3, int paramInt4) = 0;
+	virtual void clear_area(int paramInt1, int paramInt2, int paramInt3, int paramInt4) = 0;
+	virtual void scroll_window(int paramInt1, int paramInt2, int paramInt3, uint32_t paramColor, bool paramBoolean) = 0;
+	virtual void drawBytes(const uint8_t*  paramArrayOfByte, int paramInt1, int paramInt2, int paramInt3, int paramInt4) = 0;
+	virtual void drawChars(const wchar_t* paramArrayOfChar, int paramInt1, int paramInt2, int paramInt3, int paramInt4) = 0;
+	virtual void drawString(const std::string& paramString, int paramInt1, int paramInt2) = 0;
+	virtual void beep() = 0;
+
+	virtual bool sendOutByte(int paramInt) = 0;
+	virtual void sendKeySeq(int key) = 0;
+	template<size_t N>
+	void sendKeySeq(int keys[N] keys) {
+		for (size_t i = 0; i < N; i++) sendKeySeq(keys[i]);
+	}
+	template <class ...Args>
+	void sendKeySeq(Args&& ...args) {
+		sendKeySeq(Args...);
+	}
+	virtual void setFGround(uint32_t paramColor) = 0;
+	virtual void setBGround(uint32_t paramColor) = 0;
+	virtual uint32_t getFGround()=0;
+	virtual uint32_t getBGround() = 0;
+};
 
 class vt_terminal_parser {
 protected:
@@ -84,6 +133,104 @@ protected:
 	virtual void esc_dispatch(int ch) = 0;
 	virtual void csi_dispatch(int ch) = 0;
 };
+
+class char_glyph {
+	std::vector<bool> _data;
+	size_t _width, _height;
+public:
+	char_glyph(size_t width, size_t height) : _width(width), _height(height), _data(width*height) {}
+	size_t width() const { return _width; }
+	size_t height() const { return _height; }
+	const std::vector<bool>& vector() const { return _data; }
+	std::vector<bool>& vector()  { return _data; }
+	bool pixel(size_t x, size_t y) const { return _data.at(x + y * _height); }
+	void pixel(size_t x, size_t y, bool value) { _data.at(x + y * _height)=value; }
+
+	template<typename T>
+	void blit_to(T* image, size_t image_stride, T bg, T fg) const{
+		auto it = _data.begin();
+		for (size_t y = 0; y < _height; y++) {
+			auto iline = image + image_stride * y;
+			for (size_t x = 0; x < _width; x++,it++) {
+				*iline = *it ? fg : bg;
+			}
+		}
+	}
+};
+
+template<typename T, typename = std::enable_if<std::is_trivially_copyable<T>::value>>
+class char_queue {
+	std::queue<T> _data;
+	std::mutex _mutex;
+	std::condition_variable _cv;
+public:
+	// not sure if we need it copyable or movable but just in case
+	char_queue(char_queue&& r) {
+		std::lock_guard guard(r._mutex);
+		_data = std::move(r._data);
+	}
+	char_queue& operator= (char_queue&& r)
+	{
+		if (&l == this) return *this;
+		std::unique_lock lk1(_mutex, std::defer_lock);
+		std::unique_lock lk2(r._mutex, std::defer_lock);
+		std::lock(lk1, lk2);
+		_queue = std::move(r._queue);
+		return *this;
+	}
+	char_queue(const char_queue& r)
+	{
+		std::lock_guard guard(r._mutex);
+		_data = r._data;
+	}
+	char_queue& operator= (const char_queue& r)
+	{
+		if (&l == this) return *this;
+		std::unique_lock lk1(_mutex, std::defer_lock);
+		std::unique_lock lk2(r._mutex, std::defer_lock);
+		std::lock(lk1, lk2);
+		_queue = r._queue;
+		return *this;
+	}
+	bool pop_try(T& data) {
+		if (!_mutex.try_lock()) return false;
+		_cv.tr
+		bool ret = _data.empty();
+		if (!ret) {
+			data = _data.front();
+			_data.pop();
+		}
+		_mutex.unlock();
+		return ret;
+	}
+	uint8_t pop_wait() {
+		std::unique_lock<std::mutex> lk(_mutex); // mutex scope lock
+		_cv.wait(lk, [this]() { return !_data.empty(); });
+		uint8_t ret = _data.front();
+		_data.pop();
+		return ret;
+	}
+	template <class ...Args>
+	void emplace(Args&& ...args) {
+		std::unique_lock<std::mutex> lk(_mutex);
+		_data.emplace(std::forward<Args>(args...));
+		lk.unlock();
+		_cv.notify_one(); // notify one waiting thread
+	}
+	void push(const T& data) {
+		std::unique_lock<std::mutex> lk(_mutex);
+		_data.push(data);
+		lk.unlock();
+		_cv.notify_one(); // notify one waiting thread
+	}
+	template<typename U>
+	void push(U&& data) {
+		std::unique_lock<std::mutex> lk(_mutex);
+		_data.push(std::forward<T>(data));
+		lk.unlock();
+		_cv.notify_one(); // notify one waiting thread
+	}
+};
 class vt100_parser : public vt_terminal_parser {
 protected:
 	enum  CharAttributes : uint16_t
@@ -140,7 +287,14 @@ protected:
 	CharAttribute _blankAttrib;
 	int _topMargin = 0;
 	int _bottomMargin = 23;
+	
 public:
+	virtual void esc_dispatch(int ch) override {
+
+	}
+	virtual void csi_dispatch(int ch) override {
+
+	}
 	void putch(int x, int y, wchar_t c) {
 		auto& line = _lines[y];
 		if (line.line.size() < x) {
@@ -180,3 +334,5 @@ public:
 	}
 
 };
+
+
