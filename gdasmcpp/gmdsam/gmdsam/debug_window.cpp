@@ -119,8 +119,10 @@ namespace ext {
 		return os;
 	}
 };
+/*
+
 using namespace std;
-void PrintLastError(const char *msg /* = "Error occurred" */) {
+void PrintLastError(const char *msg = "Error occurred" ) {
 	DWORD errCode = GetLastError();
 	char *err;
 	if (!FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
@@ -158,14 +160,13 @@ private:
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	static void window_thread(DebugStreamWindow * ptr) {
 		std::string title="DebugStream";
-		/*
-	
-		if (fname) {
+		
+			if (fname) {
 			title += "DebugStream - (";
 			title += fname;
 			title += ")";
 		}
-		*/
+
 		//HINSTANCE hInstance = GetModuleHandle(0);
 		WNDCLASS wndclass;
 		wndclass.style = CS_HREDRAW | CS_VREDRAW;
@@ -253,9 +254,9 @@ static void window_thread(void * ptr) {
 }
 
 void DebugStreamWindow::open(const char fname[])
-/* PURPOSE: Open a window for output logging
+// PURPOSE: Open a window for output logging
 RECEIVES: fname - the file name (for the window title)
-*/
+
 {
 	if (_win) close();
 	std::thread test(DebugStreamWindow::window_thread,this);
@@ -295,11 +296,11 @@ LRESULT CALLBACK DebugStreamWindow::WndProc(HWND hWnd, UINT message, WPARAM wPar
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 void DebugStreamWindow::append(const char text[], int count)
-/* PURPOSE:    Append text to the output window
+// PURPOSE:    Append text to the output window
 RECEIVES:   text - the start of the text
 count - the number of bytes
 REMARKS:    This function performs \n -> \r\n translation
-*/
+
 {
 	if (!_win) open();
 	if (!_edit || !count) return;
@@ -323,7 +324,7 @@ REMARKS:    This function performs \n -> \r\n translation
 }
 int DebugStreamWindow::getLength()
 /* PURPOSE:    Get the length of the text in the edit box
-*/
+
 {
 	if (!_edit) return 0;
 	int linecount = SendMessage(_edit, EM_GETLINECOUNT, 0, 0L);
@@ -333,9 +334,9 @@ int DebugStreamWindow::getLength()
 	return nlast;
 }
 int DebugStreamWindow::removeFirst()
-/* PURPOSE:    Remove the first line in the edit box
+ PURPOSE:    Remove the first line in the edit box
 RETURNS:    The length of the removed line
-*/
+
 {
 	if (!_edit) return 0;
 	int nfirst = SendMessage(_edit, EM_LINEINDEX, 1, 0L);
@@ -427,7 +428,7 @@ public:
 				dcImage.SelectBitmap(hBmpOld);
 			}
 		}
-		*/
+		
 	}
 	void create_backbuffer() {
 		if (!_backbuffer.Create(800, 240, 32))
@@ -539,3 +540,4 @@ void init_test() {
 		_test->open("try");
 	}
 }
+*/

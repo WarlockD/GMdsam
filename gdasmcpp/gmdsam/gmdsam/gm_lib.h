@@ -1,6 +1,7 @@
 #pragma once
 #include "global.h"
-
+#include <fstream>
+#include <type_traits>
 
 namespace gm {
 	// structore for event info
@@ -45,7 +46,34 @@ namespace std
 	};
 }
 namespace gm {
-	
+	class String {
+	public:
+		String();
+		String(const String& a);
+		String(String&& a);
+		String& operator=(const String& a);
+		String& operator=(String&& a);
+		~String();
+
+		void assign(const char* str, size_t size);
+
+		String(const char* str, size_t size);
+		String(const std::string& str) : String(str.c_str(), str.size()) {}
+		String(const char* str) : String(str, ::strlen(str)) {}
+
+
+		const char* c_str() const { return m_str; }
+		size_t size() const { return *reinterpret_cast<const size_t*>(m_str - 4) & 0x00FFFFFF; }
+		const char* begin() const { return m_str; }
+		const char* end() const { return m_str + size(); }
+		char at(size_t i) const { return m_str[i]; }
+		char operator[](size_t i) const { return m_str[i]; }
+		friend inline bool operator==(const String& l, const String& r) { return l.m_str == r.m_str; }
+		friend inline bool operator!=(const String& l, const String& r) { return l.m_str != r.m_str; }
+	private:
+		friend class StringTable;
+		const char* m_str;
+	};
 	class SymbolTable {
 	private:
 		struct _Symbol {
@@ -174,6 +202,12 @@ namespace gm {
 		CannotCreate& operator=(CannotCreate &&) = delete;  // undefined
 	};
 
+	class FileHelperException : public std::exception {
+		std::string m_msg;
+	public:
+		FileHelperException(const std::string& msg) : m_msg(msg) {}
+		virtual const char* what() const override { return m_msg.c_str(); }
+	};
 	
 	
 	class FileHelper {
@@ -185,16 +219,22 @@ namespace gm {
 		void load(const std::vector<uint8_t>& data) { _data = data;  _pos = 0;  }
 		void load(std::vector<uint8_t>&& data) { _data = std::move(data);  _pos = 0; }
 		void load(std::istream& is)  {
-			_pos = 0;
-			is.seekg(std::ios::end, 0);
-			std::streamsize size = is.tellg();
-			_data.resize((size_t)size);
-			is.seekg(0);
+			is.seekg(0, std::ios::end);
+			size_t size = size_t(is.tellg());
+			is.seekg(std::ios::beg, 0);
+			_data.resize(size);
 			is.read(reinterpret_cast<char*>(_data.data()), size);
+		}
+		void load(const std::string& filename) {
+			//std::ifstream fs(filename, std::ifstream::beg | std::ifstream::binary);
+			std::ifstream fs(filename, std::ifstream::ate | std::ifstream::binary);
+			if (fs.bad()) throw FileHelperException("Could not open file '" + filename + "'");
+			load(fs);
 		}
 		FileHelper(const std::vector<uint8_t>& data) { load(data); }
 		FileHelper(std::vector<uint8_t>&& data) { load(data); }
 		FileHelper(std::istream& is) { load(is); }
+		
 		// save or push the offset stack
 		size_t offset() const { return _pos; }
 		size_t size() const { return _data.size(); }
@@ -834,6 +874,7 @@ namespace gm {
 		void load(std::vector<uint8_t>&& data) { _data = std::move(data); load_chunks(); }
 		void load(const std::vector<uint8_t>& data) { _data = data; load_chunks(); }
 		void load(std::istream& is) { _data.load(is); load_chunks(); }
+		void load(const std::string& filename) { _data.load(filename); load_chunks(); }
 		bool has_data() const { return !_chunks.empty(); }
 
 		size_t size() const { return _full_size; }

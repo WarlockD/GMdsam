@@ -19,22 +19,18 @@ friend ito_binary_wraper operator >> (std::istream& stream, T &)
 	return ito_binary_wraper(stream);
 }
 */
-void init_test();
+
 int main(int argc, const char* argv[]) {
-	init_test();
 	gm::DataWinFile file;
 	if (argc == 2) {
 		std::string filename = argv[1];
-		std::ifstream ufile(filename, std::ifstream::ate | std::ifstream::binary);
-		size_t size = (size_t)ufile.tellg();
-		ufile.seekg(std::ios::beg, 0);
-		std::vector<uint8_t> data(size);
-		ufile.read(reinterpret_cast<char*>(data.data()), size);
-
-		if (ufile.bad()) 
+		try {
+			file.load(filename);
+		}
+		catch (gm::FileHelperException e) {
+			std::cerr << e.what() << std::endl;
 			return -1;
-		file.load(std::move(data));
-		ufile.close();
+		}
 	}
 	if (!file.has_data()) 
 		return -1;

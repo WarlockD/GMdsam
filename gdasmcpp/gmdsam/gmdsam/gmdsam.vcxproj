@@ -152,7 +152,6 @@
     <ClCompile Include="global.cpp" />
     <ClCompile Include="gm_lib.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="win32_window.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
