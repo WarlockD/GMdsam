@@ -146,6 +146,7 @@
     <ClInclude Include="dsam.h" />
     <ClInclude Include="global.h" />
     <ClInclude Include="gm_lib.h" />
+    <ClInclude Include="xml_writer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="debug_window.cpp" />

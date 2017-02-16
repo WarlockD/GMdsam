@@ -523,6 +523,25 @@ namespace util {
 		std::string _str;
 	};
 
+	class StreamIdent {
+	public:
+		StreamIdent() : _ident(0) {}
+		StreamIdent(size_t ident) : _ident(ident) {}
+		friend std::ostream& operator<<(std::ostream& os, const StreamIdent& ident);
+		StreamIdent& operator++() { _ident++; return *this; }
+		StreamIdent operator++(int) { auto tmp(*this); operator++(); return tmp; }
+		StreamIdent& operator--() { _ident--; return *this; }
+		StreamIdent operator--(int) { auto tmp(*this); operator--(); return tmp; }
+		StreamIdent& operator+=(size_t v) { _ident += v; return *this; }
+		StreamIdent& operator-=(size_t v) { _ident -= v; return *this; }
+		StreamIdent& operator=(size_t v) { _ident = v; return *this; }
+	private:
+		size_t _ident;
+	};
+	inline std::ostream& operator<<(std::ostream& os, const StreamIdent& ident) {
+		for (size_t i = 0; i < ident._ident; i++) os << "\t";
+		return os;
+	};
 };
 
 namespace std {

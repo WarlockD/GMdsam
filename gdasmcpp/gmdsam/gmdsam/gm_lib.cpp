@@ -35,16 +35,21 @@ namespace {
 namespace gm {
 	// copied from Lua 5.3.3
 	class StringTable {
+	public:
+		class StringTableException : public GMException  {
+		public:
+			StringTableException(const std::string& msg) : GMException("StringTable: " + msg) {}
+		};
 		struct istring {
 			// for compiler errors
 			istring(const istring&) = delete;
 			istring(istring&&) = delete;
 			void mark() { _size |= (0x01 << 24); }
 			void  unmark() { _size &= ~(0x01 << 24); }
-			bool marked() const { return _size & 0xFF000000 != 0; }
-			bool fixed() const { return _size & 0x10000000 != 0; }
-			size_t size() const { return _size&0x00FFFFFF; }
-			size_t _size;
+			bool marked() const { return (_size & 0xFF000000) != 0; }
+			bool fixed() const { return (_size & 0x10000000) != 0; }
+			uint32_t size() const { return _size&0x00FFFFFF; }
+			uint32_t _size;
 			char str[1];
 		};
 		union istring_find {
@@ -52,24 +57,37 @@ namespace gm {
 				size_t size;
 				const char* str;
 			} find;
-			istring org;
+			const istring org;
 		};
 		struct hasher {
 			size_t operator()(const istring* l) const { return luaS_hash(l->str, l->size()); };
 		};
 		struct equaler {
-			bool operator()(const istring* l, const istring* r) const { return l->size() == r->size() && ::memcmp(l->str, r->str, sizeof(char)*l->size()) == 0; };
+			bool operator()(const istring* l, const istring* r) const { return l == r || l->str == r->str || (l->size() == r->size() && ::memcmp(l->str, r->str, sizeof(char)*l->size()) == 0); };
 		};
-		std::unordered_set<istring*, hasher, equaler> m_string_table;
-		std::unordered_set<const String*> m_istrings;
-		size_t m_strings_used=0;
+		struct fixed_equaler {
+			bool operator()(const istring* l, const istring* r) const { return l == r || l->str == r->str; };
+		};
+		struct fixed_hasher {
+			size_t operator()(const istring* l) const { return std::hash<const void*>()(l->str); };
+		};
 
-		
-		void clear_marks() {
-			for (auto a : m_string_table) a->unmark(); // a->size &= ~(0x10 << 24);
+		std::unordered_set<const istring*, hasher, equaler> m_string_table;
+		//std::unordered_set<const istring*, fixed_hasher, fixed_equaler> m_string_fixed_table;
+		std::unordered_set<const String*> m_istrings;
+		template<typename T>
+		inline static istring* danger_cast(const T* v) { return const_cast<istring*>(reinterpret_cast<const istring*>(v)); }
+		// we insert a string that is already in memory
+		// be sure to delete this record FIRST before you collect this
+		void insert_fixed(const istring* ci) {
+			auto i= danger_cast(ci);
+			i->fixed();
+			auto it = m_string_table.emplace(ci);
+			if (it.second) {
+				if(*it.first != ci) throw StringTableException("insert_fixed: string already in table");
+			}
 		}
-	public:
-		istring*  intern(const char* str, size_t l) {
+		const istring*  intern(const char* str, size_t l) {
 			istring_find search = { l , str };
 			auto it = m_string_table.find(&search.org);
 			if (it != m_string_table.end()) return *it;
@@ -82,6 +100,7 @@ namespace gm {
 		}
 		static istring s_empty;
 		StringTable() {
+			//insert_fixed(&s_empty);
 			m_string_table.emplace(&s_empty);
 		}
 		void make_perm(istring* s) {
@@ -93,7 +112,7 @@ namespace gm {
 				str->mark();
 			}
 			for (auto it = m_string_table.begin(); it != m_string_table.end();) {
-				istring* str = (*it);
+				istring* str = const_cast<istring*>((*it));
 				if (str->fixed() || str->marked()) {
 					it++;
 					str->unmark();
@@ -129,8 +148,9 @@ namespace gm {
 	};
 	StringTable::istring StringTable::s_empty = { (0x10 << 24), 0 };
 	static StringTable s_string_table;
+	const char* String::s_empty_string = StringTable::s_empty.str;
 
-	String::String() : m_str(StringTable::s_empty.str) { }
+	
 	String::String(const String& a) : m_str(a.m_str) { s_string_table.add_string(this); }
 	String::String(String&& a) : String() { s_string_table.swap_string(this, &a); }
 	String& String::operator=(const String& a) { s_string_table.assign_string(this, a.m_str); return *this; }
@@ -145,7 +165,13 @@ namespace gm {
 	String::String(const char* str, size_t l) : m_str(s_string_table.intern(str, l)->str) { s_string_table.add_string(this); }
 
 
-
+	void DataWinFile::fill_stringtable() {
+		auto strt_chunk = get_chunk<ChunkType::STRG>();
+		for (size_t i = 0; i < strt_chunk->count; i++) {
+			const StringTable::istring* s = reinterpret_cast<const StringTable::istring*>( _data.data() +strt_chunk->offsets[i]);
+			s_string_table.insert_fixed(s);
+		}
+	}
 	static const std::unordered_map<size_t, std::string> key_to_string = {
 		{ 0, "NOKEY" },
 		{ 1, "ANYKEY" },

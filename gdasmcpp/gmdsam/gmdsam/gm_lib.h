@@ -20,6 +20,41 @@ namespace gm {
 		Trigger
 	};
 
+	class String {
+	public:
+		String::String() : m_str(s_empty_string) { }
+		String(const String& a);
+		String(String&& a);
+		String& operator=(const String& a);
+		String& operator=(String&& a);
+		~String();
+
+		void assign(const char* str, size_t size);
+		void assign(const std::string& str) { assign(str.c_str(), str.size()); }
+		String(const char* str, size_t size);
+		String(const std::string& str) : String(str.c_str(), str.size()) {}
+		String(const char* str) : String(str, ::strlen(str)) {}
+		bool empty() const { return m_str == s_empty_string; }
+		operator const char*() const { return m_str; }
+
+		String& operator=(const char* str) { assign(str, ::strlen(str)); return *this; }
+		String& operator=(const std::string& str) { assign(str); return *this; }
+
+		const char* c_str() const { return m_str; }
+		size_t size() const { return *reinterpret_cast<const size_t*>(m_str - 4) & 0x00FFFFFF; }
+		const char* begin() const { return m_str; }
+		const char* end() const { return m_str + size(); }
+		char at(size_t i) const { return m_str[i]; }
+		char operator[](size_t i) const { return m_str[i]; }
+		friend inline bool operator==(const String& l, const String& r) { return l.m_str == r.m_str; }
+		friend inline bool operator!=(const String& l, const String& r) { return l.m_str != r.m_str; }
+		friend inline std::ostream& operator<<(std::ostream& os, const String& s) { os << s.c_str(); return os; }
+	private:
+		friend class StringTable;
+		const char* m_str;
+		static const char* s_empty_string;
+	};
+
 	class EventType : public StreamInterface {
 		size_t _event;
 		friend struct std::hash<gm::EventType>;
@@ -36,102 +71,143 @@ namespace gm {
 		bool operator<(const EventType& other) const { return _event < other._event; }
 		void to_stream(std::ostream& os) const override;
 	};
+
+	class GMException : public std::exception {
+		std::string _msg;
+	public:
+		GMException(const std::string& msg) : _msg(msg) {}
+		GMException(std::string&& msg) : _msg(std::move(msg)) {}
+		virtual char const* what() const override { return _msg.c_str(); }
+	};
+
+	class SimpleXmlWriter {
+	public:
+		SimpleXmlWriter() {}
+		virtual ~SimpleXmlWriter() {}
+		bool open(const std::string& filename) {
+			if (_os) return false;
+			std::fstream* os = new std::fstream(filename, std::ios::out);
+			if (!os->good()) { delete os; return false; }
+			_os.reset(os);
+			write_headder();
+			return true;
+		}
+		void close() {
+			if (_os) {
+				writer_end();
+				_os.reset();
+			}
+		}
+
+		std::ostream& stream() { return *_os; }
+
+		void attribute_begin(const char* tag) {
+			if (_os) {
+				if (_in_attribute) tag_end();
+				_opened_tags.emplace(tag);
+				*_os << _indent++ << '<' << tag << ' ';
+				_in_attribute = true;
+			}
+		}
+		void attribute_end() {
+			if (_os && _in_attribute) {
+				*_os << '>' << std::endl;
+				_in_attribute = false;
+			}
+		}
+		template<class T>
+		void attribute_end(const T& value) {
+			if (_os && _in_attribute) {
+				auto tag = _opened_tags.top();
+				*_os << '>' << value << "</" << tag << '>' << std::end;
+				_opened_tags.pop();
+				_in_attribute = false;
+			}
+		}
+
+		void tag_begin(const char* tag) {
+			if (_os) {
+				if (_in_attribute) tag_end();
+				_opened_tags.emplace(tag);
+				*_os << _indent++ << '<' << tag << '>' << std::endl;
+			}
+		}
+		template<class V>
+		void tag_begin_end(const char* tag, const V& value) {
+			if (_os) {
+				*_os << _indent << '<' << tag << '>' << value << "</" << tag << '>' << std::end;
+			}
+		}
+		void tag_end() {
+			if (_os && !_opened_tags.empty()) {
+				if (_in_attribute) {
+					*_os << "/>" << std::endl;
+					_in_attribute = false;
+				}
+				else {
+					auto tag = _opened_tags.top();
+					*_os << --_indent << "</" << tag << '>' << std::endl;
+				}
+				_opened_tags.pop();
+			}
+		}
+		void writer_begin() {
+			*_os << "<!--XML Document-->" << std::endl;
+			*_os << "<?xml version='1.0' encoding='us-ascii'>" << std::endl;
+			_indent = 0;
+		}
+
+		bool good() const { return _os && _os->good(); }
+
+		void write(const char* str) const {
+			if (_os) {
+				if (_in_attribute) *_os << str << ' ';
+				else  *_os << _indent << str << std::endl;
+			}
+		}
+		template<class U>
+		void tag_write(const char tag, const U& str) {
+			if (_os) {
+				*_os << _indent << '<' << tag << '>' << str << "</" << tag << '>' << std::endl;
+			}
+		}
+
+		void write_attribute(const char*attribute, int value) {
+			if (_os &&_in_attribute) {
+				*_os << attribute << '=' << value << ' ';
+			}
+		}
+
+		void write_attribute(const char* attribute) { write(attribute); }
+	protected:
+		void write_headder() const {
+			*_os << "<!--XML Document-->" << std::endl;
+			*_os << "<?xml version='1.0' encoding='us-ascii'>" << std::endl;
+		}
+		void writer_end() {
+			while (!_opened_tags.empty()) tag_end();
+		}
+		std::unique_ptr<std::ostream> _os;
+		util::StreamIdent _indent;
+		bool _in_attribute;
+		std::stack<gm::String> _opened_tags;
+	};
+
 };
 // custom specialization of std::hash can be injected in namespace std
 namespace std
 {
 	template<> struct hash<gm::EventType>
 	{
-		size_t operator()(gm::EventType const& e) const { return e._event; }
+		size_t operator()(const gm::EventType & e) const { return e._event; }
+	};
+	template<> struct hash<gm::String>
+	{
+		size_t operator()(const gm::String & s) const { return std::hash<const void*>()(s.c_str()); }
 	};
 }
 namespace gm {
-	class String {
-	public:
-		String();
-		String(const String& a);
-		String(String&& a);
-		String& operator=(const String& a);
-		String& operator=(String&& a);
-		~String();
-
-		void assign(const char* str, size_t size);
-
-		String(const char* str, size_t size);
-		String(const std::string& str) : String(str.c_str(), str.size()) {}
-		String(const char* str) : String(str, ::strlen(str)) {}
-
-
-		const char* c_str() const { return m_str; }
-		size_t size() const { return *reinterpret_cast<const size_t*>(m_str - 4) & 0x00FFFFFF; }
-		const char* begin() const { return m_str; }
-		const char* end() const { return m_str + size(); }
-		char at(size_t i) const { return m_str[i]; }
-		char operator[](size_t i) const { return m_str[i]; }
-		friend inline bool operator==(const String& l, const String& r) { return l.m_str == r.m_str; }
-		friend inline bool operator!=(const String& l, const String& r) { return l.m_str != r.m_str; }
-	private:
-		friend class StringTable;
-		const char* m_str;
-	};
-	class SymbolTable {
-	private:
-		struct _Symbol {
-			size_t _offset;
-			size_t _length;
-			char* _name;
-		};
-		struct _symbol_hasher {
-			size_t operator()(const _Symbol* s) const { return util::simple_hash(s->_name, s->_length); }
-		};
-		struct _symbol_equals {
-			bool operator()(const _Symbol* l, const _Symbol* r) const { return l->_length == r->_length && std::memcmp(l->_name, r->_name, l->_length) == 0; }
-		};
-		typedef std::unordered_set<_Symbol*, _symbol_hasher, _symbol_equals> sym_table;
-		typedef sym_table::iterator iterator;
-		sym_table _table;
-		_Symbol* find(const char* str, size_t length) {
-			_Symbol test = { 0, length, const_cast<char*>(str) };
-			auto it = _table.find(&test);
-			if (it != _table.end()) return *it;
-			else return nullptr;
-		}
-		_Symbol* emplace(const char* str, size_t length) {
-			_Symbol* ptr = find(str, length);
-			if (ptr != nullptr) return ptr; 
-			ptr = new _Symbol{ 0, length, new char[length + 1] };
-			std::strncpy(ptr->_name, str, length);
-			_table.emplace(ptr);
-			return ptr;
-		}
-	public:
-		class Symbol {
-			_Symbol* _symbol;
-			friend class SymbolTable;
-			Symbol(_Symbol* ptr) : _symbol(ptr) {}
-		public:
-			const char* name() const { return _symbol->_name; }
-			size_t offset() const { return _symbol->_offset; }
-			void offset(size_t o) { _symbol->_offset = o; }
-			bool operator==(const Symbol& other) const { return other._symbol == _symbol; }
-			bool operator!=(const Symbol& other) const { return other._symbol != _symbol; }
-			void to_stream(std::ostream& os) {
-				os << "{ name : " << name() << ", offset : " << offset() << " }";
-			}
-		};
-		SymbolTable() {}
-		SymbolTable(const SymbolTable&) = delete;
-		~SymbolTable() {
-			for (auto& a : _table) {
-				delete[] a->_name;
-				delete[] a;
-			}
-			_table.clear();
-		}
-		SymbolTable& operator=(const SymbolTable&) = delete;
-		Symbol lookup(const std::string& s) { return Symbol(emplace(s.c_str(), s.length())); }
-	};
-	
+	class DataWinFile;
 	namespace priv {
 		template<typename T, typename V = bool>
 		struct has_name_offset : std::false_type { };
@@ -171,7 +247,7 @@ namespace gm {
 		OffsetList(const uint8_t* ptr,size_t offset) : _data(ptr), _list(ptr,offset) {}
 		OffsetList(const uint8_t* ptr, const uint8_t* list) : _data(ptr), _list(list) {}
 		size_t size() const { return _list.size(); }
-		const VALUE_T* at(size_t i) const { return reinterpret_cast<const VALUE_T*>(data + _list.at(i)); }
+		const VALUE_T* at(size_t i) const { return reinterpret_cast<const VALUE_T*>(_data + _list.at(i)); }
 		iterator begin() const { return iterator(*this, 0); }
 		iterator end() const { return iterator(*this, size()); }
 		void to_debug(std::ostream& os) const {
@@ -202,14 +278,11 @@ namespace gm {
 		CannotCreate& operator=(CannotCreate &&) = delete;  // undefined
 	};
 
-	class FileHelperException : public std::exception {
-		std::string m_msg;
+	class FileHelperException : public GMException {
 	public:
-		FileHelperException(const std::string& msg) : m_msg(msg) {}
-		virtual const char* what() const override { return m_msg.c_str(); }
+		FileHelperException(const std::string& msg) : GMException("FileHelper: " + msg) {}
 	};
-	
-	
+
 	class FileHelper {
 		std::vector<uint8_t> _data;
 		size_t _pos;
@@ -333,11 +406,11 @@ namespace gm {
 	class NameInterface : public IndexInterface {
 	protected:
 		constexpr static const char * NONAME = "<EMPTY>";
-		const char* _name;
+		String _name;
 	public:
-		NameInterface(uint32_t offset, uint32_t index, const char* name) : _name(name), IndexInterface(offset,index) {}
-		const char* name() const { return _name; }
-		bool valid_name() const { return _name && *_name != '\0'; }
+		NameInterface(uint32_t offset, uint32_t index, String name) : _name(name), IndexInterface(offset,index) {}
+		String name() const { return _name; }
+		bool valid_name() const { return !_name.empty(); }
 		bool operator<(const NameInterface& other) const { return IndexInterface::operator<(other); }
 		bool operator==(const IndexInterface& other) const { return IndexInterface::operator==(other); }
 		bool operator!=(const IndexInterface& other) const { return IndexInterface::operator!=(other); }
@@ -400,6 +473,23 @@ namespace gm {
 		const RAW_T* raw() const { return _raw; }
 		template<typename T, typename = std::enable_if<std::is_convertible<T,uint32_t>::value>::type> // index handles the conversion
 		Resource(T index, const uint8_t* data, uint32_t offset) : Resource(static_cast<uint32_t>(index), data, offset, _name_test{}) {}
+	};
+
+	class XMLResourceExportInterface  {
+	public:
+		virtual ~XMLResourceExportInterface() {}
+		static inline std::string xml_export_filename(ChunkType CT, const std::string& name)  {
+			std::string filename = name;
+			switch (CT) {
+			case ChunkType::FONT: filename += ".font"; break;
+			case ChunkType::SPRT: filename += ".sprite"; break;
+			default:
+				break;
+			}
+			filename += ".gmx";
+			return filename;
+		}
+		virtual bool xml_export(const std::string& path) const = 0;
 	};
 	namespace raw_type {
 		// these are all the internal raw types in game maker that I could derive
@@ -799,7 +889,7 @@ namespace gm {
 		bool physics_enabled() const { return _raw->physics_enabled != 0; }
 	};
 
-	class Sprite : public Resource<raw_type::Sprite, ChunkType::SPRT> {
+	class Sprite : public Resource<raw_type::Sprite, ChunkType::SPRT>, public XMLResourceExportInterface {
 		const uint8_t* _masks;
 		// kind of a hack.  First number is an int of the size, after that
 		// its just an array of masks, not sure why there would be more than
@@ -829,9 +919,48 @@ namespace gm {
 		BitMask mask_at(size_t index) const {
 			return BitMask(width(), height(), _masks + sizeof(int) + (mask_stride()*height() * index));
 		}
+		virtual bool xml_export(const std::string& path) const {
+			SimpleXmlWriter xml;
+			if (!xml.open(path + '\\' + XMLResourceExportInterface::xml_export_filename(ChunkType::SPRT, name().c_str()))) return false;
+			xml.tag_begin("sprite");
+			xml.tag_begin_end("type", _raw->mode);
+			xml.tag_begin_end("xorg", _raw->original_x);
+			xml.tag_begin_end("yorigin", _raw->original_y);
+			xml.tag_begin_end("colkind", _raw->colcheck);
+			xml.tag_begin_end("sepmasks", 0);
+			xml.tag_begin_end("bbox_left", _raw->left);
+			xml.tag_begin_end("bbox_right", _raw->right);
+			xml.tag_begin_end("bbox_top", _raw->top);
+			xml.tag_begin_end("bbox_bottom", _raw->bottom);
+			xml.tag_begin_end("HTile", 0);
+			xml.tag_begin_end("VTile", 0);
+			xml.tag_begin("TextureGroups");
+			xml.tag_begin_end("TextureGroup0", frames().at(0)->texture_index);
+			xml.tag_end();
+			xml.tag_begin_end("For3D", 0);
+			xml.tag_begin_end("width", _raw->width);
+			xml.tag_begin_end("height", _raw->height);
+			xml.tag_begin("frames");
+			std::string n;
+			auto& ff = frames();
+			for (size_t i = 0; i < ff.size(); i++) {
+				const auto & f = ff.at(i);
+				xml.attribute_begin("frame");
+				xml.write_attribute("index", i);
+				n = name().c_str();
+				n += "_" + std::to_string(i) + ".png";
+				xml.attribute_end(n);
+			}
+			xml.tag_end();
+			xml.tag_end();
+			xml.close();
+		}
 	};
 	
-
+	class DataWinFileException : public GMException {
+	public:
+		DataWinFileException(const std::string& msg) : GMException("Data Win File: " + msg) {}
+	};
 	class DataWinFile {
 		struct Chunk : CannotCreate<Chunk> {
 			union {
@@ -847,6 +976,7 @@ namespace gm {
 		std::unordered_map<uint32_t, const Chunk*> _chunks;
 		//std::reference_wrapper<Chunk> test
 		using chunk_const_iterator = std::unordered_map<uint32_t, const Chunk*>::const_iterator;
+		void fill_stringtable(); // used to get the string table with all the strings from datawin
 		void load_chunks() {
 			size_t pos = 0;
 			_full_size = 0;
@@ -867,8 +997,14 @@ namespace gm {
 					pos += chunk->size;
 				}
 			}
+			fill_stringtable();
 		}
-
+		template<ChunkType C>
+		const Chunk* get_chunk() const {
+			auto it = _chunks.find(chunk_traits<C>::swap_value());
+			if (it == _chunks.end()) throw DataWinFileException("Chunk type not found"); // not found
+			return &(*it->second);
+		}
 	public:
 		DataWinFile() {}
 		void load(std::vector<uint8_t>&& data) { _data = std::move(data); load_chunks(); }
@@ -886,10 +1022,8 @@ namespace gm {
 		}
 		template<class C, class = std::enable_if<priv::is_resource<C>::value>>
 		C resource_at(uint32_t index) const {
-			auto it = _chunks.find(chunk_traits<C::ResType>::swap_value());
-			if (it == _chunks.end()) throw; // not found
-			const Chunk* chunk = &(*it->second);
-			return C(index, _data.data(), it->second->offsets[index]);
+			auto it = get_chunk<C::ResType>();
+			return C(index, _data.data(), it->offsets[index]);
 		}
 	};
 };

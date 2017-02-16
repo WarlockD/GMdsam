@@ -34,6 +34,7 @@ int main(int argc, const char* argv[]) {
 	}
 	if (!file.has_data()) 
 		return -1;
+	gm::String fa("test");
 
 	auto object = file.resource_at<gm::Object>(217); // jerry
 	std::cout << "Object: " << object.name() << std::endl;

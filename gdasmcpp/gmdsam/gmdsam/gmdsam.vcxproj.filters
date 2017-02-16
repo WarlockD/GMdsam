@@ -24,6 +24,9 @@
     <ClInclude Include="dsam.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="xml_writer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
