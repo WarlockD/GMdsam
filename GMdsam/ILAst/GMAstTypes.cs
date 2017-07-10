@@ -303,6 +303,12 @@ namespace GameMaker.Ast
     }
     public class ILBlock : ILNode, ILNodeBlock
     {
+        public enum ILState
+        {
+            Good,
+            Processing,
+            Error
+        }
         public ILExpression EntryGoto;
         NodeList<ILNode> _body = null;
         public ILBlock() { _body = new NodeList<ILNode>(this); }

@@ -594,6 +594,24 @@ namespace GameMaker
         [DataContract]
         public class Background : GameMakerStructure, INamedResrouce, IImageResorce
         {
+            [DataContract]
+            public class BackgroundInfo
+            {
+                int istileset = -1;
+                int tilewidth = -1;
+                int tileheight = -1;
+                int tilexoff = -1;
+                int tileyoff = -1;
+                int tilehsep = -1;
+                int tilevsep = -1;
+                int HTile = -1;
+                int VTile = -1;
+                List<int> TextureGroups=new List<int>();
+                int For3D=-1;
+                int width = -1;
+                int height = -1;
+                string data=null; //   < data > images\background.png</ data>
+            }
             [DataMember(Order = 10)]
             public bool Trasparent;
             [DataMember(Order = 11)]
@@ -1014,11 +1032,13 @@ namespace GameMaker
        // string Regex argumentSearch = new Regex()
         public class Script : GameMakerStructure, INamedResrouce
         {
+            static ILBlock _badBlockFiller = new ILBlock();
             GM_Type _returnType = GM_Type.NoType;
             int _scriptIndex;
             int _argumentCount;
             private readonly object _syncRoot = new object();
             private ILBlock _block = null;
+            bool decompiledFailed {  get { return decompiledFailed;  } }
             void CountArguments(ILVariable v, ref int arg)
             {
                 var match = Context.ScriptArgRegex.Match(v.Name);
@@ -1031,6 +1051,7 @@ namespace GameMaker
             ILBlock CreateScriptBlock() { 
                 if(_scriptIndex < 0) return null;
                 ILBlock block = File.Codes[_scriptIndex].Block;
+                if (block == null) return _badBlockFiller;
                 HashSet<GM_Type> types = new HashSet<GM_Type>();
                 _argumentCount = 0;
                 foreach (var e in block.GetSelfAndChildrenRecursive<ILExpression>(x=> x.Code == GMCode.Ret || x.Code == GMCode.Var))
@@ -1058,7 +1079,6 @@ namespace GameMaker
                     {
                         if (_block == null)
                         {
-                            if (!Context.doThreads) Context.Message("Starting Script Code '{0}'", Name);
                             _block = CreateScriptBlock();
                         }
                     }
@@ -1069,7 +1089,7 @@ namespace GameMaker
                 get
                 {
                     CheckBlockCache();
-                    return _block;
+                    return _block == _badBlockFiller ? null : _block;
                 }
             }
             public GM_Type ReturnType
@@ -1104,6 +1124,7 @@ namespace GameMaker
         
         public abstract class Code : GameMakerStructure, IDataResource, INamedResrouce
         {
+            static ILBlock _badBlockFiller = new ILBlock();
             public int Size { get; protected set; }
             public int CodePosition { get; protected set; }
             // This, honestly is great to use, the problem is that since I can turn on and off locking, it runs a seperate thread when creating this object 
@@ -1112,6 +1133,8 @@ namespace GameMaker
             // protected Lazy<ILBlock> _block = null; 
             private readonly object _syncRoot = new object();
             private ILBlock _block = null;
+            private GMException _exception = null;
+            public GMException Exception {  get { return _exception; } }
             public ILBlock Block {
                 get
                 {
@@ -1121,12 +1144,24 @@ namespace GameMaker
                         {
                             if (_block == null)
                             {
-                                if (!Context.doThreads) Context.Message("Starting Compiling Code '{0}'", Name);
-                                _block = CreateNewBlock();
+                                if (_block == null)
+                                {
+                                    try
+                                    {
+                                        if (!Context.doThreads) Context.Message("Starting Script Code '{0}'", Name);
+                                        _block = CreateNewBlock();
+                                    }
+                                    catch (GMException e)
+                                    {
+                                        _block = _badBlockFiller;
+                                        _exception = e;
+                                    }
+
+                                }
                             }
                         }
-                    }
-                    return _block;
+                    } 
+                    return _block == _badBlockFiller ? null : _block;
                 }
             }
             public Dictionary<string, ILVariable> Locals { get; protected set; }

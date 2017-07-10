@@ -134,7 +134,8 @@ namespace GameMaker.Ast
                     ILLabel trueLabel;
                     ILLabel falseLabel;
                     // It has to be just brtrue - any preceding code would introduce goto
-                    Debug.Assert(!basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel));
+                    error.Assert(!basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel),
+                        "Unrolled loop");
                     if (basicBlock.MatchLastAndBr(GMCode.Bt, out trueLabel, out condExpr, out falseLabel) ||
                          basicBlock.MatchLastAndBr(GMCode.Pushenv, out falseLabel, out condExpr, out trueLabel) || // built it the same way from the dissasembler, this needs inverted
                         basicBlock.MatchLastAndBr(GMCode.Repeat, out trueLabel, out condExpr, out falseLabel) ) // repeate loop is built like a while

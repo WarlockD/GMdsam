@@ -823,6 +823,8 @@ namespace GameMaker
             CheckList("PATH", ref paths);
             CheckList("SCPT", ref scripts);
 
+
+            Context.Info("Eveything loaded");
             RefactorCode();
             LoadHeadderNew(); // need to reorder the rooms so this needs to be red first
             DateTime end = DateTime.Now;

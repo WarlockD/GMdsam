@@ -371,6 +371,7 @@ namespace GameMaker.Writers
             foreach (var o in list) DoSingleItem(path, o);
         }
         static void DoFileWrite(string path, File.Code s) {
+            if (s.Block == null) return; // do nothing if we have no code
             string filename = Path.ChangeExtension(Path.Combine(path, s.Name), "js");
             using (ResourceFormater fmt = new ResourceFormater(filename)) fmt.Write(s);
         }
@@ -453,10 +454,16 @@ namespace GameMaker.Writers
         static void DoFileWrite(string path, File.Background b)
         {
             CodeTask.RunOneThing(path, b);
+           // string bg_image_patch = Path.Combine(path, "images");
+          //  string filename = Path.ChangeExtension(Path.Combine(bg_image_patch, b.Name), ".png"); // we just have one
+          //  b.Frame.Image.Save(filename);
+
+  
+
             if (Context.saveAllPngs)
             {
                 string filename = Path.ChangeExtension(Path.Combine(path, b.Name), ".png"); // we just have one
-                b.Frame.Image.Save(filename);
+                
             }
         }
         static void DoFileWrite(string path, File.AudioFile s)

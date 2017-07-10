@@ -333,7 +333,7 @@ namespace GameMaker.Ast
             ILLabel callTo;
             return FindEndOfSwitch(start, out callTo);
         }
-        int _switchStaticCount = 0;
+
         public bool DetectSwitchAndConvertToBranches(IList<ILNode> body, ILBasicBlock head, int pos)
         {
             ILExpression condition;

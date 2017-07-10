@@ -78,6 +78,7 @@
     <Compile Include="Dissasembler\IBuildAst.cs" />
     <Compile Include="Dissasembler\NewByteCodeAst.cs" />
     <Compile Include="Dissasembler\OldByteCodeAst.cs" />
+    <Compile Include="GameMaker\Reader.cs" />
     <Compile Include="ILAst\LoopAndConditions.cs" />
     <Compile Include="ILAst\Optimize.cs" />
     <Compile Include="ILAst\BuildILAst.cs" />

@@ -19,14 +19,20 @@ namespace GameMaker.Writers.GameMaker
         {
             string eventName = Constants.MakePrittyEventName(@event, 0);
             output.WriteLine("Event: {0}", action.Name);
-            output.Write(action.Method); // auto ident
+            if (action.Method == null)
+                output.WriteLine("Error in decompileing! :" + action.Method);
+            else
+             output.Write(action.Method); // auto ident
             output.WriteLine();
         }
         void WriteAction(int @event, int subEvent, ActionInfo action)
         {
             string eventName = Constants.MakePrittyEventName(@event, subEvent);
             output.WriteLine("Event: {0}", action.Name);
-            output.Write(action.Method); // auto ident
+            if(action.Method == null)
+            {
+                output.Write("Error in decompiling action!");
+            } else output.Write(action.Method); // auto ident
             output.WriteLine();
         }
         void WriteAction(int @event, List<ActionInfo> actions)

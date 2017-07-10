@@ -184,7 +184,15 @@ namespace GameMaker
             msg.FatalError(string.Format(str, o), node);
         }
     }
-   
+   public class GMException : Exception
+    {
+        public ErrorContext Context;
+        public GMException(string message, ErrorContext context) : base(message)
+        {
+            this.Context = context;
+        }
+    }
+
     public class ErrorContext : IMessages
     {
         enum MType
@@ -195,6 +203,14 @@ namespace GameMaker
             Error,
             Fatal,
             Message, // always goes though
+        }
+        public void Assert(bool test, string message)
+        {
+            if (!test)
+            {
+                DoMessage(MType.Fatal, "ASSERT: " + message, null);
+                throw new GMException(message, this);
+            }
         }
         const string ErrorFileName = "errors.txt";
         public static ProgressBar ProgressBar = null;
