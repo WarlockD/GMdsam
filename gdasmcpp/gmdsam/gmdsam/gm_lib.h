@@ -2,6 +2,11 @@
 #include "global.h"
 #include <fstream>
 #include <type_traits>
+#include <iostream>
+#include <unordered_map>
+#include <thread>
+#include <mutex>
+#include <atomic>
 
 namespace gm {
 	// structore for event info
@@ -19,7 +24,185 @@ namespace gm {
 		Keyreleased,
 		Trigger
 	};
+	// self tracking object
+	template<typename T>
+	class class_tracking {
+	protected:
+		using value_type = T;
+		using type = class_tracking<T>;
+		using pointer = std::add_pointer_t<T>;
+		static std::unordered_set<pointer>& objects() {
+			static std::unordered_set<pointer> objects;
+			return objects;
+		}
+		void start_tracking(pointer ptr) { objects().emplace(obj); }
+		void stop_tracking(pointer ptr) { objects().erase(obj); }
+	public:
+	};
 
+
+	class symboltable {
+	public:
+		using string_type = std::add_const_t<std::string>;
+		using key_type = std::reference_wrapper<string_type>;
+		struct isymbol {
+			const string_type str;
+			std::atomic<int> mark;
+			template<typename U>
+			isymbol(U&& str) : str(std::forward<U>(str)) {}
+			isymbol(const isymbol& copy) = delete;
+			isymbol(isymbol&& move) = delete;
+			operator const std::string&() const { return str; }
+		};
+
+		using value_type = std::unique_ptr<isymbol>;
+		using container_type = std::unordered_map<key_type, value_type>;
+		inline static value_type& empty_symbol() {
+			static value_type _empty = std::make_unique<isymbol>("");
+			return _empty;
+		}
+		static bool is_empty(const isymbol& sym) { return &sym == empty_symbol().get(); }
+		static bool is_empty(const value_type& sym) { return sym.get() == empty_symbol().get(); }
+		template<typename U>
+		value_type& find(U&& value) noexcept {
+			if (value.empty())
+				return empty_symbol();
+			else {
+				std::lock_guard<std::mutex> lock(_mutex);
+				const auto& key = value;
+				auto iter = _table.find(key);
+				if (iter != _table.end()) { return iter->second; }
+				return insert(std::forward<U>(value));
+			}
+		}
+		void remove(const value_type& value) noexcept {
+			if (!value) return;
+			std::lock_guard<std::mutex> lock(_mutex);
+			auto iter = _table.find(value->str);
+			if (iter != _table.end() && iter->second.get() == value.get()) {
+				_table.erase(iter);
+			}
+		}
+	private:
+		template<typename U>
+		value_type&  insert(U&& value) noexcept {
+			value_type ptr = std::make_unique<isymbol>(std::forward<U>(value));
+			auto result = _table.emplace(ptr->str, ptr);
+			return result.first->second;
+		}
+		std::mutex _mutex;
+		container_type _table;
+	};
+	class symbol {
+		struct symbol_tracker {
+			std::unordered_set<symbol*> symbols;
+			std::mutex mutex;
+			void emplace(symbol* sym) {
+				std::lock_guard<std::mutex> lock(mutex);
+				symbols.emplace(sym);
+			}
+			void erase(symbol* sym) {
+				std::lock_guard<std::mutex> lock(mutex);
+				symbols.erase(sym);
+			}
+		};
+	public:
+		using value_type = std::add_const_t<symboltable::string_type>;
+		template<typename ValueType> using is_value_type = std::is_same<std::decay_t<ValueType>, std::decay_t<value_type>>;
+		template<typename ValueType> using is_symbol_type = std::is_same<std::decay_t<ValueType>, symbol>;
+
+		symbol() : _symbol(symboltable::empty_symbol().get()) {}
+		symbol(const symbol& copy) :_symbol(copy._symbol) { symbols().emplace(this); }
+		symbol(symbol&& move) :_symbol(move._symbol) { symbols().emplace(this); move.clear(); }
+
+		~symbol() { if (!empty) clear(); }
+		template <
+			class ValueType,
+			class = std::enable_if_t<is_value_type<ValueType>::value>
+		> explicit symbol(ValueType&& value) {
+			_assign(std::forward<ValueType>(value));
+		}
+
+		template <class ValueType, class = std::enable_if_t<!is_symbol_type<ValueType>::value>>
+		symbol& operator =(ValueType&& value) {
+			_assign(std::forward<ValueType>(value));
+			return *this;
+		}
+
+		template <
+			class... Args,
+			class = std::enable_if_t<
+			std::conjunction<
+			std::negation<std::is_symbol_type<Args>...>
+			>::value
+			>
+			symbol(Args&&... args) : symbol(std::move(value_type(std::forward<Args>(args)...))) { }
+
+		bool empty() const { return symboltable::is_empty(*_symbol); }
+		size_t size() const { return _symbol->str.size(); }
+		operator value_type&() const { return _symbol->str; }
+		value_type str() const { return _symbol->str; }
+		const char* c_str() const { return _symbol->str.c_str(); }
+		value_type::const_iterator begin() const { return _symbol->str.begin(); }
+		value_type::const_iterator end() const { return _symbol->str.end(); }
+		bool operator==(const symbol& r) const { return _symbol == r._symbol; }
+		bool operator!=(const symbol& r) const { return _symbol != r._symbol; }
+		bool operator==(symboltable::string_type& r) const { return _symbol->str == r; }
+		bool operator!=(symboltable::string_type& r) const { return _symbol->str != r; }
+	private:
+		void clear() {
+			if (!empty) symbols().erase(this);
+			_symbol = symboltable::empty_symbol().get();
+		}
+		void _assign(symboltable::isymbol* sym) {
+			if (sym != _symbol) {
+				if (symboltable::is_empty(*sym))  symbols().erase(this);
+				if (symboltable::is_empty(*_symbol))  symbols().emplace(this);
+				_symbol = sym;
+			}
+		}
+		void _assign(const symbol& sym) { _assign(sym._symbol); }
+		// we could just use find, as that returns the empty symbol but this is a slight optimizeing
+		// on empty strings
+		template<typename U, typename std::enable_if<std::is_same<std::decay_t<U>, std::decay_t<value_type>>::value>>
+		void _assign(U&& str) {
+			if (empty()) {
+				if (!str.empty()) {
+					symbols().emplace(this);
+					_symbol = table().find(std::forward<U>(str)).get();
+				}
+			}
+			else {
+				if (str.empty()) clear();
+				else _symbol = table().find(std::forward<U>(str)).get();
+			}
+		}
+		static symboltable& table() {
+			static symboltable _table;
+			return _table;
+		}
+		static symbol_tracker& symbols() {
+			static symbol_tracker _table;
+			return _table;
+		}
+		symboltable::isymbol* _symbol;
+	};
+};
+
+namespace std {
+	template<>
+	struct hash<gm::symbol> {
+		size_t operator()(const gm::symbol& sym) const { return std::hash<gm::symbol>()(sym); }
+	};
+}
+
+template<typename C, typename E>
+static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const gm::symbol& sym) {
+	os << sym.str();
+	return os;
+}
+
+namespace gm {
 	class String {
 	public:
 		String::String() : m_str(s_empty_string) { }
@@ -135,7 +318,7 @@ namespace gm {
 		template<class V>
 		void tag_begin_end(const char* tag, const V& value) {
 			if (_os) {
-				*_os << _indent << '<' << tag << '>' << value << "</" << tag << '>' << std::end;
+				(*_os) << _indent << '<' << tag << '>' << value << "</" << tag << '>' << std::end;
 			}
 		}
 		void tag_end() {

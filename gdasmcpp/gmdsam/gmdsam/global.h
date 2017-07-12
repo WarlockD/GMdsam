@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
-
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
@@ -13,6 +13,9 @@
 #include <iostream>
 #include <iomanip>
 #include <iterator>
+#include <mutex>
+#include <thread>
+#include <atomic>
 
 struct StreamInterface {
 	virtual void to_stream(std::ostream& os) const = 0;
@@ -56,6 +59,254 @@ namespace ext {
 inline std::ostream& operator<<(std::ostream& os, const ext::set_format& fmt) { fmt << os;  return os; }
 inline std::ostream& operator<<(std::ostream& os, const ext::offset& fmt) { fmt.to_stream(os);  return os; }
 	
+// self tracking object
+template<typename T>
+class class_tracking {
+protected:
+	using value_type = T;
+	using type = class_tracking<T>;
+	using pointer = std::add_pointer_t<T>;
+	static std::unordered_set<pointer>& objects() {
+		static std::unordered_set<pointer> objects;
+		return objects;
+	}
+	void start_tracking(pointer ptr) { objects().emplace(obj); }
+	void stop_tracking(pointer ptr) { objects().erase(obj); }
+public:
+};
+
+namespace util {
+	// copyied from flyweight
+	namespace impl {
+		template <class T>
+		struct extractor {
+			constexpr extractor() noexcept { }
+
+			T const& operator () (T const& argument) const noexcept { return argument; }
+		};
+
+		template <class T>
+		using const_ref = std::add_lvalue_reference_t<std::add_const_t<T>>;
+
+		template <class T, class KeyExtractor, class Allocator, bool make_const = true>
+		struct container_traits final {
+			using type = std::conditional_t<make_const, std::add_const_t<T>, T>;
+			using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+			using extractor_type = KeyExtractor;
+			using computed_key_type = std::decay_t<decltype(std::declval<const_ref<extractor_type>>()(std::declval<const_ref<T>>()))>;
+
+			using is_associative = std::integral_constant<
+				bool,
+				!std::is_same<
+				std::decay_t<T>,
+				std::decay_t<computed_key_type>
+				>::value
+			>;
+
+			using mapped_weak_type = std::weak_ptr<type>;
+			using mapped_unique_type = std::unique_ptr<type>;
+			using key_type = std::conditional_t<
+				sizeof(computed_key_type) <=
+				sizeof(std::reference_wrapper<computed_key_type>) ||
+				!is_associative::value,
+				computed_key_type,
+				std::reference_wrapper<std::add_const_t<computed_key_type>>
+			>;
+
+			using container_unique_type = std::unordered_map<
+				key_type,
+				mapped_unique_type,
+				std::hash<computed_key_type>,
+				std::equal_to<computed_key_type>,
+				typename std::allocator_traits<Allocator>::template rebind_alloc<
+				std::pair<std::add_const_t<key_type>, mapped_unique_type>
+				>
+			>;
+			using container_weak_type = std::unordered_map<
+				key_type,
+				mapped_weak_type,
+				std::hash<computed_key_type>,
+				std::equal_to<computed_key_type>,
+				typename std::allocator_traits<Allocator>::template rebind_alloc<
+				std::pair<std::add_const_t<key_type>, mapped_weak_type>
+				>
+			>;
+		};
+	}; /* namespace impl */
+	class symboltable {
+	public:
+		using string_type = std::string;
+		using value_type = std::add_const_t<string_type>;
+
+		struct isymbol {
+			const string_type str;
+			std::atomic<int> mark;
+			template<typename U>
+			isymbol(U&& str) : str(std::forward<U>(str)) {}
+			isymbol(const isymbol& copy) = delete;
+			isymbol(isymbol&& move) = delete;
+			operator const std::string&() const { return str; }
+		};
+		struct key_extractor {
+			constexpr key_extractor() noexcept { }
+			string_type const& operator () (string_type const& argument) const noexcept { return argument; }
+			string_type const& operator () (isymbol const& argument) const noexcept { return argument.str; }
+		};
+		using traits = impl::container_traits<isymbol, key_extractor, std::allocator<string_type>, false>;
+		//	using key_type = std::reference_wrapper<string_type>;
+		using container_type = typename traits::container_unique_type;
+		using maped_type = typename traits::mapped_unique_type;
+		inline static maped_type& empty_symbol() {
+			static maped_type _empty = std::make_unique<isymbol>("");
+			return _empty;
+		}
+		static bool is_empty(const isymbol& sym) { return &sym == empty_symbol().get(); }
+		static bool is_empty(const maped_type& sym) { return sym.get() == empty_symbol().get(); }
+		template<typename U>
+		maped_type& find(U&& value) noexcept {
+			if (value.empty())
+				return empty_symbol();
+			else {
+				std::lock_guard<std::mutex> lock(_mutex);
+				const auto& key = _extractor(value);
+				auto iter = _table.find(key);
+				if (iter != _table.end()) { return iter->second; }
+				return insert(std::forward<U>(value));
+			}
+		}
+		void remove(const maped_type& value) noexcept {
+			if (!value) return;
+			std::lock_guard<std::mutex> lock(_mutex);
+			const auto& key = _extractor(value);
+			auto iter = _table.find(key);
+			if (iter != _table.end() && iter->second.get() == value.get()) {
+				_table.erase(iter);
+			}
+		}
+	private:
+		template<typename U>
+		maped_type&  insert(U&& value) noexcept {
+			value_type ptr = std::make_unique<isymbol>(std::forward<U>(value));
+			auto result = _table.emplace(ptr->str, ptr);
+			return result.first->second;
+		}
+		std::mutex _mutex;
+		container_type _table;
+		key_extractor _extractor;
+	};
+	class symbol {
+	public:
+		using value_type = typename symboltable::value_type;
+		template<typename ValueType> using is_value_type = std::is_same<std::decay_t<ValueType>, std::decay_t<value_type>>;
+		template<typename ValueType> using is_symbol_type = std::is_same<std::decay_t<ValueType>, symbol>;
+	private:
+		struct symbol_tracker {
+			std::unordered_set<symbol*> symbols;
+			std::mutex mutex;
+			void emplace(symbol* sym) {
+				std::lock_guard<std::mutex> lock(mutex);
+				symbols.emplace(sym);
+			}
+			void erase(symbol* sym) {
+				std::lock_guard<std::mutex> lock(mutex);
+				symbols.erase(sym);
+			}
+		};
+		inline static symboltable& table() {
+			static symboltable _table;
+			return _table;
+		}
+		inline static symbol_tracker& symbols() {
+			static symbol_tracker _symbols;
+			return _symbols;
+		}
+		symboltable::isymbol* _symbol;
+
+		void _assign(symboltable::isymbol* sym) {
+			if (sym != _symbol) {
+				if (symboltable::is_empty(*sym))  symbols().erase(this);
+				if (symboltable::is_empty(*_symbol))  symbols().emplace(this);
+				_symbol = sym;
+			}
+		}
+		void _assign(const symbol& sym) { _assign(sym._symbol); }
+		// we could just use find, as that returns the empty symbol but this is a slight optimizeing
+		// on empty strings
+		template<typename U, typename = std::enable_if<is_value_type<U>::value>>
+		void _assign(U&& str) {
+			if (empty()) {
+				if (!str.empty()) {
+					symbols().emplace(this);
+					_symbol = table().find(std::forward<U>(str)).get();
+				}
+			}
+			else {
+				if (str.empty()) clear();
+				else _symbol = table().find(std::forward<U>(str)).get();
+			}
+		}
+
+
+	public:
+		bool empty() const { return symboltable::is_empty(*_symbol); }
+		void clear() {
+			if (!empty()) symbols().erase(this);
+			_symbol = symboltable::empty_symbol().get();
+		}
+		symbol() : _symbol(symboltable::empty_symbol().get()) {}
+		symbol(const symbol& copy) :_symbol(copy._symbol) { symbols().emplace(this); }
+		symbol(symbol&& move) :_symbol(move._symbol) { symbols().emplace(this); move.clear(); }
+		symbol& operator=(const symbol& copy) { _assign(copy); return *this; }
+		symbol& operator=(symbol&& move) { _assign(move); move.clear(); return *this; }
+		~symbol() { if (!empty()) clear(); }
+		template <
+			class ValueType,
+			class = std::enable_if_t<is_value_type<ValueType>::value>
+		> explicit symbol(ValueType&& value) {
+			_assign(std::forward<ValueType>(value));
+		}
+
+		template <class ValueType, class = std::enable_if_t<!is_symbol_type<ValueType>::value>>
+		symbol& operator =(ValueType&& value) {
+			_assign(std::forward<ValueType>(value));
+			return *this;
+		}
+
+		template <
+			class... Args,
+			class = std::enable_if_t<
+			std::conjunction<
+			std::negation<std::is_symbol_type<Args>...>
+			>::value
+			>
+			symbol(Args&&... args) : symbol(std::move(value_type(std::forward<Args>(args)...))) { }
+
+
+		size_t size() const { return _symbol->str.size(); }
+		operator value_type&() const { return _symbol->str; }
+		value_type str() const { return _symbol->str; }
+		const char* c_str() const { return _symbol->str.c_str(); }
+		value_type::const_iterator begin() const { return _symbol->str.begin(); }
+		value_type::const_iterator end() const { return _symbol->str.end(); }
+		bool operator==(const symbol& r) const { return _symbol == r._symbol; }
+		bool operator!=(const symbol& r) const { return _symbol != r._symbol; }
+		bool operator==(value_type& r) const { return _symbol->str == r; }
+		bool operator!=(value_type& r) const { return _symbol->str != r; }
+	};
+}
+
+template<typename C, typename E>
+static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const util::symbol& sym) {
+	os << sym.str();
+	return os;
+}
+namespace std {
+	template<>
+	struct hash<util::symbol> {
+		size_t operator()(const util::symbol& sym) const { return std::hash<util::symbol>()(sym); }
+	};
+}
+
 
 namespace debug {
 	namespace priv {
@@ -79,6 +330,16 @@ namespace debug {
 		{
 			priv::serialize_imp(os, obj, priv::debug_serializtion{});
 		}
+		// https://stackoverflow.com/questions/22758291/how-can-i-detect-if-a-type-can-be-streamed-to-an-stdostream
+		template<typename S, typename T>
+		class is_streamable {
+			template<typename SS, typename TT>
+			static auto test(int) -> decltype(std::declval<SS&>() << std::declval<TT>(), std::true_type());
+			template<typename, typename>
+			static auto test(...)->std::false_type;
+		public:
+			static const bool value = decltype(test<S, T>(0))::value;
+		};
 	};
 	void enable_windows10_vt100_support();
 	class ostream {
@@ -163,8 +424,14 @@ namespace debug {
 	//	debug_stream& ostream operator<< (debug_stream& os) { to_debug(os); return os; }
 	};
 
-	extern ostream cerr;
+	extern std::ostream cerr;
 };
+
+template<typename C, typename E, typename U, typename = std::enable_if<!debug::priv::is_streamable<std::basic_ostream<C, E>, U>::value>>
+	static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const U& obj) {
+		debug::priv::debug_serialize(os, obj)
+		return os;
+	}
 
 namespace util {
 	namespace priv {
