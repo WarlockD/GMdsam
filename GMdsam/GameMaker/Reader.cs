@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace GameMaker.GameMaker
 {
+#if DEBUG_JUNK_ENABLED
     class BinaryReader
     {
             public MemoryStream Buffer { get;  set;  }
@@ -128,4 +129,5 @@ namespace GameMaker.GameMaker
             }
         }
     }
+#endif
 }

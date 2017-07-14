@@ -34,6 +34,7 @@ namespace {
 
 namespace gm {
 	// copied from Lua 5.3.3
+#ifndef USE_SYMBOL
 	class StringTable {
 	public:
 		class StringTableException : public GMException  {
@@ -147,7 +148,12 @@ namespace gm {
 		static const char* cast(const istring* str) { return str->str; }
 	};
 	StringTable::istring StringTable::s_empty = { (0x10 << 24), 0 };
+
+	// all we need here is just solid refrences of the string
+
 	static StringTable s_string_table;
+
+
 	const char* String::s_empty_string = StringTable::s_empty.str;
 
 	
@@ -164,12 +170,21 @@ namespace gm {
 
 	String::String(const char* str, size_t l) : m_str(s_string_table.intern(str, l)->str) { s_string_table.add_string(this); }
 
+#endif
 
 	void DataWinFile::fill_stringtable() {
 		auto strt_chunk = get_chunk<ChunkType::STRG>();
 		for (size_t i = 0; i < strt_chunk->count; i++) {
+			
+#ifdef USE_SYMBOL
+			const char* c_str = reinterpret_cast<const char*>(_data.data() + strt_chunk->offsets[i]);
+			util::symbol sym(c_str);
+			sym.make_perm();
+			_stringtable.emplace_back(sym);
+#else
 			const StringTable::istring* s = reinterpret_cast<const StringTable::istring*>( _data.data() +strt_chunk->offsets[i]);
 			s_string_table.insert_fixed(s);
+#endif
 		}
 	}
 	static const std::unordered_map<size_t, std::string> key_to_string = {
@@ -286,7 +301,7 @@ namespace gm {
 	}
 	void EventType::to_stream(std::ostream& os) const  {
 		std::string str;
-		switch (event())
+		switch (_event)
 		{
 		case 0: os << "CreateEvent"; return;
 		case 1: os << "DestroyEvent"; return;
@@ -436,6 +451,6 @@ namespace gm {
 		case 10: os << "KeyReleased(" << gm_key(sub_event()) << ')'; return;
 		case 11: os << "Trigger(" << sub_event() << ')'; return;
 		}
-		os << "Unknown(" << event() << ',' << sub_event() << ')';
+		os << "Unknown(" << _event << ',' << sub_event() << ')';
 	}
 }; 

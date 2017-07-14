@@ -89,6 +89,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -148,6 +149,11 @@
     <ClInclude Include="dsam.h" />
     <ClInclude Include="global.h" />
     <ClInclude Include="gm_lib.h" />
+    <ClInclude Include="ticpp\ticpp.h" />
+    <ClInclude Include="ticpp\ticppapi.h" />
+    <ClInclude Include="ticpp\ticpprc.h" />
+    <ClInclude Include="ticpp\tinystr.h" />
+    <ClInclude Include="ticpp\tinyxml.h" />
     <ClInclude Include="xml_writer.h" />
   </ItemGroup>
   <ItemGroup>
@@ -155,6 +161,11 @@
     <ClCompile Include="global.cpp" />
     <ClCompile Include="gm_lib.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ticpp\ticpp.cpp" />
+    <ClCompile Include="ticpp\tinystr.cpp" />
+    <ClCompile Include="ticpp\tinyxml.cpp" />
+    <ClCompile Include="ticpp\tinyxmlerror.cpp" />
+    <ClCompile Include="ticpp\tinyxmlparser.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

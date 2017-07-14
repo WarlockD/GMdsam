@@ -34,7 +34,6 @@ int main(int argc, const char* argv[]) {
 	}
 	if (!file.has_data()) 
 		return -1;
-	gm::String fa("test");
 
 	auto object = file.resource_at<gm::Object>(217); // jerry
 	std::cout << "Object: " << object.name() << std::endl;
@@ -43,6 +42,10 @@ int main(int argc, const char* argv[]) {
 	for (auto test : events) {
 		std::cout << test.first << ", " << test.second << std::endl;
 	}
+
+	auto sprite = file.resource_at<gm::Sprite>(217); // random sprite
+	sprite.xml_export(std::cout);
+
 	while (true) {}
 
 	return 0;

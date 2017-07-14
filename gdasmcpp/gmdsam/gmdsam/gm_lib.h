@@ -1,13 +1,14 @@
 #pragma once
 #include "global.h"
-#include <fstream>
-#include <type_traits>
-#include <iostream>
-#include <unordered_map>
-#include <thread>
-#include <mutex>
-#include <atomic>
+#include <variant>
+#include <cassert>
 
+#define OLD_XML_WRITER
+#ifndef OLD_XML_WRITER
+#include "ticpp\ticpp.h"
+#endif
+
+#define USE_SYMBOL
 namespace gm {
 	// structore for event info
 	enum class e_event {
@@ -24,185 +25,11 @@ namespace gm {
 		Keyreleased,
 		Trigger
 	};
-	// self tracking object
-	template<typename T>
-	class class_tracking {
-	protected:
-		using value_type = T;
-		using type = class_tracking<T>;
-		using pointer = std::add_pointer_t<T>;
-		static std::unordered_set<pointer>& objects() {
-			static std::unordered_set<pointer> objects;
-			return objects;
-		}
-		void start_tracking(pointer ptr) { objects().emplace(obj); }
-		void stop_tracking(pointer ptr) { objects().erase(obj); }
-	public:
-	};
 
 
-	class symboltable {
-	public:
-		using string_type = std::add_const_t<std::string>;
-		using key_type = std::reference_wrapper<string_type>;
-		struct isymbol {
-			const string_type str;
-			std::atomic<int> mark;
-			template<typename U>
-			isymbol(U&& str) : str(std::forward<U>(str)) {}
-			isymbol(const isymbol& copy) = delete;
-			isymbol(isymbol&& move) = delete;
-			operator const std::string&() const { return str; }
-		};
-
-		using value_type = std::unique_ptr<isymbol>;
-		using container_type = std::unordered_map<key_type, value_type>;
-		inline static value_type& empty_symbol() {
-			static value_type _empty = std::make_unique<isymbol>("");
-			return _empty;
-		}
-		static bool is_empty(const isymbol& sym) { return &sym == empty_symbol().get(); }
-		static bool is_empty(const value_type& sym) { return sym.get() == empty_symbol().get(); }
-		template<typename U>
-		value_type& find(U&& value) noexcept {
-			if (value.empty())
-				return empty_symbol();
-			else {
-				std::lock_guard<std::mutex> lock(_mutex);
-				const auto& key = value;
-				auto iter = _table.find(key);
-				if (iter != _table.end()) { return iter->second; }
-				return insert(std::forward<U>(value));
-			}
-		}
-		void remove(const value_type& value) noexcept {
-			if (!value) return;
-			std::lock_guard<std::mutex> lock(_mutex);
-			auto iter = _table.find(value->str);
-			if (iter != _table.end() && iter->second.get() == value.get()) {
-				_table.erase(iter);
-			}
-		}
-	private:
-		template<typename U>
-		value_type&  insert(U&& value) noexcept {
-			value_type ptr = std::make_unique<isymbol>(std::forward<U>(value));
-			auto result = _table.emplace(ptr->str, ptr);
-			return result.first->second;
-		}
-		std::mutex _mutex;
-		container_type _table;
-	};
-	class symbol {
-		struct symbol_tracker {
-			std::unordered_set<symbol*> symbols;
-			std::mutex mutex;
-			void emplace(symbol* sym) {
-				std::lock_guard<std::mutex> lock(mutex);
-				symbols.emplace(sym);
-			}
-			void erase(symbol* sym) {
-				std::lock_guard<std::mutex> lock(mutex);
-				symbols.erase(sym);
-			}
-		};
-	public:
-		using value_type = std::add_const_t<symboltable::string_type>;
-		template<typename ValueType> using is_value_type = std::is_same<std::decay_t<ValueType>, std::decay_t<value_type>>;
-		template<typename ValueType> using is_symbol_type = std::is_same<std::decay_t<ValueType>, symbol>;
-
-		symbol() : _symbol(symboltable::empty_symbol().get()) {}
-		symbol(const symbol& copy) :_symbol(copy._symbol) { symbols().emplace(this); }
-		symbol(symbol&& move) :_symbol(move._symbol) { symbols().emplace(this); move.clear(); }
-
-		~symbol() { if (!empty) clear(); }
-		template <
-			class ValueType,
-			class = std::enable_if_t<is_value_type<ValueType>::value>
-		> explicit symbol(ValueType&& value) {
-			_assign(std::forward<ValueType>(value));
-		}
-
-		template <class ValueType, class = std::enable_if_t<!is_symbol_type<ValueType>::value>>
-		symbol& operator =(ValueType&& value) {
-			_assign(std::forward<ValueType>(value));
-			return *this;
-		}
-
-		template <
-			class... Args,
-			class = std::enable_if_t<
-			std::conjunction<
-			std::negation<std::is_symbol_type<Args>...>
-			>::value
-			>
-			symbol(Args&&... args) : symbol(std::move(value_type(std::forward<Args>(args)...))) { }
-
-		bool empty() const { return symboltable::is_empty(*_symbol); }
-		size_t size() const { return _symbol->str.size(); }
-		operator value_type&() const { return _symbol->str; }
-		value_type str() const { return _symbol->str; }
-		const char* c_str() const { return _symbol->str.c_str(); }
-		value_type::const_iterator begin() const { return _symbol->str.begin(); }
-		value_type::const_iterator end() const { return _symbol->str.end(); }
-		bool operator==(const symbol& r) const { return _symbol == r._symbol; }
-		bool operator!=(const symbol& r) const { return _symbol != r._symbol; }
-		bool operator==(symboltable::string_type& r) const { return _symbol->str == r; }
-		bool operator!=(symboltable::string_type& r) const { return _symbol->str != r; }
-	private:
-		void clear() {
-			if (!empty) symbols().erase(this);
-			_symbol = symboltable::empty_symbol().get();
-		}
-		void _assign(symboltable::isymbol* sym) {
-			if (sym != _symbol) {
-				if (symboltable::is_empty(*sym))  symbols().erase(this);
-				if (symboltable::is_empty(*_symbol))  symbols().emplace(this);
-				_symbol = sym;
-			}
-		}
-		void _assign(const symbol& sym) { _assign(sym._symbol); }
-		// we could just use find, as that returns the empty symbol but this is a slight optimizeing
-		// on empty strings
-		template<typename U, typename std::enable_if<std::is_same<std::decay_t<U>, std::decay_t<value_type>>::value>>
-		void _assign(U&& str) {
-			if (empty()) {
-				if (!str.empty()) {
-					symbols().emplace(this);
-					_symbol = table().find(std::forward<U>(str)).get();
-				}
-			}
-			else {
-				if (str.empty()) clear();
-				else _symbol = table().find(std::forward<U>(str)).get();
-			}
-		}
-		static symboltable& table() {
-			static symboltable _table;
-			return _table;
-		}
-		static symbol_tracker& symbols() {
-			static symbol_tracker _table;
-			return _table;
-		}
-		symboltable::isymbol* _symbol;
-	};
-};
-
-namespace std {
-	template<>
-	struct hash<gm::symbol> {
-		size_t operator()(const gm::symbol& sym) const { return std::hash<gm::symbol>()(sym); }
-	};
-}
-
-template<typename C, typename E>
-static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const gm::symbol& sym) {
-	os << sym.str();
-	return os;
-}
-
-namespace gm {
+#ifdef USE_SYMBOL
+	using String = util::symbol;
+#else
 	class String {
 	public:
 		String::String() : m_str(s_empty_string) { }
@@ -237,12 +64,13 @@ namespace gm {
 		const char* m_str;
 		static const char* s_empty_string;
 	};
+#endif
 
 	class EventType : public StreamInterface {
 		size_t _event;
 		friend struct std::hash<gm::EventType>;
 	public:
-		
+
 		EventType(size_t event) : _event(event << 16) {}
 		EventType(size_t event, size_t sub_event) : _event(event << 16 | (sub_event & 0xFFFF)) {}
 		static EventType from_index(int index) { return EventType(index >> 16, index & 0xFFFF); }
@@ -265,7 +93,137 @@ namespace gm {
 
 	class SimpleXmlWriter {
 	public:
-		SimpleXmlWriter() {}
+		struct XmlElement;
+		using XmlElementPtr = std::unique_ptr<XmlElement>;
+		using value_type = std::variant<String, int, float, XmlElementPtr>;
+		using container_type = std::unordered_map<String, value_type>;
+		struct to_stream_helper {
+			std::ostream& os;
+			util::StreamIdent& ident;
+			to_stream_helper(std::ostream& os, util::StreamIdent& ident) : os(os), ident(ident) {}
+			void output_attributes(const XmlElement& v) const {
+				if (!v.attributes.empty()) {
+					for (const auto& a : v.attributes) {
+						const auto& elm = a.second;
+						os << ' ';
+						os << a.first << "=\"";
+						std::visit(*this, elm);
+						os << "\"";
+					}
+				}
+			}
+			bool operator()(const String& v) const { os << v.str(); return false; }
+			bool operator()(const float v) const { 
+				os << std::defaultfloat << v; // we atleast want one decimal
+				if (v == (int)v) os << ".0";
+				return false; 
+			}
+			bool operator()(const int v) const { os << std::setfill(' ') << std::setw(18) << std::dec <<  v; return false; }
+
+			bool operator()(const XmlElement& v) const {
+				os << '<' << v.name;
+				output_attributes(v);
+
+				if (v.elements.empty()) { os << "/>"; return false; }
+				os << '>';
+				// we assum the front tag is printed, we don't care bout the name
+				// special case with one tag, purely for formatting
+				if (v.elements.size() == 1 && !std::holds_alternative<XmlElementPtr>(v.elements.front())) {
+					std::visit(*this, v.elements.front());
+					// end tag is anotmaticly printed here as well as endln
+				} else {
+					ident++;
+					os  << std::endl;
+					os << ident;
+					bool endline = false;
+					for (const auto& e : v.elements) {
+						std::visit(*this, e);
+						os << std::endl;
+						os << ident;
+					}
+					os << std::endl;
+
+					ident--;
+				}
+				os << ident;
+				os  << "</" << v.name << '>';
+				return false;
+			}
+			bool operator()(const XmlElementPtr& v) const { return operator()(*v.get()); }
+		};
+		struct XmlElement {
+			std::vector<value_type> elements;
+			std::unordered_map<String, std::variant<String, int, float>> attributes;
+			String name;
+			XmlElement(const String& name) : name(name) {}
+			XmlElement&  AddTag(float v) { elements.emplace_back(v); return *this; }
+			XmlElement&  AddTag(int v) { elements.emplace_back(v); return *this; }
+			XmlElement&  AddTag(const String& v) { elements.emplace_back(v); return *this;}
+			XmlElement& AddElement(const String& v) {
+				XmlElement* e = new XmlElement(v);
+				elements.emplace_back(std::move(std::unique_ptr<XmlElement>( e)));
+				return *e;
+			}
+			XmlElement& AddElement(const String& v, float value) {
+				return AddElement(v).AddTag(value);
+			}
+			XmlElement& AddElement(const String& v, int value) {
+				return AddElement(v).AddTag(value);
+			}
+			XmlElement& AddElement(const String& v, const String& value) {
+				return AddElement(v).AddTag(value);
+			}
+			void AddAttribute(const String& key, int value) { attributes.emplace(key, value); }
+			void AddAttribute(const String& key, float value) { attributes.emplace(key, value); }
+			void AddAttribute(const String& key, const String& value) { attributes.emplace(key, value); }
+
+		};
+		XmlElement _root;
+	public:
+		SimpleXmlWriter() : _root("xml") { _root.AddAttribute("version", 1.0f); }
+		XmlElement& AddElement(const String& s) { return _root.AddElement(s); }
+		void save(const std::string& filename) {
+			std::ofstream file(filename);
+			if (file.good()) {
+				to_stream(file);
+			}
+			file.close();
+		}
+		void to_stream(std::ostream& os) const {
+			util::StreamIdent ident;
+			to_stream_helper _helper(os, ident);
+
+			os << "<?" << _root.name;
+			_helper.output_attributes(_root);
+			os << "?>";// << std::endl;
+			// should we check to make sure each is an element?
+			_helper(_root);
+			os << std::endl;
+		}
+	};
+
+#if 0
+	class SimpleXmlWriter {
+		class Element {
+			String _name;
+			using attribute_type = std::unordered_map<String, String>;
+			using tag_type = std::unordered_map<String, std::unique_ptr<Element>>;
+			attribute_type _attributes;
+			tag_type _tags;
+		public:
+			Element(const String& s) : _name(s) {}
+			const String& name() const { return _name; }
+			tag_type& tags() { return _tags; }
+			attribute_type& attributes() { return _attributes; }
+			Element& createElement(const String& s) {
+				auto it = _tags.emplace(s, std::make_unique<Element>());
+				return *(*it.first).second.get();
+			}
+			void deleteElement(const String& s) { _tags.erase(s); }
+		};
+		Element _root;
+	public:
+		SimpleXmlWriter(): _root("?xml"){}
 		virtual ~SimpleXmlWriter() {}
 		bool open(const std::string& filename) {
 			if (_os) return false;
@@ -302,7 +260,8 @@ namespace gm {
 		void attribute_end(const T& value) {
 			if (_os && _in_attribute) {
 				auto tag = _opened_tags.top();
-				*_os << '>' << value << "</" << tag << '>' << std::end;
+				auto& os = *_os;
+				os << '>' << value << "</" << tag << '>' << std::end;
 				_opened_tags.pop();
 				_in_attribute = false;
 			}
@@ -318,7 +277,8 @@ namespace gm {
 		template<class V>
 		void tag_begin_end(const char* tag, const V& value) {
 			if (_os) {
-				(*_os) << _indent << '<' << tag << '>' << value << "</" << tag << '>' << std::end;
+				auto & os = *_os;
+				os << _indent << '<' << tag << '>' << value << "</" << tag << '>' << std::end;
 			}
 		}
 		void tag_end() {
@@ -375,8 +335,9 @@ namespace gm {
 		bool _in_attribute;
 		std::stack<gm::String> _opened_tags;
 	};
-
+#endif
 };
+
 // custom specialization of std::hash can be injected in namespace std
 namespace std
 {
@@ -384,10 +345,12 @@ namespace std
 	{
 		size_t operator()(const gm::EventType & e) const { return e._event; }
 	};
+#ifndef USE_SYMBOL
 	template<> struct hash<gm::String>
 	{
 		size_t operator()(const gm::String & s) const { return std::hash<const void*>()(s.c_str()); }
 	};
+#endif
 }
 namespace gm {
 	class DataWinFile;
@@ -600,7 +563,12 @@ namespace gm {
 		virtual ~NameInterface() {}
 		virtual void to_stream(std::ostream& os) const override {
 			OffsetInterface::to_stream(os);
-			os << '(' << std::setfill(' ') << std::setw(4) << _index << ':' << (valid_name() ? _name : NONAME) << ')';
+			os << '(' << std::setfill(' ') << std::setw(4) << _index << ':';
+			if (valid_name())
+				os << _name;
+			else
+				os << NONAME;
+			os << ')'; 
 		}
 	};
 	//http://stackoverflow.com/questions/36936584/how-to-write-constexpr-swap-function-to-change-endianess-of-an-integer
@@ -658,6 +626,7 @@ namespace gm {
 		Resource(T index, const uint8_t* data, uint32_t offset) : Resource(static_cast<uint32_t>(index), data, offset, _name_test{}) {}
 	};
 
+
 	class XMLResourceExportInterface  {
 	public:
 		virtual ~XMLResourceExportInterface() {}
@@ -672,6 +641,8 @@ namespace gm {
 			filename += ".gmx";
 			return filename;
 		}
+		virtual void xml_export(std::ostream& os) const {};
+
 		virtual bool xml_export(const std::string& path) const = 0;
 	};
 	namespace raw_type {
@@ -870,7 +841,6 @@ namespace gm {
 #pragma pack(pop)
 	};
 
-
 	class BitMask {
 		int _width;
 		int _height;
@@ -1020,6 +990,12 @@ namespace gm {
 			os << "{ event : " << EventType::from_index(_index) << ", id : " << id() << " }";
 		}
 	};
+	class String : public Resource<raw_type::String, ChunkType::STRG> {
+	public:
+		String(int index, const uint8_t* data, uint32_t offset)
+			: Resource(index, data, offset) {}
+
+	};
 
 	class Object : public Resource<raw_type::Object, ChunkType::OBJT> {
 		const raw_type::ObjectPhysicsVert* _physics_verts;
@@ -1096,47 +1072,55 @@ namespace gm {
 		int colcheck() const { return _raw->colcheck; }
 		int origin_x() const { return _raw->original_x; }
 		int origin_y() const { return _raw->original_y; }
-		OffsetList<raw_type::SpriteFrame>& frames() const { return OffsetList<raw_type::SpriteFrame>(_raw->ptr_begin()-_offset, _raw->ptr_end()); }
+		OffsetList<raw_type::SpriteFrame> frames() const { return OffsetList<raw_type::SpriteFrame>(_raw->ptr_begin()-_offset, _raw->ptr_end()); }
 		size_t mask_count() const { return *reinterpret_cast<const int*>(_masks); }
 		size_t mask_stride() const { return (width() + 7) / 8; }
 		BitMask mask_at(size_t index) const {
 			return BitMask(width(), height(), _masks + sizeof(int) + (mask_stride()*height() * index));
 		}
-		virtual bool xml_export(const std::string& path) const {
+		virtual void xml_export(std::ostream& os) const {
 			SimpleXmlWriter xml;
-			if (!xml.open(path + '\\' + XMLResourceExportInterface::xml_export_filename(ChunkType::SPRT, name().c_str()))) return false;
-			xml.tag_begin("sprite");
-			xml.tag_begin_end("type", _raw->mode);
-			xml.tag_begin_end("xorg", _raw->original_x);
-			xml.tag_begin_end("yorigin", _raw->original_y);
-			xml.tag_begin_end("colkind", _raw->colcheck);
-			xml.tag_begin_end("sepmasks", 0);
-			xml.tag_begin_end("bbox_left", _raw->left);
-			xml.tag_begin_end("bbox_right", _raw->right);
-			xml.tag_begin_end("bbox_top", _raw->top);
-			xml.tag_begin_end("bbox_bottom", _raw->bottom);
-			xml.tag_begin_end("HTile", 0);
-			xml.tag_begin_end("VTile", 0);
-			xml.tag_begin("TextureGroups");
-			xml.tag_begin_end("TextureGroup0", frames().at(0)->texture_index);
-			xml.tag_end();
-			xml.tag_begin_end("For3D", 0);
-			xml.tag_begin_end("width", _raw->width);
-			xml.tag_begin_end("height", _raw->height);
-			xml.tag_begin("frames");
+			auto& sprite = xml.AddElement("sprite");
+			sprite.AddElement("type", _raw->mode);
+			sprite.AddElement("xorg", _raw->original_x);
+			sprite.AddElement("yorigin", _raw->original_y);
+			sprite.AddElement("colkind", _raw->colcheck);
+			sprite.AddElement("sepmasks", 0);
+			sprite.AddElement("bbox_left", _raw->left);
+			sprite.AddElement("bbox_right", _raw->right);
+			sprite.AddElement("bbox_top", _raw->top);
+			sprite.AddElement("bbox_bottom", _raw->bottom);
+			sprite.AddElement("HTile", 0);
+			sprite.AddElement("VTile", 0);
+			auto& texturegroups = sprite.AddElement("TextureGroups");
+			texturegroups.AddElement("TextureGroup0", frames().at(0)->texture_index);
+			sprite.AddElement("For3D", 0);
+			sprite.AddElement("width", _raw->width);
+			sprite.AddElement("height", _raw->height);
+			auto& e_frames = sprite.AddElement("frames");
 			std::string n;
 			auto& ff = frames();
 			for (size_t i = 0; i < ff.size(); i++) {
 				const auto & f = ff.at(i);
-				xml.attribute_begin("frame");
-				xml.write_attribute("index", i);
+				auto& e_frame = e_frames.AddElement("frame");
+				e_frame.AddAttribute("index", (int)i);
 				n = name().c_str();
 				n += "_" + std::to_string(i) + ".png";
-				xml.attribute_end(n);
+				e_frame.AddTag(n);
 			}
-			xml.tag_end();
-			xml.tag_end();
-			xml.close();
+			xml.to_stream(os);
+		}
+		virtual bool xml_export(const std::string& path) const {
+			SimpleXmlWriter xml;
+			std::string filename = path + '\\' + XMLResourceExportInterface::xml_export_filename(ChunkType::SPRT, name().c_str());
+			std::ofstream file(filename);
+			if (!file.good()) {
+				debug::cerr << "Could not open filename for xml write '" << filename << '"' << std::endl;
+				return false;
+			}
+			xml_export(file);
+			file.close();
+			return true;
 		}
 	};
 	
@@ -1157,6 +1141,7 @@ namespace gm {
 		FileHelper _data;
 		size_t _full_size;
 		std::unordered_map<uint32_t, const Chunk*> _chunks;
+		std::vector<String> _stringtable;
 		//std::reference_wrapper<Chunk> test
 		using chunk_const_iterator = std::unordered_map<uint32_t, const Chunk*>::const_iterator;
 		void fill_stringtable(); // used to get the string table with all the strings from datawin

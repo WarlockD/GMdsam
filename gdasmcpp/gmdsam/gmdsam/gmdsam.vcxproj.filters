@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ticpp">
+      <UniqueIdentifier>{e2344c5b-b6aa-4395-a5c9-796850533854}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gm_lib.h">
@@ -27,6 +30,21 @@
     <ClInclude Include="xml_writer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ticpp\ticpp.h">
+      <Filter>ticpp</Filter>
+    </ClInclude>
+    <ClInclude Include="ticpp\ticppapi.h">
+      <Filter>ticpp</Filter>
+    </ClInclude>
+    <ClInclude Include="ticpp\ticpprc.h">
+      <Filter>ticpp</Filter>
+    </ClInclude>
+    <ClInclude Include="ticpp\tinystr.h">
+      <Filter>ticpp</Filter>
+    </ClInclude>
+    <ClInclude Include="ticpp\tinyxml.h">
+      <Filter>ticpp</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -40,6 +58,21 @@
     </ClCompile>
     <ClCompile Include="debug_window.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ticpp\ticpp.cpp">
+      <Filter>ticpp</Filter>
+    </ClCompile>
+    <ClCompile Include="ticpp\tinystr.cpp">
+      <Filter>ticpp</Filter>
+    </ClCompile>
+    <ClCompile Include="ticpp\tinyxml.cpp">
+      <Filter>ticpp</Filter>
+    </ClCompile>
+    <ClCompile Include="ticpp\tinyxmlerror.cpp">
+      <Filter>ticpp</Filter>
+    </ClCompile>
+    <ClCompile Include="ticpp\tinyxmlparser.cpp">
+      <Filter>ticpp</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

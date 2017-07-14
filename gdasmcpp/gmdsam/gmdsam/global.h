@@ -16,6 +16,7 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
+#include <fstream>
 
 struct StreamInterface {
 	virtual void to_stream(std::ostream& os) const = 0;
@@ -33,7 +34,8 @@ inline std::ostream& operator<<(std::ostream& os, const StreamInterface& res) {
 namespace console {
 	class no_stream_exception : public std::exception {
 	public:
-		no_stream_exception() : std::exception("Oject has no to_string method") {}
+		no_stream_exception() : std::exception() {}
+		const char* what() const noexcept { return "Oject has no to_string method"; }
 	};
 
 
@@ -59,58 +61,35 @@ namespace ext {
 inline std::ostream& operator<<(std::ostream& os, const ext::set_format& fmt) { fmt << os;  return os; }
 inline std::ostream& operator<<(std::ostream& os, const ext::offset& fmt) { fmt.to_stream(os);  return os; }
 	
-// self tracking object
-template<typename T>
-class class_tracking {
-protected:
-	using value_type = T;
-	using type = class_tracking<T>;
-	using pointer = std::add_pointer_t<T>;
-	static std::unordered_set<pointer>& objects() {
-		static std::unordered_set<pointer> objects;
-		return objects;
-	}
-	void start_tracking(pointer ptr) { objects().emplace(obj); }
-	void stop_tracking(pointer ptr) { objects().erase(obj); }
-public:
-};
 
 namespace util {
 	// copyied from flyweight
 	namespace impl {
-		template <class T>
-		struct extractor {
-			constexpr extractor() noexcept { }
 
+
+		template <typename T>
+		struct default_extractor {
+			constexpr default_extractor() noexcept { }
 			T const& operator () (T const& argument) const noexcept { return argument; }
 		};
 
-		template <class T>
+		template <typename T>
 		using const_ref = std::add_lvalue_reference_t<std::add_const_t<T>>;
 
-		template <class T, class KeyExtractor, class Allocator, bool make_const = true>
+		template <class T, typename KeyExtractor = default_extractor<T>, typename Allocator = std::allocator<T>>
 		struct container_traits final {
-			using type = std::conditional_t<make_const, std::add_const_t<T>, T>;
 			using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
 			using extractor_type = KeyExtractor;
 			using computed_key_type = std::decay_t<decltype(std::declval<const_ref<extractor_type>>()(std::declval<const_ref<T>>()))>;
 
-			using is_associative = std::integral_constant<
-				bool,
-				!std::is_same<
-				std::decay_t<T>,
-				std::decay_t<computed_key_type>
-				>::value
-			>;
 
-			using mapped_weak_type = std::weak_ptr<type>;
-			using mapped_unique_type = std::unique_ptr<type>;
+			using is_associative = std::integral_constant<bool,(!std::is_same<std::decay_t<T>,std::decay_t<computed_key_type>>::value)>;
+
+			using mapped_weak_type = std::weak_ptr<std::add_const_t<T>>;
+			using mapped_unique_type = std::unique_ptr<T>;
 			using key_type = std::conditional_t<
-				sizeof(computed_key_type) <=
-				sizeof(std::reference_wrapper<computed_key_type>) ||
-				!is_associative::value,
-				computed_key_type,
-				std::reference_wrapper<std::add_const_t<computed_key_type>>
+				((sizeof(computed_key_type) <= sizeof(std::reference_wrapper<computed_key_type>)) || !is_associative::value),
+				computed_key_type,std::reference_wrapper<std::add_const_t<computed_key_type>>
 			>;
 
 			using container_unique_type = std::unordered_map<
@@ -119,7 +98,7 @@ namespace util {
 				std::hash<computed_key_type>,
 				std::equal_to<computed_key_type>,
 				typename std::allocator_traits<Allocator>::template rebind_alloc<
-				std::pair<std::add_const_t<key_type>, mapped_unique_type>
+					std::pair<std::add_const_t<key_type>, mapped_unique_type>
 				>
 			>;
 			using container_weak_type = std::unordered_map<
@@ -128,90 +107,134 @@ namespace util {
 				std::hash<computed_key_type>,
 				std::equal_to<computed_key_type>,
 				typename std::allocator_traits<Allocator>::template rebind_alloc<
-				std::pair<std::add_const_t<key_type>, mapped_weak_type>
+					std::pair<std::add_const_t<key_type>, mapped_weak_type>
 				>
 			>;
 		};
 	}; /* namespace impl */
+	   // self tracking object
+	template<typename T>
+	class class_tracking {
+	protected:
+		using value_type = T;
+		using type = class_tracking<T>;
+		using pointer = std::add_pointer_t<T>;
+		std::mutex mutex;
+		std::unordered_set<pointer> objects;
+	public:
+		void emplace(pointer ptr) { std::lock_guard<std::mutex> lock(mutex); objects.emplace(ptr); }
+		void erase(pointer ptr) { std::lock_guard<std::mutex> lock(mutex); objects.erase(ptr); }
+		template<typename F>
+		void for_each(F func) {
+			std::lock_guard<std::mutex> lock(mutex);
+			for (auto o : objects) func(o);
+		}
+	};
+
 	class symboltable {
 	public:
 		using string_type = std::string;
 		using value_type = std::add_const_t<string_type>;
 
 		struct isymbol {
-			const string_type str;
 			std::atomic<int> mark;
-			template<typename U>
-			isymbol(U&& str) : str(std::forward<U>(str)) {}
-			isymbol(const isymbol& copy) = delete;
+			size_t length;
+			size_t hash;
+			const char* str;
+
+			//template<typename ... Args>
+			//isymbol(Args ... arg) : str(std::forward<Args>(arg)...) {}
+	
 			isymbol(isymbol&& move) = delete;
-			operator const std::string&() const { return str; }
+			static std::unique_ptr<isymbol> create(const isymbol& istr, bool const_string) {
+				isymbol* ptr;
+				if (const_string && istr.str[istr.length] == 0) {
+					ptr = new isymbol(istr);
+					ptr->mark = 2;
+				}
+				else {
+					char* rptr = new char[istr.length + sizeof(isymbol) + 1];
+					char* nstr = rptr + sizeof(isymbol);
+					std::copy(nstr, nstr + istr.length, istr.str);
+					ptr = new(rptr) isymbol(nstr, istr.length);
+				}
+				return std::unique_ptr<isymbol>(ptr);
+			}
+			isymbol(const char* str, size_t length) : length(length), hash(util::simple_hash(str, length)), str(str) {}
+			bool operator==(const isymbol& r) const {
+				return length == r.length && std::memcmp(str, r.str, length) == 0;
+			}
+		private:
+			isymbol(const isymbol& copy, const char* str) : length(copy.length), hash(copy.hash), str(str) {}
+			isymbol(const isymbol& copy) = default;
+		};
+		struct isymbol_hasher {
+			size_t operator()(const isymbol& s) const { return s.hash;  }
 		};
 		struct key_extractor {
 			constexpr key_extractor() noexcept { }
 			string_type const& operator () (string_type const& argument) const noexcept { return argument; }
 			string_type const& operator () (isymbol const& argument) const noexcept { return argument.str; }
 		};
-		using traits = impl::container_traits<isymbol, key_extractor, std::allocator<string_type>, false>;
+		using traits = impl::container_traits<isymbol, impl::default_extractor<isymbol>, std::allocator<isymbol>>;
 		//	using key_type = std::reference_wrapper<string_type>;
 		using container_type = typename traits::container_unique_type;
 		using maped_type = typename traits::mapped_unique_type;
 		inline static maped_type& empty_symbol() {
-			static maped_type _empty = std::make_unique<isymbol>("");
+			static maped_type _empty = std::make_unique<isymbol>("", 0);
 			return _empty;
 		}
 		static bool is_empty(const isymbol& sym) { return &sym == empty_symbol().get(); }
 		static bool is_empty(const maped_type& sym) { return sym.get() == empty_symbol().get(); }
-		template<typename U>
-		maped_type& find(U&& value) noexcept {
-			if (value.empty())
-				return empty_symbol();
-			else {
-				std::lock_guard<std::mutex> lock(_mutex);
-				const auto& key = _extractor(value);
-				auto iter = _table.find(key);
-				if (iter != _table.end()) { return iter->second; }
-				return insert(std::forward<U>(value));
-			}
+		maped_type& find(const char* str) noexcept {
+			if (str == nullptr || str[0] == 0) return empty_symbol();
+			std::lock_guard<std::mutex> lock(_mutex);
+			isymbol skey(str,strlen(str));
+			const auto& key = _extractor(skey);
+			auto iter = _table.find(key);
+			if (iter != _table.end()) { return iter->second; }
+			return insert(skey);
 		}
 		void remove(const maped_type& value) noexcept {
 			if (!value) return;
 			std::lock_guard<std::mutex> lock(_mutex);
-			const auto& key = _extractor(value);
+			const auto& key = _extractor(*value.get());
 			auto iter = _table.find(key);
 			if (iter != _table.end() && iter->second.get() == value.get()) {
 				_table.erase(iter);
 			}
 		}
+		void collect_marked() {
+			std::lock_guard<std::mutex> lock(_mutex);
+			for (auto it = _table.begin(); it != _table.end();) {
+				isymbol* sym = it->second.get();
+				if (sym->mark < 0) continue;
+				if (sym->mark.exchange(0) != 0)
+					it = _table.erase(it);
+				else  it++;
+			}
+		}
 	private:
-		template<typename U>
-		maped_type&  insert(U&& value) noexcept {
-			value_type ptr = std::make_unique<isymbol>(std::forward<U>(value));
-			auto result = _table.emplace(ptr->str, ptr);
+		maped_type&  insert(const isymbol& value) noexcept {
+			maped_type ptr = isymbol::create(value);
+			const auto& key = _extractor(ptr->str);
+			auto result = _table.emplace(key, std::move(ptr));
 			return result.first->second;
 		}
 		std::mutex _mutex;
 		container_type _table;
 		key_extractor _extractor;
 	};
+
 	class symbol {
 	public:
+		using string_type = typename symboltable::string_type;
 		using value_type = typename symboltable::value_type;
 		template<typename ValueType> using is_value_type = std::is_same<std::decay_t<ValueType>, std::decay_t<value_type>>;
 		template<typename ValueType> using is_symbol_type = std::is_same<std::decay_t<ValueType>, symbol>;
 	private:
-		struct symbol_tracker {
-			std::unordered_set<symbol*> symbols;
-			std::mutex mutex;
-			void emplace(symbol* sym) {
-				std::lock_guard<std::mutex> lock(mutex);
-				symbols.emplace(sym);
-			}
-			void erase(symbol* sym) {
-				std::lock_guard<std::mutex> lock(mutex);
-				symbols.erase(sym);
-			}
-		};
+		using symbol_tracker = class_tracking<symbol>;
+
 		inline static symboltable& table() {
 			static symboltable _table;
 			return _table;
@@ -229,10 +252,9 @@ namespace util {
 				_symbol = sym;
 			}
 		}
-		void _assign(const symbol& sym) { _assign(sym._symbol); }
 		// we could just use find, as that returns the empty symbol but this is a slight optimizeing
 		// on empty strings
-		template<typename U, typename = std::enable_if<is_value_type<U>::value>>
+		template<typename U>
 		void _assign(U&& str) {
 			if (empty()) {
 				if (!str.empty()) {
@@ -245,91 +267,84 @@ namespace util {
 				else _symbol = table().find(std::forward<U>(str)).get();
 			}
 		}
-
-
 	public:
 		bool empty() const { return symboltable::is_empty(*_symbol); }
 		void clear() {
 			if (!empty()) symbols().erase(this);
 			_symbol = symboltable::empty_symbol().get();
 		}
+		void make_perm() {
+			// makes this string uncolectable
+			_symbol->mark = -1;
+		}
+		static void collect_garbage() {
+			symbols().for_each([](symbol* o) { if (!o->empty() && o->_symbol->mark == 0) o->_symbol->mark = 1; });
+			table().collect_marked();
+		}
 		symbol() : _symbol(symboltable::empty_symbol().get()) {}
 		symbol(const symbol& copy) :_symbol(copy._symbol) { symbols().emplace(this); }
 		symbol(symbol&& move) :_symbol(move._symbol) { symbols().emplace(this); move.clear(); }
-		symbol& operator=(const symbol& copy) { _assign(copy); return *this; }
-		symbol& operator=(symbol&& move) { _assign(move); move.clear(); return *this; }
+		symbol& operator=(const symbol& copy) { _assign(copy._symbol); return *this; }
+		symbol& operator=(symbol&& move) { _assign(move._symbol); move.clear(); return *this; }
 		~symbol() { if (!empty()) clear(); }
-		template <
-			class ValueType,
-			class = std::enable_if_t<is_value_type<ValueType>::value>
-		> explicit symbol(ValueType&& value) {
+
+		template <typename ValueType, typename = std::enable_if_t<is_value_type<ValueType>::value> || std::is_constructible<value_type, ValueType>::value>
+			explicit symbol(ValueType&& value) {
 			_assign(std::forward<ValueType>(value));
 		}
+		template <typename... > struct typelist;
 
-		template <class ValueType, class = std::enable_if_t<!is_symbol_type<ValueType>::value>>
-		symbol& operator =(ValueType&& value) {
-			_assign(std::forward<ValueType>(value));
-			return *this;
+		template <typename... Args,
+			typename = std::enable_if_t<
+			!std::is_same<typelist<symbol>,
+			typelist<std::decay_t<Args>...>>::value
+			>>
+	//	template <typename... Args, typename = std::enable_if<std::is_constructible<value_type, Args&&...>::value && !std::is_same<std::decay<Args>,symbol>::value>>
+			symbol(Args&&... args) {
+			_assign(value_type(std::forward<Args>(args)...));
 		}
+#if 0
+			string_type str(std::forward<Args>(args)...);
+			_assign(std::move(str));
+		}
+#endif
 
-		template <
-			class... Args,
-			class = std::enable_if_t<
-			std::conjunction<
-			std::negation<std::is_symbol_type<Args>...>
-			>::value
-			>
-			symbol(Args&&... args) : symbol(std::move(value_type(std::forward<Args>(args)...))) { }
+		template <class ValueType> symbol& operator =(ValueType&& value) { *this = symbol(std::forward<ValueType>(value)); return *this; }
+		// I get what this is trying to do, if the arg is a symbol, then to ingore this and use the constructor
+		// just not sure how ot use  std::conjunction
 
 
-		size_t size() const { return _symbol->str.size(); }
-		operator value_type&() const { return _symbol->str; }
-		value_type str() const { return _symbol->str; }
-		const char* c_str() const { return _symbol->str.c_str(); }
-		value_type::const_iterator begin() const { return _symbol->str.begin(); }
-		value_type::const_iterator end() const { return _symbol->str.end(); }
+
+		size_t size() const { return _symbol->length; }
+		operator std::string() const { return std::string(_symbol->str,_symbol->length); }
+		std::string str() const { return std::string(_symbol->str, _symbol->length); }
+		const char* c_str() const { return _symbol->str; }
+		const char* begin() const { return _symbol->str; }
+		const char* end() const { return _symbol->str + _symbol->length; }
 		bool operator==(const symbol& r) const { return _symbol == r._symbol; }
 		bool operator!=(const symbol& r) const { return _symbol != r._symbol; }
 		bool operator==(value_type& r) const { return _symbol->str == r; }
 		bool operator!=(value_type& r) const { return _symbol->str != r; }
 	};
-}
+};
 
 template<typename C, typename E>
 static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const util::symbol& sym) {
 	os << sym.str();
 	return os;
-}
+};
+
 namespace std {
 	template<>
 	struct hash<util::symbol> {
-		size_t operator()(const util::symbol& sym) const { return std::hash<util::symbol>()(sym); }
+		size_t operator()(const util::symbol& sym) const { return std::hash<std::string>()(sym.str()); }
 	};
-}
-
-
-namespace debug {
+};
+namespace util {
+	// http://stackoverflow.com/questions/257288/is-it-possible-to-write-a-template-to-check-for-a-functions-existence
 	namespace priv {
 		// http://stackoverflow.com/questions/257288/is-it-possible-to-write-a-template-to-check-for-a-functions-existence
-		struct has_no_serializtion {};
-		struct has_to_string : has_no_serializtion {};
-		struct has_stream_operator : has_no_serializtion {};
-		struct has_to_stream : has_stream_operator {};
-		struct search_for_serializtion : has_to_stream {};
-		struct debug_serializtion : search_for_serializtion {};
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_no_serializtion) { os << obj; } // throw console::no_stream_exception;
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_to_string)-> decltype(obj.to_string(), void()) { os << obj.to_string(); }
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_stream_operator)-> decltype(s << obj, void()) { obj << obj; }
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_to_stream)-> decltype(obj.to_stream(os), void()) { obj.to_stream(os); }
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, debug_serializtion)-> decltype(obj.to_debug(os), void()) { obj.to_debug(os); }
-		template<class T> auto serialize(std::ostream& os, T const& obj) -> decltype(serialize_imp(os, obj, search_for_serializtion{}), void())
-		{
-			priv::serialize_imp(os, obj, priv::search_for_serializtion{});
-		}
-		template<class T> auto debug_serialize(std::ostream& os, T const& obj) -> decltype(serialize_imp(os, obj, debug_serializtion{}), void())
-		{
-			priv::serialize_imp(os, obj, priv::debug_serializtion{});
-		}
+
 		// https://stackoverflow.com/questions/22758291/how-can-i-detect-if-a-type-can-be-streamed-to-an-stdostream
 		template<typename S, typename T>
 		class is_streamable {
@@ -340,7 +355,136 @@ namespace debug {
 		public:
 			static const bool value = decltype(test<S, T>(0))::value;
 		};
+		struct has_no_serializtion {};
+		struct has_to_string : has_no_serializtion {};
+		struct has_stream_operator : has_to_string {};
+		struct has_stream_function : has_stream_operator {};
+		struct debug_serializtion : has_stream_function {};
+
+		template<typename T> auto serialize_imp(std::ostream& os, T const& obj, has_no_serializtion) { os << obj; } // throw console::no_stream_exception;
+		template<typename T> auto serialize_imp(std::ostream& os, T const& obj, has_to_string)-> decltype(obj.to_string(), void()) { os << obj.to_string(); }
+		template<typename T> auto serialize_imp(std::ostream& os, T const& obj, has_stream_operator)-> decltype(s << obj, void()) { obj << obj; }
+		template<typename T> auto serialize_imp(std::ostream& os, T const& obj, has_stream_function)-> decltype(obj.to_stream(os), void()) { obj.to_stream(os); }
+		template<typename T> auto serialize_imp(std::ostream& os, T const& obj, debug_serializtion)-> decltype(obj.to_debug(os), void()) { obj.to_debug(os); }
+
+		template<typename C, typename E, typename T>
+		std::basic_ostream<C, E>&  serialize(std::basic_ostream<C, E>& os, T const& obj) {
+			serialize_imp(os, obj, priv::has_stream_function{});
+			return os;
+		}
+		template<typename C, typename E, typename T>
+		std::basic_ostream<C, E>& debug_serialize(std::basic_ostream<C, E>& os, T const& obj) {
+			serialize_imp(os, obj, priv::debug_serializtion{});
+			return os;
+		}
+
+		//template<class>
+		//struct can_stream : std::false_type {};
+
+		template<class> struct sfinae_true : std::true_type {};
+		namespace detail {
+			struct false_detection {};
+			struct true_detection : false_detection {};
+			template<class T>
+			static auto test_at(true_detection)->sfinae_true<decltype(std::declval<T>().at(std::declval<size_t>()))>;
+			template<class T>
+			static auto test_at(false_detection)->std::false_type;
+			template<typename T>
+			static auto test(true_detection)->sfinae_true<T>;
+			template<typename T>
+			static auto test(true_detection)->std::false_type;
+
+			template<class T>
+			static auto test_stream(true_detection)->sfinae_true<decltype(std::declval<std::ostream>() << std::declval<T>())>;
+			template<class T>
+			static auto test_stream(false_detection)->std::false_type;
+
+			template<class T>
+			static auto test_to_stream(true_detection)->sfinae_true<decltype(std::declval<T>().to_stream(std::declval<std::ostream>()))>;
+			template<class T>
+			static auto test_to_stream(false_detection)->std::false_type;
+
+			template<class T>
+			static auto test_to_debug(true_detection)->sfinae_true<decltype(std::declval<T>().to_debug(std::declval<std::ostream>()))>;
+			template<class T>
+			static auto test_to_debug(false_detection)->std::false_type;
+
+			template<typename T>
+			struct test_it : decltype(detail::test<T>(true_detection{}))   {};
+		};
+
+		//template<typename T_ARRAY>
+		//struct has_at_func : has_declval<decltype(std::declval<T_ARRAY>().at(std::declval<size_t>()))> {};
+		template<typename T_ARRAY>
+		struct has_at_func : decltype(detail::test_at<T_ARRAY>(detail::true_detection{})){};
+
 	};
+	template<typename T>
+	struct can_stream : decltype(priv::detail::test_stream<T>(priv::detail::true_detection{})){};
+	template<typename T>
+	struct has_to_stream : decltype(priv::detail::test_to_stream<T>(priv::detail::true_detection{})){};
+	template<typename T>
+	struct has_to_debug : decltype(priv::detail::test_to_debug<T>(priv::detail::true_detection{})){};
+
+	template<typename C, typename E, typename T>
+	std::basic_ostream<C, E>&  serialize(std::basic_ostream<C, E>&  os, T const& obj)
+	{
+#if _DEBUG
+		priv::debug_serialize(os, obj);
+#else
+		priv::serialize(os, obj);
+#endif
+	}
+
+
+	template<typename T, typename = std::enable_if<(std::is_arithmetic<T>::value || std::is_pod<T>::value), T>::type>
+	constexpr T cast(const uint8_t* ptr) { return *reinterpret_cast<const T*>(ptr); }
+
+	template<typename T, typename A, typename = std::enable_if<((std::is_arithmetic<T>::value || std::is_pod<T>::value) && std::is_pointer<A>::value), T>::type>
+	constexpr T cast(A ptr) { return cast(reinterpret_cast<const uint8_t*>(ptr)); }
+
+	template<typename T, typename = std::enable_if<(std::is_arithmetic<T>::value || std::is_pod<T>::value)>::type>
+	constexpr typename const std::pointer_traits<T>::pointer cast_ptr(const uint8_t* ptr) { return reinterpret_cast<const T*>(ptr); }
+
+	template<typename T, typename A, typename = std::enable_if<((std::is_arithmetic<T>::value || std::is_pod<T>::value) && std::is_pointer<A>::value)>::type>
+	constexpr typename const std::pointer_traits<T>::pointer cast_ptr(A ptr) { return cast(reinterpret_cast<const uint8_t*>(ptr)); }
+
+	template<typename T>
+	const T* read_struct(const uint8_t*& ptr) {
+		const T* value = reinterpret_cast<const T*>(ptr);
+		ptr += sizeof(T);
+		return value;
+	}
+	template<typename T>
+	T read_value(const uint8_t** ptr) {
+		T value = *reinterpret_cast<const T*>(*ptr);
+		*ptr += sizeof(T);
+		return value;
+	}
+	inline size_t simple_hash(const char *str)
+	{
+		size_t hash = 5381;
+		int c;
+		while (c = (unsigned char)(*str++)) hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+		return hash;
+	}
+	inline size_t simple_hash(const char *str, size_t len)
+	{
+		size_t hash = 5381;
+		while (len > 0) {
+			int c = *str++;
+			hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+			len--;
+		}
+		return hash;
+	}
+
+
+
+}
+
+namespace debug {
+	
 	void enable_windows10_vt100_support();
 	class ostream {
 		std::ostream _stream;
@@ -355,9 +499,9 @@ namespace debug {
 		void write(const T& obj) // -> decltype(write_check(obj, has_to_debug{}), void())
 		{
 			if (_debug)
-				priv::debug_serialize(_stream, obj);
+				util::priv::debug_serialize(_stream, obj);
 			else
-				priv::serialize(_stream, obj);
+				util::priv::serialize(_stream, obj);
 		}
 		std::ostream& stream() { return _stream; }
 		const std::string& name() const { return _name; }
@@ -374,9 +518,10 @@ namespace debug {
 //		ostream& operator<<(ostream& (__cdecl *func)(ostream&)) { return func(*this); }
 	};
 	// wrapper for debug_stream, handles most of not all cases.  I could rewrite it but this template does the job
+#if 0
 	template<typename T>
 	inline ostream& operator<<(ostream& os, T&& obj) {os.write(obj); return os;}
-
+#endif
 	//inline ostream& operator<<(ostream& os, std::ostream& (__cdecl *func)(std::ostream&)) { os.write(func); return os; }
 	//inline ostream& operator<<(ostream& os, std::ios& (__cdecl *func)(std::ios&)) { os.write(func); return os; }
 	//inline ostream& operator<<(ostream& os, std::ios_base& (__cdecl *func)(std::ios_base&)){ os.write(func); return os; }
@@ -423,123 +568,14 @@ namespace debug {
 		}
 	//	debug_stream& ostream operator<< (debug_stream& os) { to_debug(os); return os; }
 	};
-
-	extern std::ostream cerr;
+	extern ostream cerr;
+	//extern std::ostream& cerr = std::cerr;
 };
 
-template<typename C, typename E, typename U, typename = std::enable_if<!debug::priv::is_streamable<std::basic_ostream<C, E>, U>::value>>
-	static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const U& obj) {
-		debug::priv::debug_serialize(os, obj)
-		return os;
-	}
+
 
 namespace util {
-	namespace priv {
-		// http://stackoverflow.com/questions/257288/is-it-possible-to-write-a-template-to-check-for-a-functions-existence
-		struct has_no_serializtion {};
-		struct has_to_string : has_no_serializtion {};
-		struct has_stream_operator : has_no_serializtion {};
-		struct has_to_stream : has_stream_operator {};
-		struct search_for_serializtion : has_to_stream {};
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_no_serializtion) { os << '?' << typeid(T).name() << '?'; } // throw console::no_stream_exception;
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_to_string)-> decltype(obj.to_string(), void()) { os << obj.to_string(); }
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_stream_operator)-> decltype(s << obj, void()) { obj << obj; }
-		template<class T> auto serialize_imp(std::ostream& os, T const& obj, has_to_stream)-> decltype(obj.to_stream(os), void()) { obj.to_stream(os); }
-		//template<class>
-		//struct can_stream : std::false_type {};
 	
-		template<class> struct sfinae_true : std::true_type {};
-		namespace detail {
-			struct false_detection {};
-			struct true_detection : false_detection {};
-			template<class T>
-			static auto test_at(true_detection)->sfinae_true<decltype(std::declval<T>().at(std::declval<size_t>()))>;
-			template<class T>
-			static auto test_at(false_detection)->std::false_type;
-			template<typename T>
-			static auto test(true_detection)->sfinae_true<T>;
-			template<typename T>
-			static auto test(true_detection)->std::false_type;
-
-			template<class T>
-			static auto test_stream(true_detection)->sfinae_true<decltype(std::declval<std::ostream>() << std::declval<T>())>;
-			template<class T>
-			static auto test_stream(false_detection)->std::false_type;
-
-			template<class T>
-			static auto test_to_stream(true_detection)->sfinae_true<decltype(std::declval<T>().to_stream(std::declval<std::ostream>()))>;
-			template<class T>
-			static auto test_to_stream(false_detection)->std::false_type;
-
-			template<class T>
-			static auto test_to_debug(true_detection)->sfinae_true<decltype(std::declval<T>().to_debug(std::declval<std::ostream>()))>;
-			template<class T>
-			static auto test_to_debug(false_detection)->std::false_type;
-
-			template<typename T>
-			struct test_it : decltype(detail::test<T>(true_detection{}))   {};
-		};
-
-		//template<typename T_ARRAY>
-		//struct has_at_func : has_declval<decltype(std::declval<T_ARRAY>().at(std::declval<size_t>()))> {};
-		template<typename T_ARRAY>
-		struct has_at_func : decltype(detail::test_at<T_ARRAY>(detail::true_detection{})){};
-
-	};
-	template<typename T>
-	struct can_stream : decltype(priv::detail::test_stream<T>(priv::detail::true_detection{})){};
-	template<typename T>
-	struct has_to_stream : decltype(priv::detail::test_to_stream<T>(priv::detail::true_detection{})){};
-	template<typename T>
-	struct has_to_debug : decltype(priv::detail::test_to_debug<T>(priv::detail::true_detection{})){};
-
-	template<class T> auto serialize(std::ostream& os, T const& obj) -> decltype(priv::serialize_imp(os, obj, priv::search_for_serializtion{}), void())
-	{
-		priv::serialize_imp(os, obj, priv::search_for_serializtion{});
-	}
-
-	template<typename T, typename = std::enable_if<(std::is_arithmetic<T>::value || std::is_pod<T>::value), T>::type>
-	constexpr T cast(const uint8_t* ptr) { return *reinterpret_cast<const T*>(ptr); }
-
-	template<typename T, typename A, typename = std::enable_if<((std::is_arithmetic<T>::value || std::is_pod<T>::value) && std::is_pointer<A>::value), T>::type>
-	constexpr T cast(A ptr) { return cast(reinterpret_cast<const uint8_t*>(ptr)); }
-
-	template<typename T, typename = std::enable_if<(std::is_arithmetic<T>::value || std::is_pod<T>::value)>::type>
-	constexpr typename const std::pointer_traits<T>::pointer cast_ptr(const uint8_t* ptr) { return reinterpret_cast<const T*>(ptr); }
-
-	template<typename T, typename A, typename = std::enable_if<((std::is_arithmetic<T>::value || std::is_pod<T>::value) && std::is_pointer<A>::value)>::type>
-	constexpr typename const std::pointer_traits<T>::pointer cast_ptr(A ptr) { return cast(reinterpret_cast<const uint8_t*>(ptr)); }
-
-	template<typename T>
-	const T* read_struct(const uint8_t*& ptr) {
-		const T* value = reinterpret_cast<const T*>(ptr);
-		ptr += sizeof(T);
-		return value;
-	}
-	template<typename T>
-	T read_value(const uint8_t** ptr) {
-		T value = *reinterpret_cast<const T*>(*ptr);
-		*ptr += sizeof(T);
-		return value;
-	}
-	inline size_t simple_hash(const char *str)
-	{
-		size_t hash = 5381;
-		int c;
-		while (c = (unsigned char)(*str++)) hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-		return hash;
-	}
-	inline size_t simple_hash(const char *str, size_t len)
-	{
-		size_t hash = 5381;
-		while (len > 0) {
-			int c = *str++;
-			hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-			len--;
-		}
-		return hash;
-	}
-
 
 	// Great taken from here
 	// http://zotu.blogspot.com/2010/01/creating-random-access-iterator.html
@@ -794,7 +830,10 @@ namespace util {
 	public:
 		StreamIdent() : _ident(0) {}
 		StreamIdent(size_t ident) : _ident(ident) {}
-		friend std::ostream& operator<<(std::ostream& os, const StreamIdent& ident);
+		template<typename C, typename E>
+		void to_stream(std::basic_ostream<C, E>& os) const {
+			for (size_t i = 0; i < _ident; i++) os << "\t";
+		}
 		StreamIdent& operator++() { _ident++; return *this; }
 		StreamIdent operator++(int) { auto tmp(*this); operator++(); return tmp; }
 		StreamIdent& operator--() { _ident--; return *this; }
@@ -805,11 +844,27 @@ namespace util {
 	private:
 		size_t _ident;
 	};
-	inline std::ostream& operator<<(std::ostream& os, const StreamIdent& ident) {
-		for (size_t i = 0; i < ident._ident; i++) os << "\t";
-		return os;
-	};
+
 };
+
+template<typename C, typename E, typename U, typename = std::enable_if<!util::priv::is_streamable<std::basic_ostream<C, E>, U>::value>>
+static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const U& obj) {
+#if _DEBUG
+	util::priv::debug_serialize(os, obj);
+#else
+	util::priv::serialize(os, obj);
+#endif
+	return os;
+}
+
+#if 0
+template<typename C, typename E>
+static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const util::StreamIdent& ident) {
+	ident.to_stream<C,E>(os);
+	return os;
+};
+
+#endif
 
 namespace std {
 	template<>

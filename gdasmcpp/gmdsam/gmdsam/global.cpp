@@ -100,6 +100,6 @@ namespace debug {
 	ostream::~ostream() { delete _stream.rdbuf(); }
 	debug::ostream cerr(true);
 	
-
+	//debug::ostream& cerr = std::cerr;
 
 };
