@@ -28,7 +28,8 @@ namespace gm {
 
 
 #ifdef USE_SYMBOL
-	using String = util::symbol;
+	using Symbol = util::symbol;
+	using StringView = std::string_view;
 #else
 	class String {
 	public:
@@ -93,10 +94,11 @@ namespace gm {
 
 	class SimpleXmlWriter {
 	public:
+		using string_type = std::string_view;
 		struct XmlElement;
 		using XmlElementPtr = std::unique_ptr<XmlElement>;
-		using value_type = std::variant<String, int, float, XmlElementPtr>;
-		using container_type = std::unordered_map<String, value_type>;
+		using value_type = std::variant<string_type, int, float, XmlElementPtr>;
+		using container_type = std::unordered_map<string_type, value_type>;
 		struct to_stream_helper {
 			std::ostream& os;
 			util::StreamIdent& ident;
@@ -112,7 +114,7 @@ namespace gm {
 					}
 				}
 			}
-			bool operator()(const String& v) const { os << v.str(); return false; }
+			bool operator()(const std::string_view& v) const { os << v; return false; }
 			bool operator()(const float v) const { 
 				os << std::defaultfloat << v; // we atleast want one decimal
 				if (v == (int)v) os << ".0";
@@ -153,35 +155,35 @@ namespace gm {
 		};
 		struct XmlElement {
 			std::vector<value_type> elements;
-			std::unordered_map<String, std::variant<String, int, float>> attributes;
-			String name;
-			XmlElement(const String& name) : name(name) {}
+			std::unordered_map<string_type, std::variant<string_type, int, float>> attributes;
+			string_type name;
+			XmlElement(const std::string_view& name) : name(name) {}
 			XmlElement&  AddTag(float v) { elements.emplace_back(v); return *this; }
 			XmlElement&  AddTag(int v) { elements.emplace_back(v); return *this; }
-			XmlElement&  AddTag(const String& v) { elements.emplace_back(v); return *this;}
-			XmlElement& AddElement(const String& v) {
+			XmlElement&  AddTag(const string_type& v) { elements.emplace_back(v); return *this;}
+			XmlElement& AddElement(const string_type& v) {
 				XmlElement* e = new XmlElement(v);
 				elements.emplace_back(std::move(std::unique_ptr<XmlElement>( e)));
 				return *e;
 			}
-			XmlElement& AddElement(const String& v, float value) {
+			XmlElement& AddElement(const string_type& v, float value) {
 				return AddElement(v).AddTag(value);
 			}
-			XmlElement& AddElement(const String& v, int value) {
+			XmlElement& AddElement(const string_type& v, int value) {
 				return AddElement(v).AddTag(value);
 			}
-			XmlElement& AddElement(const String& v, const String& value) {
+			XmlElement& AddElement(const string_type& v, const string_type& value) {
 				return AddElement(v).AddTag(value);
 			}
-			void AddAttribute(const String& key, int value) { attributes.emplace(key, value); }
-			void AddAttribute(const String& key, float value) { attributes.emplace(key, value); }
-			void AddAttribute(const String& key, const String& value) { attributes.emplace(key, value); }
+			void AddAttribute(const string_type& key, int value) { attributes.emplace(key, value); }
+			void AddAttribute(const string_type& key, float value) { attributes.emplace(key, value); }
+			void AddAttribute(const string_type& key, const string_type& value) { attributes.emplace(key, value); }
 
 		};
 		XmlElement _root;
 	public:
 		SimpleXmlWriter() : _root("xml") { _root.AddAttribute("version", 1.0f); }
-		XmlElement& AddElement(const String& s) { return _root.AddElement(s); }
+		XmlElement& AddElement(const string_type& s) { return _root.AddElement(s); }
 		void save(const std::string& filename) {
 			std::ofstream file(filename);
 			if (file.good()) {
@@ -201,141 +203,6 @@ namespace gm {
 			os << std::endl;
 		}
 	};
-
-#if 0
-	class SimpleXmlWriter {
-		class Element {
-			String _name;
-			using attribute_type = std::unordered_map<String, String>;
-			using tag_type = std::unordered_map<String, std::unique_ptr<Element>>;
-			attribute_type _attributes;
-			tag_type _tags;
-		public:
-			Element(const String& s) : _name(s) {}
-			const String& name() const { return _name; }
-			tag_type& tags() { return _tags; }
-			attribute_type& attributes() { return _attributes; }
-			Element& createElement(const String& s) {
-				auto it = _tags.emplace(s, std::make_unique<Element>());
-				return *(*it.first).second.get();
-			}
-			void deleteElement(const String& s) { _tags.erase(s); }
-		};
-		Element _root;
-	public:
-		SimpleXmlWriter(): _root("?xml"){}
-		virtual ~SimpleXmlWriter() {}
-		bool open(const std::string& filename) {
-			if (_os) return false;
-			std::fstream* os = new std::fstream(filename, std::ios::out);
-			if (!os->good()) { delete os; return false; }
-			_os.reset(os);
-			write_headder();
-			return true;
-		}
-		void close() {
-			if (_os) {
-				writer_end();
-				_os.reset();
-			}
-		}
-
-		std::ostream& stream() { return *_os; }
-
-		void attribute_begin(const char* tag) {
-			if (_os) {
-				if (_in_attribute) tag_end();
-				_opened_tags.emplace(tag);
-				*_os << _indent++ << '<' << tag << ' ';
-				_in_attribute = true;
-			}
-		}
-		void attribute_end() {
-			if (_os && _in_attribute) {
-				*_os << '>' << std::endl;
-				_in_attribute = false;
-			}
-		}
-		template<class T>
-		void attribute_end(const T& value) {
-			if (_os && _in_attribute) {
-				auto tag = _opened_tags.top();
-				auto& os = *_os;
-				os << '>' << value << "</" << tag << '>' << std::end;
-				_opened_tags.pop();
-				_in_attribute = false;
-			}
-		}
-
-		void tag_begin(const char* tag) {
-			if (_os) {
-				if (_in_attribute) tag_end();
-				_opened_tags.emplace(tag);
-				*_os << _indent++ << '<' << tag << '>' << std::endl;
-			}
-		}
-		template<class V>
-		void tag_begin_end(const char* tag, const V& value) {
-			if (_os) {
-				auto & os = *_os;
-				os << _indent << '<' << tag << '>' << value << "</" << tag << '>' << std::end;
-			}
-		}
-		void tag_end() {
-			if (_os && !_opened_tags.empty()) {
-				if (_in_attribute) {
-					*_os << "/>" << std::endl;
-					_in_attribute = false;
-				}
-				else {
-					auto tag = _opened_tags.top();
-					*_os << --_indent << "</" << tag << '>' << std::endl;
-				}
-				_opened_tags.pop();
-			}
-		}
-		void writer_begin() {
-			*_os << "<!--XML Document-->" << std::endl;
-			*_os << "<?xml version='1.0' encoding='us-ascii'>" << std::endl;
-			_indent = 0;
-		}
-
-		bool good() const { return _os && _os->good(); }
-
-		void write(const char* str) const {
-			if (_os) {
-				if (_in_attribute) *_os << str << ' ';
-				else  *_os << _indent << str << std::endl;
-			}
-		}
-		template<class U>
-		void tag_write(const char tag, const U& str) {
-			if (_os) {
-				*_os << _indent << '<' << tag << '>' << str << "</" << tag << '>' << std::endl;
-			}
-		}
-
-		void write_attribute(const char*attribute, int value) {
-			if (_os &&_in_attribute) {
-				*_os << attribute << '=' << value << ' ';
-			}
-		}
-
-		void write_attribute(const char* attribute) { write(attribute); }
-	protected:
-		void write_headder() const {
-			*_os << "<!--XML Document-->" << std::endl;
-			*_os << "<?xml version='1.0' encoding='us-ascii'>" << std::endl;
-		}
-		void writer_end() {
-			while (!_opened_tags.empty()) tag_end();
-		}
-		std::unique_ptr<std::ostream> _os;
-		util::StreamIdent _indent;
-		bool _in_attribute;
-		std::stack<gm::String> _opened_tags;
-	};
-#endif
 };
 
 // custom specialization of std::hash can be injected in namespace std
@@ -389,8 +256,8 @@ namespace gm {
 		typedef typename long difference_type;
 		typedef typename VALUE_T* pointer;
 		typedef typename VALUE_T& reference;
-		typedef typename util::GenericIterator<VALUE_T,OffsetList> iterator;
-		OffsetList(const uint8_t* ptr,size_t offset) : _data(ptr), _list(ptr,offset) {}
+		typedef typename util::GenericIterator<VALUE_T, OffsetList> iterator;
+		OffsetList(const uint8_t* ptr, size_t offset) : _data(ptr), _list(ptr, offset) {}
 		OffsetList(const uint8_t* ptr, const uint8_t* list) : _data(ptr), _list(list) {}
 		size_t size() const { return _list.size(); }
 		const VALUE_T* at(size_t i) const { return reinterpret_cast<const VALUE_T*>(_data + _list.at(i)); }
@@ -406,7 +273,7 @@ namespace gm {
 			}
 		}
 	};
-	
+
 
 	// class forces a struct/class to be non copyable or creatable
 	template<typename C> // ugh cannot do this in an undefined class , typename = std::enable_if<std::is_pod<C>::value>>
@@ -434,10 +301,10 @@ namespace gm {
 		size_t _pos;
 		std::vector<uint32_t> _offsets; // used for offset lists
 	public:
-		FileHelper() :  _pos(0) {}
-		void load(const std::vector<uint8_t>& data) { _data = data;  _pos = 0;  }
+		FileHelper() : _pos(0) {}
+		void load(const std::vector<uint8_t>& data) { _data = data;  _pos = 0; }
 		void load(std::vector<uint8_t>&& data) { _data = std::move(data);  _pos = 0; }
-		void load(std::istream& is)  {
+		void load(std::istream& is) {
 			is.seekg(0, std::ios::end);
 			size_t size = size_t(is.tellg());
 			is.seekg(std::ios::beg, 0);
@@ -453,7 +320,7 @@ namespace gm {
 		FileHelper(const std::vector<uint8_t>& data) { load(data); }
 		FileHelper(std::vector<uint8_t>&& data) { load(data); }
 		FileHelper(std::istream& is) { load(is); }
-		
+
 		// save or push the offset stack
 		size_t offset() const { return _pos; }
 		size_t size() const { return _data.size(); }
@@ -494,10 +361,10 @@ namespace gm {
 		}
 		const char* str(size_t offset) { return reinterpret_cast<char*>(_data.data()) + offset; }
 	};
-	
 
 
-	
+
+
 
 	enum class ChunkType : uint32_t {
 		BAD = 0,
@@ -518,7 +385,7 @@ namespace gm {
 		FUNC = 'FUNC',
 		STRG = 'STRG',
 	};
-	
+
 	class OffsetInterface : public StreamInterface {
 	protected:
 		uint32_t _offset;
@@ -537,7 +404,7 @@ namespace gm {
 	protected:
 		uint32_t _index;
 	public:
-		template<typename T, typename = std::enable_if<std::is_convertible<T,uint32_t>::value>::type>
+		template<typename T, typename = std::enable_if<std::is_convertible<T, uint32_t>::value>::type>
 		IndexInterface(uint32_t offset, T index) : OffsetInterface(offset), _index(static_cast<uint32_t>(index)) {}
 		virtual ~IndexInterface() {}
 		uint32_t index() const { return _index; } // unique
@@ -552,10 +419,10 @@ namespace gm {
 	class NameInterface : public IndexInterface {
 	protected:
 		constexpr static const char * NONAME = "<EMPTY>";
-		String _name;
+		StringView _name;
 	public:
-		NameInterface(uint32_t offset, uint32_t index, String name) : _name(name), IndexInterface(offset,index) {}
-		String name() const { return _name; }
+		NameInterface(uint32_t offset, uint32_t index, StringView name) : _name(name), IndexInterface(offset, index) {}
+		StringView name() const { return _name; }
 		bool valid_name() const { return !_name.empty(); }
 		bool operator<(const NameInterface& other) const { return IndexInterface::operator<(other); }
 		bool operator==(const IndexInterface& other) const { return IndexInterface::operator==(other); }
@@ -568,7 +435,7 @@ namespace gm {
 				os << _name;
 			else
 				os << NONAME;
-			os << ')'; 
+			os << ')';
 		}
 	};
 	//http://stackoverflow.com/questions/36936584/how-to-write-constexpr-swap-function-to-change-endianess-of-an-integer
@@ -608,30 +475,31 @@ namespace gm {
 	};
 
 	template<typename RAW_T, ChunkType CT>
-	class Resource :  public std::conditional<ResourceTraits<RAW_T, CT>::HasNameOffset, NameInterface, IndexInterface>::type , public ResourceTraits<RAW_T, CT>{
+	class Resource : public std::conditional<ResourceTraits<RAW_T, CT>::HasNameOffset, NameInterface, IndexInterface>::type, public ResourceTraits<RAW_T, CT> {
 	protected:
 		typedef typename std::conditional<ResourceTraits<RAW_T, CT>::HasNameOffset, NameInterface, IndexInterface>::type base_type;
 		const RAW_T* _raw;
 		struct _index_test {};
 		struct _name_test : _index_test {};
-		template<typename T = RAW_T,  typename = std::enable_if<!HasNameOffset>::type>
+		template<typename T = RAW_T, typename = std::enable_if<!HasNameOffset>::type>
 		Resource(uint32_t index, const uint8_t* data, uint32_t offset, _name_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index) { }
-		template<typename T = RAW_T,  typename = std::enable_if<HasNameOffset>::type>
+		template<typename T = RAW_T, typename = std::enable_if<HasNameOffset>::type>
 		Resource(uint32_t index, const uint8_t* data, uint32_t offset, _index_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index, reinterpret_cast<const char*>(data + reinterpret_cast<const RAW_T*>(data + offset)->name_offset)) { }
 	public:
 		Resource() : _name(), _index(-1), _raw(nullptr) {}
 		bool valid() const { return _raw != nullptr; }
 		const RAW_T* raw() const { return _raw; }
-		template<typename T, typename = std::enable_if<std::is_convertible<T,uint32_t>::value>::type> // index handles the conversion
+		template<typename T, typename = std::enable_if<std::is_convertible<T, uint32_t>::value>::type> // index handles the conversion
 		Resource(T index, const uint8_t* data, uint32_t offset) : Resource(static_cast<uint32_t>(index), data, offset, _name_test{}) {}
 	};
 
 
-	class XMLResourceExportInterface  {
+	class XMLResourceExportInterface {
 	public:
 		virtual ~XMLResourceExportInterface() {}
-		static inline std::string xml_export_filename(ChunkType CT, const std::string& name)  {
-			std::string filename = name;
+		template<typename T>
+		static inline std::string xml_export_filename(ChunkType CT, T&& name) {
+			std::string filename(std::forward<T>(name));
 			switch (CT) {
 			case ChunkType::FONT: filename += ".font"; break;
 			case ChunkType::SPRT: filename += ".sprite"; break;
@@ -644,16 +512,21 @@ namespace gm {
 		virtual void xml_export(std::ostream& os) const {};
 
 		virtual bool xml_export(const std::string& path) const = 0;
+		template<typename T>
+		bool xml_export(T&& s) const {
+			const std::string tmp(std::forward<T>(s));
+			return xml_export(tmp);
+		}
 	};
 	namespace raw_type {
 		// these are all the internal raw types in game maker that I could derive
 		// the exception will be func/code as the two versions I know about have diffrent structures
-		
+
 #pragma pack(push, 1)
 
 		// All strings ARE null terminated within a data.win file.  However when you read offsets the point to 
 		// the string itself and NOT to this structure.  This structure is only in the STNG chunk
-		struct String : CannotCreate<String> {
+		struct String : CannotCreate<raw_type::String> {
 			uint32_t length;
 			const char u_str[1];
 		};
@@ -861,7 +734,40 @@ namespace gm {
 			return ((pixel >> bit) & 1) != 0;
 		}
 	};
+	class String : public Resource<raw_type::String, ChunkType::STRG> {
+	public:
+		String(int index, const uint8_t* data, uint32_t offset) : Resource(index, data, offset) {}
+		struct StringHasher {
+			std::hash<StringView> _hasher;
+			size_t operator()(const String& s) const { return _hasher(s); }
+		};
+		StringView strv() const { return StringView(_raw->u_str, _raw->length); }
+		size_t size() const noexcept { return _raw->length; }
+		size_t length() const noexcept { return _raw->length; }
+		operator StringView() const noexcept { return strv(); } // main conversion function
+		bool operator==(const String& r) const noexcept { return _raw == r._raw; }
+		bool operator==(const StringView& r) const noexcept { return strv() == r; }
+		bool operator==(const std::string& r) const noexcept { return strv() == r; }
+		template<typename T> bool operator!=(const T& r) const noexcept { return !(*this == r); }
+		const char* begin() const { return _raw->u_str; }
+		const char* end() const { return _raw->u_str + _raw->length; }
+	};
+	// we have to cut the namespace here to use std::hash
+};
+template<typename C, typename E>
+static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const gm::String& s) noexcept {
+	os << s.strv();
+	return os;
+}
+namespace std {
+	template<>
+	struct hash<gm::String> {
+		std::hash<gm::StringView> _hasher;
+		size_t operator()(const gm::String& r) const { return _hasher(r); }
+	};
+}
 
+namespace gm {
 
 	class Texture {
 		const uint8_t* _data;
@@ -990,9 +896,9 @@ namespace gm {
 			os << "{ event : " << EventType::from_index(_index) << ", id : " << id() << " }";
 		}
 	};
-	class String : public Resource<raw_type::String, ChunkType::STRG> {
+	class GString : public Resource<raw_type::String, ChunkType::STRG> {
 	public:
-		String(int index, const uint8_t* data, uint32_t offset)
+		GString(int index, const uint8_t* data, uint32_t offset)
 			: Resource(index, data, offset) {}
 
 	};
@@ -1104,7 +1010,7 @@ namespace gm {
 				const auto & f = ff.at(i);
 				auto& e_frame = e_frames.AddElement("frame");
 				e_frame.AddAttribute("index", (int)i);
-				n = name().c_str();
+				n = name();
 				n += "_" + std::to_string(i) + ".png";
 				e_frame.AddTag(n);
 			}
@@ -1112,7 +1018,7 @@ namespace gm {
 		}
 		virtual bool xml_export(const std::string& path) const {
 			SimpleXmlWriter xml;
-			std::string filename = path + '\\' + XMLResourceExportInterface::xml_export_filename(ChunkType::SPRT, name().c_str());
+			std::string filename = path + '\\' + XMLResourceExportInterface::xml_export_filename(ChunkType::SPRT, name());
 			std::ofstream file(filename);
 			if (!file.good()) {
 				debug::cerr << "Could not open filename for xml write '" << filename << '"' << std::endl;
@@ -1141,6 +1047,7 @@ namespace gm {
 		FileHelper _data;
 		size_t _full_size;
 		std::unordered_map<uint32_t, const Chunk*> _chunks;
+		//std::vector<std::string_view> _stringtable;
 		std::vector<String> _stringtable;
 		//std::reference_wrapper<Chunk> test
 		using chunk_const_iterator = std::unordered_map<uint32_t, const Chunk*>::const_iterator;

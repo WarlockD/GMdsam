@@ -174,20 +174,28 @@ namespace gm {
 
 	void DataWinFile::fill_stringtable() {
 		auto strt_chunk = get_chunk<ChunkType::STRG>();
+		_stringtable.clear();
+		_stringtable.reserve(strt_chunk->count + 2);
 		for (size_t i = 0; i < strt_chunk->count; i++) {
 			
-#ifdef USE_SYMBOL
-			const char* c_str = reinterpret_cast<const char*>(_data.data() + strt_chunk->offsets[i]);
-			util::symbol sym(c_str);
-			sym.make_perm();
-			_stringtable.emplace_back(sym);
+			const uint32_t* start = reinterpret_cast<const uint32_t*>(_data.data() + strt_chunk->offsets[i]);
+			uint32_t length = *start;
+			const char* c_str = reinterpret_cast<const char*>(start + 1);
+			assert(strlen(c_str) == length); // verifys the strings are 0 terminated
+		//	uint32_t length = *(reinterpret_cast<const uint32_t*>(c_str) - 1);
+		//	size_t size = _data.size();
+		//	util::symbol sym(c_str);
+		//	sym.make_perm();
+#ifndef STRING_TABLE_USING_STRINGVIEW
+			_stringtable.emplace_back(_stringtable.size(), _data.data(), strt_chunk->offsets[i]);
 #else
-			const StringTable::istring* s = reinterpret_cast<const StringTable::istring*>( _data.data() +strt_chunk->offsets[i]);
-			s_string_table.insert_fixed(s);
+			_stringtable.emplace_back(c_str, length);
 #endif
+
 		}
+		debug::cerr << "Strings done " << strt_chunk->count;
 	}
-	static const std::unordered_map<size_t, std::string> key_to_string = {
+	static const std::unordered_map<size_t, std::string_view> key_to_string = {
 		{ 0, "NOKEY" },
 		{ 1, "ANYKEY" },
 		{ 8, "BACKSPACE" },

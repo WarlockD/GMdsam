@@ -24,13 +24,15 @@
 #include <cassert>
 #include <math.h>
 
-#ifndef __GCC
+#ifdef _MSC_VER
 #include <safeint.h>
 #endif
 
+
+
 namespace util {
 	namespace priv {
-#ifndef __GCC
+#ifdef _MSC_VER
 		template<typename _Tp>
 		bool __raise_and_add(_Tp& __val, int __base, unsigned char __c) {
 			if (SafeMultiply(__val, __base, &__val) || SafeAdd(__val, __c, &__val))
@@ -273,6 +275,44 @@ namespace util {
 		return false;
 	}
 #endif
+	namespace bit {
+		template<typename T>
+		uintptr_t point2uint(const T* p) {
+			static_assert(sizeof(size_t) == sizeof(T*), "This should always be true...hopefuly");
+			return reinterpret_cast<uintptr_t>(p);
+		}
+		//#define check_expr(e,o) (o)
+#define check_exp(e,o) (assert((e)),(o))
+		/*
+		** some useful bit tricks
+		*/
+		template<typename A, typename B>
+		constexpr static int lmod(A s, B size) { return check_exp((size&(size - 1)) == 0, static_cast<int>(s & (size - 1))); }
+		template<typename A>
+		constexpr static A twoto(A x) { (1 << (x)); }
+		template<typename X, typename M>
+		static inline void resetbits(X& x, M m) { x &= ~static_cast<X>(m); }
+		template<typename X, typename M>
+		static inline void setbits(X& x, M m) { x |= static_cast<X>(m); }
+		template<typename X, typename M>
+		constexpr static inline bool testbits(X x, M m) { return (x & m) != 0; }
+		template<typename B>
+		constexpr static inline B bitmask(B b) { return(1 << (b)); }
+		template<typename B>
+		constexpr static inline B bit2mask(B b) { return bitmask(b); }
+		template<typename B, typename ... Args>
+		constexpr static inline B bit2mask(B b, Args&& ... args) { return bit2mask(b) | bit2mask(std::forward<Args>(args)...); }
+
+		template<typename B1, typename B2>
+		constexpr static inline B1 bit2mask(B1 b1, B2 b2) { return bitmask(b1) | bitmask(b2); }
+		template<typename X, typename B>
+		static inline void l_setbit(X& x, B b) { setbits(x, bitmask(b)); }
+		template<typename X, typename B>
+		static inline void resetbit(X& x, B b) { resetbit(x, bitmask(b)); }
+		template<typename X, typename B>
+		constexpr static inline bool testbit(X x, B b) { return testbits(x, bitmask(b)); }
+
+	}
 	namespace priv {
 #if 0
 		template<typename T, typename = std::enable_if<std::is_floating_point<T>::value>>
@@ -285,138 +325,102 @@ namespace util {
 				return 0;
 			}
 			else {  /* normal case */
-				size_t u = static_cast<size_t>(i) + static_cast<size_t>(ni);  
-				return  u <= static_cast<size>(std::numeric_limits<int>::max()) ? u : ~u;    
+				size_t u = static_cast<size_t>(i) + static_cast<size_t>(ni);
+				return  u <= static_cast<size>(std::numeric_limits<int>::max()) ? u : ~u;
 			}
 		}
 #endif
-	}
-}
+		// used the example https://gcc.gnu.org/ml/gcc-patches/2017-04/msg00364.html for conversion routines
+		// it be nice if from_chars comes out for vc or gcc, but its going to be a while for it
+		template<typename T, typename E = void>
+		struct _number_format : std::false_type { static constexpr bool has_format = false; };
 
-// if we have a public function called hash() then use that for the hash of the object
-template<typename C, typename E, typename U, typename = std::enable_if<!util::priv::is_streamable<std::basic_ostream<C, E>, U>::value>>
-static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const U& obj) {
-#if _DEBUG
-	util::priv::debug_serialize(os, obj);
-#else
-	util::priv::serialize(os, obj);
-#endif
-	return os;
-}
+		template<typename T>
+		struct _number_format<T, typename std::enable_if<std::is_floating_point<T>::value>> : std::true_type {
+			using type = T;
+			static constexpr const char* fmt =
+				std::is_same<signed_type, float>::value ? "%.7g" :
+				std::is_same<signed_type, double>::value ? "%.14g" :
+				std::is_same<signed_type, long double>::value ? "%.19Lg" : nullptr;
+			static constexpr size_t buffer_size = std::numeric_limits<long double>::digits10 + 2; // the dot and 0
+			static constexpr bool has_format = fmt != nullptr;
+		};
+		template<typename T>
+		struct _number_format<T, typename std::enable_if<std::is_integral<T>::value>> : std::true_type {
+			using type = T;
+			static constexpr const char* fmt =
+				std::is_same<signed_type, int>::value ? "%d" :
+				std::is_same<signed_type, long>::value ? "%ld" :
+				std::is_same<signed_type, long long>::value ? "%lld" : nullptr;
+			static constexpr size_t buffer_size = std::numeric_limits<T>::digits10 + 2;
+			static constexpr bool has_format = fmt != nullptr;
+		};
+		// TEMPLATE CLASS is_floating_point
+		template<typename T>
+		struct number_format : _number_format<typename std::remove_cv<T>::type> {	};
 
-// fucking windows
-#ifdef max
-#undef max
-#endif
-#ifdef min
-#undef min
-#endif
+		template<class _Ty>
+		constexpr bool is_floating_point_v = is_floating_point<_Ty>::value;
+		struct from_chars_result {
+			const char* ptr;
+			::std::error_code ec;
+		};
+		struct to_chars_result {
+			char* ptr;
+			::std::error_code ec;
+		};
+		template<typename _Tp>
+		to_chars_result __to_chars(char* __first, char* __last, _Tp __val, int __base = 10) {
+			using traits = number_format<_Tp>;
+			assert(_base == 10); // only using base 10 for now
+			to_chars_result __res;
+			//const unsigned __len = __to_chars_len(__val, __base);
+			const unsigned __len = static_cast<int>(_last - _first) > 0 ? static_cast<unsigned>(_last - _first) : 0;
+			if (traits::buffer_size > __len) { // buffer isn't big enough
+				__res.ptr = __last;
+				__res.ec = std::make_error_code(std::errc::value_too_large);
+				return __res;
+			}
+			// slower than doing manualy, but I don't have to worry about it
+			int __plen = ::snprintf(__first, __len, traits::fmt, from);
+			assert(__plen > 0);
+			__res.ptr = __first + __plen;
+			return __res;
+		}
 
-namespace lua {
-	using lua_Number = double;
-	using lua_Integer = int64_t;
-	/*
-	** 'lu_mem' and 'l_mem' are unsigned/signed integers big enough to count
-	** the total memory used by Lua (in bytes). Usually, 'size_t' and
-	** 'ptrdiff_t' should work, but we use 'long' for 16-bit machines.
-	*/
-	static constexpr lua_Integer LUA_MAXINTEGER = std::numeric_limits<lua_Integer>::max();
-	using lu_mem = size_t;
-	using l_mem = ptrdiff_t;
-	/* chars used as small naturals (so that 'char' is reserved for characters) */
-	using lu_byte = uint8_t; 
-	 /* maximum value for size_t */
-	static constexpr size_t MAX_SIZET = std::numeric_limits<size_t>::max();
-	static constexpr lu_mem MAX_LUMEM = std::numeric_limits<lu_mem>::max();
-	static constexpr l_mem MAX_LMEM = std::numeric_limits<l_mem>::max();
-	static constexpr int MAX_INT = std::numeric_limits<int>::max();
-	/* maximum size visible for Lua (must be representable in a lua_Integer */
-	static constexpr size_t MAX_SIZE = (sizeof(size_t) < sizeof(lua_Integer) ? MAX_SIZET : (size_t)(LUA_MAXINTEGER));
-	/*
-	** conversion of pointer to unsigned integer:
-	** this is for hashing only; there is no problem if the integer
-	** cannot hold the whole pointer value
-	*/
-	template<typename T>
-	uint32_t point2uint(const T* p) { return ((uint32_t)((size_t)(p)& std::numeric_limits<uint32_t>::max())); }
-	constexpr static size_t STRCACHE_N = 53;
-	constexpr static size_t STRCACHE_M = 2;
-	/* type to ensure maximum alignment */
-#if defined(LUAI_USER_ALIGNMENT_T)
-	typedef LUAI_USER_ALIGNMENT_T L_Umaxalign;
-#else
-	typedef union {
-		lua_Number n;
-		double u;
-		void *s;
-		lua_Integer i;
-		long l;
-	} L_Umaxalign;
-#endif
-	// basic settings
-	struct lua_State {};
+		// https://news.ycombinator.com/item?id=8749154
+		template<typename _Tp, typename = std::enable_if<std::is_signed<_Tp>::value>>
+		static constexpr bool int_add_safe(const _Tp a, const _Tp b) {
+			return b < _Tp{} ? a >= (std::numeric_limits<_Tp>::min() - b) : a <= (std::numeric_limits<_Tp>::max() - b);
+		}
 
-
-	typedef int(*lua_CFunction) (lua_State *L);
-	enum class LUATYPE : uint8_t {
-		NONE = (uint8_t)(-1),
-		NIL = 0,
-		BOOLEAN = 1,
-		LIGHTUSERDATA = 2,
-		NUMBER = 3,
-		STRING = 4,
-		TABLE = 5,
-		FUNCTION = 6,
-		USERDATA = 7,
-		THREAD = 8,
-		_NUMTAGS = 9
-	};
-
-	//#define check_expr(e,o) (o)
-#define check_exp(e,o) (assert((e)),(o))
-	/*
-	** some useful bit tricks
-	*/
-	template<typename A, typename B>
-	constexpr static int lmod(A s, B size) { return check_exp((size&(size - 1)) == 0, static_cast<int>(s & (size - 1))); }
-	template<typename A>
-	constexpr static A twoto(A x) { (1 << (x)); }
-	template<typename X, typename M>
-	static inline void resetbits(X& x, M m) { x &= ~static_cast<X>(m); }
-	template<typename X, typename M>
-	static inline void setbits(X& x, M m) { x |= static_cast<X>(m); }
-	template<typename X, typename M>
-	constexpr static inline bool testbits(X x, M m) { return (x & m) != 0; }
-	template<typename B>
-	constexpr static inline B bitmask(B b) { return(1 << (b)); }
-	template<typename B>
-	constexpr static inline B bit2mask(B b) { return bitmask(b); }
-	template<typename B, typename ... Args>
-	constexpr static inline B bit2mask(B b, Args&& ... args) { return bit2mask(b) | bit2mask(std::forward<Args>(args)...); }
-
-	template<typename B1, typename B2>
-	constexpr static inline B1 bit2mask(B1 b1, B2 b2) { return bitmask(b1) | bitmask(b2); }
-	template<typename X, typename B>
-	static inline void l_setbit(X& x, B b) { setbits(x, bitmask(b)); }
-	template<typename X, typename B>
-	static inline void resetbit(X& x, B b) { resetbit(x, bitmask(b)); }
-	template<typename X, typename B>
-	constexpr static inline bool testbit(X x, B b) { return testbits(x, bitmask(b)); }
+		template<typename _Tp>
+		bool __from_chars_integral_base_10(const char*& __first, const char* __last, _Tp& __val) {
+			while (__first != __last && std::isdigit(*_first)) {
+				uint8_t __c = *__first++;
+				if (!__raise_and_add(__val, 10, __c))
+					return false; // overflow
+			}
+			return true;
+		}
+		template<typename _Tp>
+		typename std::enable_if<std::is_integral<_Tp>::value && std::is_unsigned<_Tp>::value, to_chars_result>::type
+			__from_chars(const char* __first, const char* __last, _Tp& __val, int __base = 10) {
+			to_chars_result __res;
+			const char* __start = __first;
+			assert(__base == 10);
+			switch (__base) {
+			case 10:
+				if (!__from_chars_integral_base_10(__first, __last, __val)) {
+					__res.ec = std::make_error_code(std::errc::value_too_large);
+				}
+				__res.ptr = __last;
+				break;
+			}
+			return __res;
 
 
-	struct GCObject;
-	struct Table;
-	struct TString;
-
-	struct LightUserData {
-		void* _data;
-	public:
-		LightUserData(void* data) : _data(data) {}
-		void* get() const { return _data; }
-	};
-
-	namespace cvt {
-
+		}
 		// from wiki https://en.wikipedia.org/wiki/Base64
 		struct Base64 {
 
@@ -429,17 +433,18 @@ namespace lua {
 				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 			// I wonder how slow this in compiling?
-			static constexpr uint8_t index_of_base64_set(size_t x) { 
+			static constexpr uint8_t index_of_base64_set(size_t x) {
 				for (size_t i = 0; i < sizeof(_base64set); i++)
-					if (static_cast<uint8_t>(_base64set[i]) == x) return i;
-				return sizeof(_base64set);
-			
+					if (static_cast<uint8_t>(_base64set[i]) == x) return (uint8_t)i;
+				return (uint8_t)sizeof(_base64set);
+
 			}
 			
 
+
 			// so we dont have ot 077 & in the set
 			// repeating the base64 characters in the index array avoids the  077 &  operations
-			static inline size_t to_base64(const uint8_t* data, char* chars,size_t size) {
+			static inline size_t to_base64(const uint8_t* data, char* chars, size_t size) {
 				if (size > 0) {
 					chars[0] = base64set[data[0] >> 2];
 					if (size > 2) chars[1] = base64set[data[0] << 4 | data[1] >> 4];
@@ -449,7 +454,7 @@ namespace lua {
 				if (size > 3) chars[3] = base64set[data[2]]; else chars[3] = '=';
 				if (size > 2) chars[3] = base64set[data[2]];
 				if (size > 1) chars[3] = base64set[data[2]];
-				
+
 			}
 			static inline std::string encode_base64str(const uint8_t* data, size_t size) {
 				std::string out;
@@ -478,14 +483,14 @@ namespace lua {
 				}
 			}
 			static std::vector<uint8_t> decode_base64vec(const char* str, size_t size) {
-				static std::array<uint8_t, 256> base64index = util::make_array<256>(&index_of_base64_set);
+				static std::array<uint8_t, 256> base64index = util::make_array<256>(index_of_base64_set);
 				assert(size % 4 == 0); // have to be alligned
 				std::vector<uint8_t> out;
 				out.reserve((size * 3 / 4) + 4);
 				uint8_t b[4];
 				while (size > 4) {
 					for (size_t i = 0; i < 4; i++) {
-						if ((b[0] = base64index[str[i]]) == sizeof(_base64set)) 
+						if ((b[0] = base64index[str[i]]) == sizeof(_base64set))
 							throw std::exception(); // bad charater
 					}
 					_decode_base64vec(out, b);
@@ -496,196 +501,18 @@ namespace lua {
 			}
 
 		};
-		// used the example https://gcc.gnu.org/ml/gcc-patches/2017-04/msg00364.html for conversion routines
-		// it be nice if from_chars comes out for vc or gcc, but its going to be a while for it
-		namespace priv {
-		//	template<typename T, typename E = void>
-		//	struct number_format { static constexpr bool has_format = false; };
-			template<typename T, typename = std::enable_if<std::is_floating_point<T>::value>>
-			struct number_format {
-				using type = T;
-				static constexpr const char* fmt =
-					std::is_same<signed_type, float>::value ? "%.7g" :
-					std::is_same<signed_type, double>::value ? "%.14g" :
-					std::is_same<signed_type, long double>::value ? "%.19Lg" : nullptr;
-				static constexpr size_t buffer_size = std::numeric_limits<long double>::digits10 + 2; // the dot and 0
-				static constexpr bool has_format = fmt != nullptr;
-			};
-			template<typename T, typename = std::enable_if<std::is_integral<T>::value>>
-			struct number_format {
-				using type = T;
-				static constexpr const char* fmt =
-					std::is_same<signed_type, int>::value ? "%d" :
-					std::is_same<signed_type, long>::value ? "%ld" :
-					std::is_same<signed_type, long long>::value ? "%lld" : nullptr;
-				static constexpr size_t buffer_size = std::numeric_limits<T>::digits10 + 2;
-				static constexpr bool has_format = fmt != nullptr;
-			};
-			struct from_chars_result {
-				const char* ptr;
-				::std::error_code ec;
-			};
-			struct to_chars_result {
-				char* ptr;
-				::std::error_code ec;
-			};
-			template<typename _Tp>
-			to_chars_result __to_chars(char* __first, char* __last, _Tp __val, int __base=10) {
-				using traits = number_format<_Tp>;
-				assert(_base == 10); // only using base 10 for now
-				to_chars_result __res;
-				//const unsigned __len = __to_chars_len(__val, __base);
-				const unsigned __len = static_cast<int>(_last - _first) > 0 ? static_cast<unsigned>(_last - _first) : 0;
-				if (traits::buffer_size > __len) { // buffer isn't big enough
-					__res.ptr = __last;
-					__res.ec = std::make_error_code(std::errc::value_too_large);
-					return __res;
-				}
-				// slower than doing manualy, but I don't have to worry about it
-				int __plen = ::snprintf(__first, __len, traits::fmt, from);
-				assert(__plen > 0);
-				__res.ptr = __first + __plen;
-				return __res;
-			}
-
-			// https://news.ycombinator.com/item?id=8749154
-			template<typename _Tp, typename = std::enable_if<std::is_signed<_Tp>::value>>
-			static constexpr bool int_add_safe(const _Tp a, const _Tp b) {
-				return b < _Tp{} ? a >= (std::numeric_limits<_Tp>::min() - b) : a <= (std::numeric_limits<_Tp>::max() - b);
-			}
-
-			template<typename _Tp>
-			bool __from_chars_integral_base_10(const char* __first, const char* __last, _Tp& __val) {
-				
-
-			}
-			template<typename _Tp, typename = std::enable_if<std::is_integral<_Tp>::value> && std::is_unsigned<_Tp>::value>>
-				to_chars_result __from_chars(const char* __first, const char* __last, _Tp& __val, int __base = 10) {
-				to_chars_result __res;
-				const char* __start = __first
-				while (__first != __last) {
-					unsigned char __c = *__first;
-					if (std::isdigit(__c))
-						__c -= '0';
-					else
-					{
-						constexpr char __abc[] = "abcdefghijklmnopqrstuvwxyz";
-						unsigned char __lc = std::tolower(__c);
-						// Characters 'a'..'z' are consecutive
-						if (std::isalpha(__c) && (__lc - 'a') < __b)
-							__c = __lc - 'a' + 10;
-						else
-							break;
-					}
-
-					if (__builtin_expect(__valid, 1))
-						__valid = __raise_and_add(__val, __base, __c);
-					__first++;
-				}
-
-
-			}
-#if 0
-#define MAXBY10		cast(lua_Unsigned, LUA_MAXINTEGER / 10)
-#define MAXLASTD	cast_int(LUA_MAXINTEGER % 10)
-
-			static const char *l_str2int(const char *s, lua_Integer *result) {
-				lua_Unsigned a = 0;
-				int empty = 1;
-				int neg;
-				
-				neg = isneg(&s);
-				if (s[0] == '0' &&
-					(s[1] == 'x' || s[1] == 'X')) {  /* hex? */
-					s += 2;  /* skip '0x' */
-					for (; lisxdigit(cast_uchar(*s)); s++) {
-						a = a * 16 + luaO_hexavalue(*s);
-						empty = 0;
-					}
-				}
-				else {  /* decimal */
-					for (; lisdigit(cast_uchar(*s)); s++) {
-						int d = *s - '0';
-						if (a >= MAXBY10 && (a > MAXBY10 || d > MAXLASTD + neg))  /* overflow? */
-							return NULL;  /* do not accept it (as integer) */
-						a = a * 10 + d;
-						empty = 0;
-					}
-				}
-				while (lisspace(cast_uchar(*s))) s++;  /* skip trailing spaces */
-				if (empty || *s != '\0') return NULL;  /* something wrong in the numeral */
-				else {
-					*result = l_castU2S((neg) ? 0u - a : a);
-					return s;
-				}
-#endif
-			}
-			template<typename_Tp, typename = std::enable_if<std::is_floating_point<_Tp>::value>> 
-			from_chars_result __from_chars(const char* __first, const char* __last, _Tp& __val, int __base=10) {
-				from_chars_result __res;
-				assert(_base == 10); // only using base 10 for now
-				int dot = lua_getlocaledecpoint();
-				lua_Number r = 0.0;  /* result (accumulator) */
-				int sigdig = 0;  /* number of significant digits */
-				int nosigdig = 0;  /* number of non-significant digits */
-				int e = 0;  /* exponent correction */
-				int neg;  /* 1 if number is negative */
-				int hasdot = 0;  /* true after seen a dot */
-				*endptr = cast(char *, s);  /* nothing is valid yet */
-				while (lisspace(cast_uchar(*s))) s++;  /* skip initial spaces */
-				neg = isneg(&s);  /* check signal */
-				if (!(*s == '0' && (*(s + 1) == 'x' || *(s + 1) == 'X')))  /* check '0x' */
-					return 0.0;  /* invalid format (no '0x') */
-				for (s += 2; ; s++) {  /* skip '0x' and read numeral */
-					if (*s == dot) {
-						if (hasdot) break;  /* second dot? stop loop */
-						else hasdot = 1;
-					}
-					else if (lisxdigit(cast_uchar(*s))) {
-						if (sigdig == 0 && *s == '0')  /* non-significant digit (zero)? */
-							nosigdig++;
-						else if (++sigdig <= MAXSIGDIG)  /* can read it without overflow? */
-							r = (r * cast_num(16.0)) + luaO_hexavalue(*s);
-						else e++; /* too many digits; ignore, but still count for exponent */
-						if (hasdot) e--;  /* decimal digit? correct exponent */
-					}
-					else break;  /* neither a dot nor a digit */
-				}
-				if (nosigdig + sigdig == 0)  /* no digits? */
-					return 0.0;  /* invalid format */
-				*endptr = cast(char *, s);  /* valid up to here */
-				e *= 4;  /* each digit multiplies/divides value by 2^4 */
-				if (*s == 'p' || *s == 'P') {  /* exponent part? */
-					int exp1 = 0;  /* exponent value */
-					int neg1;  /* exponent signal */
-					s++;  /* skip 'p' */
-					neg1 = isneg(&s);  /* signal */
-					if (!lisdigit(cast_uchar(*s)))
-						return 0.0;  /* invalid; must have at least one digit */
-					while (lisdigit(cast_uchar(*s)))  /* read exponent */
-						exp1 = exp1 * 10 + *(s++) - '0';
-					if (neg1) exp1 = -exp1;
-					e += exp1;
-					*endptr = cast(char *, s);  /* valid up to here */
-				}
-				if (neg) r = -r;
-				return l_mathop(ldexp)(r, e);
-			}
-
-		}
-	
-		template<typename FROM, typename TO, typename = std::enable_if<std::is_integral<TO>::value && std::is_floating_point<FROM>::value>>
-		static inline bool convert(TO& to, const FROM& from) {
+		template<typename FROM, typename TO>
+		typename std::enable_if<std::is_integral<TO>::value && std::is_floating_point<FROM>::value,bool>::type
+		static inline  convert(TO& to, const FROM& from) {
 			if (from >= std::numeric_limits<TO>::min() && from < std::numeric_limits<TO>::max()) {
 				to = static_cast<TO>(from);
 				return true;
-			
-
 			}
 			return false;
 		}
-		template<typename FROM, typename TO, typename = std::enable_if<std::is_floating_point<TO>::value && std::is_integral<FROM>::value>
-		static inline bool convert(TO& to, const FROM& from) {
+		template<typename FROM, typename TO>
+		typename std::enable_if<std::is_floating_point<TO>::value && std::is_integral<FROM>::value,bool>::type
+		static inline  convert(TO& to, const FROM& from) {
 			if (from >= std::numeric_limits<TO>::min() && from < std::numeric_limits<TO>::max()) {
 				to = static_cast<TO>(from);
 				return true;
@@ -693,8 +520,9 @@ namespace lua {
 			}
 			return false;
 		}
-		template<typename FROM, typename TO, typename = std::enable_if<std::is_constructible<TO, const char*>::value && std::number_format<FROM>::has_format>>
-		static inline bool convert(TO& to, const FROM& from) {
+		template<typename FROM, typename TO>
+		typename std::enable_if<std::is_constructible<TO, const char*>::value && priv::number_format<FROM>::has_format,bool>::type
+		static inline  convert(TO& to, const FROM& from) {
 			using traits = number_format<FROM>;
 			char buffer[traits::buffer_size];
 			int len = ::snprintf(buffer, traits::buffer_size - 1, traits::fmt, from);
@@ -702,419 +530,23 @@ namespace lua {
 			to = TO(buffer);
 			return true;
 		}
-		template<typename FROM, typename TO, typename = std::enable_if<std::number_format<FROM>::has_format> && <std::is_convertible<TO, const char*>::value>>
-		static inline bool convert(TO& to, const FROM& from) {
-			const char* str = from;
-			using traits = number_format<FROM>;
-			char buffer[traits::buffer_size];
-			int len = ::snprintf(buffer, traits::buffer_size - 1, traits::fmt, from);
-			assert(len >= 0 && len <= traits::buffer_size);
-			to = TO(buffer);
-			return true;
-		}
-
 	}
-	struct Number {
-		using number_type = std::variant<lua_Number, lua_Integer>;
-		number_type _value;
-	public:
-		template<typename T, typename = std::enable_if<std::is_floating_point<T>::value>>
-		Number(T v) : _value(static_cast<lua_Number>(v)) {}
-		template<typename T, typename = std::enable_if<!std::is_integral<T>::value>>
-		Number(T v) : _value(static_cast<lua_Integer>(v)) {}
-		template<typename T>
-		Number& operator=(T v) { *this = Number(v); return *this; }
-		bool is_integer() const { return std::holds_alternative<lua_Integer>(_value); }
-		bool is_float() const { return std::holds_alternative<lua_Number>(_value); }
-		// see the soure code on line 96 ltable.c 5.3.5 in lua for more information on the floating point hash
-		// bit
-		size_t hash() const {
-			if (is_integer()) return std::get<lua_Integer>(_value);
-			else {
-#define lua_numbertointeger(n,p) \
-
-			}
-		}
-
-	};
-	using Value = std::variant<nullptr_t, bool, LightUserData, lua_Integer, lua_Number, lua_CFunction, Table*, TString*>;
-	static constexpr size_t LUA_NUMTAGS = static_cast<size_t>(LUATYPE::_NUMTAGS);
-	enum class LUATAGS : uint8_t {
-		NONE			= static_cast<uint8_t>(LUATYPE::NONE),
-		NIL				= static_cast<uint8_t>(LUATYPE::NIL),
-		BOOLEAN			= static_cast<uint8_t>(LUATYPE::BOOLEAN),
-		LIGHTUSERDATA	= static_cast<uint8_t>(LUATYPE::LIGHTUSERDATA),
-		NUMBER			= static_cast<uint8_t>(LUATYPE::NUMBER),
-		STRING			= static_cast<uint8_t>(LUATYPE::STRING),
-		TABLE			= static_cast<uint8_t>(LUATYPE::TABLE),
-		FUNCTION		= static_cast<uint8_t>(LUATYPE::FUNCTION),
-		USERDATA		= static_cast<uint8_t>(LUATYPE::USERDATA),
-		THREAD			= static_cast<uint8_t>(LUATYPE::THREAD),
-		PROTO			= static_cast<uint8_t>(LUATYPE::_NUMTAGS),/* function prototypes */
-		DEADKEY			, /* removed keys in tables */
-		_TOTALTAGS		,
-		/*
-		** tags for Tagged Values have the following use of bits:
-		** bits 0-3: actual tag (a LUA_T* value)
-		** bits 4-5: variant bits
-		** bit 6: whether value is collectable
-		*/
-
-		/*
-		** LUA_TFUNCTION variants:
-		** 0 - Lua function
-		** 1 - light C function
-		** 2 - regular C function (closure)
-		*/
-		/* Variant tags for functions */
-		LCL				= (static_cast<uint8_t>(LUATYPE::FUNCTION) | (0 << 4)),  /* Lua closure */
-		LCF				= (static_cast<uint8_t>(LUATYPE::FUNCTION) | (1 << 4)),  /* light C function */
-		CCL				= (static_cast<uint8_t>(LUATYPE::FUNCTION) | (2 << 4)),  /* C closure */
-		/* Variant tags for strings */
-		SHRSTR			= (static_cast<uint8_t>(LUATYPE::STRING) | (0 << 4)),  /* short strings */
-		LNGSTR			= (static_cast<uint8_t>(LUATYPE::STRING) | (1 << 4)),  /* long strings */
-		/* Variant tags for numbers */
-		NUMFLT			= (static_cast<uint8_t>(LUATYPE::NUMBER) | (0 << 4)),  /* float numbers */
-		NUMINT			= (static_cast<uint8_t>(LUATYPE::NUMBER) | (1 << 4)),  /* integer numbers */
-	};
-	static constexpr size_t LUA_TOTALTAGS = static_cast<size_t>(LUATAGS::_TOTALTAGS);
-	using LUATAGS_INTTYPE = std::underlying_type_t<LUATAGS>;
-	/* Bit mark for collectable types */
-	static constexpr LUATAGS_INTTYPE BIT_ISCOLLECTABLE = (1 << 6);
-	/* mark a tag as collectable */
-	static inline LUATAGS ctb(LUATAGS t) { return static_cast<LUATAGS>(static_cast<LUATAGS_INTTYPE>(t) | BIT_ISCOLLECTABLE); }
-	struct stringtable {
-		std::vector<TString *> hash; /* number of elements */
-		int nuse;  
-		size_t size() const { return hash.size(); }
-	} ;
-	typedef void(*lua_Alloc)();
-
-	struct global_State {
-		lua_Alloc frealloc;  /* function to reallocate memory */
-		void *ud;         /* auxiliary data to 'frealloc' */
-		l_mem totalbytes;  /* number of bytes currently allocated - GCdebt */
-		l_mem GCdebt;  /* bytes allocated not yet compensated by the collector */
-		lu_mem GCmemtrav;  /* memory traversed by the GC */
-		lu_mem GCestimate;  /* an estimate of the non-garbage memory in use */
-		stringtable strt;  /* hash table for strings */
-		TValue l_registry;
-		unsigned int seed;  /* randomized seed for hashes */
-		lu_byte currentwhite;
-		lu_byte gcstate;  /* state of garbage collector */
-		lu_byte gckind;  /* kind of GC running */
-		lu_byte gcrunning;  /* true if GC is running */
-		GCObject *allgc;  /* list of all collectable objects */
-		GCObject **sweepgc;  /* current position of sweep in list */
-		GCObject *finobj;  /* list of collectable objects with finalizers */
-		GCObject *gray;  /* list of gray objects */
-		GCObject *grayagain;  /* list of objects to be traversed atomically */
-		GCObject *weak;  /* list of tables with weak values */
-		GCObject *ephemeron;  /* list of ephemeron tables (weak keys) */
-		GCObject *allweak;  /* list of all-weak tables */
-		GCObject *tobefnz;  /* list of userdata to be GC */
-		GCObject *fixedgc;  /* list of objects not to be collected */
-		struct lua_State *twups;  /* list of threads with open upvalues */
-		unsigned int gcfinnum;  /* number of finalizers to call in each GC step */
-		int gcpause;  /* size of pause between successive GCs */
-		int gcstepmul;  /* GC 'granularity' */
-		lua_CFunction panic;  /* to be called in unprotected errors */
-		struct lua_State *mainthread;
-		const lua_Number *version;  /* pointer to version number */
-		TString *memerrmsg;  /* memory-error message */
-	//	TString *tmname[TM_N];  /* array with tag-method names */
-		Table *mt[LUA_NUMTAGS];  /* metatables for basic types */
-		TString *strcache[STRCACHE_N][STRCACHE_M];  /* cache for strings in API */
-		std::mutex mutex; // global mutex
-		static global_State& G() {
-			static global_State _G;
-			return _G;
-		}
-	};
-	using G = global_State;
-	//number of all possible tags (including LUA_TNONE but excluding DEADKEY)
-	
-	// basic types 
+}
 
 
+// fucking windows
+
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
 
 
-
-	template<typename T>
-	static inline checktype(const Value& v) { return std::holds_alternative<T>(v); }
-#define checktag(o,t)		(rttype(o) == (t))
-#define checktype(o,t)		(ttnov(o) == (t))
-#define ttisnumber(o)		checktype((o), LUA_TNUMBER)
-#define ttisfloat(o)		checktag((o), LUA_TNUMFLT)
-#define ttisinteger(o)		checktag((o), LUA_TNUMINT)
-#define ttisnil(o)		checktag((o), LUA_TNIL)
-#define ttisboolean(o)		checktag((o), LUA_TBOOLEAN)
-#define ttislightuserdata(o)	checktag((o), LUA_TLIGHTUSERDATA)
-#define ttisstring(o)		checktype((o), LUA_TSTRING)
-#define ttisshrstring(o)	checktag((o), ctb(LUA_TSHRSTR))
-#define ttislngstring(o)	checktag((o), ctb(LUA_TLNGSTR))
-#define ttistable(o)		checktag((o), ctb(LUA_TTABLE))
-	struct lua_TValue  {
-		Value value_;
-		lua_TValue() : value_{ nullptr } {}
-		template<typename T>
-		lua_TValue(T&& v) : value_{ std::forward<T>(v) } {}
-		bool is_float() const { return std::holds_alternative<lua_Number>(value_); }
-		bool is_integer() const { return std::holds_alternative<lua_Integer>(value_); }
-		bool is_number() const { return is_float() || is_integer(); }
-		bool is_bool() const { return std::holds_alternative<bool>(value_); }
-		bool is_table() const { return std::holds_alternative<Table*>(value_); }
-		bool is_string() const { return std::holds_alternative<TString*>(value_); }
-		bool iscollectable() const { return is_table() || is_string(); }  
-	};
-	using TValue = lua_TValue;
-
-	struct GCObject {
-		GCObject* next;
-		uint8_t marked;
-		/* Layout for bit use in 'marked' field: */
-		static constexpr uint8_t WHITE0BIT = 0;  /* object is white (type 0) */
-		static constexpr uint8_t WHITE1BIT = 1;  /* object is white (type 0) */
-		static constexpr uint8_t BLACKBIT = 2;  /* object is white (type 0) */
-		static constexpr uint8_t FINALIZEDBIT = 3;  /* object is white (type 0) */
-		static constexpr uint8_t WHITEBITS = 3;  /* object is white (type 0) */
-												 /* bit 7 is currently used by tests (luaL_checkmemory) */
-		static constexpr uint8_t WHITEBITS = bit2mask(WHITE0BIT, WHITE1BIT);
-		static constexpr uint8_t maskcolors = (~(bitmask(BLACKBIT) | WHITEBITS));
-		constexpr static uint8_t otherwhite(uint8_t currentwhite) { return currentwhite ^ WHITEBITS; }
-		constexpr static bool isdeadm(uint8_t ow,uint8_t marked) { return (!(((marked) ^ WHITEBITS) & (ow))); }
-		constexpr static uint8_t luaC_white(uint8_t currentwhite) {
-			return currentwhite & WHITEBITS;
-		}
-		bool iswhite() const { return testbits(marked, WHITEBITS); }
-		bool isblack() const { return testbits(marked, BLACKBIT); }
-		/* neither white nor black */  
-		bool isgray() const { return !testbits(marked, WHITEBITS | bitmask(BLACKBIT)); }
-		bool tofinalize() const { return testbits(marked, FINALIZEDBIT); }
-		
-		bool isgray() const { return !testbits(marked, WHITEBITS | bitmask(BLACKBIT)); }
-		bool isdead() const { return isdeadm(otherwhite(G::G().currentwhite), marked); }
-		void changewhite() { marked ^= WHITEBITS;  }
-		void gray2black() { l_setbit(marked, BLACKBIT); }
-		/*
-		** 'makewhite' erases all color bits then sets only the current white
-		** bit
-		*/
-		bool valiswhite()  const { return iswhite();}
-		void makewhite() { marked = marked & maskcolors | G::G().currentwhite; }
-		void white2gray() { resetbits(marked, WHITEBITS); }
-		void black2gray() { resetbits(marked, BLACKBIT); }
-
-
-		void fix(lua_State *L) {
-			global_State& g = G::G();
-			assert(g.allgc == this);  /* object must be 1st in 'allgc' list! */
-			white2gray();  /* they will be gray forever */
-			g.allgc = this->next;  /* remove object from 'allgc' list */
-			this->next = g.fixedgc;  /* link it to 'fixedgc' list */
-			g.fixedgc = this;
-		}
-
-
-		static void* operator new(size_t size) {
-			if (size < sizeof(L_Umaxalign)) size = sizeof(L_Umaxalign);
-			return ::operator new(size);
-		}
-		template<typename T, typename = std::enable_if<std::is_base_of<GCObject, std::decay_t<T>>::value>>
-		static T* create(size_t size = sizeof(T)) {
-			if (size < sizeof(L_Umaxalign)) size = sizeof(L_Umaxalign);
-			char* ptr = new char[size];
-			if (sizeof(T) < sizeof(L_Umaxalign)) size = sizeof(L_Umaxalign);
-			return new T();
-		}
-	private:
-		GCObject() : next(nullptr), marked(0) {}
-	protected:
-		template<typename T>
-		constexpr static size_t get_size(T = T{}) { return sizeof(T) < sizeof(L_Umaxalign) ? sizeof(L_Umaxalign) : sizeof(T); }
-	};
-	/*
-	** Tables
-	*/
-
-	union TKey {
-		struct {
-			//TValuefields;
-			// dont understand this?
-			TValue tv;
-			int next;  /* for chaining (offset for next node) */
-		} nk;
-		TValue tvk;
-	};
-
-
-	/* copy a value into a key without messing up field 'next' */
-#define setnodekey(L,key,obj) \
-	{ TKey *k_=(key); const TValue *io_=(obj); \
-	  k_->nk.value_ = io_->value_; k_->nk.tt_ = io_->tt_; \
-	  (void)L; checkliveness(L,io_); }
-
-
-	struct Node {
-		TValue i_val;
-		TKey i_key;
-	} ;
-
-	/*
-	** 'module' operation for hashing (size is always a power of 2)
-	*/
-
-	struct Table : public GCObject {
-		lu_byte flags;  /* 1<<p means tagmethod(p) is not present */
-		lu_byte lsizenode;  /* log2 of size of 'node' array */
-		unsigned int sizearray;  /* size of 'array' array */
-		std::vector<TValue> array;  /* array part */
-		Node *node;
-		Node *lastfree;  /* any free position is before this position */
-		Table *metatable;
-		GCObject *gclist;
-		size_t sizenode() const { return twoto(lsizenode); }
-	};
-	struct TString : public GCObject {
-		lu_byte extra;  /* reserved words for short strings; "has hash" for longs */
-		lu_byte shrlen;  /* length for short strings */
-		unsigned int hash;
-		union {
-			size_t lnglen;  /* length for long strings */
-			TString *hnext;  /* linked list for hash table */
-		} u;
-		char *getstr() {
-			return reinterpret_cast<char*>(this) + get_size<TString>();
-		}
-	};
-	struct TString;
-
-
-
-
-
-
-
-
-
-	/*
-	** Header for string value; string bytes follow the end of this structure
-	** (aligned according to 'UTString'; see next).
-	*/
-
-
-
-
-		/* get the actual string (array of bytes) from a Lua value */
-#define svalue(o)       getstr(tsvalue(o))
-
-		/* get string length from 'TString *s' */
-#define tsslen(s)	((s)->tt == LUA_TSHRSTR ? (s)->shrlen : (s)->u.lnglen)
-
-		/* get string length from 'TValue *o' */
-#define vslen(o)	tsslen(tsvalue(o))
-	/*
-	** Ensures that address after this type is always fully aligned.
-	*/
-	union UTString {
-		L_Umaxalign dummy;  /* ensures maximum alignment for strings */
-		TString tsv;
-	} ;
-
-	struct lua_TValue : public lua_TTag<int> {
-		Value value_; 
-		lua_TValue() : value_{ nullptr }, tt_(LUATAGS::NIL) {}
-		/* Macros to access values */
-auto& ivalue() { return	check_exp(isinteger(), value_.i); }
-auto& fltvalue() { return	check_exp(isfloat(), value_.n); }
-auto& nvalue() { return	check_exp(isnumber(), (isinteger() ? static_cast<lua_Number>(ivalue(o)) : fltvalue(o))); }
-auto& gcvalue() { return	check_exp(iscollectable(o), value_.gc); }
-auto& pvalue() { return	check_exp(islightuserdata(), value_.p); }
-
-auto& fvalue() { return	check_exp(islcf(), value_.f); }
-
-auto& tsvalue() { return	check_exp(isstring(), gco2ts(value_.gc)); }
-auto& uvalue() { return	check_exp(isfulluserdata(), gco2u(value_.gc)); }
-auto& clvalue() { return	check_exp(isclosure(), gco2cl(value_.gc)); }
-auto& clLvalue() { return	check_exp(isLclosure(), gco2lcl(value_.gc)); }
-auto& clCvalue() { return	check_exp(isCclosure(), gco2ccl(value_.gc)); }
-auto& hvalue() { return	check_exp(istable(), gco2t(value_.gc)); }
-auto& bvalue() { return	check_exp(isboolean(), value_.b); }
-auto& thvalue() { return	check_exp(isthread(), gco2th(value_.gc)); }
-		/* a dead value may get the 'gc' field, but cannot access its contents */
-auto& deadvalue() { return	check_exp(isdeadkey(), cast(void *, value_.gc)); }
-
-auto& l_isfalse() { return	(isnil() || (isboolean() && bvalue(o) == 0)); }
-
-
-
-		LUATAGS_INTTYPE novariant() const { }
-	};
-	using TValue = lua_TValue;
-	// ah the magic of templates
-	// should change these though
-	/* macro defining a nil value */
-};
 
 namespace util {
-	// copyied from flyweight
-	namespace impl {
 
-
-		template <typename T>
-		struct default_extractor {
-			constexpr default_extractor() noexcept { }
-			T const& operator () (T const& argument) const noexcept { return argument; }
-		};
-
-		template <typename T>
-		using const_ref = std::add_lvalue_reference_t<std::add_const_t<T>>;
-
-		template<typename T>
-		struct hash_function_call {
-			size_t operator()(const T& obj) const { return obj.hash(); }
-			size_t operator()(const T* obj) const { return obj->hash(); }
-		};
-
-
-		template <class T, typename KeyExtractor = default_extractor<T>, typename Allocator = std::allocator<T>>
-		struct container_traits final {
-			using allocator_type = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-			using extractor_type = KeyExtractor;
-			using computed_key_type = std::decay_t<decltype(std::declval<const_ref<extractor_type>>()(std::declval<const_ref<T>>()))>;
-
-			template<typename C>
-			using hash_function = std::conditional_t<priv::has_hash_member<C>::value, hash_function_call, std::hash<C>>;
-
-			using is_associative = std::integral_constant<bool,(!std::is_same<std::decay_t<T>,std::decay_t<computed_key_type>>::value)>;
-
-			using mapped_weak_type = std::weak_ptr<std::add_const_t<T>>;
-			using mapped_unique_type = std::unique_ptr<T>;
-			using key_type = std::conditional_t<
-				((sizeof(computed_key_type) <= sizeof(std::reference_wrapper<computed_key_type>)) || !is_associative::value),
-				computed_key_type,std::reference_wrapper<std::add_const_t<computed_key_type>>
-			>;
-
-			using container_unique_type = std::unordered_map<
-				key_type,
-				mapped_unique_type,
-				hash_function<computed_key_type>,
-				std::equal_to<computed_key_type>,
-				typename std::allocator_traits<Allocator>::template rebind_alloc<
-					std::pair<std::add_const_t<key_type>, mapped_unique_type>
-				>
-			>;
-			using container_weak_type = std::unordered_map<
-				key_type,
-				mapped_weak_type,
-				hash_function<computed_key_type>,
-				std::equal_to<computed_key_type>,
-				typename std::allocator_traits<Allocator>::template rebind_alloc<
-					std::pair<std::add_const_t<key_type>, mapped_weak_type>
-				>
-			>;
-		};
-	}; /* namespace impl */
 	   // self tracking object
 	template<typename T>
 	class class_tracking {
@@ -1140,40 +572,64 @@ namespace util {
 
 		using string_view = std::string_view;
 		class isymbol {
-			constexpr isymbol(const isymbol& copy) : _str(copy.str), _hash(copy._hash), mark(0) {}
-			constexpr isymbol(isymbol&& move) : _str(move.str), _hash(move._hash), mark(0) {}
-			isymbol& operator=(const isymbol& copy) = default;
-			isymbol& operator=(isymbol&& move) = default;
-			static std::hash<std::string_view> _hasher;
+			isymbol(const isymbol& copy) : _str(copy._str), _hash(copy._hash), mark(0) {}
+			isymbol(isymbol&& move) : _str(move._str), _hash(move._hash), mark(0) {}
+			using hash_type = std::hash<std::string_view>;
+			static inline size_t _hasher(const string_view& s) { 
+				static std::hash<string_view> __hasher;
+				return __hasher(s);
+			}
 			std::atomic<int> mark;
 			size_t _hash; // hash is cached, but is it that important?
 			string_view _str;
 			friend symboltable;
 		public:
 			friend class symbol;
-			constexpr isymbol(const char* str, size_t length) : _str(str, length), _hash(_hasher(_str)), mark(0) {}
-			constexpr isymbol(const char* str, size_t length, size_t hash) : _str(str, length), _hash(hash), mark(0) {}
-			constexpr isymbol(const char* str) : _str(str), _hash(_hasher(_str)), mark(0) {}
-			constexpr isymbol(const string_view& str) : _str(str), _hash(_hasher(_str)), mark(0) {}
-			constexpr size_t size() const { return _str.size(); }
-			constexpr size_t hash() const { return _hash; }
+			isymbol(const char* str, size_t length) : _str(str, length), _hash(_hasher(_str)), mark(0) {}
+			isymbol(const char* str, size_t length, size_t hash) : _str(str, length), _hash(hash), mark(0) {}
+			isymbol(const char* str) : _str(str), _hash(_hasher(_str)), mark(0) {}
+			isymbol(const string_view& str) : _str(str), _hash(_hasher(_str)), mark(0) {}
+			isymbol(const string_view& str,size_t hash) : _str(str), _hash(hash), mark(0) {}
+			size_t size() const { return _str.size(); }
+			size_t hash() const { return _hash; }
+			const string_view& strv() const { return _str; }
 			void mark_use() { mark = 1; }
-			constexpr const string_view& str() const { return _str; }
-			static std::unique_ptr<isymbol> create(const isymbol& istr, bool const_string) {
+			const string_view& str() const { return _str; }
+			static std::unique_ptr<isymbol> create(const string_view& strv, size_t hash, bool const_string) {
 				isymbol* ptr;
 				if (const_string) {
-					ptr = new isymbol(istr);
+					ptr = new isymbol(strv, hash);
 					ptr->mark = 2;
 				}
 				else {
-					char* rptr = new char[istr.size() + sizeof(isymbol) + 1];
+					char* rptr = new char[strv.size() + sizeof(isymbol) + 1];
 					char* nstr = rptr + sizeof(isymbol);
-					std::copy(nstr, nstr + istr.size(), istr.str);
-					ptr = new(rptr) isymbol(nstr, istr.size(),istr.hash());
+					// stupid windows, yes yes its an raw pointer
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS) 
+#ifdef USE_PRAGMA_WARNING_PUSH
+#pragma warning( push )
+#pragma warning( disable : 4996)
+#else
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+#define _BACKUP_CRT_SECURE_NO_WARNINGS
+#endif
+					std::copy(strv.begin(), strv.end(), nstr);
+#ifdef _BACKUP_CRT_SECURE_NO_WARNINGS 
+#ifdef USE_PRAGMA_WARNING_PUSH
+#pragma warning( pop ) 
+#else
+#undef _CRT_SECURE_NO_WARNINGS
+#endif // 
+#undef _BACKUP_CRT_SECURE_NO_WARNINGS
+#endif
+					ptr = new(rptr) isymbol(nstr, strv.size(), hash);
 				}
 				return std::unique_ptr<isymbol>(ptr);
 			}
-
+			static std::unique_ptr<isymbol> create(const string_view& strv, bool const_string) {
+				return create(strv, _hasher(strv), const_string);
+			}
 			static const isymbol* empty_isymbol() { 
 				static isymbol _empty("");
 				return &_empty;
@@ -1184,12 +640,20 @@ namespace util {
 			bool is_perm() const {
 				return is_cstring() || mark < 0;
 			}
-			constexpr bool operator==(const isymbol& r) const { return (_str.data() == r._str.data()) || (_str == r._str); }
+			bool operator==(const isymbol& r) const {
+				return (_str.data() == r._str.data()) && (_str.length() == _str.length());
+			}
 		};
 		
 		// container meh
 		struct isymbol_hasher {
 			size_t operator()(const isymbol& s) const { return s.hash();  }
+		};
+		// special equals when we are doing searches into the table
+		struct isymbol_equals {
+			bool operator()(const isymbol& l, const isymbol& r) const {
+				return l == r || l.strv() == r.strv();
+			}
 		};
 #if 0
 		using traits = impl::container_traits<isymbol, impl::default_extractor<isymbol>, std::allocator<isymbol>>;
@@ -1197,19 +661,21 @@ namespace util {
 		using container_type = typename traits::container_unique_type;
 		using maped_type = typename traits::mapped_unique_type;
 #else
-		using container_key = std::reference_wrapper<std::add_const_t<isymbol>>;
+	//	using container_key = std::reference_wrapper<std::add_const_t<isymbol>>;
+		using container_key = string_view;
 		//using container_key = const isymbol&;
 		using container_value = std::unique_ptr<isymbol>;
 		// cause I gave up on std::string, on how fucking crazy the memory allocation is, can't use above
-		using container_type = std::unordered_map<container_key, container_value, isymbol_hasher, isymbol_hasher>;
+	//	using container_type = std::unordered_map<container_key, container_value, isymbol_hasher, isymbol_equals>;
+
+		using container_type = std::unordered_map<string_view, container_value>;
 #endif
 		symboltable() { }
 		static bool is_empty(const isymbol* sym) { return sym == isymbol::empty_isymbol(); }
 		const isymbol* find(const char* str,bool const_string=false) noexcept {
 			if (str == nullptr || str[0] == 0) return isymbol::empty_isymbol();
 			std::lock_guard<std::mutex> lock(_mutex);
-			isymbol skey(str,strlen(str));
-			container_key key(skey);
+			container_key key(str);
 			auto iter = _table.find(key);
 			if (iter != _table.end()) { 
 				if (const_string && !iter->second->is_cstring()) 
@@ -1218,12 +684,12 @@ namespace util {
 				else 
 					return iter->second.get(); 
 			}
-			return insert(skey, const_string);
+			return insert(key, const_string);
 		}
 		void remove(const isymbol* value) noexcept {
 			if (!value) return;
 			std::lock_guard<std::mutex> lock(_mutex);
-			container_key key(*value);
+			container_key key(value->strv());
 			auto iter = _table.find(key);
 			if (iter != _table.end() && iter->second.get() == value) {
 				_table.erase(iter);
@@ -1250,9 +716,9 @@ namespace util {
 		}
 		std::mutex& mutex() { return _mutex;  } // get the table mutex
 	private:
-		const isymbol* insert(const isymbol& value, bool const_string=false) noexcept {
+		const isymbol* insert(const container_key& value, bool const_string=false) noexcept {
 			auto ptr = isymbol::create(value, const_string);
-			container_key key(*ptr.get());
+			container_key key(ptr->strv());
 			auto result = _table.emplace(key, std::move(ptr));
 			return result.first->second.get();
 		}
@@ -1268,8 +734,6 @@ namespace util {
 		using const_iterator = string_view::const_iterator;
 		using reverse_iterator = string_view::reverse_iterator;
 		using const_reverse_iterator = string_view::const_reverse_iterator;
-		template<typename ValueType> using is_value_type = std::is_same<std::decay_t<ValueType>, std::decay_t<value_type>>;
-		template<typename ValueType> using is_symbol_type = std::is_same<std::decay_t<ValueType>, symbol>;
 	private:
 		const symboltable::isymbol* _symbol;
 		using symbol_tracker = class_tracking<symbol>;
@@ -1305,10 +769,13 @@ namespace util {
 			});
 		}
 		static void collect_garbage() {
-			symbols().for_each([](symbol* o) { if (!o->empty() && o->_symbol->mark == 0) o->_symbol->mark = 1; });
+			symbols().for_each([](symbol* o) { 
+				if (!o->empty() && o->_symbol->mark == 0) 
+					const_cast<symboltable::isymbol*>(o->_symbol)->mark.store(1); 
+			});
 			table().collect_marked();
 		}
-		symbol() : _symbol(symboltable::isymbol::empty_isymbol())) {}
+		symbol() : _symbol(symboltable::isymbol::empty_isymbol()) {}
 		symbol(const symbol& copy) :_symbol(copy._symbol) { symbols().emplace(this); }
 		symbol(symbol&& move) :_symbol(move._symbol) { symbols().emplace(this); move.clear(); }
 		symbol& operator=(const symbol& copy) { _assign(copy._symbol); return *this; }
@@ -1316,30 +783,11 @@ namespace util {
 		~symbol() { if (!empty()) clear(); }
 		friend class symboltable;
 		// saved for notes
-#if 0
-		template <typename ValueType, typename = std::enable_if_t<is_value_type<ValueType>::value> || std::is_constructible<value_type, ValueType>::value>
-			explicit symbol(ValueType&& value) {
-			_assign(std::forward<ValueType>(value));
-		}
-		template <typename... > struct typelist;
 
-		template <typename... Args,
-			typename = std::enable_if_t<
-			!std::is_same<typelist<symbol>,
-			typelist<std::decay_t<Args>...>>::value
-			>>
-	//	template <typename... Args, typename = std::enable_if<std::is_constructible<value_type, Args&&...>::value && !std::is_same<std::decay<Args>,symbol>::value>>
-			symbol(Args&&... args) {
-			_assign(value_type(std::forward<Args>(args)...));
-		}
-#endif
-		// ok this is a hack to make string literals work
-
-		const char x[] = "Hello, World!";
 		template<size_t N>
-		explicit symbol(const char (&clit)[N]) : _symbol(table().find(std::forward<T>(clit), true)) { assert(clit[N] == 0); }
-		explicit symbol(const char* str) : _symbol(table().find(str, false)) {  }
-		explicit symbol(const std::string& str) : _symbol(table().find(str.c_str(), false)) {  }
+		symbol(const char (&clit)[N]) : _symbol(table().find(std::forward<T>(clit), true)) { assert(clit[N] == 0); }
+		symbol(const char* str) : _symbol(table().find(str, false)) {  }
+		symbol(const std::string& str) : _symbol(table().find(str.c_str(), false)) {  }
 
 		symbol& operator=(const char* str) { _assign(table().find(str, false)); return *this; }
 		void swap(symbol& right) {
@@ -1370,7 +818,7 @@ namespace util {
 
 template<typename C, typename E>
 static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os, const util::symbol& sym) {
-	os << sym.str();
+	os << sym.strv();
 	return os;
 };
 
@@ -1481,15 +929,39 @@ namespace util {
 	template<typename TT>
 	class PointerIterator {
 	public:
-		typedef std::random_access_iterator_tag iterator_category;
-		typedef TT value_type;
-		typedef TT* pointer;
-		typedef TT& reference;
-		typedef std::ptrdiff_t difference_type;
-		PointerIterator(pointer vec) : _list(vec) {}
-		PointerIterator() : _list(nullptr) {}
-		template<typename T2> PointerIterator(const PointerIterator<T2>& r) : _list(&(*r)) {}
-		template<typename T2> PointerIterator& operator=(const PointerIterator<T2>& r) { _list = &(*r); return *this; }
+		using value_type = std::remove_cv_t<TT>;
+		using iterator_category = std::random_access_iterator_tag;
+		using type = PointerIterator<TT>;
+		using const_type = PointerIterator<const value_type>;
+		using pointer = std::add_pointer_t<TT>;
+		using reference = std::add_lvalue_reference_t<TT>;
+		using difference_type = std::ptrdiff_t;
+
+		static constexpr bool is_const = std::is_const<TT>::value;
+		template<typename R> using value_types_equal = std::is_same<std::remove_cv<R>, std::remove_cv<TT>>;
+		template<typename R> using types_equal = std::is_same<PointerIterator<TT>, PointerIterator<R>>;
+
+		constexpr PointerIterator() : _list(nullptr) {} // really don't want to ever do this, remove?
+		// we can assign it anything
+		template<typename T, typename = std::enable_if <types_equal<T>::value && (std::is_const<TT>::value || (!std::is_const<TT>::value &&  !std::is_const<T>::value))>>
+			constexpr PointerIterator(T* vec) : _list(vec) {}
+
+
+		// same with the copy or assign
+		template<typename T>
+		constexpr PointerIterator(const PointerIterator<T>& r) : PointerIterator(r._list) {}
+		template<typename T>
+		constexpr PointerIterator(PointerIterator<T>&& r) : PointerIterator(r._list) { r._list = nullptr; }
+		template<typename T>
+		constexpr PointerIterator& operator=(const PointerIterator<T>& r) {
+			*this = PointerIterator<TT>(r._list); return *this;
+		}
+		template<typename T>
+		constexpr PointerIterator& operator=(PointerIterator<T>&& r) {
+			*this = PointerIterator<TT>(r._list); return *this;
+		}
+
+
 		PointerIterator& operator++() { ++_list; return *this; }
 		PointerIterator& operator--() { --_list; return *this; }
 		PointerIterator operator++(int) { return PointerIterator(_list++); }
@@ -1501,27 +973,37 @@ namespace util {
 		reference operator*() const { return *_list; }
 		pointer operator->() const { return _list; }
 		reference operator[](const difference_type& n) const { return _list[n]; }
-		template<typename T> friend bool operator==(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator!=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator<(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator>(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator<=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend bool operator>=(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend typename PointerIterator<T>::difference_type operator+(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
-		template<typename T> friend typename PointerIterator<T>::difference_type operator-(const PointerIterator<T>& r1, const PointerIterator<T>& r2);
+
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		constexpr bool operator==(const PointerIterator<T>& r) const { return _list == r._list; }
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		constexpr bool operator!=(const PointerIterator<T>& r) const { return _list != r._list; }
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		constexpr bool operator>=(const PointerIterator<T>& r) const { return _list <= r._list; }
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		constexpr bool operator<=(const PointerIterator<T>& r) const { return _list >= r._list; }
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		constexpr bool operator>(const PointerIterator<T>& r) const { return _list > r._list; }
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		constexpr bool operator<(const PointerIterator<T>& r) const { return _list < r._list; }
+
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		difference_type sub_op(const PointerIterator<T>& r) const { return _list - r._list; }
+
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		difference_type add_op(const PointerIterator<T>& r) const { return _list + r._list; }
+
+		template<typename T, typename = std::enable_if<types_equal<T>::value>>
+		difference_type distance(const PointerIterator<T>& r) { return std::distance(_list, r._list); }
+
 	private:
 		pointer _list;
 	};
-	template<typename T> bool operator==(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list == r2._list); }
-	template<typename T> bool operator!=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list != r2._list); }
-	template<typename T> bool operator<(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list < r2._list); }
-	template<typename T> bool operator>(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list > r2._list); }
-	template<typename T> bool operator>=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list >= r2._list); }
-	template<typename T> bool operator<=(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return (r1._list <= r2._list); }
-	template<typename T>
-	typename PointerIterator<T>::difference_type operator+(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return PointerIterator<T>(r1._list + r2._list); }
-	template<typename T>
-	typename PointerIterator<T>::difference_type operator-(const PointerIterator<T>& r1, const PointerIterator<T>& r2) { return PointerIterator<T>(r1._list - r2._list); }
+
+	template<typename L, typename R>
+	typename PointerIterator<L>::difference_type operator+(const PointerIterator<L>& r1, const PointerIterator<R>& r2) { return r1.sub_op(r2); }
+	template<typename L, typename R>
+	typename PointerIterator<L>::difference_type operator-(const PointerIterator<L>& r1, const PointerIterator<R>& r2) { return r1.add_op(r2); }
 
 	template <typename TT, typename = std::enable_if<(std::is_pod<TT>::value || std::is_arithmetic<TT>::value)>::type>
 	class PointerArray

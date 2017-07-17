@@ -19,7 +19,10 @@ friend ito_binary_wraper operator >> (std::istream& stream, T &)
 	return ito_binary_wraper(stream);
 }
 */
-
+void exit_program(int value) {
+	assert(value == 0);
+	exit(value);
+}
 int main(int argc, const char* argv[]) {
 	gm::DataWinFile file;
 	if (argc == 2) {
@@ -29,11 +32,11 @@ int main(int argc, const char* argv[]) {
 		}
 		catch (gm::FileHelperException e) {
 			std::cerr << e.what() << std::endl;
-			return -1;
+			exit_program (-1);
 		}
 	}
 	if (!file.has_data()) 
-		return -1;
+		exit_program (-1);
 
 	auto object = file.resource_at<gm::Object>(217); // jerry
 	std::cout << "Object: " << object.name() << std::endl;
@@ -48,5 +51,5 @@ int main(int argc, const char* argv[]) {
 
 	while (true) {}
 
-	return 0;
+	exit_program(0);
 }
