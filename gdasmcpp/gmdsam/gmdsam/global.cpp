@@ -4,7 +4,7 @@
 #include <mutex>
 #include <windows.h>
 #include <cassert>
-
+#define USE_PRAGMA_WARNING_PUSH
 namespace std {
 	// https://kjellkod.wordpress.com/2013/01/22/exploring-c11-part-2-localtime-and-time-again/
 	// thread safe
@@ -20,6 +20,30 @@ namespace std {
 		return tm_snapshot;
 	}
 };
+namespace util {
+	std::unique_ptr<symboltable::isymbol> symboltable::isymbol::create(const string_view& strv, size_t hash, bool const_string) {
+		isymbol* ptr;
+		if (const_string) {
+			ptr = new isymbol(strv, hash);
+			ptr->mark = 2;
+		}
+		else {
+			char* rptr = new char[strv.size() + sizeof(isymbol) + 1];
+			char* nstr = rptr + sizeof(isymbol);
+			// stupid windows, yes yes its an raw pointer
+#if defined(_MSC_VER) 
+#pragma warning( push ) 
+#pragma warning( disable : 4996)
+#endif
+			std::copy(strv.begin(), strv.end(), nstr);
+#if defined(_MSC_VER) 
+#pragma warning( pop ) 
+#endif
+			ptr = new(rptr) isymbol(nstr, strv.size(), hash);
+		}
+		return std::unique_ptr<isymbol>(ptr);
+	}
+}
 namespace debug {
 	void enable_windows10_vt100_support() {
 		DWORD dwMode = 0;

@@ -74,5 +74,8 @@
     <ClCompile Include="ticpp\tinyxmlparser.cpp">
       <Filter>ticpp</Filter>
     </ClCompile>
+    <ClCompile Include="dsam.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

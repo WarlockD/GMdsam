@@ -142,7 +142,8 @@ namespace GameMaker.Dissasembler
                 case NewOpcode.pushenv:
                     {
                         //  Debug.WriteLine("Popenv: Address: {0}, Extra: {1} {1:X8}  Calc: {2}",i.Address, raw, GMCodeUtil.getBranchOffset(raw));
-                        int sextra = CurrentPC + GMCodeUtil.getBranchOffset(CurrentRaw);
+                        int sextra = CurrentPC + GMCodeUtil.getBranchOff
+                            set(CurrentRaw);
                         e = CreateExpression(GMCode.Pushenv, types, GetLabel(sextra + 1)); // we are one instruction after the pop
                         pushEnviroment.Add(sextra, GetLabel(CurrentPC)); // record the pop position
                     }

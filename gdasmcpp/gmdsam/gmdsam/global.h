@@ -34,12 +34,20 @@ namespace util {
 	namespace priv {
 #ifdef _MSC_VER
 		template<typename _Tp>
-		bool __raise_and_add(_Tp& __val, int __base, unsigned char __c) {
-			if (SafeMultiply(__val, __base, &__val) || SafeAdd(__val, __c, &__val))
+		static inline bool __raise_and_add(_Tp& __val, int __base, unsigned char __c) {
+			if (SafeMultiply(__val, __base, __val) || SafeAdd(__val, __c, __val))
 				return true;
 			return false;
 		}
+		template<typename T1, typename T2>
+		static inline bool __multi_overflow(T1 l, T2 r, T1&  result) {
+			return SafeMultiply(l, r, result);
+		}
 #else
+		template<typename T1, typename T2>
+		static inline bool __multi_overflow(T1 l, T2 r, T1&  result) {
+			return __builtin_mul_overflow(l, r, &result);
+		}
 		 template<typename _Tp>
 			bool
 			 __raise_and_add(_Tp& __val, int __base, unsigned char __c)
@@ -394,33 +402,167 @@ namespace util {
 			return b < _Tp{} ? a >= (std::numeric_limits<_Tp>::min() - b) : a <= (std::numeric_limits<_Tp>::max() - b);
 		}
 
+
 		template<typename _Tp>
-		bool __from_chars_integral_base_10(const char*& __first, const char* __last, _Tp& __val) {
-			while (__first != __last && std::isdigit(*_first)) {
-				uint8_t __c = *__first++;
-				if (!__raise_and_add(__val, 10, __c))
-					return false; // overflow
+		bool __from_chars_binary(const char*& __first, const char* __last, _Tp& __val) {
+			static_assert(is_integral<_Tp>::value, "implementation bug");
+			static_assert(is_unsigned<_Tp>::value, "implementation bug");
+
+			const ptrdiff_t __len = __last - __first;
+			int __i = 0;
+			while (__i < __len)
+			{
+				if (__first[__i] == '0')
+					__val <<= 1;
+				else if (__first[__i] == '1')
+					(__val <<= 1) |= 1;
+				else
+					break;
+				__i++;
+			}
+			__first += __i;
+			return __i <= (sizeof(_Tp) * __CHAR_BIT__);
+		}
+
+		template<typename _Tp>
+		bool
+			__from_chars_digit(const char*& __first, const char* __last, _Tp& __val,
+				int __base)
+		{
+			static_assert(is_integral<_Tp>::value, "implementation bug");
+			static_assert(is_unsigned<_Tp>::value, "implementation bug");
+
+			auto __matches = [__base](char __c) {
+				return '0' <= __c && __c <= ('0' + (__base - 1));
+			};
+
+			while (__first != __last)
+			{
+				const char __c = *__first;
+				if (__matches(__c))
+				{
+					if (!__raise_and_add(__val, __base, __c - '0'))
+					{
+						while (++__first != __last && __matches(*__first))
+							;
+						return false;
+					}
+					__first++;
+				}
+				else
+					return true;
 			}
 			return true;
 		}
+
+		constexpr bool __consecutive_chars(const char* __s, int __n)
+		{
+			for (int __i = 1; __i < __n; ++__i)
+				if (__s[__i] != (__s[__i - 1] + 1))
+					return false;
+			return true;
+		}
+
 		template<typename _Tp>
-		typename std::enable_if<std::is_integral<_Tp>::value && std::is_unsigned<_Tp>::value, to_chars_result>::type
-			__from_chars(const char* __first, const char* __last, _Tp& __val, int __base = 10) {
-			to_chars_result __res;
-			const char* __start = __first;
-			assert(__base == 10);
-			switch (__base) {
-			case 10:
-				if (!__from_chars_integral_base_10(__first, __last, __val)) {
-					__res.ec = std::make_error_code(std::errc::value_too_large);
+		bool __from_chars_alnum(const char*& __first, const char* __last, _Tp& __val, int __base)
+		{
+			const int __b = __base - 10;
+			bool __valid = true;
+			while (__first != __last)
+			{
+				unsigned char __c = *__first;
+				if (std::isdigit(__c))
+					__c -= '0';
+				else
+				{
+					constexpr char __abc[] = "abcdefghijklmnopqrstuvwxyz";
+					unsigned char __lc = std::tolower(__c);
+					constexpr bool __consecutive = __consecutive_chars(__abc, 26);
+					if _GLIBCXX17_CONSTEXPR(__consecutive)
+					{
+						// Characters 'a'..'z' are consecutive
+						if (std::isalpha(__c) && (__lc - 'a') < __b)
+							__c = __lc - 'a' + 10;
+						else
+							break;
+					}
+					else
+					{
+						if (auto __p = __builtin_memchr(__abc, __lc, __b))
+							__c = static_cast<const char*>(__p) - __abc;
+						else
+							break;
+					}
 				}
-				__res.ptr = __last;
-				break;
+
+				if (__builtin_expect(__valid, 1))
+					__valid = __raise_and_add(__val, __base, __c);
+				__first++;
+			}
+			return __valid;
+		}
+
+		template<typename _Tp>
+		typename std::enable_if<std::is_unsigned<_Tp>::value, bool>::type
+			__from_chars(const char*& __first, const char* __last, _Tp& __value, int __base = 10) {
+			assert(2 <= __base && __base <= 36);
+			if (__base == 2)
+				return __detail::__from_chars_binary(__first, __last, __value);
+			else if (__base <= 10)
+				return __detail::__from_chars_digit(__first, __last, __value, __base);
+			else
+				return __detail::__from_chars_alnum(__first, __last, __value, __base);
+		}
+
+
+		template<typename _Tp>
+		typename std::enable_if<std::is_unsigned<_Tp>::value, from_chars_result>::type
+			from_chars(const char* __first, const char* __last, _Tp& __value, int __base = 10) {
+			assert(2 <= __base && __base <= 36);
+			from_chars_result __res{ __first,{} };
+			bool valid = __from_chars(__first, __last, __value, __base);
+			if (__first == __start)
+				__res.ec = std::make_error_code(errc::invalid_argument);
+			else {
+				__res.ptr = __first;
+				if (!__valid)
+					__res.ec = std::make_error_code(errc::result_out_of_range);
 			}
 			return __res;
-
-
 		}
+		template<typename _Tp>
+		typename std::enable_if<std::is_signed<_Tp>::value, from_chars_result>::type
+			from_chars(const char* __first, const char* __last, _Tp& __value, int __base = 10) {
+			assert(2 <= __base && __base <= 36);
+			from_chars_result __res{ __first,{} };
+			using unsigned_type = std::make_unsigned_t<_Tp>;
+			unsigned_type val = 0;
+			_Tp sign = 0;
+			if (__first != __last) {
+				if (*__first == '-') {
+					sign = -1;
+					__first++;
+				}
+			}
+			const auto __start = __first;
+			bool valid = __from_chars(__first, __last, val, __base);
+			if (__first == __start)
+				__res.ec = std::make_error_code(errc::invalid_argument);
+			else {
+				__res.ptr = __first;
+				if (!__valid)
+					__res.ec = std::make_error_code(std::errc::result_out_of_range);
+				_Tp __tmp;
+				if (__multi_overflow(__value, sign, __tmp))
+					__res.ec = std::make_error_code(std::errc::result_out_of_range);
+				else
+					__value = __tmp;
+			}
+			return __res;
+		}
+
+
+				
 		// from wiki https://en.wikipedia.org/wiki/Base64
 		struct Base64 {
 
@@ -439,7 +581,7 @@ namespace util {
 				return (uint8_t)sizeof(_base64set);
 
 			}
-			
+
 
 
 			// so we dont have ot 077 & in the set
@@ -595,38 +737,7 @@ namespace util {
 			const string_view& strv() const { return _str; }
 			void mark_use() { mark = 1; }
 			const string_view& str() const { return _str; }
-			static std::unique_ptr<isymbol> create(const string_view& strv, size_t hash, bool const_string) {
-				isymbol* ptr;
-				if (const_string) {
-					ptr = new isymbol(strv, hash);
-					ptr->mark = 2;
-				}
-				else {
-					char* rptr = new char[strv.size() + sizeof(isymbol) + 1];
-					char* nstr = rptr + sizeof(isymbol);
-					// stupid windows, yes yes its an raw pointer
-#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS) 
-#ifdef USE_PRAGMA_WARNING_PUSH
-#pragma warning( push )
-#pragma warning( disable : 4996)
-#else
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-#define _BACKUP_CRT_SECURE_NO_WARNINGS
-#endif
-					std::copy(strv.begin(), strv.end(), nstr);
-#ifdef _BACKUP_CRT_SECURE_NO_WARNINGS 
-#ifdef USE_PRAGMA_WARNING_PUSH
-#pragma warning( pop ) 
-#else
-#undef _CRT_SECURE_NO_WARNINGS
-#endif // 
-#undef _BACKUP_CRT_SECURE_NO_WARNINGS
-#endif
-					ptr = new(rptr) isymbol(nstr, strv.size(), hash);
-				}
-				return std::unique_ptr<isymbol>(ptr);
-			}
+			static std::unique_ptr<isymbol> create(const string_view& strv, size_t hash, bool const_string);
 			static std::unique_ptr<isymbol> create(const string_view& strv, bool const_string) {
 				return create(strv, _hasher(strv), const_string);
 			}

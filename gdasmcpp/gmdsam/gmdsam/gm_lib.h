@@ -10,6 +10,14 @@
 
 #define USE_SYMBOL
 namespace gm {
+	class gm_exception : public std::exception {
+		std::string _message;
+	public:
+		gm_exception(std::string&& message) : _message(message) {}
+		gm_exception(const std::string& message) : _message(message) {}
+		gm_exception(const char* str, ...); // printf style
+		const char* what() const { return _message.c_str(); }
+	};
 	// structore for event info
 	enum class e_event {
 		CreateEvent = 0,
@@ -707,9 +715,34 @@ namespace gm {
 			//uint32_t frame_count;
 			//uint32_t frame_offsets[1];
 		};
+		// version 1 of Undertale, need ot figure out how to tell the diffrence
 		struct OldCode : CannotCreate<OldCode> {
 			int name_offset;
 			int list_size;
+			uint32_t code[1];
+		};
+
+		// new stuff decoding is wierd, need to check, basic problem is that I don't know how its setup
+		struct NewCode : CannotCreate<NewCode> {
+			int name_offset;
+			int list_size;
+			short local_count;
+			short argument_count;
+			int wierd_unkonwn;
+			int _offset;
+#if 0
+			{
+				// from my c# source over a year ago
+				name = string.Intern(r.ReadStringFromNextOffset());
+				Size = r.ReadInt32();
+				LocalCount = r.ReadInt16();
+				ArgumentCount = r.ReadInt16();
+				wierd = r.ReadInt32();
+				CodePosition = (int)r.BaseStream.Position + wierd - 4;
+				// this kind of some silly  encryption?
+				offset = r.ReadInt32();
+			}
+#endif
 		};
 #pragma pack(pop)
 	};
@@ -793,6 +826,16 @@ namespace gm {
 		bool preload() const { return _raw->preload != 0; }
 		const raw_type::SpriteFrame& frame() const { return *_frame; }
 	};
+	class Undertale_1_01_Code : public Resource<raw_type::NewCode, ChunkType::CODE> {
+		const uint32_t* _code;
+		uint32_t _offset;
+	public:
+		Undertale_1_01_Code(int index, const uint8_t* data, uint32_t offset) : Resource(index, data, offset) {
+			_code = reinterpret_cast<const uint32_t*>(this->offset() + _raw->wierd_unkonwn - 4);
+		}
+		uint32_t operator[](size_t i) const { return _code[i]; }
+	};
+
 	class Room : public Resource<raw_type::Room, ChunkType::ROOM> {
 	protected:
 		const char* _caption;
@@ -896,12 +939,7 @@ namespace gm {
 			os << "{ event : " << EventType::from_index(_index) << ", id : " << id() << " }";
 		}
 	};
-	class GString : public Resource<raw_type::String, ChunkType::STRG> {
-	public:
-		GString(int index, const uint8_t* data, uint32_t offset)
-			: Resource(index, data, offset) {}
 
-	};
 
 	class Object : public Resource<raw_type::Object, ChunkType::OBJT> {
 		const raw_type::ObjectPhysicsVert* _physics_verts;
@@ -1029,7 +1067,7 @@ namespace gm {
 			return true;
 		}
 	};
-	
+
 	class DataWinFileException : public GMException {
 	public:
 		DataWinFileException(const std::string& msg) : GMException("Data Win File: " + msg) {}

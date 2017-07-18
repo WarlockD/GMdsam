@@ -2,6 +2,7 @@
 #include <chrono>
 #include <random>
 #include <type_traits>
+#include <cstdarg>
 
 namespace {
 	namespace _private {
@@ -33,6 +34,18 @@ namespace {
 };
 
 namespace gm {
+
+	gm_exception::gm_exception(const char* str, ...) {
+		static std::mutex _mutex;
+		static char buffer[512]; // should be enough
+		std::lock_guard<std::mutex> lock(_mutex);
+		va_list va;
+		va_start(va, str);
+		int len = vsnprintf(buffer, sizeof(buffer) - 1, str, va);
+		va_end(va);
+		assert(len >= 0 && len <= (sizeof(buffer) - 1));
+		_message = buffer;
+	}
 	// copied from Lua 5.3.3
 #ifndef USE_SYMBOL
 	class StringTable {
