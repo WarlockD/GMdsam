@@ -16,6 +16,9 @@
     <Filter Include="ticpp">
       <UniqueIdentifier>{e2344c5b-b6aa-4395-a5c9-796850533854}</UniqueIdentifier>
     </Filter>
+    <Filter Include="new_code_dsam.h">
+      <UniqueIdentifier>{60297e54-f2cc-4510-9ec0-160a779b506f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gm_lib.h">
@@ -44,6 +47,12 @@
     </ClInclude>
     <ClInclude Include="ticpp\tinyxml.h">
       <Filter>ticpp</Filter>
+    </ClInclude>
+    <ClInclude Include="ast.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="new_code.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

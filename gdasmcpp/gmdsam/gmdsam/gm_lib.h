@@ -16,6 +16,7 @@ namespace gm {
 		gm_exception(std::string&& message) : _message(message) {}
 		gm_exception(const std::string& message) : _message(message) {}
 		gm_exception(const char* str, ...); // printf style
+		//gm_exception(const char* file, int line, const char* str, ...); // printf style
 		const char* what() const { return _message.c_str(); }
 	};
 	// structore for event info
@@ -437,7 +438,7 @@ namespace gm {
 		bool operator!=(const IndexInterface& other) const { return IndexInterface::operator!=(other); }
 		virtual ~NameInterface() {}
 		virtual void to_stream(std::ostream& os) const override {
-			OffsetInterface::to_stream(os);
+			IndexInterface::to_stream(os);
 			os << '(' << std::setfill(' ') << std::setw(4) << _index << ':';
 			if (valid_name())
 				os << _name;
@@ -493,12 +494,16 @@ namespace gm {
 		Resource(uint32_t index, const uint8_t* data, uint32_t offset, _name_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index) { }
 		template<typename T = RAW_T, typename = std::enable_if<HasNameOffset>::type>
 		Resource(uint32_t index, const uint8_t* data, uint32_t offset, _index_test) : _raw(reinterpret_cast<const RAW_T*>(data + offset)), base_type(offset, index, reinterpret_cast<const char*>(data + reinterpret_cast<const RAW_T*>(data + offset)->name_offset)) { }
+	
+
 	public:
 		Resource() : _name(), _index(-1), _raw(nullptr) {}
 		bool valid() const { return _raw != nullptr; }
 		const RAW_T* raw() const { return _raw; }
 		template<typename T, typename = std::enable_if<std::is_convertible<T, uint32_t>::value>::type> // index handles the conversion
 		Resource(T index, const uint8_t* data, uint32_t offset) : Resource(static_cast<uint32_t>(index), data, offset, _name_test{}) {}
+
+
 	};
 
 
@@ -718,14 +723,14 @@ namespace gm {
 		// version 1 of Undertale, need ot figure out how to tell the diffrence
 		struct OldCode : CannotCreate<OldCode> {
 			int name_offset;
-			int list_size;
+			int code_size;
 			uint32_t code[1];
 		};
 
 		// new stuff decoding is wierd, need to check, basic problem is that I don't know how its setup
 		struct NewCode : CannotCreate<NewCode> {
 			int name_offset;
-			int list_size;
+			int code_size;
 			short local_count;
 			short argument_count;
 			int wierd_unkonwn;
@@ -828,12 +833,27 @@ namespace gm {
 	};
 	class Undertale_1_01_Code : public Resource<raw_type::NewCode, ChunkType::CODE> {
 		const uint32_t* _code;
-		uint32_t _offset;
 	public:
 		Undertale_1_01_Code(int index, const uint8_t* data, uint32_t offset) : Resource(index, data, offset) {
-			_code = reinterpret_cast<const uint32_t*>(this->offset() + _raw->wierd_unkonwn - 4);
+		//	uint32_t off = this->offset() + 16;
+			_code = reinterpret_cast<const uint32_t*>(data + this->offset()  + _raw->wierd_unkonwn - 4);
+			//_code = reinterpret_cast<const uint32_t*>(this->offset() + _raw->wierd_unkonwn - 4);
 		}
-		uint32_t operator[](size_t i) const { return _code[i]; }
+		const uint32_t& operator[](size_t i) const { return _code[i]; }
+		const uint32_t* code() const { return _code; }
+		size_t size() const { return _raw->code_size; }
+		virtual void to_stream(std::ostream& os) const override {
+			base_type::to_stream(os);
+			os << "{";
+			os << std::dec;
+			os << " size: " << _raw->code_size;
+			os << " locals: " << _raw->local_count;
+			os << " args: " << _raw->argument_count;
+			os << " wierd: " << _raw->wierd_unkonwn;
+			os << " offset: " << _raw->_offset;
+
+			os << " }";
+		}
 	};
 
 	class Room : public Resource<raw_type::Room, ChunkType::ROOM> {
@@ -1073,7 +1093,7 @@ namespace gm {
 		DataWinFileException(const std::string& msg) : GMException("Data Win File: " + msg) {}
 	};
 	class DataWinFile {
-		struct Chunk : CannotCreate<Chunk> {
+		struct RawChunk : CannotCreate<RawChunk> {
 			union {
 				char name[4];
 				uint32_t iname;
@@ -1082,9 +1102,35 @@ namespace gm {
 			uint32_t count;
 			uint32_t offsets[1];  // used for fast lookups
 		};
+		class Chunk {
+			const RawChunk* _chunk;
+			Chunk(const RawChunk* chunk) : _chunk(chunk) {}
+		public:
+			Chunk() : _chunk(nullptr) {}
+			Chunk(const uint8_t* data) : _chunk(reinterpret_cast<const RawChunk*>(data)) {}
+			size_t chunk_size() const { return _chunk->size; }
+			size_t offset_count() const { return _chunk->count; }
+			uint32_t operator[](size_t i) const { assert(i < _chunk->count);  return _chunk->offsets[i]; }
+
+			template<class C, class = std::enable_if<priv::is_resource<C>::value>>
+			C at(size_t i, const uint8_t* data) const {
+				assert(i < _chunk->count); 
+				return C(i, data, _chunk->offsets[i]);
+			}
+			uint32_t at(size_t i) const {
+				assert(i < _chunk->count);  
+				return _chunk->offsets[i];
+			}
+			const uint32_t* begin() const { return _chunk->offsets;  }
+			const uint32_t* end() const { return _chunk->offsets + _chunk->count; }
+			uint32_t iname() const { return _chunk->iname; }
+			bool operator==(const Chunk& r) const { return _chunk == r._chunk; }
+			bool operator!=(const Chunk& r) const { return _chunk != r._chunk; }
+		};
+
 		FileHelper _data;
 		size_t _full_size;
-		std::unordered_map<uint32_t, const Chunk*> _chunks;
+		std::unordered_map<uint32_t, Chunk> _chunks;
 		//std::vector<std::string_view> _stringtable;
 		std::vector<String> _stringtable;
 		//std::reference_wrapper<Chunk> test
@@ -1095,30 +1141,99 @@ namespace gm {
 			_full_size = 0;
 			_chunks.clear();
 			while (pos < _data.size()) {
-				const Chunk* chunk = Chunk::cast(_data.data(), pos);
+				Chunk chunk(_data.data()+ pos);
 				pos += sizeof(uint32_t) * 2; // skip over name and size
 											 // have to check swaped value as iname is in little edan?
-				if (chunk->iname == chunk_traits<ChunkType::FORM>::swap_value()) {
-					_full_size = chunk->size; // form has the size of the file
+				if (chunk.iname() == chunk_traits<ChunkType::FORM>::swap_value()) {
+					_full_size = chunk.chunk_size(); // form has the size of the file
 				}
 				else {
 					if (!_full_size) { // bad file, should start with FORM
 						_chunks.clear();
 						return;
 					}
-					_chunks[chunk->iname] = chunk;
-					pos += chunk->size;
+					_chunks[chunk.iname()] = chunk;
+					pos += chunk.chunk_size();
 				}
 			}
 			fill_stringtable();
 		}
 		template<ChunkType C>
-		const Chunk* get_chunk() const {
+		const Chunk& get_chunk() const {
 			auto it = _chunks.find(chunk_traits<C>::swap_value());
 			if (it == _chunks.end()) throw DataWinFileException("Chunk type not found"); // not found
-			return &(*it->second);
+			return it->second;
 		}
 	public:
+		const std::vector<String>& stringtable() const { return _stringtable; }
+		// this is very slow as we create all the objects here at construction
+		// however it saves me the effort of having to write illiterators
+		template<typename _CHUNK>
+		class ResourceIterator {
+		public:
+			using type = ResourceIterator<_CHUNK>;
+			using value_type = _CHUNK;
+			using pointer = const _CHUNK*;
+			using refrence = const _CHUNK&;
+			using iterator_category = std::bidirectional_iterator_tag;
+			using difference_type = std::ptrdiff_t;
+			ResourceIterator(const Chunk& chunk, const uint8_t* data, size_t index) :
+				_chunk(chunk), _data(data), _index(index), _current(chunk.at<value_type>(std::min(index, chunk.offset_count() - 1), data)) { }
+			refrence operator*() const { return _current; }
+			pointer operator->() const { return *__current; }
+			type& operator++() { //prefix increment
+				_set_current(_index + 1);
+				return *this;
+			}
+			type operator++(int){ 	//postfix increment
+				type tmp(*this);
+				++this;
+				return tmp;
+			}
+			type& operator--() { //prefix dec
+				_set_current(_index - 1);
+				return *this;
+			}
+			type operator--(int) { 	//postfix dec
+				type tmp(*this);
+				--this;
+				return tmp;
+			}
+			bool operator==(const type& r) const { return _index == r._index; }
+			bool operator!=(const type& r) const { return !(*this == r); }
+		private:
+			value_type _current;
+			uint32_t _index;
+			const uint8_t* _data;
+			const Chunk& _chunk;
+			void _set_current(size_t index) { 
+				_index = std::min(index, _chunk.offset_count()-1);
+				_current = _chunk.at<value_type>(_index, _data);
+			}
+		};
+
+		template<typename _CHUNK>
+		class ResrouceIndexContainer {
+		public:
+			using type = ResrouceIndexContainer<_CHUNK>;
+			using value_type = _CHUNK;
+			using pointer = const _CHUNK*;
+			using refrence = const _CHUNK&;
+			using iterator = ResourceIterator<_CHUNK>;
+
+			ResrouceIndexContainer(Chunk chunk, const uint8_t* data) : _chunk(chunk), _data(data) {}
+			size_t size() const { return _chunk->count; }
+			value_type operator[](size_t index) const { return _chunk.at<value_type>(index, _data);}
+			value_type at(size_t index) const { return _chunk.at<value_type>(index, _data); }
+
+			iterator begin() const { return iterator(_chunk, _data, 0); }
+			iterator end() const { return iterator(_chunk, _data, _chunk.offset_count()); }
+		private:
+			Chunk _chunk;
+			const uint8_t* _data;
+			
+			
+		};
 		DataWinFile() {}
 		void load(std::vector<uint8_t>&& data) { _data = std::move(data); load_chunks(); }
 		void load(const std::vector<uint8_t>& data) { _data = data; load_chunks(); }
@@ -1126,17 +1241,25 @@ namespace gm {
 		void load(const std::string& filename) { _data.load(filename); load_chunks(); }
 		bool has_data() const { return !_chunks.empty(); }
 
+
+		
+		template<class C, class = std::enable_if<priv::is_resource<C>::value>>
+		ResrouceIndexContainer<C> resource_container() {
+			return ResrouceIndexContainer<C>(get_chunk<C::ResType>(), _data.data());
+		}
+
+
 		size_t size() const { return _full_size; }
 		template<class C, class = std::enable_if<priv::is_resource<C>::value>>
 		size_t resource_count() const {
 			auto it = _chunks.find(chunk_traits<C::ResType>::swap_value());
 			if (it == _chunks.end())  throw; // not found
-			else return it->second->count;
+			else return it->second.offset_count();
 		}
 		template<class C, class = std::enable_if<priv::is_resource<C>::value>>
 		C resource_at(uint32_t index) const {
 			auto it = get_chunk<C::ResType>();
-			return C(index, _data.data(), it->offsets[index]);
+			return it.at<C>(index, _data.data());
 		}
 	};
 };

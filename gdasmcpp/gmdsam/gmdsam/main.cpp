@@ -1,4 +1,7 @@
 #include "gm_lib.h"
+#include "dsam.h"
+#include "new_code.h"
+
 #include <fstream>
 
 template<typename T>
@@ -22,6 +25,20 @@ friend ito_binary_wraper operator >> (std::istream& stream, T &)
 void exit_program(int value) {
 	assert(value == 0);
 	exit(value);
+}
+
+template<typename C>
+int search(const char* name) {
+	auto code_container = file.resource_container<C>();
+	for (auto& e : code_container) {
+		if (e.name() == name) {
+			debug::cerr << "foundit! " << e.index() << std::endl;
+			return e.index();
+		}
+
+	}
+	debug::cerr << "not found '" << name "'" << std::endl;
+	return -1;
 }
 int main(int argc, const char* argv[]) {
 	gm::DataWinFile file;
@@ -48,6 +65,13 @@ int main(int argc, const char* argv[]) {
 
 	auto sprite = file.resource_at<gm::Sprite>(217); // random sprite
 	sprite.xml_export(std::cout);
+	//auto code = file.resource_at<gm::Undertale_1_01_Code>(1622);
+	auto code = file.resource_at<gm::Undertale_1_01_Code>(0);
+
+	debug::cerr << code << std::endl;
+	gm::dsam::undertale_1_01::dsam dd(file, code);
+
+	dd.Dissasemble();
 
 	while (true) {}
 

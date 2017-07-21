@@ -45,6 +45,9 @@ namespace gm {
 		va_end(va);
 		assert(len >= 0 && len <= (sizeof(buffer) - 1));
 		_message = buffer;
+#ifdef _DEBUG
+		debug::cerr << "gm_exception: " <<  _message << std::endl;
+#endif
 	}
 	// copied from Lua 5.3.3
 #ifndef USE_SYMBOL
@@ -188,10 +191,10 @@ namespace gm {
 	void DataWinFile::fill_stringtable() {
 		auto strt_chunk = get_chunk<ChunkType::STRG>();
 		_stringtable.clear();
-		_stringtable.reserve(strt_chunk->count + 2);
-		for (size_t i = 0; i < strt_chunk->count; i++) {
+		_stringtable.reserve(strt_chunk.offset_count() + 2);
+		for (size_t i = 0; i < strt_chunk.offset_count(); i++) {
 			
-			const uint32_t* start = reinterpret_cast<const uint32_t*>(_data.data() + strt_chunk->offsets[i]);
+			const uint32_t* start = reinterpret_cast<const uint32_t*>(_data.data() + strt_chunk.at(i));
 			uint32_t length = *start;
 			const char* c_str = reinterpret_cast<const char*>(start + 1);
 			assert(strlen(c_str) == length); // verifys the strings are 0 terminated
@@ -200,13 +203,13 @@ namespace gm {
 		//	util::symbol sym(c_str);
 		//	sym.make_perm();
 #ifndef STRING_TABLE_USING_STRINGVIEW
-			_stringtable.emplace_back(_stringtable.size(), _data.data(), strt_chunk->offsets[i]);
+			_stringtable.emplace_back(_stringtable.size(), _data.data(), strt_chunk.at(i));
 #else
 			_stringtable.emplace_back(c_str, length);
 #endif
 
 		}
-		debug::cerr << "Strings done " << strt_chunk->count;
+		debug::cerr << "StringsTable Done count = " << strt_chunk.offset_count() << std::endl;
 	}
 	static const std::unordered_map<size_t, std::string_view> key_to_string = {
 		{ 0, "NOKEY" },

@@ -146,9 +146,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ast.h" />
     <ClInclude Include="dsam.h" />
     <ClInclude Include="global.h" />
     <ClInclude Include="gm_lib.h" />
+    <ClInclude Include="new_code.h" />
     <ClInclude Include="ticpp\ticpp.h" />
     <ClInclude Include="ticpp\ticppapi.h" />
     <ClInclude Include="ticpp\ticpprc.h" />
