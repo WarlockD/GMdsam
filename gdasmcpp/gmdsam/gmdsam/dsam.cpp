@@ -134,6 +134,8 @@ namespace gm {
 					return Value(); // no type, invalid
 				case Type::Short:
 					return Value(static_cast<short>(value));
+				default:
+					return Value{}; // compiler error
 				}
 			}
 			Value _convert(Value* value) const {

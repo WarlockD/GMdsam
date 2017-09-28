@@ -531,7 +531,7 @@ namespace GameMaker
             public PhysicsVert[] PhysicisVertexs;
             public int[] eventOffsets = new int[12]; // hummmm!
             public Event[][] Events;
-         
+            static bool print_once = false;
             protected override void InternalRead(BinaryReader r)
             {
                 name = string.Intern(r.ReadStringFromNextOffset());
@@ -563,7 +563,11 @@ namespace GameMaker
                 // eventOffsets = r.ReadInt32(12);// the next 12 are the events.  Each event offset has even more information
                 // do it manualy
                 int count = r.ReadInt32();
-                Debug.Assert(count == 12); // should have 12?
+                if(!print_once && count > 12)
+                {
+                    print_once = true;
+                    ErrorContext.ConsoleWriteLine("event count is more than 12 so new version of game maker?");
+                }
                 int[] mainEvents = r.ReadInt32(count);
                 Events = new Event[12][];
                 for (int i = 0; i < mainEvents.Length; i++)

@@ -140,7 +140,7 @@ namespace GameMaker
             r.BaseStream.Position = pos;
             return s;
         }
-        const int MaxZeroTerminatedStringSize = 64;
+        const int MaxZeroTerminatedStringSize = 4096;
         /// <summary>
         /// Tries to read a string, assumes strings arn't bigger than 64 charaters
         /// </summary>
@@ -496,14 +496,17 @@ namespace GameMaker
             // Slightly changed, now the start number is the count
             class NewFunctionIndex
             {
+                public int Type1;
                 public string Name;
+                public int Type2;
                 public string Value;
                 public NewFunctionIndex(BinaryReader r)
                 {
-                    Debug.Assert(r.ReadIntBool());
+                    //  Debug.Assert(r.ReadIntBool());
+                    Type1 = r.ReadInt32();
                     Name = r.ReadStringFromNextOffset();
                     Debug.Assert(Name != null);
-                    Debug.Assert(!r.ReadIntBool());
+                    Type2 = r.ReadInt32();
                     Value = r.ReadStringFromNextOffset();
                     Debug.Assert(Value != null);
                 }
@@ -579,7 +582,8 @@ namespace GameMaker
                                 uint first = r.ReadUInt32(); // skip the first pop/push/function opcode
                                 int position = (int)r.BaseStream.Position;
                                 int code = (int)(first >> 24);
-                                Debug.Assert(code == 69 || code == 195 || code == 192 || code == 194); 
+                               // Debug.Assert(code == 69 || code == 195 || code == 192 || code == 194);
+                                Debug.Assert(code == 69 || code == 195 || code == 192 || code == 194 || code == 193); // not sure what 193 is but chance it
                                 // 69 is the new pop
                                 // 195 pushb?
                                 // 192 push general?  Old push code
@@ -633,8 +637,16 @@ namespace GameMaker
                     else trash.Add(nref);
                     if(nref.Offsets!= null) foreach (var o in nref.Offsets) offsetLookup.Add(o, nref);
                 }
-                Debug.Assert(globalCount == globals.Count);
-                Debug.Assert(localCount == locals.Count);
+                if(globalCount != globals.Count)
+                {
+                    ErrorContext.ConsoleWriteLine("global count not equal to globals found (" + globalCount + ") != (" + globals.Count +")");
+
+                }
+                if (localCount != locals.Count)
+                {
+                    ErrorContext.ConsoleWriteLine("local count not equal to local found (" + localCount + ") != ("  + locals.Count + ")");
+
+                }
                 // trash is all just arguments?
 
 

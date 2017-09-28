@@ -973,9 +973,8 @@ namespace gm {
 			if (_raw->physics_vert_count > 0) ptr += _raw->physics_vert_count * sizeof(raw_type::ObjectPhysicsVert);
 			Offsets root(ptr);
 			//debug::debug_ptr<uint32_t> d(data,RawResourceSize+offset, 24);
-			if (root.size() != 12) throw; // should always = 12?
 			// ugh so the first 12 
-			ptr += sizeof(uint32_t) * 12;
+			ptr += sizeof(uint32_t) * root.size();
 			debug::cerr << "Root:" << std::endl << root << std::endl;
 			debug::cerr << std::endl;
 			// might be a way to template this to caculate the offsets but right now this works

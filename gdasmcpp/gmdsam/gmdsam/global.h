@@ -24,6 +24,10 @@
 #include <cassert>
 #include <math.h>
 
+
+// I don't want to builid my own filesystem but for Visual Studio 2017 we don't have it yet so lets try the expmental header
+#include <filesystem> 
+
 #ifdef _MSC_VER
 #include <safeint.h>
 #endif
