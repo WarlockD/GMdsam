@@ -204,7 +204,7 @@ namespace GameMaker
                     return new MemoryStream(File.rawData, _pngOffset, _pngLength, false, false);
                 }
             }
-           
+            // starrt of changes
             protected override void InternalRead(BinaryReader r)
             {
                 int dummy = r.ReadInt32(); // Always 1
