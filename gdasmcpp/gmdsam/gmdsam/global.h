@@ -1,4 +1,8 @@
 #pragma once
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif 
+
 #include <cstdint>
 #include <array>
 #include <vector>
@@ -1361,6 +1365,10 @@ static inline std::basic_ostream<C, E>& operator<<(std::basic_ostream<C, E>& os,
 };
 
 #endif
+namespace gm {
+	using string = std::string;
+
+};
 
 namespace std {
 	template<>

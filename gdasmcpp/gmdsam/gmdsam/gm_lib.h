@@ -1,7 +1,6 @@
 #pragma once
 #include "global.h"
-#include <variant>
-#include <cassert>
+
 
 #define OLD_XML_WRITER
 #ifndef OLD_XML_WRITER

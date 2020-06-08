@@ -208,7 +208,12 @@ namespace GameMaker
             protected override void InternalRead(BinaryReader r)
             {
                 int dummy = r.ReadInt32(); // Always 1
-                _pngOffset = r.ReadInt32(); // offset to texture
+                // hack for sequal
+                dummy = r.ReadInt32(); // this is an offset or 0, hack as the sequal is just a 0
+                if (dummy == 0)
+                    _pngOffset = r.ReadInt32(); // offset to texture, another int?
+                else
+                    _pngOffset = dummy;
                 r.BaseStream.Position = _pngOffset;
                 string sig = r.ReadFixedString(8);
                 if (sig != pngSig) throw new Exception("Texture not a png");
@@ -491,7 +496,9 @@ namespace GameMaker
                     IsQuestion = r.ReadIntBool();
                     UseApplyTo = r.ReadIntBool();
                     ExeType = r.ReadInt32();
-                    Name = r.ReadStringFromNextOffset();
+                    int dummy = r.ReadInt32();
+                    int name_offset = r.ReadInt32();
+                    Name = r.ReadStringFromOffset(name_offset);
                     Debug.Assert(Name == "");
                     CodeOffset = r.ReadInt32();
                     ArgumentCount = r.ReadInt32();
